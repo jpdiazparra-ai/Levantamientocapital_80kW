@@ -1,0 +1,23 @@
+# --- Dependencias base, solo wheels precompilados ---
+pip==24.2
+setuptools<70
+wheel
+
+# --- Librerías de Streamlit y análisis ---
+streamlit==1.38.0
+pandas==2.2.2
+numpy==1.26.4
+plotly==5.22.0
+
+# --- Manejo de archivos Excel ---
+openpyxl==3.1.5
+xlsxwriter==3.2.0
+
+# --- PDF (opcional) ---
+reportlab==4.1.0
+kaleido==0.2.1
+# --- Utilidades comunes ---
+requests==2.32.3
+python-dateutil==2.9.0.post0
+pytz==2025.1
+toml==0.10.2
