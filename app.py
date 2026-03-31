@@ -978,7 +978,7 @@ def get_knowhow_resumen_payload() -> dict:
     for r in range(4, min(len(df_raw.index), 12)):
         label = cell(r, 0)
         value = cell(r, 1)
-        if label:
+        if label and normalize_key(label) != normalize_key("Resumen por familia de know-how"):
             assumptions.append({"label": label, "value": value})
     payload["assumptions"] = assumptions
 
@@ -1453,11 +1453,21 @@ def render_inputs_knowhow_fw_detail():
         st.markdown("#### Supuestos editables")
         if assumptions:
             assump_df = pd.DataFrame(assumptions).rename(columns={"label": "Variable", "value": "Valor"})
+            assump_df = assump_df[
+                assump_df["Variable"].astype(str).str.strip().ne("")
+                & assump_df["Valor"].astype(str).str.strip().ne("")
+            ].reset_index(drop=True)
             st.dataframe(
                 style_engineering_table(assump_df, header_color="#2C5783", row_color="#EAF6FF"),
                 hide_index=True,
                 use_container_width=True,
-                height=246,
+                height=206,
+            )
+            st.markdown(
+                "<div style='margin-top:8px;color:#000000;font-size:14px;line-height:1.5;font-weight:700;'>"
+                "* Variables base para valorizar la ingeniería del proyecto por etapa."
+                "</div>",
+                unsafe_allow_html=True,
             )
         st.markdown("#### Multiplicadores técnicos")
         if multipliers:
@@ -1467,6 +1477,12 @@ def render_inputs_knowhow_fw_detail():
                 hide_index=True,
                 use_container_width=True,
                 height=246,
+            )
+            st.markdown(
+                "<div style='margin-top:8px;color:#000000;font-size:14px;line-height:1.5;font-weight:700;'>"
+                "* Factores que ajustan el valor de la ingeniería según complejidad y madurez del desarrollo."
+                "</div>",
+                unsafe_allow_html=True,
             )
         if criteria:
             criteria_html = "".join(f"<li>{html.escape(text)}</li>" for text in criteria)
@@ -2520,6 +2536,8 @@ def render_inputs_capex_10kw_detail():
                 height=480,
             )
 
+    render_inputs_project_gantt()
+
     st.markdown("#### Tabla base de ingeniería")
     st.dataframe(
         style_engineering_table(tabla_10kw, header_color="#2C5783", row_color="#EAF6FF"),
@@ -2760,7 +2778,6 @@ def render_inputs_estado_actual_dashboard():
         else:
             st.info("No hay datos válidos para graficar Suministro / Montaje.")
 
-        render_inputs_project_gantt()
         render_inputs_item_analytics(base)
         render_inputs_factor_chart(base)
     elif selected_financial_asset == "know_how_fw":
@@ -4310,7 +4327,6 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
                 valorizacion_fluxial_preview_display = format_usd(valorizacion_fluxial_preview)
         else:
             valorizacion_fluxial_preview_display = format_clp(valorizacion_fluxial_preview * base_fx_preview) if base_currency_preview == "CLP" else format_usd(valorizacion_fluxial_preview)
-        st.markdown("---")
         st.markdown(
             f"""
             <div class="val-summary-hero">
@@ -4590,7 +4606,6 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
         unsafe_allow_html=True,
     )
 
-    st.markdown("---")
     st.markdown('<div class="sup-shell">', unsafe_allow_html=True)
     sh_col, reset_col, pdf_col = st.columns([1, 0.24, 0.28])
     with sh_col:
@@ -5854,7 +5869,8 @@ st.markdown(
             max-width:760px;
         }
         .inputs-nav-card{
-            min-height:118px;
+            min-height:132px;
+            height:132px;
             display:flex;
             flex-direction:column;
             justify-content:flex-start;
@@ -6013,8 +6029,6 @@ for idx, (block_value, block_title) in enumerate(input_cards):
             on_click=_set_inputs_bloque,
             args=(block_value,),
         )
-
-st.markdown("---")
 selected_input_block = st.session_state.get("inputs_bloque_sel")
 
 if selected_input_block:
@@ -6294,6 +6308,7 @@ elif selected_input_block == "escalamiento":
     if capex_10kw_active:
         render_inputs_capex_10kw_detail()
     elif capex_80kw_active:
+        st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
         capex_80kw_views = [
             ("dashboard", "📊 Dashboard general"),
             ("capex", "🏗️ Detalle capex 80kW"),
