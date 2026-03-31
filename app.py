@@ -2027,43 +2027,46 @@ def build_inputs_gantt_figure(df: pd.DataFrame, date_mode: str = "Real", color_b
         pilotos = dfp["Piloto"].dropna().unique()
         color_map = {p: PX_COLORS[i % len(PX_COLORS)] for i, p in enumerate(pilotos)}
 
-    if GANTT_DATE_COL_END_REAL in dfp.columns:
-        dfp["_label_barra"] = dfp[GANTT_DATE_COL_END_REAL].dt.strftime("%d-%m-%Y")
-    else:
-        dfp["_label_barra"] = ""
-
-    fig = px.timeline(
-        dfp,
-        x_start="_start",
-        x_end="_end",
-        y="Tarea / Entregable",
-        color=color_arg,
-        color_discrete_map=color_map,
-        category_orders={"Tarea / Entregable": y_labels},
-        text="_label_barra",
-        opacity=0.95,
-    )
-    fig.update_traces(
-        texttemplate="%{text}",
-        textposition="inside",
-        insidetextanchor="middle",
-        selector=dict(type="bar"),
-    )
-
     safe_pct = pd.to_numeric(dfp.get("%", 0), errors="coerce").fillna(0).astype(float)
-    fig.update_traces(
-        customdata=np.stack([
-            dfp.get("Fase", pd.Series([""] * len(dfp))).astype(str),
-            dfp.get("Estado", pd.Series([""] * len(dfp))).astype(str),
-            dfp.get("ID", pd.Series([""] * len(dfp))),
-            (dfp["_end"] - dfp["_start"]).dt.days.clip(lower=1).astype(int),
-            safe_pct.round(0),
-        ], axis=1),
-        hovertemplate="<b>%{y}</b><br>"
-                      "Estado: %{customdata[1]} · ID: %{customdata[2]}<br>"
-                      "Inicio: %{base|%Y-%m-%d}<br>"
-                      "Fin: %{x|%Y-%m-%d}<extra>Duración: %{customdata[3]} días · Avance: %{customdata[4]}%</extra>",
-    )
+    fig = go.Figure()
+    shown_legends = set()
+    for idx, row in dfp.iterrows():
+        legend_name = str(row.get(color_arg, "")) if color_arg in row.index else ""
+        legend_name = legend_name.strip() or "Sin categoría"
+        color_value = color_map.get(legend_name, apple["default"]) if color_map else apple["default"]
+        duration_days = max(int((row["_end"] - row["_start"]).days), 1)
+        completion_pct = float(safe_pct.loc[idx]) if idx in safe_pct.index else 0.0
+        task_name = str(row.get("Tarea / Entregable", ""))
+        phase_name = str(row.get("Fase", ""))
+        state_name = str(row.get("Estado", ""))
+        task_id = row.get("ID", "")
+        end_label = row["_end"].strftime("%d-%m-%Y") if pd.notna(row["_end"]) else ""
+
+        fig.add_trace(
+            go.Scatter(
+                x=[row["_start"], row["_end"]],
+                y=[task_name, task_name],
+                mode="lines+markers+text",
+                name=legend_name,
+                legendgroup=legend_name,
+                showlegend=legend_name not in shown_legends,
+                line=dict(color=color_value, width=12),
+                marker=dict(
+                    size=[9, 14],
+                    color=[color_value, color_value],
+                    symbol=["circle", "diamond"],
+                    line=dict(color="white", width=1.4),
+                ),
+                text=["", end_label],
+                textposition="middle right",
+                customdata=[[phase_name, state_name, task_id, duration_days, completion_pct]] * 2,
+                hovertemplate="<b>%{y}</b><br>"
+                              "Estado: %{customdata[1]} · ID: %{customdata[2]}<br>"
+                              "Inicio: %{x|%Y-%m-%d}<br>"
+                              "Fase: %{customdata[0]}<extra>Duración: %{customdata[3]} días · Avance: %{customdata[4]:.0f}%</extra>",
+            )
+        )
+        shown_legends.add(legend_name)
 
     today_ts = pd.Timestamp.today().normalize()
     today_iso = today_ts.strftime("%Y-%m-%d")
@@ -3281,12 +3284,12 @@ data_refresh_nonce = int(st.session_state.get("data_refresh_nonce", 0))
 
 df_capex_base = load_capex_data(capex_url, refresh_nonce=data_refresh_nonce)
 capex_total_usd_base = float(df_capex_base["Monto_USD"].sum() or 0.0) if "Monto_USD" in df_capex_base.columns else 0.0
-fx_base = 909.0
+fx_base = 925.0
 global_fx_value = st.sidebar.number_input(
     "Tipo de cambio",
     min_value=100.0,
     max_value=5000.0,
-    value=909.0,
+    value=925.0,
     step=10.0,
     help="Valor base global CLP/USD. Se usa como referencia inicial para los cálculos y parámetros ligados al dólar.",
 )
@@ -3433,8 +3436,13 @@ def render_resumen_content(
     include_export: bool = True,
     include_direction_item: bool = False,
 ):
+    resumen_title = (
+        "Estructura de Inversión y Ejecución de CAPEX – Piloto 80 kW"
+        if include_direction_item
+        else "CAPEX Técnico – Piloto 80 kW"
+    )
     st.markdown(
-        '<div class="eng-body-title" style="font-size:21px;font-weight:800;color:#0f172a;margin:0 0 14px 0;">Estructura de Inversión y Ejecución de CAPEX – Piloto 80 kW</div>',
+        f'<div class="eng-body-title" style="font-size:21px;font-weight:800;color:#0f172a;margin:0 0 14px 0;">{resumen_title}</div>',
         unsafe_allow_html=True,
     )
 
@@ -3488,40 +3496,100 @@ def render_resumen_content(
     )
     resumen_color_map = {**CAT_COLOR_MAP, "Dirección técnica": "#0F766E"}
 
-    fig_item_total = px.bar(
-        df_items_tot,
-        x="Total_MM",
-        y="Item",
-        orientation="h",
-        text="Texto",
-        color="Categoria",
-        color_discrete_map=resumen_color_map,
-        labels={"Total_MM": "Monto (millones de CLP)", "Item": "Ítem", "Categoria": "Categoría técnica"},
-        title=None,
-    )
-    fig_item_total.update_traces(
-        textposition="inside",
-        insidetextanchor="middle",
-        textfont_size=11,
-        marker=dict(line=dict(color="rgba(255,255,255,0.88)", width=1.2)),
-        hovertemplate="<b>%{y}</b><br>Categoría técnica: %{fullData.name}<br>Monto: %{x:.1f} MM CLP<extra></extra>",
-    )
-    fig_item_total.update_layout(
-        xaxis_title="Monto total (millones de CLP)",
-        yaxis_title="",
-        margin=dict(l=10, r=10, t=40, b=110),
-        showlegend=True,
-        legend_title_text="Categoría técnica",
-        legend=dict(
+    if include_direction_item:
+        fig_item_total = px.scatter(
+            df_items_tot,
+            x="Total_MM",
+            y="Item",
+            color="Categoria",
+            color_discrete_map=resumen_color_map,
+            size="Total_MM",
+            size_max=34,
+            text="Texto",
+            labels={"Total_MM": "Monto (millones de CLP)", "Item": "Ítem", "Categoria": "Categoría técnica"},
+            title=None,
+        )
+        for _, row in df_items_tot.iterrows():
+            fig_item_total.add_shape(
+                type="line",
+                x0=0,
+                x1=row["Total_MM"],
+                y0=row["Item"],
+                y1=row["Item"],
+                xref="x",
+                yref="y",
+                line=dict(
+                    color=resumen_color_map.get(row["Categoria"], "#94A3B8"),
+                    width=8,
+                ),
+                layer="below",
+            )
+        fig_item_total.update_traces(
+            mode="markers+text",
+            textposition="middle right",
+            textfont_size=11,
+            marker=dict(line=dict(color="rgba(255,255,255,0.92)", width=1.6), opacity=0.96),
+            hovertemplate="<b>%{y}</b><br>Categoría técnica: %{fullData.name}<br>Monto: %{x:.1f} MM CLP<extra></extra>",
+        )
+        fig_item_total.update_layout(
+            xaxis_title="Monto total (millones de CLP)",
+            yaxis_title="",
+            margin=dict(l=10, r=10, t=40, b=110),
+            showlegend=True,
+            legend_title_text="Categoría técnica",
+            legend=dict(
+                orientation="h",
+                yanchor="top",
+                y=-0.18,
+                xanchor="left",
+                x=0,
+            ),
+            height=460,
+        )
+    else:
+        fig_item_total = px.bar(
+            df_items_tot,
+            x="Total_MM",
+            y="Item",
             orientation="h",
-            yanchor="top",
-            y=-0.18,
-            xanchor="left",
-            x=0,
-        ),
-        height=420,
-        bargap=0.25,
-    )
+            text="Texto",
+            color="Categoria",
+            color_discrete_map=resumen_color_map,
+            labels={"Total_MM": "Monto (millones de CLP)", "Item": "Ítem", "Categoria": "Categoría técnica"},
+            title=None,
+        )
+        fig_item_total.update_traces(
+            textposition="outside",
+            textfont=dict(size=11, color="#334155"),
+            cliponaxis=False,
+            marker=dict(line=dict(color="rgba(255,255,255,0.96)", width=1.6)),
+            hovertemplate="<b>%{y}</b><br>Categoría técnica: %{fullData.name}<br>Monto: %{x:.1f} MM CLP<extra></extra>",
+        )
+        fig_item_total.update_layout(
+            xaxis_title="Monto total (millones de CLP)",
+            yaxis_title="",
+            margin=dict(l=10, r=34, t=32, b=110),
+            showlegend=True,
+            legend_title_text="Categoría técnica",
+            legend=dict(
+                orientation="h",
+                yanchor="top",
+                y=-0.18,
+                xanchor="left",
+                x=0,
+            ),
+            height=440,
+            bargap=0.34,
+            plot_bgcolor="white",
+            paper_bgcolor="rgba(0,0,0,0)",
+        )
+        fig_item_total.update_xaxes(
+            showgrid=True,
+            gridcolor="rgba(148,163,184,0.18)",
+            zeroline=False,
+            ticksuffix=" MM",
+        )
+        fig_item_total.update_yaxes(showgrid=False)
     apply_engineering_chart_typography(fig_item_total, title_size=20, body_size=13, tick_size=12, legend_size=12)
     st.plotly_chart(fig_item_total, use_container_width=True)
     st.session_state["fig_item_total"] = fig_item_total
@@ -3586,36 +3654,81 @@ def render_resumen_content(
                         categories=df_tl_plot["Categoria"].tolist(),
                         ordered=True,
                     )
-                    fig_timeline_cat = px.timeline(
-                        df_tl_plot,
-                        x_start="Fecha_inicio",
-                        x_end="Fecha_termino",
-                        y="Categoria",
-                        color="Item",
-                        color_discrete_map=item_color_map,
-                        hover_data={
-                            "Categoria": True,
-                            "Item": True,
-                            "Mes_inicio": True,
-                            "Mes_termino": True,
-                            "Monto_CLP": ":,.0f",
-                            "Monto_USD": ":,.0f",
-                        },
-                    )
-                    fig_timeline_cat.update_yaxes(categoryorder="array", title="Categoría / Tarea")
-                    fig_timeline_cat.update_xaxes(
-                        title="Mes del proyecto",
-                        tickmode="array",
-                        tickvals=df_tl_plot["Fecha_inicio"].sort_values().unique(),
-                        ticktext=df_tl_plot["Mes_inicio"].sort_values().unique(),
-                        showgrid=True,
-                    )
-                    fig_timeline_cat.update_layout(
-                        margin=dict(l=10, r=10, t=60, b=10),
-                        height=520,
-                        legend_title_text="Ítem",
-                        hoverlabel=dict(bgcolor="white"),
-                    )
+                    if include_direction_item:
+                        fig_timeline_cat = go.Figure()
+                        shown_items = set()
+                        for _, row in df_tl_plot.iterrows():
+                            item_name = row["Item"]
+                            category_name = row["Categoria"]
+                            color_value = item_color_map.get(item_name, CAT_COLOR_MAP.get(category_name, "#94A3B8"))
+                            fig_timeline_cat.add_trace(
+                                go.Scatter(
+                                    x=[row["Fecha_inicio"], row["Fecha_termino"]],
+                                    y=[category_name, category_name],
+                                    mode="lines+markers",
+                                    name=item_name,
+                                    legendgroup=item_name,
+                                    showlegend=item_name not in shown_items,
+                                    line=dict(color=color_value, width=10),
+                                    marker=dict(size=10, color=color_value, line=dict(color="white", width=1.4)),
+                                    hovertemplate=(
+                                        f"<b>{item_name}</b><br>"
+                                        f"Categoría: {category_name}<br>"
+                                        f"Mes inicio: {int(row['Mes_inicio'])}<br>"
+                                        f"Mes término: {int(row['Mes_termino'])}<br>"
+                                        f"Monto CLP: {row['Monto_CLP']:,.0f}<br>"
+                                        f"Monto USD: {row['Monto_USD']:,.0f}<extra></extra>"
+                                    ),
+                                )
+                            )
+                            shown_items.add(item_name)
+                        fig_timeline_cat.update_yaxes(categoryorder="array", categoryarray=df_tl_plot["Categoria"].tolist(), title="Categoría / Tarea")
+                        fig_timeline_cat.update_xaxes(
+                            title="Mes del proyecto",
+                            tickmode="array",
+                            tickvals=df_tl_plot["Fecha_inicio"].sort_values().unique(),
+                            ticktext=df_tl_plot["Mes_inicio"].sort_values().unique(),
+                            showgrid=True,
+                        )
+                        fig_timeline_cat.update_layout(
+                            margin=dict(l=10, r=10, t=60, b=10),
+                            height=520,
+                            legend_title_text="Ítem",
+                            hoverlabel=dict(bgcolor="white"),
+                            plot_bgcolor="white",
+                            paper_bgcolor="rgba(0,0,0,0)",
+                        )
+                    else:
+                        fig_timeline_cat = px.timeline(
+                            df_tl_plot,
+                            x_start="Fecha_inicio",
+                            x_end="Fecha_termino",
+                            y="Categoria",
+                            color="Item",
+                            color_discrete_map=item_color_map,
+                            hover_data={
+                                "Categoria": True,
+                                "Item": True,
+                                "Mes_inicio": True,
+                                "Mes_termino": True,
+                                "Monto_CLP": ":,.0f",
+                                "Monto_USD": ":,.0f",
+                            },
+                        )
+                        fig_timeline_cat.update_yaxes(categoryorder="array", title="Categoría / Tarea")
+                        fig_timeline_cat.update_xaxes(
+                            title="Mes del proyecto",
+                            tickmode="array",
+                            tickvals=df_tl_plot["Fecha_inicio"].sort_values().unique(),
+                            ticktext=df_tl_plot["Mes_inicio"].sort_values().unique(),
+                            showgrid=True,
+                        )
+                        fig_timeline_cat.update_layout(
+                            margin=dict(l=10, r=10, t=60, b=10),
+                            height=520,
+                            legend_title_text="Ítem",
+                            hoverlabel=dict(bgcolor="white"),
+                        )
                     apply_engineering_chart_typography(fig_timeline_cat, title_size=20, body_size=13, tick_size=12, legend_size=11)
                     st.plotly_chart(
                         fig_timeline_cat,
@@ -4102,7 +4215,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
         st.plotly_chart(fig_val, use_container_width=True)
 
     df_model, model_map = get_valorizacion_model_map(df_valorizacion)
-    fx_default = float(fx_used) if np.isfinite(fx_used) and fx_used > 0 else parse_model_number(model_map.get("fxclpusd", 915))
+    fx_default = float(fx_used) if np.isfinite(fx_used) and fx_used > 0 else parse_model_number(model_map.get("fxclpusd", 925))
     total_base_knowhow_clp, _, _, _ = get_valor_activo_tecnologico_construido(refresh_nonce=data_refresh_nonce)
     pre_money_actual_default = total_base_knowhow_clp / fx_default if fx_default > 0 and total_base_knowhow_clp > 0 else 0.0
     capex_10kw_default = 0.0
@@ -4120,7 +4233,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
     captura_default = parse_model_percent(model_map.get("capturadelvalorpotencialpostpiloto", "100%"))
     ronda_pct_default = parse_model_percent(model_map.get("participacionobjetivoparanuevosinversionistas", "70%"))
     widget_defaults = {
-        "fx": int(round(fx_default or 915)),
+        "fx": int(round(fx_default or 925)),
         "pre_money": int(round(pre_money_actual_default)),
         "inv_clp": int(round(inversion_clp_default)),
         "investment_currency": "USD",
