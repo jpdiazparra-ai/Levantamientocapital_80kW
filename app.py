@@ -12,6 +12,7 @@ import re
 import unicodedata
 import math
 import html
+import requests
 import plotly.graph_objects as go
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from pathlib import Path
@@ -249,11 +250,40 @@ FIN_GRID = "rgba(148,163,184,.25)"
 GANTT_DATE_COL_START = "Inicio (AAAA-MM-DD)"
 GANTT_DATE_COL_END_PLAN = "Fin plan (AAAA-MM-DD)"
 GANTT_DATE_COL_END_REAL = "Fin real"
+REMOTE_FETCH_TTL_SECONDS = 3600
+REMOTE_CONNECT_TIMEOUT_SECONDS = 5
+REMOTE_READ_TIMEOUT_SECONDS = 20
 
 # =========================
 # FUNCIONES
 # =========================
-@st.cache_data(show_spinner=True, ttl=120)
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def fetch_remote_file_bytes(url: str, refresh_nonce: int = 0) -> bytes:
+    response = requests.get(
+        url,
+        timeout=(REMOTE_CONNECT_TIMEOUT_SECONDS, REMOTE_READ_TIMEOUT_SECONDS),
+        headers={"User-Agent": "streamlit-render-capex-dashboard/1.0"},
+    )
+    response.raise_for_status()
+    return response.content
+
+
+def read_remote_csv(url: str, *, refresh_nonce: int = 0, **kwargs) -> pd.DataFrame:
+    return pd.read_csv(BytesIO(fetch_remote_file_bytes(url, refresh_nonce=refresh_nonce)), **kwargs)
+
+
+def read_remote_excel(url: str, *, refresh_nonce: int = 0, **kwargs) -> pd.DataFrame:
+    return pd.read_excel(BytesIO(fetch_remote_file_bytes(url, refresh_nonce=refresh_nonce)), **kwargs)
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_capex_raw_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
+    df_raw = read_remote_csv(url, refresh_nonce=refresh_nonce, dtype=str)
+    df_raw.columns = [str(c).strip() for c in df_raw.columns]
+    return df_raw
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_capex_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
     """
     Carga el CSV de CAPEX y lo normaliza.
@@ -262,9 +292,7 @@ def load_capex_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
       y opcionalmente 'Mes_inicio', 'Mes_termino', 'Dependencia'.
     - Versión SIN encabezados (formato antiguo): toma las primeras 5 columnas como Item/Categoria/Participacion/Monto/Bullet.
     """
-    df_raw = pd.read_csv(url, dtype=str)
-    # Normalizamos nombres de columnas para detección por nombre
-    df_raw.columns = [str(c).strip() for c in df_raw.columns]
+    df_raw = load_capex_raw_data(url, refresh_nonce=refresh_nonce).copy()
 
     has_named_header = set(["ITEM", "Categoría", "Participación (%)", "Monto USD"]).issubset(
         set(df_raw.columns)
@@ -335,7 +363,7 @@ def load_capex_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(show_spinner=True, ttl=120)
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_capex_total_real_clp(url: str, refresh_nonce: int = 0) -> float | None:
     """
     Intenta obtener un total real en CLP directamente desde la hoja publicada de CAPEX.
@@ -343,14 +371,12 @@ def load_capex_total_real_clp(url: str, refresh_nonce: int = 0) -> float | None:
     total fijo del sidebar.
     """
     try:
-        df_raw = pd.read_csv(url, dtype=str)
+        df_raw = load_capex_raw_data(url, refresh_nonce=refresh_nonce).copy()
     except Exception:
         return None
 
     if df_raw.empty:
         return None
-
-    df_raw.columns = [str(c).strip() for c in df_raw.columns]
 
     item_col = find_best_column(df_raw, ["item", "concepto", "descripcion"])
     if item_col:
@@ -453,13 +479,13 @@ def build_google_sheet_xlsx_candidates(url: str) -> list[str]:
     return deduped
 
 
-@st.cache_data(show_spinner=True, ttl=120)
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_director_general_data(sheet_source_url: str, sheet_name: str = "Director General Técnico", refresh_nonce: int = 0) -> pd.DataFrame:
     """Carga la hoja de Dirección Técnica desde el mismo Google Sheet publicado."""
     last_error = None
     for candidate_url in build_google_sheet_xlsx_candidates(sheet_source_url):
         try:
-            df_raw = pd.read_excel(candidate_url, sheet_name=sheet_name, dtype=str)
+            df_raw = read_remote_excel(candidate_url, refresh_nonce=refresh_nonce, sheet_name=sheet_name, dtype=str)
             df_raw.columns = [str(c).strip() for c in df_raw.columns]
 
             cols_map = {str(c).strip().lower(): c for c in df_raw.columns}
@@ -497,9 +523,9 @@ def load_director_general_data(sheet_source_url: str, sheet_name: str = "Directo
     )
 
 
-@st.cache_data(show_spinner=True, ttl=120)
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_valorizacion_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
-    df = pd.read_csv(url, dtype=str)
+    df = read_remote_csv(url, refresh_nonce=refresh_nonce, dtype=str)
     df.columns = [str(c).strip() for c in df.columns]
     for col in df.columns:
         if df[col].dtype == object:
@@ -509,29 +535,29 @@ def load_valorizacion_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(show_spinner=True, ttl=120)
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_valorizacion_raw_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
-    return pd.read_csv(url, dtype=str, header=None)
+    return read_remote_csv(url, refresh_nonce=refresh_nonce, dtype=str, header=None)
 
 
-@st.cache_data(show_spinner=True, ttl=120)
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_knowhow_resumen_raw_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
-    return pd.read_csv(url, dtype=str, header=None)
+    return read_remote_csv(url, refresh_nonce=refresh_nonce, dtype=str, header=None)
 
 
-@st.cache_data(show_spinner=True, ttl=120)
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_eerrv2_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
-    return pd.read_csv(url, dtype=str, header=None)
+    return read_remote_csv(url, refresh_nonce=refresh_nonce, dtype=str, header=None)
 
 
-@st.cache_data(show_spinner=True, ttl=120)
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_restante_piloto_10kw_raw_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
-    return pd.read_csv(url, dtype=str, header=None)
+    return read_remote_csv(url, refresh_nonce=refresh_nonce, dtype=str, header=None)
 
 
-@st.cache_data(show_spinner=True, ttl=120)
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_bullet_contexto_10kw_raw_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
-    return pd.read_csv(url, dtype=str, header=None)
+    return read_remote_csv(url, refresh_nonce=refresh_nonce, dtype=str, header=None)
 
 
 def build_restante_piloto_10kw_view(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
@@ -1155,9 +1181,9 @@ def parse_money_mixed_robusto(x) -> float:
         return np.nan
 
 
-@st.cache_data(show_spinner=True, ttl=120)
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_dashboard_financiero_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
-    df = pd.read_csv(url, dtype=str)
+    df = read_remote_csv(url, refresh_nonce=refresh_nonce, dtype=str)
     df.columns = [str(c).strip() for c in df.columns]
 
     rename_map = {
@@ -1925,9 +1951,9 @@ def gantt_process_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(show_spinner=True, ttl=300)
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_project_gantt_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
-    df = pd.read_csv(url, encoding="utf-8-sig")
+    df = read_remote_csv(url, refresh_nonce=refresh_nonce, encoding="utf-8-sig")
     df.columns = [str(c).strip() for c in df.columns]
     return gantt_process_df(df)
 
@@ -2504,17 +2530,6 @@ def render_inputs_capex_10kw_detail():
 
 
 def render_inputs_estado_actual_dashboard():
-    try:
-        df_fin = load_dashboard_financiero_data(DASHBOARD_FINANCIERO_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
-    except Exception as exc:
-        st.error(f"No se pudo cargar la fuente de Dashboard Financiero Proyecto: {exc}")
-        return
-
-    base = df_fin[df_fin["Monto"].notna()].copy()
-    if base.empty:
-        st.info("La fuente de Dashboard Financiero Proyecto no contiene registros válidos.")
-        return
-
     estado_subblock_key = "inputs_estado_actual_subbloque_sel"
 
     def _set_estado_subblock(value: str):
@@ -2567,6 +2582,17 @@ def render_inputs_estado_actual_dashboard():
         return
     if selected_estado_subblock != "financiero":
         st.info("Selecciona uno de los sub-bloques para abrir su contenido.")
+        return
+
+    try:
+        df_fin = load_dashboard_financiero_data(DASHBOARD_FINANCIERO_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+    except Exception as exc:
+        st.error(f"No se pudo cargar la fuente de Dashboard Financiero Proyecto: {exc}")
+        return
+
+    base = df_fin[df_fin["Monto"].notna()].copy()
+    if base.empty:
+        st.info("La fuente de Dashboard Financiero Proyecto no contiene registros válidos.")
         return
 
     valor_activo_tecnologico, monto_total, capacidades_externo, know_how_fw = get_valor_activo_tecnologico_construido(refresh_nonce=data_refresh_nonce)
@@ -2814,8 +2840,7 @@ def render_pagos_hitos(
     )
 
     try:
-        df_raw_pagos = pd.read_csv(capex_url, dtype=str)
-        df_raw_pagos.columns = [str(c).strip() for c in df_raw_pagos.columns]
+        df_raw_pagos = load_capex_raw_data(capex_url, refresh_nonce=data_refresh_nonce).copy()
         col_map = {}
         if "ITEM" in df_raw_pagos.columns and "Item" not in df_raw_pagos.columns:
             col_map["ITEM"] = "Item"
@@ -6028,6 +6053,11 @@ elif selected_input_block == "escalamiento":
     def _set_capex_focus(value: str):
         st.session_state[capex_selector_state_key] = value
 
+    capex_80kw_view_state_key = "inputs_capex_80kw_view_sel"
+
+    def _set_capex_80kw_view(value: str):
+        st.session_state[capex_80kw_view_state_key] = value
+
     if capex_selector_state_key not in st.session_state:
         st.session_state[capex_selector_state_key] = None
 
@@ -6264,25 +6294,47 @@ elif selected_input_block == "escalamiento":
     if capex_10kw_active:
         render_inputs_capex_10kw_detail()
     elif capex_80kw_active:
-        input_dashboard_tab, input_capex_tab, input_direccion_tab, input_explorador_tab = st.tabs(
-            ["📊 Dashboard general", "🏗️ Detalle capex 80kW", "🧑‍💼 Capital Humano", "🔍 Explorador interactivo"]
-        )
-        with input_dashboard_tab:
+        capex_80kw_views = [
+            ("dashboard", "📊 Dashboard general"),
+            ("capex", "🏗️ Detalle capex 80kW"),
+            ("direccion", "🧑‍💼 Capital Humano"),
+            ("explorador", "🔍 Explorador interactivo"),
+        ]
+        if capex_80kw_view_state_key not in st.session_state:
+            st.session_state[capex_80kw_view_state_key] = "dashboard"
+        if st.session_state[capex_80kw_view_state_key] not in {value for value, _ in capex_80kw_views}:
+            st.session_state[capex_80kw_view_state_key] = "dashboard"
+
+        capex_view_cols = st.columns(len(capex_80kw_views))
+        for idx, (view_value, view_label) in enumerate(capex_80kw_views):
+            is_active = st.session_state.get(capex_80kw_view_state_key) == view_value
+            with capex_view_cols[idx]:
+                st.button(
+                    "Seleccionado" if is_active else view_label,
+                    key=f"inputs_capex_80kw_view_{view_value}",
+                    use_container_width=True,
+                    type="primary" if is_active else "secondary",
+                    on_click=_set_capex_80kw_view,
+                    args=(view_value,),
+                )
+
+        selected_capex_80kw_view = st.session_state.get(capex_80kw_view_state_key)
+        if selected_capex_80kw_view == "dashboard":
             render_resumen_content(
                 key_prefix="inputs_dashboard_general_",
                 include_export=False,
                 include_direction_item=True,
             )
-        with input_capex_tab:
+        elif selected_capex_80kw_view == "capex":
             render_resumen_content(
                 key_prefix="inputs_capex_overview_",
                 include_export=False,
                 include_direction_item=False,
             )
             render_capex_module_content(selector_key="inputs_capex_internal_selector")
-        with input_direccion_tab:
+        elif selected_capex_80kw_view == "direccion":
             render_direccion_module_content()
-        with input_explorador_tab:
+        elif selected_capex_80kw_view == "explorador":
             render_explorador_module_content(key_prefix="inputs_explorer_")
     else:
         st.info("Selecciona `CAPEX 10kW` o `CAPEX 80kW` para abrir el contenido asociado.")
