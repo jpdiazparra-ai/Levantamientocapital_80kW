@@ -2,6 +2,7 @@
 # Dashboard CAPEX Piloto Eólico 80 kW (versión mejorada)
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -12,6 +13,7 @@ import re
 import unicodedata
 import math
 import html
+import textwrap
 import requests
 import plotly.graph_objects as go
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -46,25 +48,34 @@ st.set_page_config(
 )
 
 CAT_COLOR_MAP = {
-    "Desarrollo Tecnológico": "#4C956C",            # verde musgo
-    "Componentes Mecánicos": "#5C6B73",             # acero opaco
-    "Sistema Eléctrico y Control": "#C58940",       # ámbar oscuro
-    "Obras Civiles": "#C75C5C",                     # ladrillo mate
-    "Montaje y Logística": "#7F6A93",               # violeta apagado
-    "Ensayos y Certificación": "#E3B23C",           # dorado mate
-    "Contingencias y Administración": "#7A7E8C",    # gris grafito
+    "Desarrollo Tecnológico": "#7FA8A4",            # verde agua mate
+    "Componentes Mecánicos": "#4F5D6F",             # azul grafito
+    "Sistema Eléctrico y Control": "#D9A766",       # mostaza suave
+    "Obras Civiles": "#D7605E",                     # coral apagado
+    "Montaje y Logística": "#A9A7A4",               # gris cemento
+    "Ensayos y Certificación": "#C98C70",           # terracota suave
+    "Contingencias y Administración": "#7B8794",    # gris acero
 }
 
 PX_COLORS = [
-    "#4C956C",
-    "#5C6B73",
-    "#C58940",
-    "#C75C5C",
-    "#7F6A93",
-    "#E3B23C",
+    "#7FA8A4",
+    "#4F5D6F",
+    "#D9A766",
+    "#D7605E",
+    "#A9A7A4",
+    "#C98C70",
+    "#7B8794",
 ]
 px.defaults.template = "plotly_white"
 px.defaults.color_discrete_sequence = PX_COLORS
+
+DIRECTION_ROLE_COLOR_MAP = {
+    "Ingeniero Eléctrico": "#4F5D6F",
+    "Ingeniero Mecánico": "#D7605E",
+    "Ingeniero de Desarrollo Tecnológico": "#D9A766",
+    "Líder de Ingeniería y Proyecto": "#7FA8A4",
+}
+HUMAN_CAPITAL_SUMMARY_COLOR = "#4F5D6F"
 
 CAPEX_CLP_DEFAULT = 480_000_000
 CAPEX_CSV_URL_DEFAULT = (
@@ -242,9 +253,9 @@ GANTT_PROJECT_CSV_URL_DEFAULT = (
     "pub?gid=0&single=true&output=csv"
 )
 FIN_PALETTE_SM = {
-    "Suministro": "#0EA5A4",
-    "I+D": "#6366F1",
-    "Montaje": "#F59E0B",
+    "Suministro": "#7FA8A4",
+    "I+D": "#4F5D6F",
+    "Montaje": "#D9A766",
 }
 FIN_GRID = "rgba(148,163,184,.25)"
 GANTT_DATE_COL_START = "Inicio (AAAA-MM-DD)"
@@ -1278,15 +1289,15 @@ def render_inputs_financial_main_kpis(df_in: pd.DataFrame):
             box-shadow:0 8px 18px rgba(15,23,42,.06);
         }}
         .inputs-fin-hero{{
-            background:linear-gradient(90deg,#EFF8FF 0%,#DFF4FF 42%,#C6ECFF 100%);
+            background:linear-gradient(90deg,#f4f1ed 0%,#ebe5de 42%,#ddd7cf 100%);
         }}
         .inputs-fin-blank{{
-            background:linear-gradient(180deg,#f8fafc 0%,#ffffff 68%) !important;
+            background:linear-gradient(180deg,#f6f4f1 0%,#ffffff 68%) !important;
         }}
         .inputs-fin-row{{display:flex;align-items:center;gap:10px;margin-bottom:10px}}
         .inputs-fin-ico{{
             width:36px;height:36px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;
-            background:#ecfeff;border:1px solid rgba(14,165,164,.25);font-size:22px
+            background:#e7ece8;border:1px solid rgba(79,109,90,.24);font-size:22px
         }}
         .inputs-fin-h{{font-size:13px;font-weight:800;color:#0f172a;letter-spacing:.02em}}
         .inputs-fin-v{{font-size:28px;font-weight:900;color:#0f172a;line-height:1.05;margin-bottom:8px}}
@@ -1294,7 +1305,7 @@ def render_inputs_financial_main_kpis(df_in: pd.DataFrame):
         .inputs-fin-sub{{display:flex;gap:8px;flex-wrap:wrap}}
         .inputs-fin-chip{{
             display:inline-block;font-size:12px;padding:5px 10px;border-radius:999px;
-            border:1px solid rgba(165,180,252,.45);background:#eef2ff;color:#3730a3
+            border:1px solid rgba(107,114,128,.25);background:#ece9e4;color:#4b5563
         }}
         .inputs-fin-note{{font-size:13px;line-height:1.5;color:#475569;margin-top:6px}}
         .inputs-fin-selector-row{{
@@ -1737,31 +1748,116 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
     df[cat_col] = df[cat_col].astype(str).str.strip().replace({"": np.nan, "nan": np.nan}).fillna("(Sin categoría)")
 
     st.markdown("### Desglose de Componentes de Inversión")
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        top_n = st.selectbox("Top N por monto", [5, 10, 15, 20, 30], index=2, key="inputs_fin_top_n")
-    with c2:
-        modo = st.radio(
-            "Visualizar",
-            ["Monto CLP", "% por Item (100%)"],
-            index=0,
-            horizontal=True,
-            key="inputs_fin_modo",
-        )
-
     cats_all = sorted(df[cat_col].dropna().astype(str).str.strip().unique().tolist())
-    default_cats = st.session_state.get("inputs_fin_cats_sel", cats_all)
-    cats_sel = st.multiselect(
-        "Categorías S/M",
-        cats_all,
-        default=default_cats,
-        key="inputs_fin_cats_sel",
-    )
-    render_inputs_cat_summary_pills(df, cat_col)
+    preferred_order = [cat for cat in ["Suministro", "I+D", "Montaje"] if cat in cats_all]
+    if not preferred_order:
+        preferred_order = cats_all[:3]
+    selector_key = "inputs_fin_categoria_focus"
+    if selector_key not in st.session_state or st.session_state[selector_key] not in preferred_order:
+        st.session_state[selector_key] = preferred_order[0] if preferred_order else None
+    selected_focus = st.session_state.get(selector_key)
 
-    df2 = df[df[cat_col].isin(cats_sel)].copy() if cats_sel else df.iloc[0:0].copy()
+    resumen_cat = (
+        df[df[cat_col].isin(preferred_order)]
+        .groupby(cat_col, as_index=False)
+        .agg(Monto=("Monto", "sum"), Items=("Monto", "count"))
+    )
+    total_focus = float(resumen_cat["Monto"].sum() or 0.0)
+    resumen_cat["pct"] = np.where(total_focus > 0, resumen_cat["Monto"] / total_focus * 100.0, 0.0)
+    resumen_cat["__ord"] = resumen_cat[cat_col].apply(lambda x: preferred_order.index(x) if x in preferred_order else 999)
+    resumen_cat = resumen_cat.sort_values(["__ord", "Monto"], ascending=[True, False]).drop(columns="__ord")
+
+    st.markdown(
+        """
+        <style>
+        .inputs-focus-grid{
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:12px;
+            margin:0 0 14px 0;
+        }
+        @media (max-width:1000px){
+            .inputs-focus-grid{grid-template-columns:1fr;}
+        }
+        .inputs-focus-card{
+            border-radius:20px;
+            padding:14px 16px;
+            border:1px solid rgba(203,213,225,.72);
+            background:linear-gradient(180deg,#ffffff 0%,#f6f4f1 100%);
+            box-shadow:0 6px 18px rgba(15,23,42,.05);
+            width:100%;
+            text-align:left;
+        }
+        .inputs-focus-card.active{
+            border:1px solid rgba(79,93,111,.40);
+            background:linear-gradient(180deg,#f1f5f9 0%,#e8eeef 100%);
+            box-shadow:0 10px 24px rgba(15,23,42,.08);
+        }
+        .inputs-focus-k{
+            font-size:11px;
+            font-weight:800;
+            letter-spacing:.10em;
+            text-transform:uppercase;
+            color:#64748B;
+            margin-bottom:6px;
+        }
+        .inputs-focus-v{
+            font-size:24px;
+            font-weight:900;
+            line-height:1.02;
+            color:#0f172a;
+            margin-bottom:6px;
+        }
+        .inputs-focus-s{
+            font-size:13px;
+            line-height:1.45;
+            color:#475569;
+            margin-bottom:8px;
+        }
+        .inputs-focus-chip{
+            display:inline-flex;
+            align-items:center;
+            gap:8px;
+            padding:4px 9px;
+            border-radius:999px;
+            background:#ece9e4;
+            border:1px solid rgba(107,114,128,.18);
+            font-size:12px;
+            color:#334155;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    focus_cols = st.columns(len(resumen_cat)) if len(resumen_cat) > 0 else []
+    for col, (_, row) in zip(focus_cols, resumen_cat.iterrows()):
+        cat = str(row[cat_col])
+        is_active = selected_focus == cat
+        color = FIN_PALETTE_SM.get(cat, "#64748B")
+        with col:
+            st.markdown(
+                f"""
+                <div class="inputs-focus-card {'active' if is_active else ''}">
+                    <div class="inputs-focus-k">{html.escape(cat)}</div>
+                    <div class="inputs-focus-v">{html.escape(format_clp(float(row['Monto'])))}</div>
+                    <div class="inputs-focus-s">Participación de {float(row['pct']):.1f}% dentro del bloque S/M analizado.</div>
+                    <span class="inputs-focus-chip"><span style="display:inline-block;width:10px;height:10px;border-radius:999px;background:{color};"></span>{int(row['Items'])} ítems</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.button(
+                "Seleccionado" if is_active else f"Ver {cat}",
+                key=f"inputs_fin_focus_{cat}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+                on_click=lambda selected=cat: st.session_state.__setitem__(selector_key, selected),
+            )
+
+    df2 = df[df[cat_col] == selected_focus].copy() if selected_focus else df.iloc[0:0].copy()
     if df2.empty:
-        st.info("No hay datos para las categorías seleccionadas.")
+        st.info("No hay datos para la categoría seleccionada.")
         return
 
     resumen_item = (
@@ -1775,13 +1871,13 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
     )
     resumen_item["Promedio"] = resumen_item["Promedio"].round(0)
     resumen_item = resumen_item.sort_values("Monto", ascending=False)
-    tabla_show = resumen_item.head(top_n).copy()
+    tabla_show = resumen_item.copy()
 
     if tabla_show.empty:
         st.info("No hay ítems para mostrar.")
         return
 
-    render_inputs_item_kpi_cards(tabla_show, item_col)
+    render_inputs_item_kpi_cards(tabla_show, item_col, selected_focus)
 
     items_keep = tabla_show[item_col].tolist()
     pivot = (
@@ -1790,77 +1886,251 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
     )
 
     if not pivot.empty:
-        if modo == "Monto CLP":
-            plot_df = pivot.reset_index().melt(id_vars=item_col, var_name="Categoría", value_name="Monto")
-            fig = px.bar(
-                plot_df,
-                x="Monto",
-                y=item_col,
-                color="Categoría",
+        plot_df = pivot.reset_index().melt(id_vars=item_col, var_name="Categoría", value_name="Monto")
+        plot_df = plot_df[plot_df["Monto"] > 0].copy()
+        plot_df["Monto_MM"] = plot_df["Monto"] / 1_000_000
+        item_totals = tabla_show.set_index(item_col)["% del total"].to_dict()
+        plot_df["pct_total"] = plot_df[item_col].map(item_totals).fillna(0.0)
+        plot_df["item_label"] = plot_df[item_col].apply(
+            lambda v: "<br>".join(textwrap.wrap(str(v), width=22)) if len(str(v)) > 22 else str(v)
+        )
+        plot_height = min(max(360, 74 * len(plot_df)), 760)
+        fig = px.bar(
+            plot_df,
+            x="Monto_MM",
+            y="item_label",
+            color="Categoría",
+            orientation="h",
+            color_discrete_map=FIN_PALETTE_SM,
+            text="Monto_MM",
+        )
+        fig.update_traces(
+            texttemplate="%{text:.1f} MM",
+            textposition="outside",
+            cliponaxis=False,
+            customdata=np.stack([plot_df["Monto"], plot_df["pct_total"]], axis=-1),
+            hovertemplate=(
+                "<b>%{y}</b><br>"
+                "Monto: $%{customdata[0]:,.0f}<br>"
+                "Participación del frente: %{customdata[1]:.2f}%<extra></extra>"
+            ),
+        )
+        fig.update_layout(
+            title=dict(
+                text="Ranking de componentes del frente seleccionado",
+                x=0,
+                xanchor="left",
+                font=dict(size=22, color="#0f172a"),
+            ),
+            height=plot_height,
+            margin=dict(l=120, r=80, t=72, b=40),
+            plot_bgcolor="white",
+            paper_bgcolor="rgba(0,0,0,0)",
+            bargap=0.34,
+            legend=dict(
+                title="Frente",
                 orientation="h",
-                color_discrete_map=FIN_PALETTE_SM,
-                title="Items — Monto por categoría S/M",
-            )
-            fig.update_traces(hovertemplate="<b>%{y}</b><br>%{trace.name}: $%{x:,.0f}<extra></extra>")
-            fig.update_xaxes(separatethousands=True)
-        else:
-            row_sums = pivot.sum(axis=1).replace(0, np.nan)
-            pct = pivot.div(row_sums, axis=0) * 100.0
-            plot_df = pct.reset_index().melt(id_vars=item_col, var_name="Categoría", value_name="%")
-            fig = px.bar(
-                plot_df,
-                x="%",
-                y=item_col,
-                color="Categoría",
-                orientation="h",
-                color_discrete_map=FIN_PALETTE_SM,
-                title="Top Items — % por categoría S/M (100%)",
-            )
-            fig.update_traces(hovertemplate="<b>%{y}</b><br>%{trace.name}: %{x:.2f}%<extra></extra>")
-            fig.update_xaxes(range=[0, 100])
-
-        fig.update_layout(margin=dict(l=80, r=40, t=60, b=40), legend_title="S/M")
+                yanchor="bottom",
+                y=1.02,
+                xanchor="left",
+                x=0,
+            ),
+        )
+        fig.update_xaxes(
+            title="Monto (MM CLP)",
+            ticksuffix=" MM",
+            gridcolor="#E5E7EB",
+            zeroline=False,
+        )
+        fig.update_yaxes(title=None, showgrid=False)
         st.plotly_chart(fig, use_container_width=True)
 
 
-def render_inputs_item_kpi_cards(tabla_show: pd.DataFrame, item_col: str):
-    st.markdown(
-        """
-        <style>
-        .inputs-item-card{
-            box-sizing:border-box;border-radius:16px;padding:14px 16px;background:linear-gradient(180deg,#f8fafc 0%,#ffffff 62%);
-            border:1px solid rgba(148,163,184,.35);box-shadow:0 4px 10px rgba(15,23,42,.05)
-        }
-        .inputs-item-title{font-size:14px;font-weight:700;color:#0f172a;margin-bottom:4px}
-        .inputs-item-value{font-size:26px;font-weight:800;color:#0f172a;margin-top:4px}
-        .inputs-item-sub{font-size:13px;color:#475569;margin-top:8px}
-        .inputs-item-chip{
-            display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;margin-right:6px;
-            border:1px solid rgba(148,163,184,.35);background:#f1f5f9;color:#0f172a
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
+def render_inputs_item_kpi_cards(tabla_show: pd.DataFrame, item_col: str, selected_focus: str | None = None):
+    top_1 = tabla_show.iloc[0]
+    top_2 = tabla_show.iloc[1] if len(tabla_show) > 1 else None
+    concentration = float(tabla_show.head(3)["% del total"].sum() or 0.0)
+    accent_color = FIN_PALETTE_SM.get(str(selected_focus or "").strip(), "#7B8794")
+
+    st.caption(
+        f"Mayor componente: {top_1[item_col]} con {format_clp(float(top_1['Monto']))}. "
+        f"Top 3 concentra {concentration:.2f}% del frente analizado."
     )
-    items = list(tabla_show.iterrows())
-    for start in range(0, len(items), 3):
-        cols = st.columns(min(3, len(items) - start))
-        for col, (_, rec) in zip(cols, items[start:start + 3]):
-            with col:
-                st.markdown(
-                    f"""
-                    <div class="inputs-item-card">
-                      <div class="inputs-item-title">{rec[item_col]}</div>
-                      <div class="inputs-item-value">{format_clp(float(rec['Monto']))}</div>
-                      <div class="inputs-item-sub">
-                        <span class="inputs-item-chip">% del total: {float(rec['% del total']):.2f}%</span>
-                        <span class="inputs-item-chip">Ítems: {int(rec['Items'])}</span>
-                        <span class="inputs-item-chip">Prom: {format_clp(float(rec['Promedio']))}</span>
-                      </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+    if top_2 is not None:
+        st.caption(
+            f"Segundo componente: {top_2[item_col]} con {format_clp(float(top_2['Monto']))} "
+            f"y {int(top_2['Items'])} registros."
+        )
+
+    ranking_rows = []
+    for rank, (_, rec) in enumerate(tabla_show.iterrows(), start=1):
+        share = float(rec["% del total"])
+        row_class = " inputs-item-board-top" if rank <= 3 else ""
+        items_count = int(rec["Items"])
+        item_label = "registro" if items_count == 1 else "registros"
+        ranking_rows.append(
+            f"""
+            <div class="inputs-item-board-row{row_class}">
+              <div class="inputs-item-board-rank">
+                <span class="inputs-item-rank">#{rank}</span>
+              </div>
+              <div class="inputs-item-board-main">
+                <div class="inputs-item-name-main">{html.escape(str(rec[item_col]))}</div>
+                <div class="inputs-item-name-sub">{items_count} {item_label} · promedio {format_clp(float(rec["Promedio"]))}</div>
+                <div class="inputs-item-share-wrap">
+                  <div class="inputs-item-share-bar">
+                    <span class="inputs-item-share-fill" style="width:{min(max(share, 0.0), 100.0):.2f}%; background:{accent_color};"></span>
+                  </div>
+                  <span class="inputs-item-share-label">{share:.2f}% del frente</span>
+                </div>
+              </div>
+              <div class="inputs-item-board-amount">
+                <div class="inputs-item-board-value">{format_clp(float(rec["Monto"]))}</div>
+                <div class="inputs-item-board-meta">{items_count} ítems</div>
+              </div>
+            </div>
+            """
+        )
+
+    board_height = min(180 + len(tabla_show) * 74, 760)
+    components.html(
+        f"""
+        <style>
+        html, body {{
+            margin:0;
+            padding:0;
+            font-family:"Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color:#334155;
+            background:transparent;
+        }}
+        .inputs-item-board-wrap {{
+            max-height:{board_height}px;
+            overflow:auto;
+            border:1px solid rgba(148,163,184,.20);
+            border-radius:24px;
+            background:linear-gradient(180deg,#ffffff 0%, #faf8f5 100%);
+            box-shadow:0 10px 28px rgba(15,23,42,.05);
+            margin-top:8px;
+            padding:10px;
+        }}
+        .inputs-item-board-row {{
+            display:grid;
+            grid-template-columns:72px minmax(0,1fr) minmax(180px,240px);
+            gap:16px;
+            align-items:center;
+            padding:16px 18px;
+            border-radius:18px;
+            background:rgba(255,255,255,.84);
+            border:1px solid rgba(226,232,240,.90);
+            margin-bottom:10px;
+        }}
+        .inputs-item-board-row:last-child {{
+            margin-bottom:0;
+        }}
+        .inputs-item-board-top {{
+            background:linear-gradient(90deg, color-mix(in srgb, {accent_color} 14%, white) 0%, rgba(255,255,255,.98) 34%);
+            border-color:color-mix(in srgb, {accent_color} 26%, white);
+        }}
+        .inputs-item-board-rank {{
+            display:flex;
+            justify-content:center;
+        }}
+        .inputs-item-rank {{
+            display:inline-flex;
+            min-width:48px;
+            justify-content:center;
+            padding:8px 12px;
+            border-radius:999px;
+            background:#E7EDF3;
+            color:#334155;
+            font-weight:800;
+            font-family:inherit;
+        }}
+        .inputs-item-name-main {{
+            font-size:15px;
+            font-weight:800;
+            color:#0f172a;
+            line-height:1.25;
+            font-family:inherit;
+        }}
+        .inputs-item-name-sub {{
+            margin-top:3px;
+            font-size:12px;
+            color:#64748B;
+            font-weight:700;
+            font-family:inherit;
+        }}
+        .inputs-item-share-wrap {{
+            display:flex;
+            align-items:center;
+            gap:10px;
+            min-width:180px;
+            margin-top:10px;
+        }}
+        .inputs-item-share-bar {{
+            position:relative;
+            width:100%;
+            min-width:120px;
+            height:10px;
+            border-radius:999px;
+            background:#E5E7EB;
+            overflow:hidden;
+        }}
+        .inputs-item-share-fill {{
+            display:block;
+            height:100%;
+            border-radius:999px;
+        }}
+        .inputs-item-share-label {{
+            min-width:88px;
+            text-align:left;
+            font-weight:800;
+            color:#334155;
+            white-space:nowrap;
+            font-family:inherit;
+        }}
+        .inputs-item-board-amount {{
+            text-align:right;
+        }}
+        .inputs-item-board-value {{
+            font-size:21px;
+            font-weight:900;
+            color:#0f172a;
+            line-height:1.08;
+            white-space:nowrap;
+            font-family:inherit;
+        }}
+        .inputs-item-board-meta {{
+            margin-top:4px;
+            font-size:12px;
+            font-weight:700;
+            color:#64748B;
+            font-family:inherit;
+        }}
+        @media (max-width:920px) {{
+            .inputs-item-board-row {{
+                grid-template-columns:1fr;
+                gap:10px;
+            }}
+            .inputs-item-board-rank {{
+                justify-content:flex-start;
+            }}
+            .inputs-item-board-amount {{
+                text-align:left;
+            }}
+            .inputs-item-share-wrap {{
+                min-width:120px;
+                gap:8px;
+            }}
+        }}
+        </style>
+        <div class="inputs-item-board-wrap">
+          {''.join(ranking_rows)}
+        </div>
+        """,
+        height=board_height + 32,
+        scrolling=True,
+    )
 
 
 def render_inputs_factor_chart(df_in: pd.DataFrame):
@@ -1896,18 +2166,19 @@ def render_inputs_factor_chart(df_in: pd.DataFrame):
     agg_fc["__of"] = agg_fc["Factor"].apply(lambda x: orden_factor.index(x) if x in orden_factor else 999)
     agg_fc["__oc"] = agg_fc["Categoria"].apply(lambda x: orden_cat.index(x) if x in orden_cat else 999)
     agg_fc = agg_fc.sort_values(["__of", "__oc"]).drop(columns=["__of", "__oc"])
-    agg_fc["label"] = agg_fc.apply(lambda r: f"{format_clp(float(r['Monto']))} · {float(r['% dentro del Factor']):.2f}%", axis=1)
+    agg_fc["Monto_MM"] = agg_fc["Monto"] / 1_000_000
+    agg_fc["label"] = agg_fc.apply(lambda r: f"{r['Monto_MM']:.1f} MM · {float(r['% dentro del Factor']):.1f}%", axis=1)
 
     st.markdown("### Eficiencia del CAPEX Ejecutado")
     fig_fc = px.bar(
         agg_fc,
-        x="Monto",
+        x="Monto_MM",
         y="Factor",
         orientation="h",
         color="Categoria",
         color_discrete_map=FIN_PALETTE_SM,
         text="label",
-        title="Montos necesarios para un nuevo piloto",
+        title="Composición del CAPEX útil para replicar el piloto",
     )
     fig_fc.update_traces(
         textposition="inside",
@@ -1915,21 +2186,36 @@ def render_inputs_factor_chart(df_in: pd.DataFrame):
         customdata=np.stack([agg_fc["% dentro del Factor"], agg_fc["%_esc"], agg_fc["Items"]], axis=-1),
         hovertemplate=(
             "<b>%{y}</b> · %{trace.name}<br>"
-            "Monto seg.: $%{x:,.0f}<br>"
+            "Monto seg.: %{x:.1f} MM CLP<br>"
             "Participación en Factor: %{customdata[0]:.2f}%<br>"
             "%_esc seg.: %{customdata[1]:.2f}%<br>"
             "Ítems seg.: %{customdata[2]}<extra></extra>"
         ),
+        marker_line_width=0,
     )
     fig_fc.update_layout(
         barmode="stack",
-        margin=dict(l=130, r=40, t=60, b=40),
+        margin=dict(l=120, r=40, t=76, b=46),
+        height=360,
         plot_bgcolor="white",
         paper_bgcolor="rgba(0,0,0,0)",
-        legend_title="Categoría (S/M/I+D)",
+        bargap=0.42,
+        legend=dict(
+            title="Categoría",
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+        ),
+        title=dict(
+            x=0,
+            xanchor="left",
+            font=dict(size=22, color="#0f172a"),
+        ),
     )
-    fig_fc.update_xaxes(separatethousands=True, tickprefix="$", gridcolor=FIN_GRID)
-    fig_fc.update_yaxes(title="Factor", showgrid=False)
+    fig_fc.update_xaxes(title="Monto (MM CLP)", ticksuffix=" MM", gridcolor=FIN_GRID, zeroline=False)
+    fig_fc.update_yaxes(title=None, showgrid=False)
     st.plotly_chart(fig_fc, use_container_width=True)
 
 
@@ -2778,10 +3064,8 @@ def render_inputs_estado_actual_dashboard():
     selected_financial_asset = financial_kpis.get("selected", "costo_ejecutado")
 
     if selected_financial_asset == "costo_ejecutado":
-        st.markdown("### Distribución de Inversión por Categoría Técnica")
         fig_sm, tabla_sm = make_inputs_suministro_chart(base)
         if fig_sm is not None and tabla_sm is not None and not tabla_sm.empty:
-            render_inputs_sm_kpi_cards(tabla_sm)
             st.plotly_chart(fig_sm, use_container_width=True)
         else:
             st.info("No hay datos válidos para graficar Suministro / Montaje.")
@@ -3180,10 +3464,13 @@ def render_pagos_hitos(
                     legend=dict(
                         orientation="h",
                         yanchor="top",
-                        y=-0.2,
-                        xanchor="center",
-                        x=0.5,
-                        title=dict(text="Ítem"),
+                        y=-0.16,
+                        xanchor="left",
+                        x=0,
+                        title=dict(text=""),
+                        font=dict(size=10),
+                        entrywidth=105,
+                        entrywidthmode="pixels",
                     ),
                     hoverlabel=dict(bgcolor="white"),
                 )
@@ -3499,7 +3786,7 @@ def render_resumen_content(
         f'<div class="eng-body-title" style="font-size:15px;font-weight:600;color:#475569;margin:0 0 10px 0;">{item_total_title}</div>',
         unsafe_allow_html=True,
     )
-    resumen_color_map = {**CAT_COLOR_MAP, "Dirección técnica": "#0F766E"}
+    resumen_color_map = {**CAT_COLOR_MAP, "Dirección técnica": HUMAN_CAPITAL_SUMMARY_COLOR}
 
     if include_direction_item:
         fig_item_total = px.scatter(
@@ -3731,7 +4018,17 @@ def render_resumen_content(
                         fig_timeline_cat.update_layout(
                             margin=dict(l=10, r=10, t=60, b=10),
                             height=520,
-                            legend_title_text="Ítem",
+                            legend=dict(
+                                orientation="h",
+                                yanchor="top",
+                                y=-0.16,
+                                xanchor="left",
+                                x=0,
+                                title=dict(text=""),
+                                font=dict(size=10),
+                                entrywidth=105,
+                                entrywidthmode="pixels",
+                            ),
                             hoverlabel=dict(bgcolor="white"),
                         )
                     apply_engineering_chart_typography(fig_timeline_cat, title_size=20, body_size=13, tick_size=12, legend_size=11)
@@ -4184,12 +4481,7 @@ def render_direccion_module_content():
                 "Líder de Ingeniería y Proyecto": "Líder de Ingeniería<br>y Proyecto",
             }
         )
-        direccion_color_map = {
-            "Ingeniero Eléctrico": "#2563EB",
-            "Ingeniero Mecánico": "#0F766E",
-            "Ingeniero de Desarrollo Tecnológico": "#64748B",
-            "Líder de Ingeniería y Proyecto": "#0F4C81",
-        }
+        direccion_color_map = DIRECTION_ROLE_COLOR_MAP
         max_total_mm = float(df_dir_plot["Total_MM"].max() or 0.0)
         top_role_row = df_dir_plot.sort_values("Total", ascending=False).iloc[0]
         top_role = str(top_role_row["Cargo"])
@@ -6095,7 +6387,17 @@ def render_explorador_module_content(key_prefix: str = "explorer_"):
             xaxis_title="Monto (millones de CLP)",
             yaxis_title="",
             margin=dict(l=10, r=10, t=60, b=10),
-            legend_title_text="Ítem",
+            legend=dict(
+                orientation="h",
+                yanchor="top",
+                y=-0.16,
+                xanchor="left",
+                x=0,
+                title=dict(text=""),
+                font=dict(size=10),
+                entrywidth=105,
+                entrywidthmode="pixels",
+            ),
         )
         st.plotly_chart(fig_exp, use_container_width=True)
     else:
@@ -7190,18 +7492,32 @@ if False:
             categories=cat_order,
             ordered=True,
         )
-    
+        legend_label_map = {
+            "Generador axial 80kW": "Generador 80kW",
+            "Montaje rotor/generador": "Montaje rotor",
+            "Simulaciones CFD de rotor híbrido": "Simulaciones CFD",
+            "Movimientos de tierra y rellenos": "Tierras y rellenos",
+            "Ensayo curva potencia IEC 61400-12": "Ensayo curva IEC",
+            "Ensayo curva de potencia IEC 61400-12": "Ensayo curva IEC",
+        }
+        df_capex_plot["Item_legend"] = df_capex_plot["Item"].replace(legend_label_map)
+        item_legend_color_map = {
+            legend_label_map.get(item, item): color
+            for item, color in item_color_map.items()
+        }
+
         fig_stack = px.bar(
             df_capex_plot,
             x="Monto_CLP_MM",
             y="Categoria",
-            color="Item",
+            color="Item_legend",
+            color_discrete_map=item_legend_color_map,
             orientation="h",
             text="Texto_seg",
             labels={
                 "Monto_CLP_MM": "Monto (millones de CLP)",
                 "Categoria": "",
-                "Item": "Ítem",
+                "Item_legend": "",
             },
             title="CAPEX por ítem segmentado por categoría (millones de CLP)",
         )
@@ -7233,7 +7549,17 @@ if False:
             xaxis_title="Monto (millones de CLP)",
             yaxis_title="",
             margin=dict(l=10, r=10, t=60, b=10),
-            legend_title_text="Ítem",
+            legend=dict(
+                orientation="h",
+                yanchor="top",
+                y=-0.12,
+                xanchor="left",
+                x=0,
+                title=dict(text=""),
+                font=dict(size=9),
+                entrywidth=88,
+                entrywidthmode="pixels",
+            ),
             height=650,
         )
     
@@ -7691,12 +8017,7 @@ def render_direccion_module_content():
             }
         )
 
-        direccion_color_map = {
-            "Ingeniero Eléctrico": "#2563EB",
-            "Ingeniero Mecánico": "#0F766E",
-            "Ingeniero de Desarrollo Tecnológico": "#64748B",
-            "Líder de Ingeniería y Proyecto": "#0F4C81",
-        }
+        direccion_color_map = DIRECTION_ROLE_COLOR_MAP
         max_total_mm = float(df_dir_plot["Total_MM"].max() or 0.0)
         top_role_row = df_dir_plot.sort_values("Total", ascending=False).iloc[0]
         top_role = str(top_role_row["Cargo"])
