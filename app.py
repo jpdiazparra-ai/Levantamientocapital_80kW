@@ -483,6 +483,10 @@ def build_google_sheet_xlsx_candidates(url: str) -> list[str]:
 def load_director_general_data(sheet_source_url: str, sheet_name: str = "Director General Técnico", refresh_nonce: int = 0) -> pd.DataFrame:
     """Carga la hoja de Dirección Técnica desde el mismo Google Sheet publicado."""
     last_error = None
+    cargo_display_map = {
+        "Director General Técnico": "Líder de Ingeniería y Proyecto",
+        "Ingeniero Proyecto (PMO)": "Ingeniero de Desarrollo Tecnológico",
+    }
     for candidate_url in build_google_sheet_xlsx_candidates(sheet_source_url):
         try:
             df_raw = read_remote_excel(candidate_url, refresh_nonce=refresh_nonce, sheet_name=sheet_name, dtype=str)
@@ -512,6 +516,7 @@ def load_director_general_data(sheet_source_url: str, sheet_name: str = "Directo
                 "Mes_inicio": pd.to_numeric(df_raw[inicio_col], errors="coerce") if inicio_col else 1,
             })
             df = df[df["Cargo"].notna() & (df["Cargo"] != "") & (df["Cargo"].str.lower() != "nan")].copy()
+            df["Cargo"] = df["Cargo"].replace(cargo_display_map)
             df = df[(df["Meses"].notna()) | (df["Total"] > 0)].copy()
             df["Mes_inicio"] = df["Mes_inicio"].fillna(1).clip(lower=1)
             return df.reset_index(drop=True)
@@ -3376,8 +3381,8 @@ st.markdown(
     .kpi-card {
         background: #F9FAFB;
         border-radius: 0.9rem;
-        padding: 1.1rem 1.4rem 1.0rem 1.4rem;
-        min-height: 160px;
+        padding: 0.95rem 1.25rem 0.8rem 1.25rem;
+        min-height: 116px;
         border: 1px solid #E5E7EB;
         box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
     }
@@ -4039,7 +4044,7 @@ def render_direccion_module_content():
         dk1, dk2, dk3 = st.columns(3)
         with dk1:
             kpi_card(
-                "Fondos dirección (CLP)",
+                "Fondos capital humano (CLP)",
                 format_clp(total_direccion),
                 "Monto total separado del CAPEX técnico base."
             )
@@ -4055,6 +4060,112 @@ def render_direccion_module_content():
                 f"{total_meses:,.0f}".replace(",", "."),
                 "Suma de meses reportados por cargo."
             )
+        st.markdown(
+            """
+            <style>
+            .dir-pro-shell{
+                border:1px solid rgba(226,232,240,.92);
+                border-radius:24px;
+                background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);
+                box-shadow:0 14px 32px rgba(15,23,42,.06);
+                padding:18px 20px 16px 20px;
+                margin:8px 0 14px 0;
+            }
+            .dir-pro-k{
+                font-size:11px;
+                font-weight:800;
+                letter-spacing:.12em;
+                text-transform:uppercase;
+                color:#64748B;
+                margin-bottom:6px;
+            }
+            .dir-pro-t{
+                font-size:24px;
+                font-weight:900;
+                line-height:1.06;
+                color:#0f172a;
+                margin-bottom:8px;
+            }
+            .dir-pro-s{
+                font-size:13px;
+                line-height:1.58;
+                color:#475569;
+                margin-bottom:12px;
+            }
+            .dir-pro-chip-row{
+                display:flex;
+                flex-wrap:wrap;
+                gap:10px;
+            }
+            .dir-pro-chip{
+                display:inline-flex;
+                align-items:center;
+                gap:8px;
+                padding:7px 11px;
+                border-radius:999px;
+                border:1px solid rgba(148,163,184,.26);
+                background:rgba(255,255,255,.86);
+                box-shadow:0 4px 10px rgba(15,23,42,.04);
+                font-size:12px;
+                color:#0f172a;
+            }
+            .dir-pro-dot{
+                width:10px;
+                height:10px;
+                border-radius:999px;
+                flex:0 0 auto;
+            }
+            .dir-insight-grid{
+                display:grid;
+                grid-template-columns:repeat(3,minmax(0,1fr));
+                gap:12px;
+                margin:0 0 14px 0;
+            }
+            @media (max-width:1000px){
+                .dir-insight-grid{grid-template-columns:1fr;}
+            }
+            .dir-insight-card{
+                border-radius:18px;
+                padding:14px 15px 13px 15px;
+                border:1px solid rgba(191,219,254,.68);
+                background:linear-gradient(180deg,#ffffff 0%,#eff6ff 100%);
+                box-shadow:0 6px 16px rgba(15,23,42,.05);
+            }
+            .dir-insight-label{
+                font-size:11px;
+                font-weight:800;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+                color:#64748B;
+                margin-bottom:6px;
+            }
+            .dir-insight-value{
+                font-size:26px;
+                font-weight:900;
+                line-height:1.02;
+                color:#0f172a;
+                margin-bottom:6px;
+            }
+            .dir-insight-sub{
+                font-size:13px;
+                line-height:1.5;
+                color:#475569;
+            }
+            .dir-notes{
+                margin:0;
+                padding-left:18px;
+            }
+            .dir-notes li{
+                margin:0 0 10px 0;
+                color:#334155;
+                line-height:1.58;
+                font-size:14px;
+            }
+            .dir-notes li:last-child{margin-bottom:0;}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
         df_dir_plot = df_direccion.copy()
         df_dir_plot["Total_MM"] = df_dir_plot["Total"] / 1e6
         df_dir_plot["Participacion_pct"] = np.where(
@@ -4067,48 +4178,75 @@ def render_direccion_module_content():
             axis=1,
         )
         df_dir_plot = df_dir_plot.sort_values("Total", ascending=True).copy()
+        df_dir_plot["Cargo_grafico"] = df_dir_plot["Cargo"].replace(
+            {
+                "Ingeniero de Desarrollo Tecnológico": "Ingeniero de Desarrollo<br>Tecnológico",
+                "Líder de Ingeniería y Proyecto": "Líder de Ingeniería<br>y Proyecto",
+            }
+        )
         direccion_color_map = {
             "Ingeniero Eléctrico": "#2563EB",
             "Ingeniero Mecánico": "#0F766E",
-            "Ingeniero Proyecto (PMO)": "#64748B",
-            "Director General Técnico": "#0F4C81",
+            "Ingeniero de Desarrollo Tecnológico": "#64748B",
+            "Líder de Ingeniería y Proyecto": "#0F4C81",
         }
+        max_total_mm = float(df_dir_plot["Total_MM"].max() or 0.0)
+        top_role_row = df_dir_plot.sort_values("Total", ascending=False).iloc[0]
+        top_role = str(top_role_row["Cargo"])
+        top_role_pct = float(top_role_row["Participacion_pct"] or 0.0)
+        concentration_top_2 = float(
+            df_dir_plot.sort_values("Total", ascending=False).head(2)["Participacion_pct"].sum() or 0.0
+        )
         st.markdown(
-            '<div class="eng-body-title">Fondos por cargo de dirección técnica</div>',
+            f"""
+            <div class="dir-pro-shell">
+                <div class="dir-pro-k">Visual ejecutivo</div>
+                <div class="dir-pro-t">Fondos por cargo de dirección técnica</div>
+                <div class="dir-pro-s">Composición económica del bloque de capital humano técnico, ordenada por peso financiero y ajustada para cargos con etiquetas largas.</div>
+                <div class="dir-pro-chip-row">
+                    <div class="dir-pro-chip"><span class="dir-pro-dot" style="background:#0F4C81"></span><strong>Cargo líder:</strong> {top_role}</div>
+                    <div class="dir-pro-chip"><span class="dir-pro-dot" style="background:#0F766E"></span><strong>Concentración top 2:</strong> {concentration_top_2:.1f}%</div>
+                    <div class="dir-pro-chip"><span class="dir-pro-dot" style="background:#2563EB"></span><strong>Run-rate ponderado:</strong> {format_clp(costo_mensual_prom_ponderado)}</div>
+                </div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
         fig_direccion = px.bar(
             df_dir_plot,
             x="Total_MM",
-            y="Cargo",
+            y="Cargo_grafico",
             orientation="h",
             text="Etiqueta_barra",
             color="Cargo",
             color_discrete_map=direccion_color_map,
             title=None,
-            labels={"Total_MM": "Monto total (MM CLP)", "Cargo": ""},
+            labels={"Total_MM": "Monto total (MM CLP)", "Cargo_grafico": ""},
         )
         fig_direccion.update_traces(
             textposition="outside",
             textfont=dict(size=11, color="#334155"),
-            marker=dict(line=dict(color="rgba(255,255,255,0.92)", width=1.2)),
+            marker=dict(line=dict(color="rgba(255,255,255,0.96)", width=1.4)),
+            cliponaxis=False,
             hovertemplate=(
-                "<b>%{y}</b><br>"
+                "<b>%{customdata[3]}</b><br>"
                 "Total: %{x:.1f} MM CLP<br>"
                 "Participación: %{customdata[0]:.1f}%<br>"
                 "Meses: %{customdata[1]:.0f}<br>"
                 "Costo mensual: %{customdata[2]:,.0f} CLP<extra></extra>"
             ),
-            customdata=df_dir_plot[["Participacion_pct", "Meses", "Costo empresa mensual"]],
+            customdata=df_dir_plot[["Participacion_pct", "Meses", "Costo empresa mensual", "Cargo"]],
         )
         fig_direccion.update_layout(
             showlegend=False,
-            margin=dict(l=10, r=70, t=34, b=24),
-            height=400,
+            margin=dict(l=16, r=124, t=12, b=12),
+            height=max(390, 92 * len(df_dir_plot) + 14),
             plot_bgcolor="white",
             paper_bgcolor="rgba(0,0,0,0)",
-            bargap=0.28,
+            bargap=0.30,
             font=dict(color="#334155", size=13),
+            uniformtext_minsize=10,
+            uniformtext_mode="hide",
         )
         apply_engineering_chart_typography(fig_direccion, title_size=20, body_size=13, tick_size=12, legend_size=12)
         fig_direccion.update_xaxes(
@@ -4116,32 +4254,89 @@ def render_direccion_module_content():
             gridcolor="rgba(148,163,184,0.18)",
             zeroline=False,
             ticksuffix=" MM",
+            range=[0, max_total_mm * 1.18 if max_total_mm > 0 else 1],
+            automargin=True,
         )
-        fig_direccion.update_yaxes(showgrid=False)
+        fig_direccion.update_yaxes(showgrid=False, automargin=True)
         st.plotly_chart(fig_direccion, use_container_width=True)
 
-        col_dir_1, col_dir_2 = st.columns([1.2, 1])
+        df_dir_table = df_dir_plot.sort_values("Total", ascending=False).copy()
+        df_dir_table.insert(0, "Ranking", [f"#{i}" for i in range(1, len(df_dir_table) + 1)])
+        df_dir_table["Costo mensual"] = df_dir_table["Costo empresa mensual"].apply(format_clp)
+        df_dir_table["Intensidad"] = df_dir_table.apply(
+            lambda row: f"{float(row['Total_MM']) / max(float(row['Meses']), 1):.1f} MM/mes",
+            axis=1,
+        )
+        df_dir_table["Total"] = df_dir_table["Total_MM"].map(lambda v: f"{v:.1f} MM CLP")
+        df_dir_table["Participación"] = df_dir_table["Participacion_pct"].map(lambda v: f"{v:.1f}%")
+
+        col_dir_1, col_dir_2 = st.columns([1.22, 1])
         with col_dir_1:
-            st.markdown("#### Tabla base de cargos")
-            df_dir_table = df_dir_plot.sort_values("Total", ascending=False).copy()
-            df_dir_table["Costo mensual"] = df_dir_table["Costo empresa mensual"].apply(format_clp)
-            df_dir_table["Total"] = df_dir_table["Total_MM"].map(lambda v: f"{v:.1f} MM CLP")
-            df_dir_table["Participación"] = df_dir_table["Participacion_pct"].map(lambda v: f"{v:.1f}%")
+            st.markdown(
+                """
+                <div class="dir-pro-shell">
+                    <div class="dir-pro-k">Tabla ejecutiva</div>
+                    <div class="dir-pro-t">Base de cargos</div>
+                    <div class="dir-pro-s">Ranking económico del bloque con duración, costo mensual, intensidad de gasto y participación relativa por rol.</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
             st.dataframe(
-                df_dir_table[["Cargo", "Meses", "Costo mensual", "Total", "Participación"]],
+                style_engineering_table(
+                    df_dir_table[["Ranking", "Cargo", "Meses", "Costo mensual", "Intensidad", "Total", "Participación"]],
+                    header_color="#24446B",
+                    row_color="#F4F8FC",
+                ),
                 hide_index=True,
                 use_container_width=True,
+                height=35 * (len(df_dir_table) + 1) + 3,
             )
         with col_dir_2:
-            st.markdown("#### Lectura ejecutiva")
             st.markdown(
-                f"- Fondos de dirección identificados: **{format_clp(total_direccion)}**.\n"
-                f"- Costo mensual ponderado del bloque: **{format_clp(costo_mensual_prom_ponderado)}** "
-                f"(total dividido por **{total_meses:,.0f} meses**).".replace(",", ".") + "\n"
-                f"- Promedio simple entre cargos: **{format_clp(costo_mensual_prom_simple)}**; no coincide con el run-rate porque los cargos tienen distinta duración.\n"
-                f"- Duración promedio por cargo: **{meses_promedio:.1f} meses**.\n"
-                f"- Si se observa junto al CAPEX técnico, la referencia total sería **{format_clp(capex_mas_direccion)}**.\n"
-                f"- Este bloque se mantiene deliberadamente separado para no contaminar el desglose del CAPEX de ingeniería."
+                """
+                <div class="dir-pro-shell">
+                    <div class="dir-pro-k">Síntesis ejecutiva</div>
+                    <div class="dir-pro-t">Lectura ejecutiva</div>
+                    <div class="dir-pro-s">Interpretación de comité enfocada en concentración del gasto, ritmo mensual y relación con el CAPEX técnico.</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"""
+                <div class="dir-insight-grid">
+                    <div class="dir-insight-card">
+                        <div class="dir-insight-label">Cargo dominante</div>
+                        <div class="dir-insight-value">{top_role_pct:.1f}%</div>
+                        <div class="dir-insight-sub">{top_role} concentra la mayor parte del bloque y define la referencia principal del costo directivo.</div>
+                    </div>
+                    <div class="dir-insight-card">
+                        <div class="dir-insight-label">Run-rate mensual</div>
+                        <div class="dir-insight-value">{format_clp(costo_mensual_prom_ponderado)}</div>
+                        <div class="dir-insight-sub">Costo mensual ponderado considerando la duración efectiva de todos los cargos del bloque.</div>
+                    </div>
+                    <div class="dir-insight-card">
+                        <div class="dir-insight-label">Referencia ampliada</div>
+                        <div class="dir-insight-value">{format_clp(capex_mas_direccion)}</div>
+                        <div class="dir-insight-sub">Valor de referencia si este capital humano técnico se mirara junto con el CAPEX base.</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"""
+                <ul class="dir-notes">
+                    <li>Fondos de dirección identificados: <strong>{format_clp(total_direccion)}</strong>.</li>
+                    <li>Costo mensual ponderado del bloque: <strong>{format_clp(costo_mensual_prom_ponderado)}</strong> (total dividido por <strong>{f"{total_meses:,.0f}".replace(",", ".")} meses</strong>).</li>
+                    <li>Promedio simple entre cargos: <strong>{format_clp(costo_mensual_prom_simple)}</strong>; no coincide con el run-rate porque los cargos tienen distinta duración.</li>
+                    <li>Duración promedio por cargo: <strong>{meses_promedio:.1f} meses</strong>.</li>
+                    <li>Los dos cargos de mayor peso concentran <strong>{concentration_top_2:.1f}%</strong> del bloque, lo que revela una estructura de gasto relativamente concentrada.</li>
+                    <li>Este bloque se mantiene deliberadamente separado para no contaminar el desglose del CAPEX de ingeniería.</li>
+                </ul>
+                """,
+                unsafe_allow_html=True,
             )
 
 
@@ -4758,7 +4953,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
     if bloque_sel == "1. Fundamentos de Creación de Valor":
         pcol1, pcol2, pcol3 = st.columns(3)
         with pcol1:
-            fx_input = st.number_input("FX CLP/USD", min_value=1, value=int(st.session_state[shared_state_key("fx")]), step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
+            fx_input = st.number_input("FX CLP/USD", min_value=1, step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
             render_input_thousands_hint(fx_input)
         with pcol2:
             investment_currency_input = st.selectbox(
@@ -4778,20 +4973,20 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
         if valuation_basis_input == "EBITDA potencial ciclo inicial":
             pcol4, pcol5, pcol6 = st.columns(3)
             with pcol4:
-                volume_input = st.number_input("Volumen comercial", min_value=0, value=int(st.session_state[shared_state_key("volume")]), step=1, format="%d", key=prime_widget("volume"), on_change=sync_widget_to_state, args=("volume",))
+                volume_input = st.number_input("Volumen comercial", min_value=0, step=1, format="%d", key=prime_widget("volume"), on_change=sync_widget_to_state, args=("volume",))
                 render_input_thousands_hint(volume_input)
             with pcol5:
-                ebitda_unit_input = st.number_input("EBITDA unitario (USD)", min_value=0, value=int(st.session_state[shared_state_key("ebitda_unit")]), step=1000, format="%d", key=prime_widget("ebitda_unit"), on_change=sync_widget_to_state, args=("ebitda_unit",))
+                ebitda_unit_input = st.number_input("EBITDA unitario (USD)", min_value=0, step=1000, format="%d", key=prime_widget("ebitda_unit"), on_change=sync_widget_to_state, args=("ebitda_unit",))
                 render_input_thousands_hint(ebitda_unit_input, "US$")
             with pcol6:
-                multiple_input = st.slider("Múltiplo EBITDA", min_value=1.0, max_value=12.0, value=float(st.session_state[shared_state_key("multiple")]), step=0.5, key=prime_widget("multiple"), on_change=sync_widget_to_state, args=("multiple",))
+                multiple_input = st.slider("Múltiplo EBITDA", min_value=1.0, max_value=12.0, step=0.5, key=prime_widget("multiple"), on_change=sync_widget_to_state, args=("multiple",))
         inversion_clp_input = float(st.session_state[shared_state_key("inv_clp")])
         captura_input = float(captura_default or 1.0)
         ronda_pct_input = float(st.session_state[shared_state_key("ronda_pct")]) / 100.0
     elif bloque_sel == "2. Serie A: Inversión Inicial y Validación":
         pcol1, pcol2, pcol3 = st.columns(3)
         with pcol1:
-            fx_input = st.number_input("FX CLP/USD", min_value=1, value=int(st.session_state[shared_state_key("fx")]), step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
+            fx_input = st.number_input("FX CLP/USD", min_value=1, step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
             render_input_thousands_hint(fx_input)
         with pcol2:
             investment_currency_input = st.selectbox(
@@ -4808,7 +5003,6 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
                 inversion_usd_input = st.number_input(
                     "Inversión piloto (USD)",
                     min_value=0,
-                    value=int(st.session_state[inv_usd_widget_key]),
                     step=10000,
                     format="%d",
                     key=inv_usd_widget_key,
@@ -4819,7 +5013,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
                 st.session_state[shared_state_key("inv_clp")] = int(round(inversion_clp_input))
                 st.session_state.pop(shared_widget_key("inv_clp"), None)
             else:
-                inversion_clp_input = st.number_input("Inversión piloto (CLP)", min_value=0, value=int(st.session_state[shared_state_key("inv_clp")]), step=10000000, format="%d", key=prime_widget("inv_clp"), on_change=sync_widget_to_state, args=("inv_clp",))
+                inversion_clp_input = st.number_input("Inversión piloto (CLP)", min_value=0, step=10000000, format="%d", key=prime_widget("inv_clp"), on_change=sync_widget_to_state, args=("inv_clp",))
                 render_input_thousands_hint(inversion_clp_input, "$")
         volume_input = float(st.session_state[shared_state_key("volume")])
         ebitda_unit_input = float(st.session_state[shared_state_key("ebitda_unit")])
@@ -4860,7 +5054,6 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
                     "% IMELSA manual",
                     min_value=0.0,
                     max_value=100.0,
-                    value=float(st.session_state[shared_state_key("imelsa_pct_manual")]),
                     step=1.0,
                     format="%.0f%%",
                     key=prime_widget("imelsa_pct_manual"),
@@ -4927,16 +5120,16 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
     elif bloque_sel == "3. Valorización Post-Validación":
         pcol1, pcol2, pcol3 = st.columns(3)
         with pcol1:
-            volume_input = st.number_input("Volumen comercial", min_value=0, value=int(st.session_state[shared_state_key("volume")]), step=1, format="%d", key=prime_widget("volume"), on_change=sync_widget_to_state, args=("volume",))
+            volume_input = st.number_input("Volumen comercial", min_value=0, step=1, format="%d", key=prime_widget("volume"), on_change=sync_widget_to_state, args=("volume",))
             render_input_thousands_hint(volume_input)
         with pcol2:
-            ebitda_unit_input = st.number_input("EBITDA unitario (USD)", min_value=0, value=int(st.session_state[shared_state_key("ebitda_unit")]), step=1000, format="%d", key=prime_widget("ebitda_unit"), on_change=sync_widget_to_state, args=("ebitda_unit",))
+            ebitda_unit_input = st.number_input("EBITDA unitario (USD)", min_value=0, step=1000, format="%d", key=prime_widget("ebitda_unit"), on_change=sync_widget_to_state, args=("ebitda_unit",))
             render_input_thousands_hint(ebitda_unit_input, "US$")
         with pcol3:
-            multiple_input = st.slider("Múltiplo EBITDA", min_value=1.0, max_value=12.0, value=float(st.session_state[shared_state_key("multiple")]), step=0.5, key=prime_widget("multiple"), on_change=sync_widget_to_state, args=("multiple",))
+            multiple_input = st.slider("Múltiplo EBITDA", min_value=1.0, max_value=12.0, step=0.5, key=prime_widget("multiple"), on_change=sync_widget_to_state, args=("multiple",))
         pcol4, pcol5 = st.columns(2)
         with pcol4:
-            fx_input = st.number_input("FX CLP/USD", min_value=1, value=int(st.session_state[shared_state_key("fx")]), step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
+            fx_input = st.number_input("FX CLP/USD", min_value=1, step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
             render_input_thousands_hint(fx_input)
         with pcol5:
             investment_currency_input = st.selectbox(
@@ -4951,7 +5144,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
     else:
         pcol1, pcol2, pcol3 = st.columns(3)
         with pcol1:
-            fx_input = st.number_input("FX CLP/USD", min_value=1, value=int(st.session_state[shared_state_key("fx")]), step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
+            fx_input = st.number_input("FX CLP/USD", min_value=1, step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
             render_input_thousands_hint(fx_input)
         with pcol2:
             investment_currency_input = st.selectbox(
@@ -4961,16 +5154,16 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
                 on_change=sync_investment_currency,
             )
         with pcol3:
-            ronda_pct_input = st.slider("Nueva cesión Serie B", min_value=5.0, max_value=90.0, value=float(st.session_state[shared_state_key("ronda_pct")]), step=1.0, format="%.0f%%", key=prime_widget("ronda_pct"), on_change=sync_widget_to_state, args=("ronda_pct",)) / 100.0
+            ronda_pct_input = st.slider("Nueva cesión Serie B", min_value=5.0, max_value=90.0, step=1.0, format="%.0f%%", key=prime_widget("ronda_pct"), on_change=sync_widget_to_state, args=("ronda_pct",)) / 100.0
         pcol4, pcol5, pcol6 = st.columns(3)
         with pcol4:
-            volume_input = st.number_input("Volumen comercial", min_value=0, value=int(st.session_state[shared_state_key("volume")]), step=1, format="%d", key=prime_widget("volume"), on_change=sync_widget_to_state, args=("volume",))
+            volume_input = st.number_input("Volumen comercial", min_value=0, step=1, format="%d", key=prime_widget("volume"), on_change=sync_widget_to_state, args=("volume",))
             render_input_thousands_hint(volume_input)
         with pcol5:
-            ebitda_unit_input = st.number_input("EBITDA unitario (USD)", min_value=0, value=int(st.session_state[shared_state_key("ebitda_unit")]), step=1000, format="%d", key=prime_widget("ebitda_unit"), on_change=sync_widget_to_state, args=("ebitda_unit",))
+            ebitda_unit_input = st.number_input("EBITDA unitario (USD)", min_value=0, step=1000, format="%d", key=prime_widget("ebitda_unit"), on_change=sync_widget_to_state, args=("ebitda_unit",))
             render_input_thousands_hint(ebitda_unit_input, "US$")
         with pcol6:
-            multiple_input = st.slider("Múltiplo EBITDA", min_value=1.0, max_value=12.0, value=float(st.session_state[shared_state_key("multiple")]), step=0.5, key=prime_widget("multiple"), on_change=sync_widget_to_state, args=("multiple",))
+            multiple_input = st.slider("Múltiplo EBITDA", min_value=1.0, max_value=12.0, step=0.5, key=prime_widget("multiple"), on_change=sync_widget_to_state, args=("multiple",))
         captura_input = float(captura_default or 1.0)
         inversion_clp_input = float(st.session_state[shared_state_key("inv_clp")])
 
@@ -6426,7 +6619,6 @@ elif selected_input_block == "escalamiento":
             ("dashboard", "📊 Dashboard general"),
             ("capex", "🏗️ Detalle capex 80kW"),
             ("direccion", "🧑‍💼 Capital Humano"),
-            ("explorador", "🔍 Explorador interactivo"),
         ]
         if capex_80kw_view_state_key not in st.session_state:
             st.session_state[capex_80kw_view_state_key] = "dashboard"
@@ -6462,8 +6654,6 @@ elif selected_input_block == "escalamiento":
             render_capex_module_content(selector_key="inputs_capex_internal_selector")
         elif selected_capex_80kw_view == "direccion":
             render_direccion_module_content()
-        elif selected_capex_80kw_view == "explorador":
-            render_explorador_module_content(key_prefix="inputs_explorer_")
     else:
         st.info("Selecciona `CAPEX 10kW` o `CAPEX 80kW` para abrir el contenido asociado.")
 elif selected_input_block == "valorizacion":
@@ -7359,7 +7549,7 @@ def render_direccion_module_content():
         dk1, dk2, dk3 = st.columns(3)
         with dk1:
             kpi_card(
-                "Fondos dirección (CLP)",
+                "Fondos capital humano (CLP)",
                 format_clp(total_direccion),
                 "Monto total separado del CAPEX técnico base."
             )
@@ -7375,6 +7565,113 @@ def render_direccion_module_content():
                 f"{total_meses:,.0f}".replace(",", "."),
                 "Suma de meses reportados por cargo."
             )
+        st.markdown(
+            """
+            <style>
+            .dir-pro-shell{
+                border:1px solid rgba(226,232,240,.92);
+                border-radius:24px;
+                background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);
+                box-shadow:0 14px 32px rgba(15,23,42,.06);
+                padding:18px 20px 16px 20px;
+                margin:8px 0 14px 0;
+            }
+            .dir-pro-k{
+                font-size:11px;
+                font-weight:800;
+                letter-spacing:.12em;
+                text-transform:uppercase;
+                color:#64748B;
+                margin-bottom:6px;
+            }
+            .dir-pro-t{
+                font-size:24px;
+                font-weight:900;
+                line-height:1.06;
+                color:#0f172a;
+                margin-bottom:8px;
+            }
+            .dir-pro-s{
+                font-size:13px;
+                line-height:1.58;
+                color:#475569;
+                margin-bottom:12px;
+            }
+            .dir-pro-chip-row{
+                display:flex;
+                flex-wrap:wrap;
+                gap:10px;
+            }
+            .dir-pro-chip{
+                display:inline-flex;
+                align-items:center;
+                gap:8px;
+                padding:7px 11px;
+                border-radius:999px;
+                border:1px solid rgba(148,163,184,.26);
+                background:rgba(255,255,255,.86);
+                box-shadow:0 4px 10px rgba(15,23,42,.04);
+                font-size:12px;
+                color:#0f172a;
+            }
+            .dir-pro-dot{
+                width:10px;
+                height:10px;
+                border-radius:999px;
+                flex:0 0 auto;
+            }
+            .dir-insight-grid{
+                display:grid;
+                grid-template-columns:repeat(3,minmax(0,1fr));
+                gap:12px;
+                margin:0 0 14px 0;
+            }
+            @media (max-width:1000px){
+                .dir-insight-grid{grid-template-columns:1fr;}
+            }
+            .dir-insight-card{
+                border-radius:18px;
+                padding:14px 15px 13px 15px;
+                border:1px solid rgba(191,219,254,.68);
+                background:linear-gradient(180deg,#ffffff 0%,#eff6ff 100%);
+                box-shadow:0 6px 16px rgba(15,23,42,.05);
+            }
+            .dir-insight-label{
+                font-size:11px;
+                font-weight:800;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+                color:#64748B;
+                margin-bottom:6px;
+            }
+            .dir-insight-value{
+                font-size:26px;
+                font-weight:900;
+                line-height:1.02;
+                color:#0f172a;
+                margin-bottom:6px;
+            }
+            .dir-insight-sub{
+                font-size:13px;
+                line-height:1.5;
+                color:#475569;
+            }
+            .dir-notes{
+                margin:0;
+                padding-left:18px;
+            }
+            .dir-notes li{
+                margin:0 0 10px 0;
+                color:#334155;
+                line-height:1.58;
+                font-size:14px;
+            }
+            .dir-notes li:last-child{margin-bottom:0;}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
         df_dir_plot = df_direccion.copy()
         df_dir_plot["Total_MM"] = df_dir_plot["Total"] / 1e6
         df_dir_plot["Participacion_pct"] = np.where(
@@ -7387,49 +7684,83 @@ def render_direccion_module_content():
             axis=1,
         )
         df_dir_plot = df_dir_plot.sort_values("Total", ascending=True).copy()
+        df_dir_plot["Cargo_grafico"] = df_dir_plot["Cargo"].replace(
+            {
+                "Ingeniero de Desarrollo Tecnológico": "Ingeniero de Desarrollo<br>Tecnológico",
+                "Líder de Ingeniería y Proyecto": "Líder de Ingeniería<br>y Proyecto",
+            }
+        )
+
         direccion_color_map = {
             "Ingeniero Eléctrico": "#2563EB",
             "Ingeniero Mecánico": "#0F766E",
-            "Ingeniero Proyecto (PMO)": "#64748B",
-            "Director General Técnico": "#0F4C81",
+            "Ingeniero de Desarrollo Tecnológico": "#64748B",
+            "Líder de Ingeniería y Proyecto": "#0F4C81",
         }
+        max_total_mm = float(df_dir_plot["Total_MM"].max() or 0.0)
+        top_role_row = df_dir_plot.sort_values("Total", ascending=False).iloc[0]
+        top_role = str(top_role_row["Cargo"])
+        top_role_pct = float(top_role_row["Participacion_pct"] or 0.0)
+        concentration_top_2 = float(
+            df_dir_plot.sort_values("Total", ascending=False).head(2)["Participacion_pct"].sum() or 0.0
+        )
+
+        st.markdown(
+            f"""
+            <div class="dir-pro-shell">
+                <div class="dir-pro-k">Visual ejecutivo</div>
+                <div class="dir-pro-t">Fondos por cargo de dirección técnica</div>
+                <div class="dir-pro-s">Composición económica del bloque de capital humano técnico, ordenada por peso financiero y ajustada para cargos con etiquetas largas.</div>
+                <div class="dir-pro-chip-row">
+                    <div class="dir-pro-chip"><span class="dir-pro-dot" style="background:#0F4C81"></span><strong>Cargo líder:</strong> {top_role}</div>
+                    <div class="dir-pro-chip"><span class="dir-pro-dot" style="background:#0F766E"></span><strong>Concentración top 2:</strong> {concentration_top_2:.1f}%</div>
+                    <div class="dir-pro-chip"><span class="dir-pro-dot" style="background:#2563EB"></span><strong>Run-rate ponderado:</strong> {format_clp(costo_mensual_prom_ponderado)}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
         fig_direccion = px.bar(
             df_dir_plot,
             x="Total_MM",
-            y="Cargo",
+            y="Cargo_grafico",
             orientation="h",
             text="Etiqueta_barra",
             color="Cargo",
             color_discrete_map=direccion_color_map,
             title="Fondos por cargo de dirección técnica",
-            labels={"Total_MM": "Monto total (MM CLP)", "Cargo": ""},
+            labels={"Total_MM": "Monto total (MM CLP)", "Cargo_grafico": ""},
         )
         fig_direccion.update_traces(
             textposition="outside",
             textfont=dict(size=11, color="#334155"),
-            marker=dict(line=dict(color="rgba(255,255,255,0.92)", width=1.2)),
+            marker=dict(line=dict(color="rgba(255,255,255,0.96)", width=1.4)),
+            cliponaxis=False,
             hovertemplate=(
-                "<b>%{y}</b><br>"
+                "<b>%{customdata[3]}</b><br>"
                 "Total: %{x:.1f} MM CLP<br>"
                 "Participación: %{customdata[0]:.1f}%<br>"
                 "Meses: %{customdata[1]:.0f}<br>"
                 "Costo mensual: %{customdata[2]:,.0f} CLP<extra></extra>"
             ),
-            customdata=df_dir_plot[["Participacion_pct", "Meses", "Costo empresa mensual"]],
+            customdata=df_dir_plot[["Participacion_pct", "Meses", "Costo empresa mensual", "Cargo"]],
         )
         fig_direccion.update_layout(
             showlegend=False,
-            margin=dict(l=10, r=70, t=70, b=24),
-            height=400,
+            margin=dict(l=16, r=124, t=66, b=12),
+            height=max(390, 92 * len(df_dir_plot) + 14),
             plot_bgcolor="white",
             paper_bgcolor="rgba(0,0,0,0)",
-            bargap=0.28,
+            bargap=0.30,
             title=dict(
                 text="Fondos por cargo de direccion tecnica",
                 font=dict(size=22, color="#0f172a"),
                 x=0.02,
             ),
             font=dict(color="#334155", size=13),
+            uniformtext_minsize=10,
+            uniformtext_mode="hide",
         )
         apply_engineering_chart_typography(fig_direccion, title_size=20, body_size=13, tick_size=12, legend_size=12)
         fig_direccion.update_xaxes(
@@ -7437,32 +7768,89 @@ def render_direccion_module_content():
             gridcolor="rgba(148,163,184,0.18)",
             zeroline=False,
             ticksuffix=" MM",
+            range=[0, max_total_mm * 1.18 if max_total_mm > 0 else 1],
+            automargin=True,
         )
-        fig_direccion.update_yaxes(showgrid=False)
+        fig_direccion.update_yaxes(showgrid=False, automargin=True)
         st.plotly_chart(fig_direccion, use_container_width=True)
 
-        col_dir_1, col_dir_2 = st.columns([1.2, 1])
+        df_dir_table = df_dir_plot.sort_values("Total", ascending=False).copy()
+        df_dir_table.insert(0, "Ranking", [f"#{i}" for i in range(1, len(df_dir_table) + 1)])
+        df_dir_table["Costo mensual"] = df_dir_table["Costo empresa mensual"].apply(format_clp)
+        df_dir_table["Intensidad"] = df_dir_table.apply(
+            lambda row: f"{float(row['Total_MM']) / max(float(row['Meses']), 1):.1f} MM/mes",
+            axis=1,
+        )
+        df_dir_table["Total"] = df_dir_table["Total_MM"].map(lambda v: f"{v:.1f} MM CLP")
+        df_dir_table["Participación"] = df_dir_table["Participacion_pct"].map(lambda v: f"{v:.1f}%")
+
+        col_dir_1, col_dir_2 = st.columns([1.22, 1])
         with col_dir_1:
-            st.markdown("#### Tabla base de cargos")
-            df_dir_table = df_dir_plot.sort_values("Total", ascending=False).copy()
-            df_dir_table["Costo mensual"] = df_dir_table["Costo empresa mensual"].apply(format_clp)
-            df_dir_table["Total"] = df_dir_table["Total_MM"].map(lambda v: f"{v:.1f} MM CLP")
-            df_dir_table["Participación"] = df_dir_table["Participacion_pct"].map(lambda v: f"{v:.1f}%")
+            st.markdown(
+                """
+                <div class="dir-pro-shell">
+                    <div class="dir-pro-k">Tabla ejecutiva</div>
+                    <div class="dir-pro-t">Base de cargos</div>
+                    <div class="dir-pro-s">Ranking económico del bloque con duración, costo mensual, intensidad de gasto y participación relativa por rol.</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
             st.dataframe(
-                df_dir_table[["Cargo", "Meses", "Costo mensual", "Total", "Participación"]],
+                style_engineering_table(
+                    df_dir_table[["Ranking", "Cargo", "Meses", "Costo mensual", "Intensidad", "Total", "Participación"]],
+                    header_color="#24446B",
+                    row_color="#F4F8FC",
+                ),
                 hide_index=True,
                 use_container_width=True,
+                height=220 + 36 * len(df_dir_table),
             )
         with col_dir_2:
-            st.markdown("#### Lectura ejecutiva")
             st.markdown(
-                f"- Fondos de dirección identificados: **{format_clp(total_direccion)}**.\n"
-                f"- Costo mensual ponderado del bloque: **{format_clp(costo_mensual_prom_ponderado)}** "
-                f"(total dividido por **{total_meses:,.0f} meses**).".replace(",", ".") + "\n"
-                f"- Promedio simple entre cargos: **{format_clp(costo_mensual_prom_simple)}**; no coincide con el run-rate porque los cargos tienen distinta duración.\n"
-                f"- Duración promedio por cargo: **{meses_promedio:.1f} meses**.\n"
-                f"- Si se observa junto al CAPEX técnico, la referencia total sería **{format_clp(capex_mas_direccion)}**.\n"
-                f"- Este bloque se mantiene deliberadamente separado para no contaminar el desglose del CAPEX de ingeniería."
+                """
+                <div class="dir-pro-shell">
+                    <div class="dir-pro-k">Síntesis ejecutiva</div>
+                    <div class="dir-pro-t">Lectura ejecutiva</div>
+                    <div class="dir-pro-s">Interpretación de comité enfocada en concentración del gasto, ritmo mensual y relación con el CAPEX técnico.</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"""
+                <div class="dir-insight-grid">
+                    <div class="dir-insight-card">
+                        <div class="dir-insight-label">Cargo dominante</div>
+                        <div class="dir-insight-value">{top_role_pct:.1f}%</div>
+                        <div class="dir-insight-sub">{top_role} concentra la mayor parte del bloque y define la referencia principal del costo directivo.</div>
+                    </div>
+                    <div class="dir-insight-card">
+                        <div class="dir-insight-label">Run-rate mensual</div>
+                        <div class="dir-insight-value">{format_clp(costo_mensual_prom_ponderado)}</div>
+                        <div class="dir-insight-sub">Costo mensual ponderado considerando la duración efectiva de todos los cargos del bloque.</div>
+                    </div>
+                    <div class="dir-insight-card">
+                        <div class="dir-insight-label">Referencia ampliada</div>
+                        <div class="dir-insight-value">{format_clp(capex_mas_direccion)}</div>
+                        <div class="dir-insight-sub">Valor de referencia si este capital humano técnico se mirara junto con el CAPEX base.</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"""
+                <ul class="dir-notes">
+                    <li>Fondos de dirección identificados: <strong>{format_clp(total_direccion)}</strong>.</li>
+                    <li>Costo mensual ponderado del bloque: <strong>{format_clp(costo_mensual_prom_ponderado)}</strong> (total dividido por <strong>{f"{total_meses:,.0f}".replace(",", ".")} meses</strong>).</li>
+                    <li>Promedio simple entre cargos: <strong>{format_clp(costo_mensual_prom_simple)}</strong>; no coincide con el run-rate porque los cargos tienen distinta duración.</li>
+                    <li>Duración promedio por cargo: <strong>{meses_promedio:.1f} meses</strong>.</li>
+                    <li>Los dos cargos de mayor peso concentran <strong>{concentration_top_2:.1f}%</strong> del bloque, lo que revela una estructura de gasto relativamente concentrada.</li>
+                    <li>Este bloque se mantiene deliberadamente separado para no contaminar el desglose del CAPEX de ingeniería.</li>
+                </ul>
+                """,
+                unsafe_allow_html=True,
             )
 
 
