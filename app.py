@@ -83,6 +83,16 @@ CAPEX_CSV_URL_DEFAULT = (
     "2PACX-1vSlNd3zXc1zV6TUQHnhXlfZtv7QVOv0mBfR_HH69Ht-0qi2aDtCfw5ouLDGIoPH_knhSAtyT2DYE-Qo/"
     "pub?gid=467592026&single=true&output=csv"
 )
+HITOS_OWNER_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vSlNd3zXc1zV6TUQHnhXlfZtv7QVOv0mBfR_HH69Ht-0qi2aDtCfw5ouLDGIoPH_knhSAtyT2DYE-Qo/"
+    "pub?gid=1007478838&single=true&output=csv"
+)
+RIESGO_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vSlNd3zXc1zV6TUQHnhXlfZtv7QVOv0mBfR_HH69Ht-0qi2aDtCfw5ouLDGIoPH_knhSAtyT2DYE-Qo/"
+    "pub?gid=1912427793&single=true&output=csv"
+)
 VALORIZACION_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vQfQcSn40boiOyRvYeX1j5SO2O9w3WoA6DkOEMxxf85v-WiWXuMC-uyBWb3-ff82pUfk1cSaBnmrcqU/"
@@ -1362,7 +1372,7 @@ def render_inputs_financial_main_kpis(df_in: pd.DataFrame):
         is_active = st.session_state.get(fin_nav_key) == value
         with selector_cols[idx]:
             st.button(
-                "Seleccionado" if is_active else "Abrir bloque",
+                selector_button_label(_label, is_active),
                 key=f"inputs_fin_asset_selector_{idx}",
                 use_container_width=True,
                 type="primary" if is_active else "secondary",
@@ -1746,6 +1756,11 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
     df = df[df["Monto"].notna()].copy()
     df[item_col] = df[item_col].astype(str).str.strip().replace({"": np.nan, "nan": np.nan}).fillna("(Vacío)")
     df[cat_col] = df[cat_col].astype(str).str.strip().replace({"": np.nan, "nan": np.nan}).fillna("(Sin categoría)")
+    df[item_col] = df[item_col].replace(
+        {
+            "Dirección": "Capital Humano",
+        }
+    )
 
     st.markdown("### Desglose de Componentes de Inversión")
     cats_all = sorted(df[cat_col].dropna().astype(str).str.strip().unique().tolist())
@@ -1789,9 +1804,9 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
             text-align:left;
         }
         .inputs-focus-card.active{
-            border:1px solid rgba(79,93,111,.40);
-            background:linear-gradient(180deg,#f1f5f9 0%,#e8eeef 100%);
-            box-shadow:0 10px 24px rgba(15,23,42,.08);
+            border:1px solid rgba(239,68,68,.28);
+            background:linear-gradient(180deg,#fff7f7 0%,#ffecec 100%);
+            box-shadow:0 10px 24px rgba(239,68,68,.08);
         }
         .inputs-focus-k{
             font-size:11px;
@@ -1812,7 +1827,7 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
             font-size:13px;
             line-height:1.45;
             color:#475569;
-            margin-bottom:8px;
+            margin-bottom:10px;
         }
         .inputs-focus-chip{
             display:inline-flex;
@@ -1848,7 +1863,7 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
                 unsafe_allow_html=True,
             )
             st.button(
-                "Seleccionado" if is_active else f"Ver {cat}",
+                selector_button_label(cat, is_active, action_label=f"Ver {cat}"),
                 key=f"inputs_fin_focus_{cat}",
                 use_container_width=True,
                 type="primary" if is_active else "secondary",
@@ -1879,71 +1894,210 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
 
     render_inputs_item_kpi_cards(tabla_show, item_col, selected_focus)
 
-    items_keep = tabla_show[item_col].tolist()
-    pivot = (
-        df2[df2[item_col].isin(items_keep)]
-        .pivot_table(index=item_col, columns=cat_col, values="Monto", aggfunc="sum", fill_value=0.0)
-    )
+    donut_df = tabla_show[[item_col, "Monto", "% del total"]].copy()
+    if len(donut_df) > 7:
+        top_df = donut_df.head(6).copy()
+        other_df = donut_df.iloc[6:]
+        donut_df = pd.concat(
+            [
+                top_df,
+                pd.DataFrame(
+                    {
+                        item_col: ["Otros componentes"],
+                        "Monto": [float(other_df["Monto"].sum())],
+                        "% del total": [float(other_df["% del total"].sum())],
+                    }
+                ),
+            ],
+            ignore_index=True,
+        )
 
-    if not pivot.empty:
-        plot_df = pivot.reset_index().melt(id_vars=item_col, var_name="Categoría", value_name="Monto")
-        plot_df = plot_df[plot_df["Monto"] > 0].copy()
-        plot_df["Monto_MM"] = plot_df["Monto"] / 1_000_000
-        item_totals = tabla_show.set_index(item_col)["% del total"].to_dict()
-        plot_df["pct_total"] = plot_df[item_col].map(item_totals).fillna(0.0)
-        plot_df["item_label"] = plot_df[item_col].apply(
-            lambda v: "<br>".join(textwrap.wrap(str(v), width=22)) if len(str(v)) > 22 else str(v)
+    if not donut_df.empty:
+        donut_df["label_wrapped"] = donut_df[item_col].apply(
+            lambda v: "<br>".join(textwrap.wrap(str(v), width=18)) if len(str(v)) > 18 else str(v)
         )
-        plot_height = min(max(360, 74 * len(plot_df)), 760)
-        fig = px.bar(
-            plot_df,
-            x="Monto_MM",
-            y="item_label",
-            color="Categoría",
-            orientation="h",
-            color_discrete_map=FIN_PALETTE_SM,
-            text="Monto_MM",
+        donut_df["Monto_MM"] = donut_df["Monto"] / 1_000_000
+
+        accent_color = FIN_PALETTE_SM.get(str(selected_focus or "").strip(), "#7B8794")
+        donut_palette = [
+            accent_color,
+            "#D9A766",
+            "#D7605E",
+            "#A9A7A4",
+            "#4F5D6F",
+            "#7FA8A4",
+            "#E5E7EB",
+        ]
+
+        fig = px.pie(
+            donut_df,
+            names="label_wrapped",
+            values="Monto",
+            hole=0.68,
+            color_discrete_sequence=donut_palette,
         )
+        donut_df["share_text"] = donut_df["% del total"].apply(lambda v: f"{v:.1f}%")
+        fig.update_traces(text=donut_df["share_text"])
         fig.update_traces(
-            texttemplate="%{text:.1f} MM",
+            sort=False,
+            textinfo="text",
             textposition="outside",
-            cliponaxis=False,
-            customdata=np.stack([plot_df["Monto"], plot_df["pct_total"]], axis=-1),
+            texttemplate="%{text}",
             hovertemplate=(
-                "<b>%{y}</b><br>"
-                "Monto: $%{customdata[0]:,.0f}<br>"
-                "Participación del frente: %{customdata[1]:.2f}%<extra></extra>"
+                "<b>%{label}</b><br>"
+                "Monto: $%{value:,.0f}<br>"
+                "Participación del frente: %{percent:.1%}<extra></extra>"
             ),
+            marker=dict(line=dict(color="rgba(255,255,255,0.96)", width=2.2)),
+            pull=[0.04 if i == 0 else 0 for i in range(len(donut_df))],
+        )
+        fig.add_annotation(
+            x=0.5,
+            y=0.54,
+            text=(
+                f"<span style='font-size:12px;color:#64748b;'>{html.escape(str(selected_focus or 'Frente'))}</span><br>"
+                f"<span style='font-size:24px;color:#0f172a;'><b>{format_clp(float(tabla_show['Monto'].sum()))}</b></span>"
+            ),
+            showarrow=False,
+            xanchor="center",
+            yanchor="middle",
         )
         fig.update_layout(
             title=dict(
-                text="Ranking de componentes del frente seleccionado",
+                text="Composición del frente seleccionado",
                 x=0,
                 xanchor="left",
                 font=dict(size=22, color="#0f172a"),
             ),
-            height=plot_height,
-            margin=dict(l=120, r=80, t=72, b=40),
+            height=580,
+            margin=dict(l=10, r=10, t=72, b=150),
             plot_bgcolor="white",
             paper_bgcolor="rgba(0,0,0,0)",
-            bargap=0.34,
+            showlegend=True,
             legend=dict(
-                title="Frente",
                 orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="left",
-                x=0,
+                yanchor="top",
+                y=-0.18,
+                xanchor="center",
+                x=0.5,
+                title=None,
+                font=dict(size=11, color="#475569"),
+                itemwidth=90,
             ),
         )
-        fig.update_xaxes(
-            title="Monto (MM CLP)",
-            ticksuffix=" MM",
-            gridcolor="#E5E7EB",
-            zeroline=False,
-        )
-        fig.update_yaxes(title=None, showgrid=False)
-        st.plotly_chart(fig, use_container_width=True)
+        apply_engineering_chart_typography(fig, title_size=20, body_size=12, tick_size=11, legend_size=11)
+
+        summary_rows = []
+        for idx, (_, rec) in enumerate(tabla_show.head(5).iterrows(), start=1):
+            summary_rows.append(
+                f"""
+                <div class="inputs-donut-insight-row">
+                  <div class="inputs-donut-insight-rank">#{idx}</div>
+                  <div class="inputs-donut-insight-main">
+                    <div class="inputs-donut-insight-name">{html.escape(str(rec[item_col]))}</div>
+                    <div class="inputs-donut-insight-sub">{float(rec['% del total']):.1f}% del frente · {format_clp(float(rec['Monto']))}</div>
+                  </div>
+                </div>
+                """
+            )
+
+        concentration_top5 = float(tabla_show.head(5)["% del total"].sum() or 0.0)
+        donut_cols = st.columns([1.2, 0.95], gap="large")
+        with donut_cols[0]:
+            st.plotly_chart(fig, use_container_width=True)
+        with donut_cols[1]:
+            st.markdown(
+                f"""
+                <style>
+                .inputs-donut-insight-card {{
+                    border:1px solid rgba(226,232,240,.9);
+                    border-radius:22px;
+                    background:linear-gradient(180deg,#ffffff 0%,#faf8f5 100%);
+                    padding:18px 18px 14px 18px;
+                    box-shadow:0 10px 24px rgba(15,23,42,.05);
+                    min-height:420px;
+                }}
+                .inputs-donut-insight-kicker {{
+                    font-size:11px;
+                    letter-spacing:.08em;
+                    text-transform:uppercase;
+                    color:#64748b;
+                    font-weight:700;
+                    margin-bottom:6px;
+                }}
+                .inputs-donut-insight-title {{
+                    font-size:18px;
+                    line-height:1.15;
+                    color:#0f172a;
+                    font-weight:800;
+                    margin-bottom:10px;
+                }}
+                .inputs-donut-insight-metric {{
+                    border-radius:16px;
+                    background:#fff;
+                    border:1px solid rgba(226,232,240,.9);
+                    padding:12px 14px;
+                    margin-bottom:12px;
+                }}
+                .inputs-donut-insight-value {{
+                    font-size:24px;
+                    line-height:1.05;
+                    color:#0f172a;
+                    font-weight:900;
+                }}
+                .inputs-donut-insight-note {{
+                    margin-top:4px;
+                    font-size:12px;
+                    color:#64748b;
+                }}
+                .inputs-donut-insight-row {{
+                    display:grid;
+                    grid-template-columns:44px minmax(0,1fr);
+                    gap:10px;
+                    align-items:start;
+                    padding:10px 0;
+                    border-top:1px solid rgba(226,232,240,.78);
+                }}
+                .inputs-donut-insight-row:first-of-type {{
+                    border-top:none;
+                    padding-top:0;
+                }}
+                .inputs-donut-insight-rank {{
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    min-height:34px;
+                    border-radius:999px;
+                    background:#E7EDF3;
+                    color:#334155;
+                    font-size:13px;
+                    font-weight:800;
+                }}
+                .inputs-donut-insight-name {{
+                    font-size:14px;
+                    line-height:1.2;
+                    color:#0f172a;
+                    font-weight:800;
+                    margin-bottom:2px;
+                }}
+                .inputs-donut-insight-sub {{
+                    font-size:12px;
+                    line-height:1.35;
+                    color:#64748b;
+                }}
+                </style>
+                <div class="inputs-donut-insight-card">
+                  <div class="inputs-donut-insight-kicker">Lectura de composición</div>
+                  <div class="inputs-donut-insight-title">El frente se concentra en pocos componentes dominantes</div>
+                  <div class="inputs-donut-insight-metric">
+                    <div class="inputs-donut-insight-value">{concentration_top5:.1f}%</div>
+                    <div class="inputs-donut-insight-note">Participación acumulada del top 5 del frente seleccionado.</div>
+                  </div>
+                  {''.join(summary_rows)}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
 
 def render_inputs_item_kpi_cards(tabla_show: pd.DataFrame, item_col: str, selected_focus: str | None = None):
@@ -1951,15 +2105,15 @@ def render_inputs_item_kpi_cards(tabla_show: pd.DataFrame, item_col: str, select
     top_2 = tabla_show.iloc[1] if len(tabla_show) > 1 else None
     concentration = float(tabla_show.head(3)["% del total"].sum() or 0.0)
     accent_color = FIN_PALETTE_SM.get(str(selected_focus or "").strip(), "#7B8794")
-
-    st.caption(
-        f"Mayor componente: {top_1[item_col]} con {format_clp(float(top_1['Monto']))}. "
-        f"Top 3 concentra {concentration:.2f}% del frente analizado."
-    )
+    top_2_html = ""
     if top_2 is not None:
-        st.caption(
-            f"Segundo componente: {top_2[item_col]} con {format_clp(float(top_2['Monto']))} "
-            f"y {int(top_2['Items'])} registros."
+        top_2_html = (
+            f"""
+            <div class="inputs-item-summary-line">
+              <span class="inputs-item-summary-label">Segundo componente</span>
+              <span class="inputs-item-summary-text">{html.escape(str(top_2[item_col]))} · {format_clp(float(top_2['Monto']))}</span>
+            </div>
+            """
         )
 
     ranking_rows = []
@@ -1985,6 +2139,7 @@ def render_inputs_item_kpi_cards(tabla_show: pd.DataFrame, item_col: str, select
                 </div>
               </div>
               <div class="inputs-item-board-amount">
+                <div class="inputs-item-board-kicker">Monto ejecutado</div>
                 <div class="inputs-item-board-value">{format_clp(float(rec["Monto"]))}</div>
                 <div class="inputs-item-board-meta">{items_count} ítems</div>
               </div>
@@ -1992,7 +2147,7 @@ def render_inputs_item_kpi_cards(tabla_show: pd.DataFrame, item_col: str, select
             """
         )
 
-    board_height = min(180 + len(tabla_show) * 74, 760)
+    board_height = min(220 + len(tabla_show) * 64, 820)
     components.html(
         f"""
         <style>
@@ -2010,19 +2165,87 @@ def render_inputs_item_kpi_cards(tabla_show: pd.DataFrame, item_col: str, select
             border-radius:24px;
             background:linear-gradient(180deg,#ffffff 0%, #faf8f5 100%);
             box-shadow:0 10px 28px rgba(15,23,42,.05);
-            margin-top:8px;
-            padding:10px;
+            margin-top:10px;
+            padding:14px;
+        }}
+        .inputs-item-summary {{
+            display:grid;
+            grid-template-columns:minmax(0,1.35fr) minmax(220px,.75fr);
+            gap:14px;
+            padding:4px 4px 14px 4px;
+            border-bottom:1px solid rgba(226,232,240,.85);
+            margin-bottom:14px;
+        }}
+        .inputs-item-summary-title {{
+            font-size:17px;
+            font-weight:800;
+            color:#0f172a;
+            line-height:1.15;
+            margin:0 0 8px 0;
+            font-family:inherit;
+        }}
+        .inputs-item-summary-line {{
+            display:flex;
+            flex-wrap:wrap;
+            gap:6px;
+            margin-bottom:4px;
+            font-size:13px;
+            line-height:1.45;
+            color:#475569;
+            font-family:inherit;
+        }}
+        .inputs-item-summary-label {{
+            color:#64748B;
+            font-weight:700;
+        }}
+        .inputs-item-summary-text {{
+            color:#334155;
+            font-weight:600;
+        }}
+        .inputs-item-summary-kpis {{
+            display:grid;
+            grid-template-columns:1fr;
+            gap:10px;
+        }}
+        .inputs-item-summary-kpi {{
+            border-radius:16px;
+            padding:12px 14px;
+            border:1px solid rgba(226,232,240,.9);
+            background:rgba(255,255,255,.88);
+        }}
+        .inputs-item-summary-kicker {{
+            font-size:11px;
+            text-transform:uppercase;
+            letter-spacing:.08em;
+            color:#64748B;
+            font-weight:700;
+            margin-bottom:4px;
+            font-family:inherit;
+        }}
+        .inputs-item-summary-value {{
+            font-size:22px;
+            line-height:1.05;
+            font-weight:900;
+            color:#0f172a;
+            font-family:inherit;
+        }}
+        .inputs-item-summary-note {{
+            font-size:12px;
+            line-height:1.35;
+            color:#64748B;
+            margin-top:4px;
+            font-family:inherit;
         }}
         .inputs-item-board-row {{
             display:grid;
             grid-template-columns:72px minmax(0,1fr) minmax(180px,240px);
             gap:16px;
             align-items:center;
-            padding:16px 18px;
-            border-radius:18px;
+            padding:14px 16px;
+            border-radius:16px;
             background:rgba(255,255,255,.84);
             border:1px solid rgba(226,232,240,.90);
-            margin-bottom:10px;
+            margin-bottom:8px;
         }}
         .inputs-item-board-row:last-child {{
             margin-bottom:0;
@@ -2047,7 +2270,7 @@ def render_inputs_item_kpi_cards(tabla_show: pd.DataFrame, item_col: str, select
             font-family:inherit;
         }}
         .inputs-item-name-main {{
-            font-size:15px;
+            font-size:16px;
             font-weight:800;
             color:#0f172a;
             line-height:1.25;
@@ -2065,13 +2288,13 @@ def render_inputs_item_kpi_cards(tabla_show: pd.DataFrame, item_col: str, select
             align-items:center;
             gap:10px;
             min-width:180px;
-            margin-top:10px;
+            margin-top:8px;
         }}
         .inputs-item-share-bar {{
             position:relative;
             width:100%;
             min-width:120px;
-            height:10px;
+            height:8px;
             border-radius:999px;
             background:#E5E7EB;
             overflow:hidden;
@@ -2092,8 +2315,17 @@ def render_inputs_item_kpi_cards(tabla_show: pd.DataFrame, item_col: str, select
         .inputs-item-board-amount {{
             text-align:right;
         }}
+        .inputs-item-board-kicker {{
+            font-size:11px;
+            text-transform:uppercase;
+            letter-spacing:.08em;
+            color:#94A3B8;
+            font-weight:700;
+            margin-bottom:4px;
+            font-family:inherit;
+        }}
         .inputs-item-board-value {{
-            font-size:21px;
+            font-size:18px;
             font-weight:900;
             color:#0f172a;
             line-height:1.08;
@@ -2108,6 +2340,9 @@ def render_inputs_item_kpi_cards(tabla_show: pd.DataFrame, item_col: str, select
             font-family:inherit;
         }}
         @media (max-width:920px) {{
+            .inputs-item-summary {{
+                grid-template-columns:1fr;
+            }}
             .inputs-item-board-row {{
                 grid-template-columns:1fr;
                 gap:10px;
@@ -2125,6 +2360,23 @@ def render_inputs_item_kpi_cards(tabla_show: pd.DataFrame, item_col: str, select
         }}
         </style>
         <div class="inputs-item-board-wrap">
+          <div class="inputs-item-summary">
+            <div>
+              <div class="inputs-item-summary-title">Lectura del frente seleccionado</div>
+              <div class="inputs-item-summary-line">
+                <span class="inputs-item-summary-label">Mayor componente</span>
+                <span class="inputs-item-summary-text">{html.escape(str(top_1[item_col]))} · {format_clp(float(top_1['Monto']))}</span>
+              </div>
+              {top_2_html}
+            </div>
+            <div class="inputs-item-summary-kpis">
+              <div class="inputs-item-summary-kpi">
+                <div class="inputs-item-summary-kicker">Concentración top 3</div>
+                <div class="inputs-item-summary-value">{concentration:.2f}%</div>
+                <div class="inputs-item-summary-note">Participación acumulada del frente analizado.</div>
+              </div>
+            </div>
+          </div>
           {''.join(ranking_rows)}
         </div>
         """,
@@ -2169,7 +2421,14 @@ def render_inputs_factor_chart(df_in: pd.DataFrame):
     agg_fc["Monto_MM"] = agg_fc["Monto"] / 1_000_000
     agg_fc["label"] = agg_fc.apply(lambda r: f"{r['Monto_MM']:.1f} MM · {float(r['% dentro del Factor']):.1f}%", axis=1)
 
-    st.markdown("### Eficiencia del CAPEX Ejecutado")
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:20px;font-weight:800;color:#0f172a;margin:0 0 6px 0;">Eficiencia del CAPEX Ejecutado</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div style="font-size:13px;font-weight:400;color:#64748b;margin:0 0 12px 0;">Separación entre gasto estructural necesario para replicar el piloto y gasto prescindible o no recurrente.</div>',
+        unsafe_allow_html=True,
+    )
     fig_fc = px.bar(
         agg_fc,
         x="Monto_MM",
@@ -2178,11 +2437,11 @@ def render_inputs_factor_chart(df_in: pd.DataFrame):
         color="Categoria",
         color_discrete_map=FIN_PALETTE_SM,
         text="label",
-        title="Composición del CAPEX útil para replicar el piloto",
     )
     fig_fc.update_traces(
         textposition="inside",
         insidetextanchor="middle",
+        textfont=dict(size=12, color="#1f2937", family="Source Sans Pro, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"),
         customdata=np.stack([agg_fc["% dentro del Factor"], agg_fc["%_esc"], agg_fc["Items"]], axis=-1),
         hovertemplate=(
             "<b>%{y}</b> · %{trace.name}<br>"
@@ -2195,27 +2454,37 @@ def render_inputs_factor_chart(df_in: pd.DataFrame):
     )
     fig_fc.update_layout(
         barmode="stack",
-        margin=dict(l=120, r=40, t=76, b=46),
-        height=360,
+        margin=dict(l=130, r=34, t=26, b=56),
+        height=330,
         plot_bgcolor="white",
         paper_bgcolor="rgba(0,0,0,0)",
-        bargap=0.42,
+        bargap=0.52,
         legend=dict(
-            title="Categoría",
+            title=None,
             orientation="h",
             yanchor="bottom",
-            y=1.02,
+            y=1.08,
             xanchor="left",
             x=0,
-        ),
-        title=dict(
-            x=0,
-            xanchor="left",
-            font=dict(size=22, color="#0f172a"),
+            font=dict(size=11, color="#475569"),
         ),
     )
-    fig_fc.update_xaxes(title="Monto (MM CLP)", ticksuffix=" MM", gridcolor=FIN_GRID, zeroline=False)
-    fig_fc.update_yaxes(title=None, showgrid=False)
+    apply_engineering_chart_typography(fig_fc, title_size=20, body_size=12, tick_size=11, legend_size=11)
+    fig_fc.update_xaxes(
+        title="Monto (MM CLP)",
+        ticksuffix=" MM",
+        gridcolor="rgba(148,163,184,0.16)",
+        zeroline=False,
+        tickfont=dict(size=11, color="#64748b"),
+        title_font=dict(size=12, color="#64748b"),
+    )
+    fig_fc.update_yaxes(
+        title=None,
+        showgrid=False,
+        tickfont=dict(size=13, color="#334155"),
+        categoryorder="array",
+        categoryarray=["Evitable", "Necesario"],
+    )
     st.plotly_chart(fig_fc, use_container_width=True)
 
 
@@ -2878,7 +3147,7 @@ def render_inputs_estado_actual_dashboard():
                 unsafe_allow_html=True,
             )
             st.button(
-                "Seleccionado" if is_active else "Abrir bloque",
+                selector_button_label(block_title, is_active),
                 key=f"inputs_estado_subnav_{idx}",
                 use_container_width=True,
                 type="primary" if is_active else "secondary",
@@ -3552,6 +3821,343 @@ def render_pagos_hitos(
     except Exception as e:
         st.error(f"No se pudo construir el análisis de pagos: {e}")
 
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_hitos_owner_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
+    df = read_remote_csv(url, refresh_nonce=refresh_nonce, dtype=str)
+    df.columns = [str(c).strip() for c in df.columns]
+    return df
+
+
+def render_hitos_owner_freeze_chart(hitos_url: str, key_prefix: str = ""):
+    st.markdown("---")
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:21px;font-weight:800;color:#0f172a;margin:0 0 14px 0;">Ruta de Freezes e Hitos por Owner</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:15px;font-weight:600;color:#475569;margin:0 0 10px 0;">Visual de coordinación para seguir decisiones de freeze, secuencia de entrega y responsable por mes objetivo.</div>',
+        unsafe_allow_html=True,
+    )
+    try:
+        df_hitos = load_hitos_owner_data(hitos_url, refresh_nonce=data_refresh_nonce).copy()
+        required_cols = ["Hito_ID", "Hito", "Owner", "Mes objetivo", "Depende de"]
+        missing_cols = [c for c in required_cols if c not in df_hitos.columns]
+        if missing_cols:
+            st.error(f"Faltan columnas en la hoja de hitos: {missing_cols}")
+            return
+
+        df_hitos["Mes_objetivo_i"] = pd.to_numeric(df_hitos["Mes objetivo"], errors="coerce")
+        df_hitos["Owner"] = df_hitos["Owner"].fillna("Sin owner").astype(str).str.strip()
+        df_hitos["Hito"] = df_hitos["Hito"].fillna("Sin hito").astype(str).str.strip()
+        df_hitos["Depende de"] = df_hitos["Depende de"].fillna("-").astype(str).str.strip()
+        df_hitos = df_hitos.dropna(subset=["Mes_objetivo_i"]).copy()
+        if df_hitos.empty:
+            st.info("No hay hitos con mes objetivo válido.")
+            return
+
+        owner_order = (
+            df_hitos.groupby("Owner", as_index=False)["Mes_objetivo_i"]
+            .min()
+            .sort_values(["Mes_objetivo_i", "Owner"])["Owner"]
+            .tolist()
+        )
+        owner_palette = {
+            owner: PX_COLORS[idx % len(PX_COLORS)]
+            for idx, owner in enumerate(owner_order)
+        }
+        df_hitos["Tipo_hito"] = np.where(
+            df_hitos["Hito"].str.contains("freeze", case=False, na=False),
+            "Freeze",
+            "Hito",
+        )
+        df_hitos = df_hitos.sort_values(["Mes_objetivo_i", "Owner", "Hito_ID"])
+
+        fig_hitos_owner = px.scatter(
+            df_hitos,
+            x="Mes_objetivo_i",
+            y="Owner",
+            color="Owner",
+            symbol="Tipo_hito",
+            color_discrete_map=owner_palette,
+            symbol_map={"Freeze": "diamond", "Hito": "circle"},
+            text="Hito_ID",
+            hover_data={
+                "Hito_ID": True,
+                "Hito": True,
+                "Owner": True,
+                "Mes objetivo": True,
+                "Depende de": True,
+                "Tipo_hito": True,
+            },
+            labels={
+                "Mes_objetivo_i": "Mes objetivo",
+                "Owner": "Owner",
+                "Tipo_hito": "Tipo",
+            },
+            title="Mapa de ownership y secuencia crítica",
+        )
+        fig_hitos_owner.update_traces(
+            marker=dict(size=18, line=dict(width=1.5, color="white")),
+            textposition="top center",
+            cliponaxis=False,
+        )
+
+        milestone_pos = {
+            str(row["Hito_ID"]).strip(): (float(row["Mes_objetivo_i"]), str(row["Owner"]))
+            for _, row in df_hitos.iterrows()
+        }
+        for _, row in df_hitos.iterrows():
+            dep = str(row.get("Depende de", "")).strip()
+            if not dep or dep == "-":
+                continue
+            for dep_id in [d.strip() for d in dep.split(",") if d.strip()]:
+                if dep_id not in milestone_pos:
+                    continue
+                x0, y0 = milestone_pos[dep_id]
+                x1, y1 = float(row["Mes_objetivo_i"]), str(row["Owner"])
+                fig_hitos_owner.add_trace(
+                    go.Scatter(
+                        x=[x0, x1],
+                        y=[y0, y1],
+                        mode="lines",
+                        line=dict(color="rgba(100,116,139,.45)", width=1.6, dash="dot"),
+                        hoverinfo="skip",
+                        showlegend=False,
+                    )
+                )
+
+        max_month = int(df_hitos["Mes_objetivo_i"].max())
+        for month in range(1, max_month + 1):
+            fig_hitos_owner.add_vline(
+                x=month,
+                line_width=1,
+                line_dash="dot",
+                line_color="rgba(203,213,225,.65)",
+            )
+
+        fig_hitos_owner.update_layout(
+            height=460,
+            margin=dict(l=70, r=20, t=96, b=34),
+            plot_bgcolor="white",
+            paper_bgcolor="rgba(0,0,0,0)",
+            title=dict(
+                x=0,
+                xanchor="left",
+                y=0.97,
+            ),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.00,
+                xanchor="left",
+                x=0,
+                title=dict(text=""),
+            ),
+            hoverlabel=dict(bgcolor="white"),
+        )
+        fig_hitos_owner.update_xaxes(
+            title="Mes objetivo",
+            dtick=1,
+            range=[0.5, max_month + 0.7],
+            showgrid=False,
+            zeroline=False,
+        )
+        fig_hitos_owner.update_yaxes(
+            title=None,
+            categoryorder="array",
+            categoryarray=owner_order[::-1],
+            showgrid=False,
+        )
+        apply_engineering_chart_typography(fig_hitos_owner, title_size=20, body_size=13, tick_size=12, legend_size=11)
+        st.plotly_chart(
+            fig_hitos_owner,
+            use_container_width=True,
+            key=f"{key_prefix}hitos_owner_chart",
+        )
+    except Exception as e:
+        st.error(f"No se pudo construir la ruta de hitos por owner: {e}")
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_riesgo_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
+    df = read_remote_csv(url, refresh_nonce=refresh_nonce, dtype=str)
+    df.columns = [str(c).strip() for c in df.columns]
+    return df
+
+
+def render_riesgo_matrix_chart(riesgo_url: str, key_prefix: str = ""):
+    st.markdown("---")
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:21px;font-weight:800;color:#0f172a;margin:0 0 14px 0;">Mapa de Riesgos Críticos del CAPEX</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:15px;font-weight:600;color:#475569;margin:0 0 10px 0;">Matriz de criticidad para visualizar probabilidad, impacto y owner responsable sobre los riesgos activos del escalamiento.</div>',
+        unsafe_allow_html=True,
+    )
+    try:
+        df_riesgo = load_riesgo_data(riesgo_url, refresh_nonce=data_refresh_nonce).copy()
+        required_cols = [
+            "Riesgo_ID",
+            "Riesgo",
+            "Probabilidad(1-5)",
+            "Impacto(1-5)",
+            "Severidad(PxI)",
+            "Owner",
+            "Relacionado Hito",
+            "Estado",
+        ]
+        missing_cols = [c for c in required_cols if c not in df_riesgo.columns]
+        if missing_cols:
+            st.error(f"Faltan columnas en la hoja de riesgo: {missing_cols}")
+            return
+
+        df_riesgo = df_riesgo.dropna(subset=["Riesgo_ID"]).copy()
+        if df_riesgo.empty:
+            st.info("No hay riesgos válidos para mostrar.")
+            return
+
+        for col in ["Probabilidad(1-5)", "Impacto(1-5)", "Severidad(PxI)"]:
+            df_riesgo[col] = pd.to_numeric(df_riesgo[col], errors="coerce")
+        df_riesgo = df_riesgo.dropna(subset=["Probabilidad(1-5)", "Impacto(1-5)", "Severidad(PxI)"]).copy()
+        df_riesgo["Owner"] = df_riesgo["Owner"].fillna("Sin owner").astype(str).str.strip()
+        df_riesgo["Estado"] = df_riesgo["Estado"].fillna("Sin estado").astype(str).str.strip()
+        df_riesgo["Relacionado Hito"] = df_riesgo["Relacionado Hito"].fillna("-").astype(str).str.strip()
+        df_riesgo["Riesgo_label"] = df_riesgo["Riesgo_ID"].astype(str).str.strip()
+        df_riesgo["Reserva USD"] = df_riesgo.get("Reserva USD", "").fillna("$0").astype(str).str.strip()
+
+        total_riesgos = int(len(df_riesgo))
+        severidad_max = float(df_riesgo["Severidad(PxI)"].max() or 0.0)
+        owner_top = (
+            df_riesgo.groupby("Owner", as_index=False)
+            .agg(Riesgos=("Riesgo_ID", "count"), Severidad_max=("Severidad(PxI)", "max"))
+            .sort_values(["Riesgos", "Severidad_max"], ascending=[False, False])
+            .iloc[0]["Owner"]
+        )
+        risk_kpi_cols = st.columns(3)
+        with risk_kpi_cols[0]:
+            kpi_card("Riesgos activos", f"{total_riesgos}", "Eventos abiertos cargados en la matriz.", variant="default")
+        with risk_kpi_cols[1]:
+            kpi_card("Severidad máxima", f"{severidad_max:.0f}", "Puntaje PxI más alto dentro del bloque.", variant="sky")
+        with risk_kpi_cols[2]:
+            kpi_card("Owner más expuesto", str(owner_top), "Responsable con mayor concentración de riesgos.", variant="green")
+
+        fig_riesgo = px.scatter(
+            df_riesgo,
+            x="Probabilidad(1-5)",
+            y="Impacto(1-5)",
+            color="Severidad(PxI)",
+            size="Severidad(PxI)",
+            size_max=38,
+            text="Riesgo_label",
+            hover_data={
+                "Riesgo_ID": True,
+                "Riesgo": True,
+                "Owner": True,
+                "Relacionado Hito": True,
+                "Estado": True,
+                "Probabilidad(1-5)": True,
+                "Impacto(1-5)": True,
+                "Severidad(PxI)": True,
+            },
+            color_continuous_scale=["#7FA8A4", "#D9A766", "#D7605E"],
+            labels={
+                "Probabilidad(1-5)": "Probabilidad",
+                "Impacto(1-5)": "Impacto",
+                "Severidad(PxI)": "Severidad",
+            },
+            title="Criticidad por riesgo y owner",
+        )
+        fig_riesgo.update_traces(
+            marker=dict(line=dict(width=1.6, color="white"), opacity=0.94),
+            textposition="top center",
+            cliponaxis=False,
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "%{customdata[1]}<br>"
+                "Owner: %{customdata[2]}<br>"
+                "Hito: %{customdata[3]}<br>"
+                "Estado: %{customdata[4]}<br>"
+                "Probabilidad: %{x:.0f} / 5<br>"
+                "Impacto: %{y:.0f} / 5<br>"
+                "Severidad: %{marker.size:.0f}<extra></extra>"
+            ),
+            customdata=np.stack(
+                [
+                    df_riesgo["Riesgo_ID"],
+                    df_riesgo["Riesgo"],
+                    df_riesgo["Owner"],
+                    df_riesgo["Relacionado Hito"],
+                    df_riesgo["Estado"],
+                ],
+                axis=-1,
+            ),
+        )
+        fig_riesgo.add_shape(type="rect", x0=0.5, x1=2.5, y0=0.5, y1=2.5, fillcolor="rgba(127,168,164,.10)", line=dict(width=0), layer="below")
+        fig_riesgo.add_shape(type="rect", x0=2.5, x1=4.0, y0=2.0, y1=4.0, fillcolor="rgba(217,167,102,.10)", line=dict(width=0), layer="below")
+        fig_riesgo.add_shape(type="rect", x0=3.0, x1=5.5, y0=3.0, y1=5.5, fillcolor="rgba(215,96,94,.12)", line=dict(width=0), layer="below")
+        fig_riesgo.add_annotation(x=1.2, y=1.2, text="Zona controlable", showarrow=False, font=dict(size=11, color="#64748B"))
+        fig_riesgo.add_annotation(x=3.05, y=2.3, text="Atención prioritaria", showarrow=False, font=dict(size=11, color="#9A6B16"))
+        fig_riesgo.add_annotation(x=4.15, y=4.8, text="Riesgo crítico", showarrow=False, font=dict(size=11, color="#B91C1C"))
+        fig_riesgo.update_layout(
+            height=520,
+            margin=dict(l=40, r=40, t=76, b=36),
+            plot_bgcolor="white",
+            paper_bgcolor="rgba(0,0,0,0)",
+            coloraxis_colorbar=dict(title="Severidad"),
+            title=dict(x=0, xanchor="left"),
+            hoverlabel=dict(bgcolor="white"),
+        )
+        fig_riesgo.update_xaxes(dtick=1, range=[0.7, 5.3], showgrid=True, gridcolor="rgba(203,213,225,.55)", zeroline=False)
+        fig_riesgo.update_yaxes(dtick=1, range=[0.7, 5.3], showgrid=True, gridcolor="rgba(203,213,225,.55)", zeroline=False)
+        apply_engineering_chart_typography(fig_riesgo, title_size=20, body_size=13, tick_size=12, legend_size=11)
+        st.plotly_chart(
+            fig_riesgo,
+            use_container_width=True,
+            key=f"{key_prefix}riesgo_matrix_chart",
+        )
+
+        detail_cols = [
+            "Riesgo_ID",
+            "Categoría",
+            "Riesgo",
+            "Owner",
+            "Relacionado Hito",
+            "Estado",
+            "Severidad(PxI)",
+            "Trigger",
+            "Mitigación",
+            "Plan B",
+            "Reserva USD",
+        ]
+        df_riesgo_table = (
+            df_riesgo[detail_cols]
+            .rename(
+                columns={
+                    "Categoría": "Categoría",
+                    "Owner": "Owner",
+                    "Relacionado Hito": "Hito",
+                    "Estado": "Estado",
+                    "Severidad(PxI)": "Severidad",
+                    "Trigger": "Trigger",
+                    "Mitigación": "Mitigación",
+                    "Plan B": "Plan B",
+                    "Reserva USD": "Reserva",
+                }
+            )
+            .sort_values(["Severidad", "Riesgo_ID"], ascending=[False, True])
+        )
+        with st.expander("Ver detalle operativo de riesgos", expanded=False):
+            st.dataframe(
+                style_engineering_table(df_riesgo_table, header_color="#4F5D6F", row_color="#F7F4EF"),
+                hide_index=True,
+                use_container_width=True,
+                height=min(420, 36 + (len(df_riesgo_table) + 1) * 35),
+            )
+    except Exception as e:
+        st.error(f"No se pudo construir la matriz de riesgos: {e}")
+
 # =========================
 # SIDEBAR
 # =========================
@@ -3886,6 +4492,12 @@ def render_resumen_content(
     st.plotly_chart(fig_item_total, use_container_width=True)
     st.session_state["fig_item_total"] = fig_item_total
 
+    if include_direction_item:
+        render_hitos_owner_freeze_chart(
+            HITOS_OWNER_CSV_URL_DEFAULT,
+            key_prefix=key_prefix,
+        )
+
     st.markdown(
         '<div class="eng-body-title" style="font-size:18px;font-weight:700;color:#0f172a;margin:8px 0 12px 0;">Secuencia de Ejecución del CAPEX y Desarrollo del Proyecto</div>',
         unsafe_allow_html=True,
@@ -4045,6 +4657,11 @@ def render_resumen_content(
         key_prefix=key_prefix,
         include_direction_salaries=include_direction_item,
     )
+    if not include_direction_item:
+        render_riesgo_matrix_chart(
+            RIESGO_CSV_URL_DEFAULT,
+            key_prefix=key_prefix,
+        )
 
     if include_export:
         st.markdown("---")
@@ -4091,10 +4708,16 @@ def render_top_summary_kpis():
 
 
 def render_capex_categoria_content():
-    st.subheader("Análisis técnico por categoría")
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:21px;font-weight:800;color:#0f172a;margin:0 0 14px 0;">Análisis técnico por categoría</div>',
+        unsafe_allow_html=True,
+    )
 
     df_cat_filtrado = df_cat.copy()
-    st.markdown("### Gráfico por ítem - distribución del capex por categoría")
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:15px;font-weight:600;color:#475569;margin:0 0 10px 0;">Gráfico por ítem · distribución del CAPEX por categoría</div>',
+        unsafe_allow_html=True,
+    )
 
     df_capex_filtrado = df_capex.copy()
     items_unicos = df_capex_filtrado["Item"].unique().tolist()
@@ -4111,7 +4734,6 @@ def render_capex_categoria_content():
                     break
                 item_name = items_unicos[idx]
                 with cols[col_idx]:
-                    st.markdown(f"**{item_name}**")
                     df_item_cat = (
                         df_capex_filtrado[df_capex_filtrado["Item"] == item_name]
                         .groupby("Categoria", as_index=False)
@@ -4124,8 +4746,23 @@ def render_capex_categoria_content():
                     total_item = df_item_cat["Monto_CLP"].sum()
                     total_capex_visible = df_capex_filtrado["Monto_CLP"].sum()
                     pct_item_total = (total_item / total_capex_visible) if total_capex_visible > 0 else 0
-
-                    fig_donut_item = px.pie(df_item_cat, values="Monto_CLP", names="Categoria", hole=0.70)
+                    st.markdown(
+                        (
+                            f'<div class="eng-body-title" style="font-size:14px;font-weight:800;color:#0f172a;'
+                            f'margin:0 0 2px 0;">{html.escape(str(item_name))}</div>'
+                            f'<div style="font-size:12px;font-weight:400;color:#64748b;margin:0 0 10px 0;">'
+                            f'{format_clp(total_item)} · {len(df_item_cat)} categorías activas</div>'
+                        ),
+                        unsafe_allow_html=True,
+                    )
+                    fig_donut_item = px.pie(
+                        df_item_cat,
+                        values="Monto_CLP",
+                        names="Categoria",
+                        hole=0.70,
+                        color="Categoria",
+                        color_discrete_map=CAT_COLOR_MAP,
+                    )
                     fig_donut_item.update_traces(
                         textinfo="percent",
                         textposition="inside",
@@ -4147,7 +4784,10 @@ def render_capex_categoria_content():
     else:
         st.info("No hay ítems para mostrar en los dónuts según las categorías seleccionadas.")
 
-    st.markdown("### Participación porcentual por categoría")
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:15px;font-weight:600;color:#475569;margin:4px 0 10px 0;">Participación porcentual por categoría</div>',
+        unsafe_allow_html=True,
+    )
     total_clp_cat = df_cat_filtrado["Monto_CLP"].sum()
     df_cat_plot = df_cat_filtrado.copy().sort_values("Monto_CLP", ascending=False)
     df_cat_plot["Pct_cat"] = df_cat_plot["Monto_CLP"] / total_clp_cat if total_clp_cat > 0 else 0.0
@@ -4165,24 +4805,40 @@ def render_capex_categoria_content():
 
     fig_cat = px.bar(
         df_cat_plot,
-        x="Categoria",
-        y="Pct_cat",
+        x="Pct_cat",
+        y="Categoria",
+        orientation="h",
         color="Categoria",
         color_discrete_map=cat_item_color_map,
         text="Pct_cat",
-        labels={"Categoria": "Categoría", "Pct_cat": "Participación"},
+        labels={"Categoria": "", "Pct_cat": "Participación"},
         title="Distribución porcentual del CAPEX por categoría",
     )
-    fig_cat.update_traces(texttemplate="%{text:.1%}", textposition="outside")
+    fig_cat.update_traces(
+        texttemplate="%{text:.1%}",
+        textposition="outside",
+        cliponaxis=False,
+        hovertemplate="<b>%{y}</b><br>Participación: %{x:.1%}<extra></extra>",
+        marker=dict(line=dict(color="rgba(255,255,255,0.96)", width=1.4)),
+    )
     max_part = float(df_cat_plot["Pct_cat"].max() or 0)
-    fig_cat.update_yaxes(tickformat=".0%", range=[0, max_part * 1.15 if max_part > 0 else 1])
+    fig_cat.update_xaxes(
+        tickformat=".0%",
+        range=[0, max_part * 1.18 if max_part > 0 else 1],
+        showgrid=True,
+        gridcolor="rgba(148,163,184,0.18)",
+        zeroline=False,
+    )
+    fig_cat.update_yaxes(showgrid=False, categoryorder="total ascending")
     fig_cat.update_layout(
-        xaxis_title="",
-        yaxis_title="Participación (%)",
-        margin=dict(l=10, r=10, t=80, b=120),
-        height=460,
-        bargap=0.25,
+        xaxis_title="Participación (%)",
+        yaxis_title="",
+        margin=dict(l=10, r=34, t=80, b=24),
+        height=420,
+        bargap=0.32,
         showlegend=False,
+        plot_bgcolor="white",
+        paper_bgcolor="rgba(0,0,0,0)",
     )
     apply_engineering_chart_typography(fig_cat, title_size=20, body_size=13, tick_size=12, legend_size=12)
     st.plotly_chart(fig_cat, use_container_width=True)
@@ -4191,8 +4847,8 @@ def render_capex_categoria_content():
     legend_css = """
     <style>
     .item-legend { display:flex; flex-wrap:wrap; gap:0.45rem 0.75rem; margin-top:0.4rem; margin-bottom:0.8rem; }
-    .item-legend-title { font-size:0.82rem; font-weight:700; color:#6B7280; text-transform:uppercase; letter-spacing:.08em; margin-top:0.4rem; margin-bottom:0.25rem; }
-    .item-legend-chip { display:inline-flex; align-items:center; gap:0.4rem; font-size:0.78rem; font-weight:600; color:#111827; }
+    .item-legend-title { font-size:11px; font-weight:500; color:#64748B; text-transform:uppercase; letter-spacing:.10em; margin-top:0.4rem; margin-bottom:0.25rem; }
+    .item-legend-chip { display:inline-flex; align-items:center; gap:0.4rem; font-size:13px; font-weight:400; color:#0f172a; }
     .item-legend-swatch { width:12px; height:12px; border-radius:2px; border:1px solid rgba(17, 24, 39, 0.2); }
     </style>
     """
@@ -4211,20 +4867,6 @@ def render_capex_categoria_content():
         unsafe_allow_html=True,
     )
 
-    st.markdown("### Tabla distribución por categoría")
-    df_bullet_cat = (
-        df_capex.groupby("Categoria", as_index=False)
-        .agg(Bullet_cat=("Bullet", lambda x: x.dropna().iloc[0] if len(x.dropna()) > 0 else ""))
-    )
-    df_show = df_cat_plot.merge(df_bullet_cat, on="Categoria", how="left")
-    df_show["Participación (%)"] = (df_show["Pct_cat"] * 100).map(lambda v: f"{v:.1f}%")
-    df_show["Monto_CLP_fmt"] = df_show["Monto_CLP"].apply(format_clp)
-    df_show["Monto_USD_fmt"] = df_show["Monto_USD"].apply(format_usd)
-    st.dataframe(
-        df_show[["Categoria", "Participación (%)", "Monto_CLP_fmt", "Monto_USD_fmt", "Bullet_cat"]],
-        hide_index=True,
-        use_container_width=True,
-    )
 
 
 def render_capex_items_content():
@@ -4270,56 +4912,8 @@ def render_capex_items_content():
 
 
 def render_capex_module_content(selector_key: str = "capex_internal_selector"):
-    st.markdown(
-        """
-        <div style="
-            display:flex;
-            align-items:center;
-            gap:12px;
-            margin:6px 0 14px 0;
-            padding:10px 14px;
-            border:1px solid rgba(229,231,235,1);
-            border-radius:16px;
-            background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);
-            width:fit-content;
-            box-shadow:0 6px 14px rgba(15,23,42,.06);
-        ">
-            <div style="
-                width:42px;
-                height:42px;
-                border-radius:12px;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                background:#0f172a;
-                color:white;
-                font-size:22px;
-                font-weight:700;
-            ">C</div>
-            <div>
-                <div style="font-size:11px;font-weight:700;letter-spacing:.12em;color:#64748b;text-transform:uppercase;">
-                    Modulo
-                </div>
-                <div style="font-size:22px;font-weight:800;color:#111827;line-height:1.1;">
-                    Capex
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     st.markdown("---")
-    capex_subview = st.radio(
-        "Visualización dentro de Capex",
-        ["📂 Por categoría", "📄 Detalle de ítems"],
-        index=0,
-        horizontal=True,
-        key=selector_key,
-    )
-    if capex_subview == "📂 Por categoría":
-        render_capex_categoria_content()
-    else:
-        render_capex_items_content()
+    render_capex_categoria_content()
 
 
 def render_direccion_module_content():
@@ -6435,6 +7029,9 @@ input_cards = [
 if "inputs_bloque_sel" not in st.session_state:
     st.session_state["inputs_bloque_sel"] = None
 
+def selector_button_label(label: str, is_active: bool, action_label: str = "Abrir bloque") -> str:
+    return f"{label} · Seleccionado" if is_active else action_label
+
 def _set_inputs_bloque(value: str):
     st.session_state["inputs_bloque_sel"] = value
     if value == "estado_actual":
@@ -6503,14 +7100,14 @@ st.markdown(
             background:linear-gradient(180deg,#cbd5e1 0%,#e2e8f0 100%);
         }
         .inputs-nav-card.active{
-            border:1px solid rgba(16,185,129,.30);
-            box-shadow:0 16px 34px rgba(16,185,129,.14);
+            border:1px solid rgba(239,68,68,.30);
+            box-shadow:0 16px 34px rgba(239,68,68,.12);
             background:
-                radial-gradient(circle at top right, rgba(52,211,153,.20), transparent 26%),
-                linear-gradient(90deg,#ecfdf5 0%,#d1fae5 48%,#a7f3d0 100%);
+                radial-gradient(circle at top right, rgba(254,202,202,.24), transparent 26%),
+                linear-gradient(90deg,#fff5f5 0%,#ffe4e6 48%,#ffe8e8 100%);
         }
         .inputs-nav-card.active:before{
-            background:linear-gradient(180deg,#059669 0%,#34d399 100%);
+            background:linear-gradient(180deg,#ef4444 0%,#f87171 100%);
         }
         .inputs-nav-k{
             font-size:11px;
@@ -6548,9 +7145,23 @@ st.markdown(
             line-height:1.45;
             color:#475569;
         }
-        .inputs-nav-card.active .inputs-nav-k{color:#166534;}
-        .inputs-nav-card.active .inputs-nav-t{color:#064e3b;}
-        .inputs-nav-card.active .inputs-nav-s{color:#065f46;}
+        .inputs-nav-card.active .inputs-nav-k{color:#b91c1c;}
+        .inputs-nav-card.active .inputs-nav-t{color:#b91c1c;}
+        .inputs-nav-card.active .inputs-nav-s{color:#991b1b;}
+        button[kind="primary"]{
+            background:#fff5f5 !important;
+            color:#ef4444 !important;
+            border:1px solid rgba(239,68,68,.52) !important;
+            box-shadow:0 8px 18px rgba(239,68,68,.10) !important;
+        }
+        button[kind="primary"] p{
+            color:#ef4444 !important;
+            font-weight:800 !important;
+        }
+        button[kind="primary"]:hover{
+            background:#ffe9e9 !important;
+            border-color:#ef4444 !important;
+        }
         .inputs-active-banner{
             border-radius:18px;
             padding:12px 14px;
@@ -6630,7 +7241,7 @@ for idx, (block_value, block_title) in enumerate(input_cards):
             unsafe_allow_html=True,
         )
         st.button(
-            "Seleccionado" if is_active else "Abrir bloque",
+            selector_button_label(block_title, is_active),
             key=f"inputs_nav_{idx}",
             use_container_width=True,
             type="primary" if is_active else "secondary",
@@ -6801,9 +7412,9 @@ elif selected_input_block == "escalamiento":
             box-shadow:0 10px 24px rgba(15,23,42,.05);
         }
         .capex-detail-card.active{
-            background:linear-gradient(90deg,#ecfdf5 0%,#d1fae5 42%,#a7f3d0 100%);
-            border:1px solid rgba(22,163,74,.30);
-            box-shadow:0 14px 28px rgba(21,128,61,.10);
+            background:linear-gradient(90deg,#fff5f5 0%,#ffe4e6 42%,#ffe8e8 100%);
+            border:1px solid rgba(239,68,68,.30);
+            box-shadow:0 14px 28px rgba(239,68,68,.10);
         }
         .capex-detail-k{
             font-size:11px;
@@ -6813,7 +7424,7 @@ elif selected_input_block == "escalamiento":
             color:#64748b;
             margin-bottom:8px;
         }
-        .capex-detail-card.active .capex-detail-k{color:#166534;}
+        .capex-detail-card.active .capex-detail-k{color:#b91c1c;}
         .capex-detail-t{
             font-size:26px;
             font-weight:900;
@@ -6827,13 +7438,13 @@ elif selected_input_block == "escalamiento":
             color:#0f766e;
             margin-bottom:10px;
         }
-        .capex-detail-card.active .capex-detail-pct{color:#065f46;}
+        .capex-detail-card.active .capex-detail-pct{color:#b91c1c;}
         .capex-detail-s{
             font-size:14px;
             line-height:1.5;
             color:#475569;
         }
-        .capex-detail-card.active .capex-detail-s{color:#065f46;}
+        .capex-detail-card.active .capex-detail-s{color:#991b1b;}
         </style>
         """,
         unsafe_allow_html=True,
@@ -6896,7 +7507,7 @@ elif selected_input_block == "escalamiento":
     capex10_col, capex80_col = st.columns(2)
     with capex10_col:
         st.button(
-            "Seleccionado" if capex_10kw_active else "Seleccionar CAPEX 10kW",
+            selector_button_label("CAPEX 10kW", capex_10kw_active, action_label="Seleccionar CAPEX 10kW"),
             key="inputs_capex_focus_kpi_10kw",
             use_container_width=True,
             type="primary" if capex_10kw_active else "secondary",
@@ -6905,7 +7516,7 @@ elif selected_input_block == "escalamiento":
         )
     with capex80_col:
         st.button(
-            "Seleccionado" if capex_80kw_active else "Seleccionar CAPEX 80kW",
+            selector_button_label("CAPEX 80kW", capex_80kw_active, action_label="Seleccionar CAPEX 80kW"),
             key="inputs_capex_focus_kpi_80kw",
             use_container_width=True,
             type="primary" if capex_80kw_active else "secondary",
@@ -6917,6 +7528,29 @@ elif selected_input_block == "escalamiento":
         render_inputs_capex_10kw_detail()
     elif capex_80kw_active:
         st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
+        st.markdown(
+            """
+            <style>
+            button[kind="primary"][data-testid="stBaseButton-secondaryFormSubmit"],
+            button[kind="primary"]{
+                background:#fff5f5 !important;
+                color:#ef4444 !important;
+                border:1px solid rgba(239,68,68,.52) !important;
+                box-shadow:0 8px 18px rgba(239,68,68,.10) !important;
+            }
+            button[kind="primary"][data-testid="stBaseButton-secondaryFormSubmit"] p,
+            button[kind="primary"] p{
+                color:#ef4444 !important;
+                font-weight:800 !important;
+            }
+            button[kind="primary"]:hover{
+                background:#ffe9e9 !important;
+                border-color:#ef4444 !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
         capex_80kw_views = [
             ("dashboard", "📊 Dashboard general"),
             ("capex", "🏗️ Detalle capex 80kW"),
@@ -6932,7 +7566,7 @@ elif selected_input_block == "escalamiento":
             is_active = st.session_state.get(capex_80kw_view_state_key) == view_value
             with capex_view_cols[idx]:
                 st.button(
-                    "Seleccionado" if is_active else view_label,
+                    selector_button_label(view_label, is_active, action_label=view_label),
                     key=f"inputs_capex_80kw_view_{view_value}",
                     use_container_width=True,
                     type="primary" if is_active else "secondary",
@@ -7622,10 +8256,16 @@ if False:
         )
     
 def render_capex_categoria_content():
-    st.subheader("Análisis técnico por categoría")
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:21px;font-weight:800;color:#0f172a;margin:0 0 14px 0;">Análisis técnico por categoría</div>',
+        unsafe_allow_html=True,
+    )
 
     df_cat_filtrado = df_cat.copy()
-    st.markdown("### Gráfico por ítem - distribución del capex por categoría")
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:15px;font-weight:600;color:#475569;margin:0 0 10px 0;">Gráfico por ítem · distribución del CAPEX por categoría</div>',
+        unsafe_allow_html=True,
+    )
 
     df_capex_filtrado = df_capex.copy()
     items_unicos = df_capex_filtrado["Item"].unique().tolist()
@@ -7642,7 +8282,6 @@ def render_capex_categoria_content():
                     break
                 item_name = items_unicos[idx]
                 with cols[col_idx]:
-                    st.markdown(f"**{item_name}**")
                     df_item_cat = (
                         df_capex_filtrado[df_capex_filtrado["Item"] == item_name]
                         .groupby("Categoria", as_index=False)
@@ -7655,8 +8294,23 @@ def render_capex_categoria_content():
                     total_item = df_item_cat["Monto_CLP"].sum()
                     total_capex_visible = df_capex_filtrado["Monto_CLP"].sum()
                     pct_item_total = (total_item / total_capex_visible) if total_capex_visible > 0 else 0
-
-                    fig_donut_item = px.pie(df_item_cat, values="Monto_CLP", names="Categoria", hole=0.70)
+                    st.markdown(
+                        (
+                            f'<div class="eng-body-title" style="font-size:14px;font-weight:800;color:#0f172a;'
+                            f'margin:0 0 2px 0;">{html.escape(str(item_name))}</div>'
+                            f'<div style="font-size:12px;font-weight:400;color:#64748b;margin:0 0 10px 0;">'
+                            f'{format_clp(total_item)} · {len(df_item_cat)} categorías activas</div>'
+                        ),
+                        unsafe_allow_html=True,
+                    )
+                    fig_donut_item = px.pie(
+                        df_item_cat,
+                        values="Monto_CLP",
+                        names="Categoria",
+                        hole=0.70,
+                        color="Categoria",
+                        color_discrete_map=CAT_COLOR_MAP,
+                    )
                     fig_donut_item.update_traces(
                         textinfo="percent",
                         textposition="inside",
@@ -7677,7 +8331,10 @@ def render_capex_categoria_content():
     else:
         st.info("No hay ítems para mostrar en los dónuts según las categorías seleccionadas.")
 
-    st.markdown("### Participación porcentual por categoría")
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:15px;font-weight:600;color:#475569;margin:4px 0 10px 0;">Participación porcentual por categoría</div>',
+        unsafe_allow_html=True,
+    )
     total_clp_cat = df_cat_filtrado["Monto_CLP"].sum()
     df_cat_plot = df_cat_filtrado.copy().sort_values("Monto_CLP", ascending=False)
     df_cat_plot["Pct_cat"] = df_cat_plot["Monto_CLP"] / total_clp_cat if total_clp_cat > 0 else 0.0
@@ -7695,24 +8352,40 @@ def render_capex_categoria_content():
 
     fig_cat = px.bar(
         df_cat_plot,
-        x="Categoria",
-        y="Pct_cat",
+        x="Pct_cat",
+        y="Categoria",
+        orientation="h",
         color="Categoria",
         color_discrete_map=cat_item_color_map,
         text="Pct_cat",
-        labels={"Categoria": "Categoría", "Pct_cat": "Participación"},
+        labels={"Categoria": "", "Pct_cat": "Participación"},
         title="Distribución porcentual del CAPEX por categoría",
     )
-    fig_cat.update_traces(texttemplate="%{text:.1%}", textposition="outside")
+    fig_cat.update_traces(
+        texttemplate="%{text:.1%}",
+        textposition="outside",
+        cliponaxis=False,
+        hovertemplate="<b>%{y}</b><br>Participación: %{x:.1%}<extra></extra>",
+        marker=dict(line=dict(color="rgba(255,255,255,0.96)", width=1.4)),
+    )
     max_part = float(df_cat_plot["Pct_cat"].max() or 0)
-    fig_cat.update_yaxes(tickformat=".0%", range=[0, max_part * 1.15 if max_part > 0 else 1])
+    fig_cat.update_xaxes(
+        tickformat=".0%",
+        range=[0, max_part * 1.18 if max_part > 0 else 1],
+        showgrid=True,
+        gridcolor="rgba(148,163,184,0.18)",
+        zeroline=False,
+    )
+    fig_cat.update_yaxes(showgrid=False, categoryorder="total ascending")
     fig_cat.update_layout(
-        xaxis_title="",
-        yaxis_title="Participación (%)",
-        margin=dict(l=10, r=10, t=80, b=120),
-        height=460,
-        bargap=0.25,
+        xaxis_title="Participación (%)",
+        yaxis_title="",
+        margin=dict(l=10, r=34, t=80, b=24),
+        height=420,
+        bargap=0.32,
         showlegend=False,
+        plot_bgcolor="white",
+        paper_bgcolor="rgba(0,0,0,0)",
     )
     st.plotly_chart(fig_cat, use_container_width=True)
     st.session_state["fig_cat_categoria"] = fig_cat
@@ -7720,8 +8393,8 @@ def render_capex_categoria_content():
     legend_css = """
     <style>
     .item-legend { display:flex; flex-wrap:wrap; gap:0.45rem 0.75rem; margin-top:0.4rem; margin-bottom:0.8rem; }
-    .item-legend-title { font-size:0.82rem; font-weight:700; color:#6B7280; text-transform:uppercase; letter-spacing:.08em; margin-top:0.4rem; margin-bottom:0.25rem; }
-    .item-legend-chip { display:inline-flex; align-items:center; gap:0.4rem; font-size:0.78rem; font-weight:600; color:#111827; }
+    .item-legend-title { font-size:11px; font-weight:500; color:#64748B; text-transform:uppercase; letter-spacing:.10em; margin-top:0.4rem; margin-bottom:0.25rem; }
+    .item-legend-chip { display:inline-flex; align-items:center; gap:0.4rem; font-size:13px; font-weight:400; color:#0f172a; }
     .item-legend-swatch { width:12px; height:12px; border-radius:2px; border:1px solid rgba(17, 24, 39, 0.2); }
     </style>
     """
@@ -7740,20 +8413,6 @@ def render_capex_categoria_content():
         unsafe_allow_html=True,
     )
 
-    st.markdown("### Tabla distribución por categoría")
-    df_bullet_cat = (
-        df_capex.groupby("Categoria", as_index=False)
-        .agg(Bullet_cat=("Bullet", lambda x: x.dropna().iloc[0] if len(x.dropna()) > 0 else ""))
-    )
-    df_show = df_cat_plot.merge(df_bullet_cat, on="Categoria", how="left")
-    df_show["Participación (%)"] = (df_show["Pct_cat"] * 100).map(lambda v: f"{v:.1f}%")
-    df_show["Monto_CLP_fmt"] = df_show["Monto_CLP"].apply(format_clp)
-    df_show["Monto_USD_fmt"] = df_show["Monto_USD"].apply(format_usd)
-    st.dataframe(
-        df_show[["Categoria", "Participación (%)", "Monto_CLP_fmt", "Monto_USD_fmt", "Bullet_cat"]],
-        hide_index=True,
-        use_container_width=True,
-    )
 
 
 def render_capex_items_content():
@@ -7798,56 +8457,8 @@ def render_capex_items_content():
 
 
 def render_capex_module_content(selector_key: str = "capex_internal_selector"):
-    st.markdown(
-        """
-        <div style="
-            display:flex;
-            align-items:center;
-            gap:12px;
-            margin:6px 0 14px 0;
-            padding:10px 14px;
-            border:1px solid rgba(229,231,235,1);
-            border-radius:16px;
-            background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);
-            width:fit-content;
-            box-shadow:0 6px 14px rgba(15,23,42,.06);
-        ">
-            <div style="
-                width:42px;
-                height:42px;
-                border-radius:12px;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                background:#0f172a;
-                color:white;
-                font-size:22px;
-                font-weight:700;
-            ">C</div>
-            <div>
-                <div style="font-size:11px;font-weight:700;letter-spacing:.12em;color:#64748b;text-transform:uppercase;">
-                    Modulo
-                </div>
-                <div style="font-size:22px;font-weight:800;color:#111827;line-height:1.1;">
-                    Capex
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     st.markdown("---")
-    capex_subview = st.radio(
-        "Visualización dentro de Capex",
-        ["📂 Por categoría", "📄 Detalle de ítems"],
-        index=0,
-        horizontal=True,
-        key=selector_key,
-    )
-    if capex_subview == "📂 Por categoría":
-        render_capex_categoria_content()
-    else:
-        render_capex_items_content()
+    render_capex_categoria_content()
 
 
 def render_direccion_module_content():
