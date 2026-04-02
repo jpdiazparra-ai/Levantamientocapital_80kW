@@ -3026,6 +3026,10 @@ def render_inputs_capex_10kw_detail():
         '<div class="eng-body-title" style="font-size:21px;font-weight:800;color:#0f172a;margin:0 0 14px 0;">Brecha de Inversión – Piloto 10 kW</div>',
         unsafe_allow_html=True,
     )
+    st.markdown(
+        '<div style="font-size:13px;font-weight:400;color:#64748b;margin:0 0 14px 0;">Lectura consolidada de la inversión pendiente del piloto 10 kW, con foco en componentes, cronograma y base de ingeniería.</div>',
+        unsafe_allow_html=True,
+    )
 
     st.markdown(
         '<div class="eng-body-title" style="font-size:15px;font-weight:600;color:#475569;margin:0 0 10px 0;">Distribución relativa por componente</div>',
@@ -3091,7 +3095,10 @@ def render_inputs_capex_10kw_detail():
         with pie_col:
             st.plotly_chart(fig_10kw, use_container_width=True)
         with table_col:
-            st.markdown("##### Resumen consolidado")
+            st.markdown(
+                '<div class="eng-body-title" style="font-size:15px;font-weight:600;color:#475569;margin:0 0 10px 0;">Resumen consolidado</div>',
+                unsafe_allow_html=True,
+            )
             st.dataframe(
                 style_engineering_table(resumen_show, header_color="#0F766E", row_color="#ECFDF5"),
                 hide_index=True,
@@ -3101,7 +3108,10 @@ def render_inputs_capex_10kw_detail():
 
     render_inputs_project_gantt()
 
-    st.markdown("#### Tabla base de ingeniería")
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:15px;font-weight:600;color:#475569;margin:8px 0 10px 0;">Tabla base de ingeniería</div>',
+        unsafe_allow_html=True,
+    )
     st.dataframe(
         style_engineering_table(tabla_10kw, header_color="#2C5783", row_color="#EAF6FF"),
         hide_index=True,
@@ -3328,7 +3338,10 @@ def render_inputs_estado_actual_dashboard():
     )
     st.markdown(hero_html, unsafe_allow_html=True)
 
-    st.markdown("### Estado Técnico-Financiero del Piloto 10 kW")
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:21px;font-weight:800;color:#0f172a;margin:0 0 14px 0;">Estado Técnico-Financiero del Piloto 10 kW</div>',
+        unsafe_allow_html=True,
+    )
     financial_kpis = render_inputs_financial_main_kpis(base)
     selected_financial_asset = financial_kpis.get("selected", "costo_ejecutado")
 
@@ -3342,7 +3355,10 @@ def render_inputs_estado_actual_dashboard():
         render_inputs_item_analytics(base)
         render_inputs_factor_chart(base)
     elif selected_financial_asset == "know_how_fw":
-        st.markdown("### Diseño de Ingeniería y Know-how Técnico")
+        st.markdown(
+            '<div class="eng-body-title" style="font-size:21px;font-weight:800;color:#0f172a;margin:0 0 14px 0;">Diseño de Ingeniería y Know-how Técnico</div>',
+            unsafe_allow_html=True,
+        )
         render_inputs_knowhow_fw_detail()
     elif selected_financial_asset == "capacidades_externas":
         st.info(
@@ -5800,26 +5816,6 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
         unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="sup-shell">', unsafe_allow_html=True)
-    sh_col, reset_col, pdf_col = st.columns([1, 0.24, 0.28])
-    with sh_col:
-        st.markdown(
-            f'<div class="sup-head-main">{supuestos_title_map.get(bloque_sel, "Supuestos Clave del Modelo de Valorización")}</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            f'<div class="eng-body-title">{supuestos_subtitle_map.get(bloque_sel, "")}</div>',
-            unsafe_allow_html=True,
-        )
-    with reset_col:
-        if st.button("⟲ Restablecer supuestos", key=widget_key("reset_supuestos"), use_container_width=True):
-            for group_name in ("base", "post"):
-                for name, default_value in group_widget_defaults[group_name].items():
-                    st.session_state[shared_state_key(name, group_name)] = default_value
-                    st.session_state.pop(shared_widget_key(name, group_name), None)
-    pdf_export_slot = pdf_col.empty()
-    st.markdown('<div class="sup-input-shell"><div class="sup-input-shell-title">Panel de entrada</div>', unsafe_allow_html=True)
-
     # Seed all calculation inputs from shared state so every branch has valid values.
     fx_input = float(st.session_state[shared_state_key("fx")])
     pre_money_input = float(st.session_state[shared_state_key("pre_money")])
@@ -5836,27 +5832,245 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
     aporte_no_pecuniario_clp = 0.0
     aporte_no_pecuniario_usd = 0.0
 
-    if bloque_sel == "1. Fundamentos de Creación de Valor":
-        pcol1, pcol2, pcol3 = st.columns(3)
-        with pcol1:
-            fx_input = st.number_input("FX CLP/USD", min_value=1, step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
-            render_input_thousands_hint(fx_input)
-        with pcol2:
-            investment_currency_input = st.selectbox(
-                "Moneda de inversión",
-                ["CLP", "USD"],
-                key=prime_widget("investment_currency"),
-                on_change=sync_investment_currency,
+    def render_supuestos_panel():
+        nonlocal fx_input, pre_money_input, inversion_clp_input, volume_input, ebitda_unit_input
+        nonlocal multiple_input, ronda_pct_input, captura_input, alloc_manual_input
+        nonlocal fluxial_pct_manual_input, imelsa_pct_manual_input, investment_currency_input
+        nonlocal aporte_no_pecuniario_clp, aporte_no_pecuniario_usd
+        nonlocal reset_requested
+
+        st.markdown('<div class="sup-shell">', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="sup-head-main">{supuestos_title_map.get(bloque_sel, "Supuestos Clave del Modelo de Valorización")}</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="eng-body-title">{supuestos_subtitle_map.get(bloque_sel, "")}</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown('<div class="sup-input-shell"><div class="sup-input-shell-title">Panel de entrada</div>', unsafe_allow_html=True)
+
+        if bloque_sel == "1. Fundamentos de Creación de Valor":
+            pcol1, pcol2, pcol3 = st.columns(3)
+            with pcol1:
+                fx_input = st.number_input("FX CLP/USD", min_value=1, step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
+                render_input_thousands_hint(fx_input)
+            with pcol2:
+                investment_currency_input = st.selectbox(
+                    "Moneda de inversión",
+                    ["CLP", "USD"],
+                    key=prime_widget("investment_currency"),
+                    on_change=sync_investment_currency,
+                )
+            with pcol3:
+                valuation_basis_input = st.selectbox(
+                    "Base de valorización pre-money",
+                    ["BASE INVERSION + KNOW-HOW", "EBITDA potencial ciclo inicial"],
+                    key=prime_widget("valuation_basis"),
+                    on_change=sync_widget_to_state,
+                    args=("valuation_basis",),
+                )
+            if valuation_basis_input == "EBITDA potencial ciclo inicial":
+                pcol4, pcol5, pcol6 = st.columns(3)
+                with pcol4:
+                    volume_input = st.number_input("Volumen comercial", min_value=0, step=1, format="%d", key=prime_widget("volume"), on_change=sync_widget_to_state, args=("volume",))
+                    render_input_thousands_hint(volume_input)
+                with pcol5:
+                    ebitda_unit_input = st.number_input("EBITDA unitario (USD)", min_value=0, step=1000, format="%d", key=prime_widget("ebitda_unit"), on_change=sync_widget_to_state, args=("ebitda_unit",))
+                    render_input_thousands_hint(ebitda_unit_input, "US$")
+                with pcol6:
+                    multiple_input = st.slider("Múltiplo EBITDA", min_value=1.0, max_value=12.0, step=0.5, key=prime_widget("multiple"), on_change=sync_widget_to_state, args=("multiple",))
+                action_col_1, action_col_2 = st.columns(2)
+                with action_col_1:
+                    if st.button("⟲ Restablecer supuestos", key=widget_key("reset_supuestos"), use_container_width=True):
+                        reset_requested = True
+                with action_col_2:
+                    if REPORTLAB_AVAILABLE:
+                        st.download_button(
+                            label="📄 Descargar PDF de supuestos",
+                            data=st.session_state[pdf_data_key],
+                            file_name="Supuestos_Modelo_Valorizacion.pdf",
+                            mime="application/pdf",
+                            key=widget_key("download_supuestos_pdf"),
+                            use_container_width=True,
+                        )
+                    else:
+                        st.info("PDF deshabilitado: falta `reportlab`.", icon="ℹ️")
+            inversion_clp_input = float(st.session_state[shared_state_key("inv_clp")])
+            captura_input = float(captura_default or 1.0)
+            ronda_pct_input = float(st.session_state[shared_state_key("ronda_pct")]) / 100.0
+        elif bloque_sel == "2. Serie A: Inversión Inicial y Validación":
+            pcol1, pcol2, pcol3 = st.columns(3)
+            with pcol1:
+                fx_input = st.number_input("FX CLP/USD", min_value=1, step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
+                render_input_thousands_hint(fx_input)
+            with pcol2:
+                investment_currency_input = st.selectbox(
+                    "Moneda de inversión",
+                    ["CLP", "USD"],
+                    key=prime_widget("investment_currency"),
+                    on_change=sync_investment_currency,
+                )
+            with pcol3:
+                if investment_currency_input == "USD":
+                    inv_usd_widget_key = shared_widget_key("inv_usd_display")
+                    if inv_usd_widget_key not in st.session_state:
+                        st.session_state[inv_usd_widget_key] = int(round(float(st.session_state[shared_state_key("inv_clp")]) / fx_input)) if fx_input > 0 else 0
+                    inversion_usd_input = st.number_input(
+                        "Inversión piloto (USD)",
+                        min_value=0,
+                        step=10000,
+                        format="%d",
+                        key=inv_usd_widget_key,
+                        on_change=sync_investment_usd_to_clp,
+                    )
+                    render_input_thousands_hint(inversion_usd_input, "US$")
+                    inversion_clp_input = float(inversion_usd_input) * fx_input
+                    st.session_state[shared_state_key("inv_clp")] = int(round(inversion_clp_input))
+                    st.session_state.pop(shared_widget_key("inv_clp"), None)
+                else:
+                    inversion_clp_input = st.number_input("Inversión piloto (CLP)", min_value=0, step=10000000, format="%d", key=prime_widget("inv_clp"), on_change=sync_widget_to_state, args=("inv_clp",))
+                    render_input_thousands_hint(inversion_clp_input, "$")
+            volume_input = float(st.session_state[shared_state_key("volume")])
+            ebitda_unit_input = float(st.session_state[shared_state_key("ebitda_unit")])
+            multiple_input = float(st.session_state[shared_state_key("multiple")])
+            captura_input = float(captura_default or 1.0)
+            ronda_pct_input = float(st.session_state[shared_state_key("ronda_pct")]) / 100.0
+            auto_ebitda_potencial = volume_input * ebitda_unit_input * multiple_input
+            auto_base_en_usd = (total_base_knowhow_clp / fx_input) if fx_input > 0 else 0.0
+            auto_valuation_basis = str(st.session_state.get(shared_state_key("valuation_basis", "base"), "EBITDA potencial ciclo inicial"))
+            auto_valorizacion_fluxial = resolve_fluxial_pre_money(
+                auto_valuation_basis,
+                auto_base_en_usd,
+                auto_ebitda_potencial,
             )
-        with pcol3:
-            valuation_basis_input = st.selectbox(
-                "Base de valorización pre-money",
-                ["BASE INVERSION + KNOW-HOW", "EBITDA potencial ciclo inicial"],
-                key=prime_widget("valuation_basis"),
-                on_change=sync_widget_to_state,
-                args=("valuation_basis",),
-            )
-        if valuation_basis_input == "EBITDA potencial ciclo inicial":
+            auto_inversion_usd = inversion_clp_input / fx_input if fx_input > 0 else 0.0
+            auto_post_money = auto_valorizacion_fluxial + auto_inversion_usd
+            auto_imelsa_pct = (auto_inversion_usd / auto_post_money) if auto_post_money > 0 else 0.0
+            auto_fluxial_pct = max(0.0, 1.0 - auto_imelsa_pct)
+
+            if not alloc_manual_input:
+                st.session_state[shared_state_key("fluxial_pct_manual")] = auto_fluxial_pct * 100.0
+                st.session_state[shared_state_key("imelsa_pct_manual")] = auto_imelsa_pct * 100.0
+                st.session_state.pop(shared_widget_key("fluxial_pct_manual"), None)
+                st.session_state.pop(shared_widget_key("imelsa_pct_manual"), None)
+
+            with st.columns(1)[0]:
+                alloc_manual_input = st.checkbox(
+                    "Asignar participación manual para Fluxial e IMELSA",
+                    key=prime_widget("alloc_manual"),
+                    on_change=sync_widget_to_state,
+                    args=("alloc_manual",),
+                )
+            if alloc_manual_input:
+                st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+                manual_wrap_left, manual_col_1, manual_col_2, manual_col_3, manual_wrap_right = st.columns([0.18, 1.1, 1, 1, 0.18])
+                with manual_col_1:
+                    imelsa_pct_manual_input = st.slider(
+                        "% IMELSA manual",
+                        min_value=0.0,
+                        max_value=100.0,
+                        step=1.0,
+                        format="%.0f%%",
+                        key=prime_widget("imelsa_pct_manual"),
+                        on_change=sync_widget_to_state,
+                        args=("imelsa_pct_manual",),
+                    ) / 100.0
+                    fluxial_pct_manual_input = max(0.0, 1.0 - imelsa_pct_manual_input)
+                    st.session_state[shared_state_key("fluxial_pct_manual")] = fluxial_pct_manual_input * 100.0
+                    st.session_state.pop(shared_widget_key("fluxial_pct_manual"), None)
+                    aporte_no_pecuniario_usd_manual = max(0.0, (auto_post_money * imelsa_pct_manual_input) - auto_inversion_usd) if auto_post_money > 0 else 0.0
+                    aporte_no_pecuniario_usd = aporte_no_pecuniario_usd_manual
+                    aporte_no_pecuniario_clp = aporte_no_pecuniario_usd_manual * fx_input
+                with manual_col_2:
+                    st.markdown(
+                        f"""
+                        <div style="margin-top:-42px;">
+                        <div style="
+                            border:1px solid rgba(148,163,184,.24);
+                            border-radius:16px;
+                            padding:16px 18px;
+                            background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);
+                            box-shadow:0 6px 14px rgba(15,23,42,.04);
+                        ">
+                            <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748B;margin-bottom:8px;">
+                                Complemento automático
+                            </div>
+                            <div style="font-size:34px;font-weight:800;line-height:1;color:#0f172a;margin-bottom:8px;">
+                                {fluxial_pct_manual_input:.0%}
+                            </div>
+                            <div style="font-size:13px;line-height:1.45;color:#475569;">
+                                Se calcula como 100% menos la participación manual asignada a IMELSA.
+                            </div>
+                        </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                with manual_col_3:
+                    st.markdown(
+                        f"""
+                        <div style="margin-top:-42px;">
+                        <div style="
+                            border:1px solid rgba(191,219,254,.55);
+                            border-radius:16px;
+                            padding:16px 18px;
+                            background:linear-gradient(90deg,#EFF8FF 0%,#DFF4FF 42%,#C6ECFF 100%);
+                            box-shadow:0 6px 14px rgba(15,23,42,.04);
+                        ">
+                            <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748B;margin-bottom:8px;">
+                                Valor complementario
+                            </div>
+                            <div style="font-size:34px;font-weight:800;line-height:1;color:#0f172a;margin-bottom:8px;">
+                                {format_clp(aporte_no_pecuniario_clp) if investment_currency_input == "CLP" else format_usd(aporte_no_pecuniario_usd)}
+                            </div>
+                            <div style="font-size:13px;line-height:1.45;color:#475569;">
+                                {"Monto adicional reconocido en CLP para complementar la estructura de entrada de la Serie A." if investment_currency_input == "CLP" else "Monto adicional reconocido en USD para complementar la estructura de entrada de la Serie A."}
+                            </div>
+                        </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                st.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
+        elif bloque_sel == "3. Valorización Post-Validación":
+            pcol1, pcol2, pcol3 = st.columns(3)
+            with pcol1:
+                volume_input = st.number_input("Volumen comercial", min_value=0, step=1, format="%d", key=prime_widget("volume"), on_change=sync_widget_to_state, args=("volume",))
+                render_input_thousands_hint(volume_input)
+            with pcol2:
+                ebitda_unit_input = st.number_input("EBITDA unitario (USD)", min_value=0, step=1000, format="%d", key=prime_widget("ebitda_unit"), on_change=sync_widget_to_state, args=("ebitda_unit",))
+                render_input_thousands_hint(ebitda_unit_input, "US$")
+            with pcol3:
+                multiple_input = st.slider("Múltiplo EBITDA", min_value=1.0, max_value=12.0, step=0.5, key=prime_widget("multiple"), on_change=sync_widget_to_state, args=("multiple",))
+            pcol4, pcol5 = st.columns(2)
+            with pcol4:
+                fx_input = st.number_input("FX CLP/USD", min_value=1, step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
+                render_input_thousands_hint(fx_input)
+            with pcol5:
+                investment_currency_input = st.selectbox(
+                    "Moneda de inversión",
+                    ["CLP", "USD"],
+                    key=prime_widget("investment_currency"),
+                    on_change=sync_investment_currency,
+                )
+            captura_input = float(captura_default or 1.0)
+            inversion_clp_input = float(st.session_state[shared_state_key("inv_clp")])
+            ronda_pct_input = float(st.session_state[shared_state_key("ronda_pct")]) / 100.0
+        else:
+            pcol1, pcol2, pcol3 = st.columns(3)
+            with pcol1:
+                fx_input = st.number_input("FX CLP/USD", min_value=1, step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
+                render_input_thousands_hint(fx_input)
+            with pcol2:
+                investment_currency_input = st.selectbox(
+                    "Moneda de inversión",
+                    ["CLP", "USD"],
+                    key=prime_widget("investment_currency"),
+                    on_change=sync_investment_currency,
+                )
+            with pcol3:
+                ronda_pct_input = st.slider("Nueva cesión Serie B", min_value=5.0, max_value=90.0, step=1.0, format="%.0f%%", key=prime_widget("ronda_pct"), on_change=sync_widget_to_state, args=("ronda_pct",)) / 100.0
             pcol4, pcol5, pcol6 = st.columns(3)
             with pcol4:
                 volume_input = st.number_input("Volumen comercial", min_value=0, step=1, format="%d", key=prime_widget("volume"), on_change=sync_widget_to_state, args=("volume",))
@@ -5866,194 +6080,12 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
                 render_input_thousands_hint(ebitda_unit_input, "US$")
             with pcol6:
                 multiple_input = st.slider("Múltiplo EBITDA", min_value=1.0, max_value=12.0, step=0.5, key=prime_widget("multiple"), on_change=sync_widget_to_state, args=("multiple",))
-        inversion_clp_input = float(st.session_state[shared_state_key("inv_clp")])
-        captura_input = float(captura_default or 1.0)
-        ronda_pct_input = float(st.session_state[shared_state_key("ronda_pct")]) / 100.0
-    elif bloque_sel == "2. Serie A: Inversión Inicial y Validación":
-        pcol1, pcol2, pcol3 = st.columns(3)
-        with pcol1:
-            fx_input = st.number_input("FX CLP/USD", min_value=1, step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
-            render_input_thousands_hint(fx_input)
-        with pcol2:
-            investment_currency_input = st.selectbox(
-                "Moneda de inversión",
-                ["CLP", "USD"],
-                key=prime_widget("investment_currency"),
-                on_change=sync_investment_currency,
-            )
-        with pcol3:
-            if investment_currency_input == "USD":
-                inv_usd_widget_key = shared_widget_key("inv_usd_display")
-                if inv_usd_widget_key not in st.session_state:
-                    st.session_state[inv_usd_widget_key] = int(round(float(st.session_state[shared_state_key("inv_clp")]) / fx_input)) if fx_input > 0 else 0
-                inversion_usd_input = st.number_input(
-                    "Inversión piloto (USD)",
-                    min_value=0,
-                    step=10000,
-                    format="%d",
-                    key=inv_usd_widget_key,
-                    on_change=sync_investment_usd_to_clp,
-                )
-                render_input_thousands_hint(inversion_usd_input, "US$")
-                inversion_clp_input = float(inversion_usd_input) * fx_input
-                st.session_state[shared_state_key("inv_clp")] = int(round(inversion_clp_input))
-                st.session_state.pop(shared_widget_key("inv_clp"), None)
-            else:
-                inversion_clp_input = st.number_input("Inversión piloto (CLP)", min_value=0, step=10000000, format="%d", key=prime_widget("inv_clp"), on_change=sync_widget_to_state, args=("inv_clp",))
-                render_input_thousands_hint(inversion_clp_input, "$")
-        volume_input = float(st.session_state[shared_state_key("volume")])
-        ebitda_unit_input = float(st.session_state[shared_state_key("ebitda_unit")])
-        multiple_input = float(st.session_state[shared_state_key("multiple")])
-        captura_input = float(captura_default or 1.0)
-        ronda_pct_input = float(st.session_state[shared_state_key("ronda_pct")]) / 100.0
-        auto_ebitda_potencial = volume_input * ebitda_unit_input * multiple_input
-        auto_base_en_usd = (total_base_knowhow_clp / fx_input) if fx_input > 0 else 0.0
-        auto_valuation_basis = str(st.session_state.get(shared_state_key("valuation_basis", "base"), "EBITDA potencial ciclo inicial"))
-        auto_valorizacion_fluxial = resolve_fluxial_pre_money(
-            auto_valuation_basis,
-            auto_base_en_usd,
-            auto_ebitda_potencial,
-        )
-        auto_inversion_usd = inversion_clp_input / fx_input if fx_input > 0 else 0.0
-        auto_post_money = auto_valorizacion_fluxial + auto_inversion_usd
-        auto_imelsa_pct = (auto_inversion_usd / auto_post_money) if auto_post_money > 0 else 0.0
-        auto_fluxial_pct = max(0.0, 1.0 - auto_imelsa_pct)
+            captura_input = float(captura_default or 1.0)
+            inversion_clp_input = float(st.session_state[shared_state_key("inv_clp")])
 
-        if not alloc_manual_input:
-            st.session_state[shared_state_key("fluxial_pct_manual")] = auto_fluxial_pct * 100.0
-            st.session_state[shared_state_key("imelsa_pct_manual")] = auto_imelsa_pct * 100.0
-            st.session_state.pop(shared_widget_key("fluxial_pct_manual"), None)
-            st.session_state.pop(shared_widget_key("imelsa_pct_manual"), None)
+        st.markdown("</div></div>", unsafe_allow_html=True)
 
-        with st.columns(1)[0]:
-            alloc_manual_input = st.checkbox(
-                "Asignar participación manual para Fluxial e IMELSA",
-                key=prime_widget("alloc_manual"),
-                on_change=sync_widget_to_state,
-                args=("alloc_manual",),
-            )
-        if alloc_manual_input:
-            st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-            manual_wrap_left, manual_col_1, manual_col_2, manual_col_3, manual_wrap_right = st.columns([0.18, 1.1, 1, 1, 0.18])
-            with manual_col_1:
-                imelsa_pct_manual_input = st.slider(
-                    "% IMELSA manual",
-                    min_value=0.0,
-                    max_value=100.0,
-                    step=1.0,
-                    format="%.0f%%",
-                    key=prime_widget("imelsa_pct_manual"),
-                    on_change=sync_widget_to_state,
-                    args=("imelsa_pct_manual",),
-                ) / 100.0
-                fluxial_pct_manual_input = max(0.0, 1.0 - imelsa_pct_manual_input)
-                st.session_state[shared_state_key("fluxial_pct_manual")] = fluxial_pct_manual_input * 100.0
-                st.session_state.pop(shared_widget_key("fluxial_pct_manual"), None)
-                aporte_no_pecuniario_usd_manual = max(0.0, (auto_post_money * imelsa_pct_manual_input) - auto_inversion_usd) if auto_post_money > 0 else 0.0
-                aporte_no_pecuniario_usd = aporte_no_pecuniario_usd_manual
-                aporte_no_pecuniario_clp = aporte_no_pecuniario_usd_manual * fx_input
-            with manual_col_2:
-                st.markdown(
-                    f"""
-                    <div style="margin-top:-42px;">
-                    <div style="
-                        border:1px solid rgba(148,163,184,.24);
-                        border-radius:16px;
-                        padding:16px 18px;
-                        background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);
-                        box-shadow:0 6px 14px rgba(15,23,42,.04);
-                    ">
-                        <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748B;margin-bottom:8px;">
-                            Complemento automático
-                        </div>
-                        <div style="font-size:34px;font-weight:800;line-height:1;color:#0f172a;margin-bottom:8px;">
-                            {fluxial_pct_manual_input:.0%}
-                        </div>
-                        <div style="font-size:13px;line-height:1.45;color:#475569;">
-                            Se calcula como 100% menos la participación manual asignada a IMELSA.
-                        </div>
-                    </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-            with manual_col_3:
-                st.markdown(
-                    f"""
-                    <div style="margin-top:-42px;">
-                    <div style="
-                        border:1px solid rgba(191,219,254,.55);
-                        border-radius:16px;
-                        padding:16px 18px;
-                        background:linear-gradient(90deg,#EFF8FF 0%,#DFF4FF 42%,#C6ECFF 100%);
-                        box-shadow:0 6px 14px rgba(15,23,42,.04);
-                    ">
-                        <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748B;margin-bottom:8px;">
-                            Valor complementario
-                        </div>
-                        <div style="font-size:34px;font-weight:800;line-height:1;color:#0f172a;margin-bottom:8px;">
-                            {format_clp(aporte_no_pecuniario_clp) if investment_currency_input == "CLP" else format_usd(aporte_no_pecuniario_usd)}
-                        </div>
-                        <div style="font-size:13px;line-height:1.45;color:#475569;">
-                            {"Monto adicional reconocido en CLP para complementar la estructura de entrada de la Serie A." if investment_currency_input == "CLP" else "Monto adicional reconocido en USD para complementar la estructura de entrada de la Serie A."}
-                        </div>
-                    </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-            st.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
-    elif bloque_sel == "3. Valorización Post-Validación":
-        pcol1, pcol2, pcol3 = st.columns(3)
-        with pcol1:
-            volume_input = st.number_input("Volumen comercial", min_value=0, step=1, format="%d", key=prime_widget("volume"), on_change=sync_widget_to_state, args=("volume",))
-            render_input_thousands_hint(volume_input)
-        with pcol2:
-            ebitda_unit_input = st.number_input("EBITDA unitario (USD)", min_value=0, step=1000, format="%d", key=prime_widget("ebitda_unit"), on_change=sync_widget_to_state, args=("ebitda_unit",))
-            render_input_thousands_hint(ebitda_unit_input, "US$")
-        with pcol3:
-            multiple_input = st.slider("Múltiplo EBITDA", min_value=1.0, max_value=12.0, step=0.5, key=prime_widget("multiple"), on_change=sync_widget_to_state, args=("multiple",))
-        pcol4, pcol5 = st.columns(2)
-        with pcol4:
-            fx_input = st.number_input("FX CLP/USD", min_value=1, step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
-            render_input_thousands_hint(fx_input)
-        with pcol5:
-            investment_currency_input = st.selectbox(
-                "Moneda de inversión",
-                ["CLP", "USD"],
-                key=prime_widget("investment_currency"),
-                on_change=sync_investment_currency,
-            )
-        captura_input = float(captura_default or 1.0)
-        inversion_clp_input = float(st.session_state[shared_state_key("inv_clp")])
-        ronda_pct_input = float(st.session_state[shared_state_key("ronda_pct")]) / 100.0
-    else:
-        pcol1, pcol2, pcol3 = st.columns(3)
-        with pcol1:
-            fx_input = st.number_input("FX CLP/USD", min_value=1, step=1, format="%d", key=prime_widget("fx"), on_change=sync_widget_to_state, args=("fx",))
-            render_input_thousands_hint(fx_input)
-        with pcol2:
-            investment_currency_input = st.selectbox(
-                "Moneda de inversión",
-                ["CLP", "USD"],
-                key=prime_widget("investment_currency"),
-                on_change=sync_investment_currency,
-            )
-        with pcol3:
-            ronda_pct_input = st.slider("Nueva cesión Serie B", min_value=5.0, max_value=90.0, step=1.0, format="%.0f%%", key=prime_widget("ronda_pct"), on_change=sync_widget_to_state, args=("ronda_pct",)) / 100.0
-        pcol4, pcol5, pcol6 = st.columns(3)
-        with pcol4:
-            volume_input = st.number_input("Volumen comercial", min_value=0, step=1, format="%d", key=prime_widget("volume"), on_change=sync_widget_to_state, args=("volume",))
-            render_input_thousands_hint(volume_input)
-        with pcol5:
-            ebitda_unit_input = st.number_input("EBITDA unitario (USD)", min_value=0, step=1000, format="%d", key=prime_widget("ebitda_unit"), on_change=sync_widget_to_state, args=("ebitda_unit",))
-            render_input_thousands_hint(ebitda_unit_input, "US$")
-        with pcol6:
-            multiple_input = st.slider("Múltiplo EBITDA", min_value=1.0, max_value=12.0, step=0.5, key=prime_widget("multiple"), on_change=sync_widget_to_state, args=("multiple",))
-        captura_input = float(captura_default or 1.0)
-        inversion_clp_input = float(st.session_state[shared_state_key("inv_clp")])
-
-    st.markdown("</div></div>", unsafe_allow_html=True)
+    actions_anchor = None
 
     base_en_usd = (total_base_knowhow_clp / fx_input) if fx_input > 0 else 0.0
     ebitda_potencial_ciclo_inicial = volume_input * ebitda_unit_input
@@ -6215,7 +6247,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
             elements.append(Spacer(1, 0.35 * cm))
 
         elements.append(Paragraph("Supuestos y KPI Clave - Modelo de Valorización", h1))
-        elements.append(Paragraph("Resumen técnico de ingeniería financiera con los supuestos activos y los KPI principales por sub-bloque.", body))
+        elements.append(Paragraph("Resumen técnico de ingeniería financiera con los supuestos activos y los indicadores actualmente visibles del modelo.", body))
         elements.append(Spacer(1, 0.35 * cm))
 
         assumptions_rows = [
@@ -6242,38 +6274,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
             )
         add_table("Supuestos acordados", assumptions_rows, [5.6 * cm, 4.0 * cm, 7.2 * cm])
 
-        bloque1_rows = [["KPI", "Valor", "Lectura"]]
-        if base_valuation_basis_input == "BASE INVERSION + KNOW-HOW":
-            bloque1_rows.extend(
-                [
-                    ["Base inversión + know-how", format_clp(total_base_knowhow_clp), "Base patrimonial en CLP"],
-                    ["Base inversión + know-how USD", format_usd(base_base_en_usd), "Base patrimonial convertida a USD"],
-                ]
-            )
-        else:
-            bloque1_rows.extend(
-                [
-                    ["Múltiplo EBITDA", f"{base_multiple_input:.2f}x", "Supuesto activo de múltiplo"],
-                    ["EBITDA potencial ciclo inicial", format_usd(base_ebitda_potencial), "EBITDA potencial multiplicado"],
-                ]
-            )
-        bloque1_rows.append(["EBITDA proyectado en escenario de escalamiento", format_usd(base_valorizacion_fluxial_hoy), "Resultado del bloque 1"])
-        add_table("Sub-bloque 1 - Fundamentos de Creación de Valor", bloque1_rows, [6.2 * cm, 4.1 * cm, 6.5 * cm])
-
-        bloque2_rows = [
-            ["KPI", "Valor", "Lectura"],
-            ["Inversión piloto (CLP)", format_clp(base_inversion_clp_input), "Capital comprometido en pesos"],
-            ["Inversión piloto (USD)", format_usd(base_inversion_usd), "Capital comprometido convertido a USD"],
-            ["Post-money Serie A (CLP)", format_clp(post_money_serie_a_clp_pdf), "Post-money expresado en CLP"],
-            ["Post-money Serie A (USD)", format_usd(base_post_money_serie_a), "Post-money expresado en USD"],
-            ["% IMELSA", f"{base_imelsa_pct:.1%}", "Participación post ingreso"],
-            ["% Fluxial", f"{base_fluxial_pct:.1%}", "Participación remanente"],
-        ]
-        if base_alloc_manual:
-            bloque2_rows.append(["Valor complementario (USD)", format_usd(base_aporte_no_pecuniario_usd), "Aporte adicional incorporado al post-money"])
-        add_table("Sub-bloque 2 - Serie A: Inversión Inicial y Validación", bloque2_rows, [6.2 * cm, 4.1 * cm, 6.5 * cm])
-
-        bloque3_rows = [
+        valuation_rows = [
             ["KPI", "Valor", "Lectura"],
             ["Pre Money actual (USD)", format_usd(base_post_money_serie_a), "Base heredada desde Serie A"],
             ["EBITDA total", format_usd(post_ebitda_total), "EBITDA unitario multiplicado por volumen"],
@@ -6282,20 +6283,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
             ["Upside vs actual", f"{post_upside_pct:.1%}", "Crecimiento de valorización post piloto respecto de Pre Money actual"],
             ["Valor por 50% post piloto", format_usd(post_valor_imelsa_post), "Valor implícito de una participación equivalente al 50% post piloto"],
         ]
-        add_table("Sub-bloque 3 - Valorización Post-Validación", bloque3_rows, [6.2 * cm, 4.1 * cm, 6.5 * cm])
-
-        bloque4_rows = [
-            ["KPI", "Valor", "Lectura"],
-            ["Valorización base Serie B", format_usd(post_valor_post_piloto), "Pre-money sugerido para la segunda ronda"],
-            ["Capital Serie B (USD)", format_usd(post_capital_raise), "Capital implícito a levantar"],
-            ["Capital Serie B (CLP)", format_clp(post_capital_raise_clp), "Referencia equivalente en CLP"],
-            ["Post-money Serie B (USD)", format_usd(post_money_serie_b_pdf), "Valorización posterior al cierre"],
-            ["Post-money Serie B (CLP)", format_clp(post_money_serie_b_clp_pdf), "Referencia equivalente en CLP"],
-            ["% remanente socios actuales", f"{post_pct_remanente:.1%}", "Participación conjunta post ronda"],
-            ["% Fluxial post ronda", f"{post_fluxial_post_b:.1%}", "Participación final de Fluxial"],
-            ["% IMELSA post ronda", f"{post_imelsa_post_b:.1%}", "Participación final de IMELSA"],
-        ]
-        add_table("Sub-bloque 4 - Serie B: Escalamiento Comercial", bloque4_rows, [6.2 * cm, 4.1 * cm, 6.5 * cm])
+        add_table("Valorización post-validación", valuation_rows, [6.2 * cm, 4.1 * cm, 6.5 * cm])
 
         doc.build(elements)
         pdf_bytes = buffer.getvalue()
@@ -6404,6 +6392,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
             fig_eerr.add_trace(go.Scatter(x=chart_df["Año"], y=chart_df["Caja_MM"], name="Flujo caja neto", mode="lines+markers", line=dict(color="#1D4ED8", width=3), marker=dict(size=9, color="#1D4ED8"), hovertemplate="Caja neta %{x}: US$%{customdata:,.0f}<extra></extra>", customdata=chart_df["Caja_neta"], yaxis="y2"))
             fig_eerr.update_layout(title="Trayectoria operativa del modelo EERRv2", barmode="group", height=420, margin=dict(l=10, r=10, t=60, b=10), plot_bgcolor="white", paper_bgcolor="rgba(0,0,0,0)", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0), yaxis=dict(title="Ingresos / EBITDA (MM USD)", showgrid=True, gridcolor="rgba(148,163,184,0.22)", zeroline=False), yaxis2=dict(title="Caja neta (MM USD)", overlaying="y", side="right", showgrid=False, zeroline=False))
             st.plotly_chart(fig_eerr, use_container_width=True)
+            actions_anchor = st.container()
 
     elif bloque_sel == "2. Serie A: Inversión Inicial y Validación":
         selected_basis_label = "BASE INVERSION + KNOW-HOW" if valuation_basis_input == "BASE INVERSION + KNOW-HOW" else "EBITDA potencial ciclo inicial"
@@ -6877,17 +6866,15 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
         if st.session_state.get(pdf_sig_key) != pdf_signature:
             st.session_state[pdf_data_key] = build_valorizacion_supuestos_pdf()
             st.session_state[pdf_sig_key] = pdf_signature
-        pdf_export_slot.download_button(
-            label="📄 Descargar PDF de supuestos",
-            data=st.session_state[pdf_data_key],
-            file_name="Supuestos_Modelo_Valorizacion.pdf",
-            mime="application/pdf",
-            key=widget_key("download_supuestos_pdf"),
-            use_container_width=True,
-        )
-    else:
-        pdf_export_slot.info("PDF deshabilitado: falta `reportlab`.", icon="ℹ️")
+    reset_requested = False
+    render_supuestos_panel()
     st.download_button(label="📥 Descargar CSV de valorización", data=csv_valorizacion, file_name="valorizacion.csv", mime="text/csv", key=widget_key("download_csv"))
+
+    if reset_requested:
+        for group_name in ("base", "post"):
+            for name, default_value in group_widget_defaults[group_name].items():
+                st.session_state[shared_state_key(name, group_name)] = default_value
+                st.session_state.pop(shared_widget_key(name, group_name), None)
 
 
 def render_explorador_module_content(key_prefix: str = "explorer_"):
