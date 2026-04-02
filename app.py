@@ -1298,6 +1298,12 @@ def render_inputs_financial_main_kpis(df_in: pd.DataFrame):
             border:1px solid rgba(148,163,184,.30);
             box-shadow:0 8px 18px rgba(15,23,42,.06);
         }}
+        .inputs-fin-hero.active,
+        .inputs-fin-side.active{{
+            border:1px solid rgba(239,68,68,.32) !important;
+            background:linear-gradient(180deg,#fff7f7 0%,#ffecec 100%) !important;
+            box-shadow:0 10px 24px rgba(239,68,68,.08) !important;
+        }}
         .inputs-fin-hero{{
             background:linear-gradient(90deg,#f4f1ed 0%,#ebe5de 42%,#ddd7cf 100%);
         }}
@@ -1318,6 +1324,27 @@ def render_inputs_financial_main_kpis(df_in: pd.DataFrame):
             border:1px solid rgba(107,114,128,.25);background:#ece9e4;color:#4b5563
         }}
         .inputs-fin-note{{font-size:13px;line-height:1.5;color:#475569;margin-top:6px}}
+        .inputs-fin-hero.active .inputs-fin-h,
+        .inputs-fin-side.active .inputs-fin-h,
+        .inputs-fin-hero.active .inputs-fin-v,
+        .inputs-fin-side.active .inputs-fin-v{{
+            color:#b91c1c !important;
+        }}
+        .inputs-fin-hero.active .inputs-fin-note,
+        .inputs-fin-side.active .inputs-fin-note{{
+            color:#991b1b !important;
+        }}
+        .inputs-fin-hero.active .inputs-fin-chip,
+        .inputs-fin-side.active .inputs-fin-chip{{
+            border:1px solid rgba(239,68,68,.24) !important;
+            background:#fff4f4 !important;
+            color:#991b1b !important;
+        }}
+        .inputs-fin-hero.active .inputs-fin-ico,
+        .inputs-fin-side.active .inputs-fin-ico{{
+            border:1px solid rgba(239,68,68,.22) !important;
+            background:#fff1f1 !important;
+        }}
         .inputs-fin-selector-row{{
             display:grid;
             grid-template-columns:{summary_grid_template};
@@ -1330,10 +1357,14 @@ def render_inputs_financial_main_kpis(df_in: pd.DataFrame):
         unsafe_allow_html=True,
     )
 
+    costo_active = st.session_state.get(fin_nav_key) == "costo_ejecutado"
+    capacidades_active = st.session_state.get(fin_nav_key) == "capacidades_externas"
+    knowhow_active = st.session_state.get(fin_nav_key) == "know_how_fw"
+
     capacidades_card_html = ""
     if capacidades_externo > 0:
         capacidades_card_html = f"""
-      <div class="inputs-fin-side">
+      <div class="inputs-fin-side {'active' if capacidades_active else ''}">
         <div class="inputs-fin-row"><div class="inputs-fin-ico">🧠</div><div class="inputs-fin-h">Capacidades externo</div></div>
         <div class="inputs-fin-v">{html.escape(format_clp(capacidades_externo))}</div>
         <div class="inputs-fin-sub"><span class="inputs-fin-chip">Valorización FW · G6</span></div>
@@ -1343,7 +1374,7 @@ def render_inputs_financial_main_kpis(df_in: pd.DataFrame):
 
     cards = f"""
     <div class="inputs-fin-summary">
-      <div class="inputs-fin-hero inputs-fin-blank">
+      <div class="inputs-fin-hero inputs-fin-blank {'active' if costo_active else ''}">
         <div class="inputs-fin-row"><div class="inputs-fin-ico">💰</div><div class="inputs-fin-h">Costo Ejecutado</div></div>
         <div class="inputs-fin-v">{html.escape(format_clp(monto_total))}</div>
         <div class="inputs-fin-sub">
@@ -1353,7 +1384,7 @@ def render_inputs_financial_main_kpis(df_in: pd.DataFrame):
         <div class="inputs-fin-note">Inversión efectivamente ejecutada para construir y poner en forma operativa el activo tecnológico.</div>
       </div>
       {capacidades_card_html}
-      <div class="inputs-fin-side inputs-fin-blank">
+      <div class="inputs-fin-side inputs-fin-blank {'active' if knowhow_active else ''}">
         <div class="inputs-fin-row"><div class="inputs-fin-ico">⚙️</div><div class="inputs-fin-h">Know-how FW</div></div>
         <div class="inputs-fin-v">{html.escape(format_clp(know_how_fw))}</div>
         <div class="inputs-fin-sub"><span class="inputs-fin-chip">Valorización FW · G7</span></div>
