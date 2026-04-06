@@ -1660,6 +1660,92 @@ def apply_engineering_chart_typography(
     return fig
 
 
+def render_inputs_donut_grid_legend(donut_df: pd.DataFrame, item_col: str, donut_palette: list[str]) -> None:
+    if donut_df.empty or item_col not in donut_df.columns:
+        return
+
+    legend_items = []
+    for idx, (_, row) in enumerate(donut_df.iterrows()):
+        color = donut_palette[idx % len(donut_palette)]
+        label = html.escape(str(row[item_col]))
+        share = float(row.get("% del total", 0.0))
+        legend_items.append(
+            f'<div class="inputs-donut-legend-item">'
+            f'<span class="inputs-donut-legend-dot" style="background:{color};"></span>'
+            f'<div class="inputs-donut-legend-copy">'
+            f'<span class="inputs-donut-legend-label">{label}</span>'
+            f'<span class="inputs-donut-legend-share">{share:.1f}% del frente</span>'
+            f'</div>'
+            f'</div>'
+        )
+
+    if len(legend_items) == 7:
+        legend_items.append('<div class="inputs-donut-legend-spacer" aria-hidden="true"></div>')
+
+    legend_html = "".join(legend_items)
+    st.markdown(
+        f"""
+        <style>
+        .inputs-donut-legend-grid {{
+            display:grid;
+            grid-template-columns:repeat(4, minmax(0, 1fr));
+            gap:12px 16px;
+            margin:14px 6px 0 6px;
+            align-items:stretch;
+        }}
+        .inputs-donut-legend-item {{
+            display:flex;
+            align-items:flex-start;
+            gap:10px;
+            min-width:0;
+            padding:10px 12px;
+            border:1px solid rgba(226,232,240,.95);
+            border-radius:14px;
+            background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);
+            box-shadow:0 4px 12px rgba(15,23,42,.04);
+        }}
+        .inputs-donut-legend-spacer {{
+            visibility:hidden;
+            pointer-events:none;
+        }}
+        .inputs-donut-legend-dot {{
+            width:12px;
+            height:12px;
+            border-radius:999px;
+            margin-top:4px;
+            flex:0 0 auto;
+            box-shadow:0 0 0 3px rgba(255,255,255,.95);
+        }}
+        .inputs-donut-legend-copy {{
+            display:flex;
+            flex-direction:column;
+            gap:2px;
+            min-width:0;
+        }}
+        .inputs-donut-legend-label {{
+            font-size:0.91rem;
+            line-height:1.25;
+            font-weight:700;
+            color:#475569;
+            word-break:break-word;
+        }}
+        .inputs-donut-legend-share {{
+            font-size:0.78rem;
+            line-height:1.2;
+            color:#94a3b8;
+        }}
+        @media (max-width: 900px) {{
+            .inputs-donut-legend-grid {{
+                grid-template-columns:repeat(2, minmax(0, 1fr));
+            }}
+        }}
+        </style>
+        <div class="inputs-donut-legend-grid">{legend_html}</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_single_select_pills_compat(
     label: str,
     options: list[str],
@@ -1923,8 +2009,6 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
         st.info("No hay ítems para mostrar.")
         return
 
-    render_inputs_item_kpi_cards(tabla_show, item_col, selected_focus)
-
     donut_df = tabla_show[[item_col, "Monto", "% del total"]].copy()
     if len(donut_df) > 7:
         top_df = donut_df.head(6).copy()
@@ -1949,14 +2033,13 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
         )
         donut_df["Monto_MM"] = donut_df["Monto"] / 1_000_000
 
-        accent_color = FIN_PALETTE_SM.get(str(selected_focus or "").strip(), "#7B8794")
         donut_palette = [
-            accent_color,
-            "#D9A766",
-            "#D7605E",
             "#A9A7A4",
-            "#4F5D6F",
+            "#D95F5C",
+            "#D9A766",
             "#7FA8A4",
+            "#4F5D6F",
+            "#6F8F9F",
             "#E5E7EB",
         ]
 
@@ -1984,11 +2067,16 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
         )
         fig.add_annotation(
             x=0.5,
-            y=0.54,
-            text=(
-                f"<span style='font-size:12px;color:#64748b;'>{html.escape(str(selected_focus or 'Frente'))}</span><br>"
-                f"<span style='font-size:24px;color:#0f172a;'><b>{format_clp(float(tabla_show['Monto'].sum()))}</b></span>"
-            ),
+            y=0.575,
+            text=f"<span style='font-size:12px;color:#64748b;'>{html.escape(str(selected_focus or 'Frente'))}</span>",
+            showarrow=False,
+            xanchor="center",
+            yanchor="middle",
+        )
+        fig.add_annotation(
+            x=0.5,
+            y=0.515,
+            text=f"<span style='font-size:24px;color:#0f172a;'><b>{format_clp(float(tabla_show['Monto'].sum()))}</b></span>",
             showarrow=False,
             xanchor="center",
             yanchor="middle",
@@ -2001,20 +2089,10 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
                 font=dict(size=22, color="#0f172a"),
             ),
             height=580,
-            margin=dict(l=10, r=10, t=72, b=150),
+            margin=dict(l=10, r=10, t=72, b=40),
             plot_bgcolor="white",
             paper_bgcolor="rgba(0,0,0,0)",
-            showlegend=True,
-            legend=dict(
-                orientation="h",
-                yanchor="top",
-                y=-0.18,
-                xanchor="center",
-                x=0.5,
-                title=None,
-                font=dict(size=11, color="#475569"),
-                itemwidth=90,
-            ),
+            showlegend=False,
         )
         apply_engineering_chart_typography(fig, title_size=20, body_size=12, tick_size=11, legend_size=11)
 
@@ -2036,6 +2114,7 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
         donut_cols = st.columns([1.2, 0.95], gap="large")
         with donut_cols[0]:
             st.plotly_chart(fig, use_container_width=True)
+            render_inputs_donut_grid_legend(donut_df, item_col, donut_palette)
         with donut_cols[1]:
             st.markdown(
                 f"""
@@ -2129,6 +2208,8 @@ def render_inputs_item_analytics(df_in: pd.DataFrame):
                 """,
                 unsafe_allow_html=True,
             )
+
+        render_inputs_item_kpi_cards(tabla_show, item_col, selected_focus)
 
 
 def render_inputs_item_kpi_cards(tabla_show: pd.DataFrame, item_col: str, selected_focus: str | None = None):
@@ -2565,7 +2646,12 @@ def load_project_gantt_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
     return gantt_process_df(df)
 
 
-def build_inputs_gantt_figure(df: pd.DataFrame, date_mode: str = "Real", color_by: str = "Estado"):
+def build_inputs_gantt_figure(
+    df: pd.DataFrame,
+    date_mode: str = "Real",
+    color_by: str = "Estado",
+    color_y_labels_by_phase: bool = False,
+):
     dfp = df.copy()
     dfp["_start"] = pd.to_datetime(dfp.get(GANTT_DATE_COL_START), errors="coerce")
     dfp["_end_plan"] = pd.to_datetime(dfp.get(GANTT_DATE_COL_END_PLAN), errors="coerce")
@@ -2581,11 +2667,13 @@ def build_inputs_gantt_figure(df: pd.DataFrame, date_mode: str = "Real", color_b
         return go.Figure()
 
     dfp = dfp.sort_values(["_start", "_end", "ID"], ascending=[False, False, True])
-    y_labels = pd.unique(dfp["Tarea / Entregable"].astype(str))
+    dfp["_task_label"] = dfp["Tarea / Entregable"].astype(str)
+    y_labels = pd.unique(dfp["_task_label"].astype(str))
     max_len = max((len(s) for s in y_labels), default=12)
     rows = len(y_labels)
     left_margin = min(56 + max_len * 6, 380)
-    height_px = min(max(460, 28 * rows), 1200)
+    # Altura realmente responsiva para que al filtrar estados no queden huecos verticales.
+    height_px = min(max(260, 110 + 36 * rows), 1200)
 
     apple = {
         "Planificado": "#0A84FF",
@@ -2618,6 +2706,16 @@ def build_inputs_gantt_figure(df: pd.DataFrame, date_mode: str = "Real", color_b
         pilotos = dfp["Piloto"].dropna().unique()
         color_map = {p: PX_COLORS[i % len(PX_COLORS)] for i, p in enumerate(pilotos)}
 
+    phase_color_map = {}
+    if "Fase" in dfp.columns:
+        fases = pd.unique(dfp["Fase"].astype(str).str.strip())
+        phase_color_map = {
+            fase: PX_COLORS[i % len(PX_COLORS)]
+            for i, fase in enumerate(
+                [fase for fase in fases if fase and fase.lower() not in {"nan", "none"}]
+            )
+        }
+
     safe_pct = pd.to_numeric(dfp.get("%", 0), errors="coerce").fillna(0).astype(float)
     fig = go.Figure()
     shown_legends = set()
@@ -2628,6 +2726,7 @@ def build_inputs_gantt_figure(df: pd.DataFrame, date_mode: str = "Real", color_b
         duration_days = max(int((row["_end"] - row["_start"]).days), 1)
         completion_pct = float(safe_pct.loc[idx]) if idx in safe_pct.index else 0.0
         task_name = str(row.get("Tarea / Entregable", ""))
+        task_label = str(row.get("_task_label", task_name))
         phase_name = str(row.get("Fase", ""))
         state_name = str(row.get("Estado", ""))
         task_id = row.get("ID", "")
@@ -2636,7 +2735,7 @@ def build_inputs_gantt_figure(df: pd.DataFrame, date_mode: str = "Real", color_b
         fig.add_trace(
             go.Scatter(
                 x=[row["_start"], row["_end"]],
-                y=[task_name, task_name],
+                y=[task_label, task_label],
                 mode="lines+markers+text",
                 name=legend_name,
                 legendgroup=legend_name,
@@ -2650,11 +2749,12 @@ def build_inputs_gantt_figure(df: pd.DataFrame, date_mode: str = "Real", color_b
                 ),
                 text=["", end_label],
                 textposition="middle right",
-                customdata=[[phase_name, state_name, task_id, duration_days, completion_pct]] * 2,
+                customdata=[[phase_name, state_name, task_id, duration_days, completion_pct, task_name]] * 2,
                 hovertemplate="<b>%{y}</b><br>"
                               "Estado: %{customdata[1]} · ID: %{customdata[2]}<br>"
                               "Inicio: %{x|%Y-%m-%d}<br>"
-                              "Fase: %{customdata[0]}<extra>Duración: %{customdata[3]} días · Avance: %{customdata[4]:.0f}%</extra>",
+                              "Fase: %{customdata[0]}<br>"
+                              "Tarea: %{customdata[5]}<extra>Duración: %{customdata[3]} días · Avance: %{customdata[4]:.0f}%</extra>",
             )
         )
         shown_legends.add(legend_name)
@@ -2679,7 +2779,7 @@ def build_inputs_gantt_figure(df: pd.DataFrame, date_mode: str = "Real", color_b
             fig.add_trace(
                 go.Scatter(
                     x=hitos["_end"],
-                    y=hitos["Tarea / Entregable"],
+                    y=hitos["_task_label"],
                     mode="markers",
                     marker=dict(size=10, symbol="diamond", line=dict(width=1, color="#1C1C1E")),
                     name="Hito",
@@ -2704,6 +2804,30 @@ def build_inputs_gantt_figure(df: pd.DataFrame, date_mode: str = "Real", color_b
         gridcolor="rgba(60,60,67,0.08)",
     )
     fig.update_yaxes(autorange="reversed", automargin=True, showticklabels=True)
+    if color_y_labels_by_phase and "Fase" in dfp.columns:
+        task_phase_map = (
+            dfp[["_task_label", "Fase"]]
+            .drop_duplicates(subset=["_task_label"])
+            .set_index("_task_label")["Fase"]
+            .to_dict()
+        )
+        fig.update_yaxes(showticklabels=False)
+        left_margin = min(max(left_margin + 24, 220), 460)
+        for task_label in y_labels:
+            phase_name = str(task_phase_map.get(task_label, "")).strip()
+            label_color = phase_color_map.get(phase_name, "#667085")
+            fig.add_annotation(
+                x=0,
+                xref="paper",
+                xanchor="right",
+                xshift=-10,
+                y=task_label,
+                yref="y",
+                text=html.escape(str(task_label)),
+                showarrow=False,
+                font=dict(size=11, color=label_color),
+                align="right",
+            )
     fig.update_layout(
         height=height_px,
         margin=dict(l=left_margin, r=32, t=36, b=18),
@@ -2724,6 +2848,44 @@ def build_inputs_gantt_figure(df: pd.DataFrame, date_mode: str = "Real", color_b
     return fig
 
 
+def render_inputs_gantt_phase_legend(df: pd.DataFrame) -> None:
+    if "Fase" not in df.columns:
+        return
+
+    fases = [
+        str(val).strip()
+        for val in df["Fase"].astype(str).tolist()
+        if str(val).strip() and str(val).strip().lower() not in {"nan", "none"}
+    ]
+    fases = list(dict.fromkeys(fases))
+    if not fases:
+        return
+
+    chips = []
+    for idx, fase in enumerate(fases):
+        color = PX_COLORS[idx % len(PX_COLORS)]
+        chips.append(
+            f"<span style='color:{color};font-weight:700;'>● {html.escape(fase)}</span>"
+        )
+
+    st.markdown(
+        f"""
+        <div style="
+            margin: 10px 0 2px 0;
+            padding: 8px 12px 0 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px 18px;
+            font-size: 0.92rem;
+            line-height: 1.45;
+        ">
+            {''.join(chips)}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_inputs_project_gantt():
     try:
         df_gantt = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
@@ -2737,14 +2899,17 @@ def render_inputs_project_gantt():
     st.markdown("### Cronograma de Ejecución y Validación")
     st.caption("Vista integrada del cronograma del proyecto antes del análisis financiero por categorías.")
 
-    c1, c2, c3 = st.columns([5, 2, 2])
+    c1, c2, c3, c4 = st.columns([4, 2.2, 1.8, 1.8])
     with c1:
         fases = sorted(
             df_gantt["Fase"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
         ) if "Fase" in df_gantt.columns else []
         fase_options = ["Todas"] + fases
         fase_default = "Instalación Turbina" if "Instalación Turbina" in fases else "Todas"
-        if "inputs_gantt_fase" not in st.session_state:
+        fase_saved = st.session_state.pop("inputs_gantt_fase__sticky", None)
+        if fase_saved in fase_options:
+            st.session_state["inputs_gantt_fase"] = fase_saved
+        elif "inputs_gantt_fase" not in st.session_state:
             st.session_state["inputs_gantt_fase"] = fase_default
         elif st.session_state["inputs_gantt_fase"] not in fase_options:
             st.session_state["inputs_gantt_fase"] = fase_default
@@ -2754,6 +2919,27 @@ def render_inputs_project_gantt():
             key="inputs_gantt_fase",
         )
     with c2:
+        estados = sorted(
+            df_gantt["Estado"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
+        ) if "Estado" in df_gantt.columns else []
+        estado_options = ["Todos"] + estados
+        estado_saved = st.session_state.pop("inputs_gantt_estado__sticky", None)
+        if estado_saved in estado_options:
+            st.session_state["inputs_gantt_estado"] = estado_saved
+        estado_default = st.session_state.get("inputs_gantt_estado", "Todos")
+        if estado_default not in estado_options:
+            estado_default = "Todos"
+            st.session_state["inputs_gantt_estado"] = estado_default
+        estado_sel = st.selectbox(
+            "Estado",
+            estado_options,
+            index=estado_options.index(estado_default),
+            key="inputs_gantt_estado",
+        )
+    with c3:
+        mode_saved = st.session_state.pop("inputs_gantt_mode__sticky", None)
+        if mode_saved in ("Plan", "Real"):
+            st.session_state["inputs_gantt_mode"] = mode_saved
         date_mode = st.radio(
             "Fechas",
             ["Plan", "Real"],
@@ -2761,7 +2947,10 @@ def render_inputs_project_gantt():
             horizontal=True,
             key="inputs_gantt_mode",
         )
-    with c3:
+    with c4:
+        color_saved = st.session_state.pop("inputs_gantt_color__sticky", None)
+        if color_saved in ("Estado", "Piloto"):
+            st.session_state["inputs_gantt_color"] = color_saved
         color_by = st.radio(
             "Color por",
             ["Estado", "Piloto"],
@@ -2772,12 +2961,21 @@ def render_inputs_project_gantt():
     plot_df = df_gantt.copy()
     if fase_sel != "Todas" and "Fase" in plot_df.columns:
         plot_df = plot_df[plot_df["Fase"].astype(str).str.strip() == fase_sel].copy()
+    if estado_sel != "Todos" and "Estado" in plot_df.columns:
+        plot_df = plot_df[plot_df["Estado"].astype(str).str.strip() == estado_sel].copy()
     if plot_df.empty:
-        st.info("No hay tareas para la fase seleccionada.")
+        st.info("No hay tareas para los filtros seleccionados.")
         return
 
-    fig_gantt = build_inputs_gantt_figure(plot_df, date_mode=date_mode, color_by=color_by)
+    fig_gantt = build_inputs_gantt_figure(
+        plot_df,
+        date_mode=date_mode,
+        color_by=color_by,
+        color_y_labels_by_phase=(fase_sel == "Todas"),
+    )
     st.plotly_chart(fig_gantt, use_container_width=True, key="inputs_estado_actual_gantt")
+    if fase_sel == "Todas":
+        render_inputs_gantt_phase_legend(plot_df)
 
 
 def render_inputs_contexto_block():
@@ -4219,6 +4417,14 @@ st.sidebar.caption(
 if "data_refresh_nonce" not in st.session_state:
     st.session_state["data_refresh_nonce"] = 0
 if st.sidebar.button("🔁 Actualizar datos desde URL"):
+    for key in (
+        "inputs_gantt_fase",
+        "inputs_gantt_estado",
+        "inputs_gantt_mode",
+        "inputs_gantt_color",
+    ):
+        if key in st.session_state:
+            st.session_state[f"{key}__sticky"] = st.session_state[key]
     st.session_state["data_refresh_nonce"] += 1
     st.rerun()
 
