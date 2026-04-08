@@ -4433,7 +4433,24 @@ if st.sidebar.button("🔁 Actualizar datos desde URL"):
 # =========================
 data_refresh_nonce = int(st.session_state.get("data_refresh_nonce", 0))
 
-df_capex_base = load_capex_data(capex_url, refresh_nonce=data_refresh_nonce)
+bootstrap_data_error = None
+try:
+    df_capex_base = load_capex_data(capex_url, refresh_nonce=data_refresh_nonce)
+except Exception as exc:
+    bootstrap_data_error = str(exc)
+    df_capex_base = pd.DataFrame(
+        columns=["Monto_USD", "Monto_CLP", "Categoria", "Participacion_pct", "Item"]
+    )
+
+if bootstrap_data_error:
+    st.error("No se pudieron cargar los datos base del dashboard desde Google Sheets.")
+    st.caption(
+        "El servicio quedó operativo, pero la fuente remota no respondió correctamente. "
+        "Revisa la conectividad de Render o la publicación de la hoja."
+    )
+    st.code(bootstrap_data_error)
+    st.stop()
+
 capex_total_usd_base = float(df_capex_base["Monto_USD"].sum() or 0.0) if "Monto_USD" in df_capex_base.columns else 0.0
 fx_base = 925.0
 global_fx_value = st.sidebar.number_input(
@@ -8047,7 +8064,11 @@ if False:
                             "2PACX-1vSlNd3zXc1zV6TUQHnhXlfZtv7QVOv0mBfR_HH69Ht-0qi2aDtCfw5ouLDGIoPH_knhSAtyT2DYE-Qo/"
                             "pub?gid=1007478838&single=true&output=csv"
                         )
-                        df_hitos = pd.read_csv(hitos_url, dtype=str)
+                        df_hitos = read_remote_csv(
+                            hitos_url,
+                            refresh_nonce=data_refresh_nonce,
+                            dtype=str,
+                        )
                         df_hitos.columns = [str(c).strip() for c in df_hitos.columns]
     
                         required_cols = [
@@ -8160,7 +8181,11 @@ if False:
                             "2PACX-1vSlNd3zXc1zV6TUQHnhXlfZtv7QVOv0mBfR_HH69Ht-0qi2aDtCfw5ouLDGIoPH_knhSAtyT2DYE-Qo/"
                             "pub?gid=1912427793&single=true&output=csv"
                         )
-                        df_riesgos = pd.read_csv(riesgos_url, dtype=str)
+                        df_riesgos = read_remote_csv(
+                            riesgos_url,
+                            refresh_nonce=data_refresh_nonce,
+                            dtype=str,
+                        )
                         df_riesgos.columns = [str(c).strip() for c in df_riesgos.columns]
     
                         def _norm_col(s: str) -> str:
