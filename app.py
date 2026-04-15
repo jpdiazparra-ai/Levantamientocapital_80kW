@@ -3717,6 +3717,7 @@ def render_pagos_hitos(
             .merge(df_sat, on="Mes", how="left")
             .fillna(0.0)
         )
+        df_dir_mensual = pd.DataFrame(columns=["Mes", "Cargo", "Pago_CLP"])
         if include_direction_salaries:
             df_dir_mensual = build_direccion_mensual(df_direccion, horizonte_meses=int(df_meses["Mes"].max()))
             if not df_dir_mensual.empty:
@@ -3821,7 +3822,13 @@ def render_pagos_hitos(
         def scale_usd(series: pd.Series) -> pd.Series:
             return series * scale_factor
 
+        def fmt_pago_detalle(val: float) -> str:
+            if unit_sel.startswith("USD"):
+                return f"{float(val):,.1f} kUSD".replace(",", ".")
+            return f"{float(val):,.2f} MM CLP".replace(",", ".")
+
         with ctrl_col2:
+            default_view_index = 0 if "capex_overview" in str(key_prefix) else 1
             view_sel = st.selectbox(
                 "Selecciona vista",
                 [
@@ -3829,9 +3836,11 @@ def render_pagos_hitos(
                     "2) Inyección por ítem",
                     "3) Total por período + categoría",
                 ],
-                index=1,
+                index=default_view_index,
                 key=f"{key_prefix}pay_view_selector",
             )
+        detail_title = ""
+        detail_df = pd.DataFrame()
 
         if view_sel.startswith("1"):
             df_flujo_plot = df_consolidado.copy()
@@ -3855,14 +3864,16 @@ def render_pagos_hitos(
                     "Pago_USD_SAT": "SAT",
                 }
             )
-            df_sueldos_plot = df_consolidado[["Mes", "Pago_CLP_Sueldos"]].copy()
-            df_sueldos_plot["Pago_plot"] = scale_clp(df_sueldos_plot["Pago_CLP_Sueldos"])
-            df_sueldos_plot["Tipo"] = "Sueldos dirección"
-            df_sueldos_plot = df_sueldos_plot[["Mes", "Tipo", "Pago_plot"]]
-            df_flujo_long = pd.concat(
-                [df_flujo_long[["Mes", "Tipo", "Pago_plot"]], df_sueldos_plot],
-                ignore_index=True,
-            )
+            df_flujo_long = df_flujo_long[["Mes", "Tipo", "Pago_plot"]].copy()
+            if include_direction_salaries and float(df_consolidado["Pago_CLP_Sueldos"].sum() or 0.0) > 0:
+                df_sueldos_plot = df_consolidado[["Mes", "Pago_CLP_Sueldos"]].copy()
+                df_sueldos_plot["Pago_plot"] = scale_clp(df_sueldos_plot["Pago_CLP_Sueldos"])
+                df_sueldos_plot["Tipo"] = "Sueldos dirección"
+                df_sueldos_plot = df_sueldos_plot[["Mes", "Tipo", "Pago_plot"]]
+                df_flujo_long = pd.concat(
+                    [df_flujo_long, df_sueldos_plot],
+                    ignore_index=True,
+                )
 
             fig_iny = px.bar(
                 df_flujo_long,
@@ -3929,32 +3940,80 @@ def render_pagos_hitos(
                 use_container_width=True,
                 key=f"{key_prefix}pay_hitos_chart",
             )
+            st.markdown(
+                """
+                <div style="margin:10px 0 12px 0;padding:12px 14px;border-radius:14px;background:#F8FAFC;border:1px solid rgba(148,163,184,.22);">
+                    <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748B;margin-bottom:8px;">Lectura de hitos</div>
+                    <div style="font-size:14px;line-height:1.65;color:#334155;">
+                        <strong>Anticipo</strong> → para iniciar fabricación<br>
+                        <strong>Pago FAT / Entrega</strong> → cuando equipo está listo<br>
+                        <strong>Saldo final</strong> → instalación, puesta en marcha o cierre
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            detail_title = "Detalle mensual por hito"
+            detail_df = df_flujo_plot[
+                ["Mes", "Pago_USD_Anticipo", "Pago_USD_Entrega", "Pago_USD_SAT", "Pago_CLP_Sueldos", "Total_USD", "Acum_plot"]
+            ].copy()
+            detail_df["Anticipo"] = scale_usd(detail_df["Pago_USD_Anticipo"])
+            detail_df["Entrega FAT"] = scale_usd(detail_df["Pago_USD_Entrega"])
+            detail_df["SAT"] = scale_usd(detail_df["Pago_USD_SAT"])
+            detail_df["Capital humano técnico"] = scale_clp(detail_df["Pago_CLP_Sueldos"])
+            detail_df["Total mensual"] = scale_usd(detail_df["Total_USD"])
+            detail_df["Acumulado"] = detail_df["Acum_plot"]
+            detail_df = detail_df[
+                ["Mes", "Anticipo", "Entrega FAT", "SAT", "Capital humano técnico", "Total mensual", "Acumulado"]
+            ]
+            for col in ["Anticipo", "Entrega FAT", "SAT", "Capital humano técnico", "Total mensual", "Acumulado"]:
+                detail_df[col] = detail_df[col].map(fmt_pago_detalle)
 
         elif view_sel.startswith("2"):
-            if df_item_periodo.empty:
+            df_item_periodo_plot = df_item_periodo.copy()
+            if not df_item_periodo_plot.empty:
+                df_item_periodo_plot["Pago_plot"] = scale_usd(df_item_periodo_plot["Pago_USD"])
+
+            if include_direction_salaries and not df_dir_mensual.empty:
+                df_dir_item_plot = (
+                    df_dir_mensual.groupby("Mes", as_index=False)
+                    .agg(Pago_CLP=("Pago_CLP", "sum"))
+                )
+                df_dir_item_plot["Item"] = "Capital humano técnico"
+                df_dir_item_plot["Categoria"] = "Capital humano técnico"
+                df_dir_item_plot["Pago_plot"] = scale_clp(df_dir_item_plot["Pago_CLP"])
+                df_item_periodo_plot = pd.concat(
+                    [
+                        df_item_periodo_plot[["Mes", "Item", "Categoria", "Pago_plot"]],
+                        df_dir_item_plot[["Mes", "Item", "Categoria", "Pago_plot"]],
+                    ],
+                    ignore_index=True,
+                )
+
+            if df_item_periodo_plot.empty:
                 st.info("No hay pagos disponibles para construir la inyección por ítem.")
             else:
-                df_item_total = (
-                    df_item_periodo.groupby("Mes", as_index=False)
-                    .agg(Total_USD=("Pago_USD", "sum"))
-                    .sort_values("Mes")
-                )
+                df_item_total = df_consolidado[["Mes", "Total_USD"]].copy().sort_values("Mes")
                 df_item_total["Total_plot"] = scale_usd(df_item_total["Total_USD"])
                 df_item_total["Acum_plot"] = df_item_total["Total_plot"].cumsum()
-                df_item_periodo_plot = df_item_periodo.copy()
-                df_item_periodo_plot["Pago_plot"] = scale_usd(df_item_periodo_plot["Pago_USD"])
+                item_color_map_plot = dict(item_color_map)
+                item_color_map_plot["Capital humano técnico"] = "#0F4C81"
                 fig_item_iny = px.bar(
                     df_item_periodo_plot,
                     x="Mes",
                     y="Pago_plot",
                     color="Item",
-                    color_discrete_map=item_color_map,
+                    color_discrete_map=item_color_map_plot,
                     labels={
                         "Mes": "Mes del proyecto",
                         "Pago_plot": f"Pago mensual ({axis_unit})",
                         "Item": "Ítem",
                     },
-                    title="Inyección por ítem (Anticipo/FAT/SAT)",
+                    title=(
+                        "Inyección por ítem + capital humano técnico"
+                        if include_direction_salaries
+                        else "Inyección por ítem (Anticipo/FAT/SAT)"
+                    ),
                 )
                 fig_item_iny.add_scatter(
                     x=df_item_total["Mes"],
@@ -3967,7 +4026,7 @@ def render_pagos_hitos(
                 fig_item_iny.update_layout(
                     barmode="stack",
                     height=420,
-                    margin=dict(l=10, r=10, t=50, b=30),
+                    margin=dict(l=10, r=10, t=50, b=92),
                     yaxis=dict(title=f"Pago mensual ({axis_unit})"),
                     yaxis2=dict(
                         title=line_label,
@@ -3978,12 +4037,12 @@ def render_pagos_hitos(
                     legend=dict(
                         orientation="h",
                         yanchor="top",
-                        y=-0.16,
-                        xanchor="left",
-                        x=0,
+                        y=-0.20,
+                        xanchor="center",
+                        x=0.5,
                         title=dict(text=""),
-                        font=dict(size=10),
-                        entrywidth=105,
+                        font=dict(size=11),
+                        entrywidth=150,
                         entrywidthmode="pixels",
                     ),
                     hoverlabel=dict(bgcolor="white"),
@@ -4004,6 +4063,10 @@ def render_pagos_hitos(
                     use_container_width=True,
                     key=f"{key_prefix}pay_items_chart",
                 )
+                detail_title = "Detalle mensual por ítem"
+                detail_df = df_item_periodo_plot.sort_values(["Mes", "Categoria", "Item"]).copy()
+                detail_df["Pago mensual"] = detail_df["Pago_plot"].map(fmt_pago_detalle)
+                detail_df = detail_df[["Mes", "Categoria", "Item", "Pago mensual"]]
 
         elif view_sel.startswith("3"):
             if df_item_periodo.empty:
@@ -4061,6 +4124,19 @@ def render_pagos_hitos(
                     fig_cat_total,
                     use_container_width=True,
                     key=f"{key_prefix}pay_categoria_chart",
+                )
+                detail_title = "Detalle mensual por categoría"
+                detail_df = df_cat_periodo.sort_values(["Mes", "Categoria"]).copy()
+                detail_df["Pago mensual"] = detail_df["Pago_plot"].map(fmt_pago_detalle)
+                detail_df = detail_df[["Mes", "Categoria", "Pago mensual"]]
+
+        if not detail_df.empty:
+            with st.expander(f"Ver {detail_title.lower()}", expanded=False):
+                st.dataframe(
+                    style_engineering_table(detail_df, header_color="#4F5D6F", row_color="#F7F4EF"),
+                    hide_index=True,
+                    use_container_width=True,
+                    height=min(420, 36 + (len(detail_df) + 1) * 35),
                 )
 
     except Exception as e:
@@ -4271,6 +4347,8 @@ def render_riesgo_matrix_chart(riesgo_url: str, key_prefix: str = ""):
         df_riesgo["Relacionado Hito"] = df_riesgo["Relacionado Hito"].fillna("-").astype(str).str.strip()
         df_riesgo["Riesgo_label"] = df_riesgo["Riesgo_ID"].astype(str).str.strip()
         df_riesgo["Reserva USD"] = df_riesgo.get("Reserva USD", "").fillna("$0").astype(str).str.strip()
+        df_riesgo["Prob_plot"] = df_riesgo["Probabilidad(1-5)"].round(2)
+        df_riesgo["Imp_plot"] = df_riesgo["Impacto(1-5)"].round(2)
 
         total_riesgos = int(len(df_riesgo))
         severidad_max = float(df_riesgo["Severidad(PxI)"].max() or 0.0)
@@ -4282,20 +4360,19 @@ def render_riesgo_matrix_chart(riesgo_url: str, key_prefix: str = ""):
         )
         risk_kpi_cols = st.columns(3)
         with risk_kpi_cols[0]:
-            kpi_card("Riesgos activos", f"{total_riesgos}", "Eventos abiertos cargados en la matriz.", variant="default")
+            kpi_card("Riesgos activos", f"{total_riesgos}", "Eventos abiertos cargados en la matriz.", variant="palette_gray")
         with risk_kpi_cols[1]:
-            kpi_card("Severidad máxima", f"{severidad_max:.0f}", "Puntaje PxI más alto dentro del bloque.", variant="sky")
+            kpi_card("Severidad máxima", f"{severidad_max:.0f}", "Puntaje PxI más alto dentro del bloque.", variant="palette_coral")
         with risk_kpi_cols[2]:
-            kpi_card("Owner más expuesto", str(owner_top), "Responsable con mayor concentración de riesgos.", variant="green")
+            kpi_card("Owner más expuesto", str(owner_top), "Responsable con mayor concentración de riesgos.", variant="palette_teal")
 
         fig_riesgo = px.scatter(
             df_riesgo,
-            x="Probabilidad(1-5)",
-            y="Impacto(1-5)",
+            x="Prob_plot",
+            y="Imp_plot",
             color="Severidad(PxI)",
             size="Severidad(PxI)",
             size_max=38,
-            text="Riesgo_label",
             hover_data={
                 "Riesgo_ID": True,
                 "Riesgo": True,
@@ -4316,7 +4393,6 @@ def render_riesgo_matrix_chart(riesgo_url: str, key_prefix: str = ""):
         )
         fig_riesgo.update_traces(
             marker=dict(line=dict(width=1.6, color="white"), opacity=0.94),
-            textposition="top center",
             cliponaxis=False,
             hovertemplate=(
                 "<b>%{customdata[0]}</b><br>"
@@ -4339,6 +4415,23 @@ def render_riesgo_matrix_chart(riesgo_url: str, key_prefix: str = ""):
                 axis=-1,
             ),
         )
+        label_offsets = [(0, -18), (24, -8), (-24, -8), (0, 18), (26, 14), (-26, 14)]
+        df_riesgo["_label_rank"] = df_riesgo.groupby(["Prob_plot", "Imp_plot"]).cumcount()
+        for _, row in df_riesgo.iterrows():
+            dx, dy = label_offsets[int(row["_label_rank"]) % len(label_offsets)]
+            fig_riesgo.add_annotation(
+                x=float(row["Prob_plot"]),
+                y=float(row["Imp_plot"]),
+                text=str(row["Riesgo_label"]),
+                showarrow=False,
+                xshift=dx,
+                yshift=dy,
+                font=dict(size=11, color="#0f172a"),
+                bgcolor="rgba(255,255,255,0.88)",
+                bordercolor="rgba(148,163,184,0.35)",
+                borderwidth=1,
+                borderpad=2,
+            )
         fig_riesgo.add_shape(type="rect", x0=0.5, x1=2.5, y0=0.5, y1=2.5, fillcolor="rgba(127,168,164,.10)", line=dict(width=0), layer="below")
         fig_riesgo.add_shape(type="rect", x0=2.5, x1=4.0, y0=2.0, y1=4.0, fillcolor="rgba(217,167,102,.10)", line=dict(width=0), layer="below")
         fig_riesgo.add_shape(type="rect", x0=3.0, x1=5.5, y0=3.0, y1=5.5, fillcolor="rgba(215,96,94,.12)", line=dict(width=0), layer="below")
@@ -4577,6 +4670,34 @@ st.markdown(
         background: linear-gradient(90deg, #ECFDF5 0%, #D1FAE5 42%, #A7F3D0 100%);
         border: 1px solid rgba(22,163,74,.28);
     }
+    .kpi-card.kpi-card-palette-gray {
+        background: linear-gradient(90deg, #D0D0D0 0%, #B8B8B8 100%);
+        border: 1px solid rgba(120,120,120,.24);
+    }
+    .kpi-card.kpi-card-palette-coral {
+        background: linear-gradient(90deg, #E36968 0%, #D85E5E 100%);
+        border: 1px solid rgba(190,84,84,.24);
+    }
+    .kpi-card.kpi-card-palette-ochre {
+        background: linear-gradient(90deg, #E0AE68 0%, #D9A766 100%);
+        border: 1px solid rgba(181,133,56,.24);
+    }
+    .kpi-card.kpi-card-palette-teal {
+        background: linear-gradient(90deg, #86AEAB 0%, #7FA8A4 100%);
+        border: 1px solid rgba(76,129,124,.24);
+    }
+    .kpi-card.kpi-card-palette-slate {
+        background: linear-gradient(90deg, #586271 0%, #4F5D6F 100%);
+        border: 1px solid rgba(55,65,81,.24);
+    }
+    .kpi-card.kpi-card-palette-coral .kpi-label,
+    .kpi-card.kpi-card-palette-coral .kpi-value,
+    .kpi-card.kpi-card-palette-coral .kpi-sub,
+    .kpi-card.kpi-card-palette-slate .kpi-label,
+    .kpi-card.kpi-card-palette-slate .kpi-value,
+    .kpi-card.kpi-card-palette-slate .kpi-sub {
+        color: #F8FAFC;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -4589,6 +4710,16 @@ def kpi_card(title: str, value: str, subtitle: str = "", variant: str = "default
         card_class += " kpi-card-sky"
     elif variant == "green":
         card_class += " kpi-card-green"
+    elif variant == "palette_gray":
+        card_class += " kpi-card-palette-gray"
+    elif variant == "palette_coral":
+        card_class += " kpi-card-palette-coral"
+    elif variant == "palette_ochre":
+        card_class += " kpi-card-palette-ochre"
+    elif variant == "palette_teal":
+        card_class += " kpi-card-palette-teal"
+    elif variant == "palette_slate":
+        card_class += " kpi-card-palette-slate"
     html = f"""
     <div class="{card_class}">
         <div class="kpi-label">{title}</div>
@@ -4605,7 +4736,7 @@ def render_resumen_content(
     include_direction_item: bool = False,
 ):
     resumen_title = (
-        "Estructura de Inversión y Ejecución de CAPEX – Piloto 80 kW"
+        "Estructura de Inversión y Ejecución requerida – Piloto 80 kW"
         if include_direction_item
         else "CAPEX Técnico – Piloto 80 kW"
     )
@@ -4865,9 +4996,20 @@ def render_resumen_content(
                             showgrid=True,
                         )
                         fig_timeline_cat.update_layout(
-                            margin=dict(l=10, r=10, t=60, b=10),
+                            margin=dict(l=10, r=10, t=60, b=110),
                             height=520,
                             legend_title_text="Ítem",
+                            legend=dict(
+                                orientation="h",
+                                yanchor="top",
+                                y=-0.20,
+                                xanchor="center",
+                                x=0.5,
+                                title=dict(text=""),
+                                font=dict(size=11),
+                                entrywidth=150,
+                                entrywidthmode="pixels",
+                            ),
                             hoverlabel=dict(bgcolor="white"),
                             plot_bgcolor="white",
                             paper_bgcolor="rgba(0,0,0,0)",
@@ -4898,17 +5040,17 @@ def render_resumen_content(
                             showgrid=True,
                         )
                         fig_timeline_cat.update_layout(
-                            margin=dict(l=10, r=10, t=60, b=10),
+                            margin=dict(l=10, r=10, t=60, b=110),
                             height=520,
                             legend=dict(
                                 orientation="h",
                                 yanchor="top",
-                                y=-0.16,
-                                xanchor="left",
-                                x=0,
+                                y=-0.20,
+                                xanchor="center",
+                                x=0.5,
                                 title=dict(text=""),
-                                font=dict(size=10),
-                                entrywidth=105,
+                                font=dict(size=11),
+                                entrywidth=150,
                                 entrywidthmode="pixels",
                             ),
                             hoverlabel=dict(bgcolor="white"),
@@ -4927,11 +5069,6 @@ def render_resumen_content(
         key_prefix=key_prefix,
         include_direction_salaries=include_direction_item,
     )
-    if not include_direction_item:
-        render_riesgo_matrix_chart(
-            RIESGO_CSV_URL_DEFAULT,
-            key_prefix=key_prefix,
-        )
 
     if include_export:
         st.markdown("---")
@@ -4947,6 +5084,12 @@ def render_resumen_content(
             )
         else:
             st.info("La exportación PDF está deshabilitada porque `reportlab` no está instalado en este entorno.")
+
+    if include_direction_item:
+        render_riesgo_matrix_chart(
+            RIESGO_CSV_URL_DEFAULT,
+            key_prefix=key_prefix,
+        )
 
 # =========================
 # KPI CARDS – DISEÑO PRO
@@ -7793,27 +7936,136 @@ elif selected_input_block == "escalamiento":
             unsafe_allow_html=True,
         )
         capex_80kw_views = [
-            ("dashboard", "📊 Dashboard general"),
-            ("capex", "🏗️ Detalle capex 80kW"),
-            ("direccion", "🧑‍💼 Capital Humano"),
+            ("dashboard", "📊 Modelo Consolidado de Inversión"),
+            ("capex", "🏗️ CAPEX Ingeniería, Suministro y Montaje"),
+            ("direccion", "🧑‍💼 Inversión en Capital Humano"),
         ]
         if capex_80kw_view_state_key not in st.session_state:
             st.session_state[capex_80kw_view_state_key] = "dashboard"
         if st.session_state[capex_80kw_view_state_key] not in {value for value, _ in capex_80kw_views}:
             st.session_state[capex_80kw_view_state_key] = "dashboard"
 
-        capex_view_cols = st.columns(len(capex_80kw_views))
-        for idx, (view_value, view_label) in enumerate(capex_80kw_views):
-            is_active = st.session_state.get(capex_80kw_view_state_key) == view_value
-            with capex_view_cols[idx]:
-                st.button(
-                    selector_button_label(view_label, is_active, action_label=view_label),
-                    key=f"inputs_capex_80kw_view_{view_value}",
-                    use_container_width=True,
-                    type="primary" if is_active else "secondary",
-                    on_click=_set_capex_80kw_view,
-                    args=(view_value,),
-                )
+        st.markdown(
+            """
+            <div style="margin:4px 0 14px 0;padding:14px 16px;border-radius:18px;background:linear-gradient(90deg,#fff8f8 0%,#fff 100%);border:1px solid rgba(239,68,68,.14);">
+                <div style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#b91c1c;margin-bottom:6px;">Mapa de lectura</div>
+                <div style="font-size:15px;line-height:1.55;color:#475569;">
+                    El <strong>Modelo Consolidado de Inversión</strong> integra el <strong>CAPEX de ingeniería, suministro y montaje</strong> con la <strong>inversión en capital humano</strong>.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        consolidated_active = st.session_state.get(capex_80kw_view_state_key) == "dashboard"
+        st.markdown(
+            """
+            <style>
+            .capex-nav-equals-shell{
+                min-height:196px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+            }
+            .capex-nav-equals{
+                width:64px;
+                height:64px;
+                border-radius:999px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                background:linear-gradient(180deg,#fff5f5 0%,#ffe7ea 100%);
+                border:1px solid rgba(239,68,68,.18);
+                box-shadow:0 10px 22px rgba(239,68,68,.08);
+                font-size:34px;
+                font-weight:900;
+                color:#b91c1c;
+                line-height:1;
+            }
+            .capex-nav-plus-shell{
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                margin:8px 0;
+            }
+            .capex-nav-plus{
+                width:42px;
+                height:42px;
+                border-radius:999px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);
+                border:1px solid rgba(148,163,184,.24);
+                box-shadow:0 6px 14px rgba(15,23,42,.05);
+                font-size:26px;
+                font-weight:900;
+                color:#475569;
+                line-height:1;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        nav_left, nav_mid, nav_right = st.columns([1.0, 0.14, 0.86], gap="medium")
+        with nav_left:
+            st.markdown("<div style='height:72px;'></div>", unsafe_allow_html=True)
+            st.button(
+                selector_button_label(
+                    "📊 Modelo Consolidado de Inversión · Total integrado CAPEX + Capital Humano",
+                    consolidated_active,
+                    action_label="📊 Modelo Consolidado de Inversión · Total integrado CAPEX + Capital Humano",
+                ),
+                key="inputs_capex_80kw_view_dashboard",
+                use_container_width=True,
+                type="primary" if consolidated_active else "secondary",
+                on_click=_set_capex_80kw_view,
+                args=("dashboard",),
+            )
+        with nav_mid:
+            st.markdown(
+                """
+                <div class="capex-nav-equals-shell">
+                    <div class="capex-nav-equals">=</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with nav_right:
+            is_capex_active = st.session_state.get(capex_80kw_view_state_key) == "capex"
+            st.button(
+                selector_button_label(
+                    "🏗️ Componente 1 · CAPEX Ingeniería, Suministro y Montaje",
+                    is_capex_active,
+                    action_label="🏗️ Componente 1 · CAPEX Ingeniería, Suministro y Montaje",
+                ),
+                key="inputs_capex_80kw_view_capex",
+                use_container_width=True,
+                type="primary" if is_capex_active else "secondary",
+                on_click=_set_capex_80kw_view,
+                args=("capex",),
+            )
+            st.markdown(
+                """
+                <div class="capex-nav-plus-shell">
+                    <div class="capex-nav-plus">+</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            is_direccion_active = st.session_state.get(capex_80kw_view_state_key) == "direccion"
+            st.button(
+                selector_button_label(
+                    "🧑‍💼 Componente 2 · Inversión en Capital Humano",
+                    is_direccion_active,
+                    action_label="🧑‍💼 Componente 2 · Inversión en Capital Humano",
+                ),
+                key="inputs_capex_80kw_view_direccion",
+                use_container_width=True,
+                type="primary" if is_direccion_active else "secondary",
+                on_click=_set_capex_80kw_view,
+                args=("direccion",),
+            )
 
         selected_capex_80kw_view = st.session_state.get(capex_80kw_view_state_key)
         if selected_capex_80kw_view == "dashboard":
