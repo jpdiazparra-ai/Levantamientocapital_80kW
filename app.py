@@ -1640,6 +1640,12 @@ def apply_engineering_chart_typography(
     layout_updates = {
         "font": dict(color="#334155", size=body_size),
         "legend": dict(font=dict(size=legend_size), title=dict(font=dict(size=legend_size, color="#475569"))),
+        "hovermode": "x unified",
+        "hoverlabel": dict(
+            bgcolor="rgba(255,255,255,0.78)",
+            bordercolor="rgba(148,163,184,0.22)",
+            font=dict(size=max(body_size - 1, 11), color="#0f172a"),
+        ),
     }
     title_text = None
     if hasattr(fig.layout, "title") and fig.layout.title is not None:
@@ -1652,6 +1658,11 @@ def apply_engineering_chart_typography(
     fig.update_xaxes(
         title_font=dict(size=body_size, color="#475569"),
         tickfont=dict(size=tick_size, color="#64748B"),
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        spikecolor="rgba(185,28,28,0.32)",
+        spikethickness=1.4,
     )
     fig.update_yaxes(
         title_font=dict(size=body_size, color="#475569"),
@@ -3827,6 +3838,27 @@ def render_pagos_hitos(
                 return f"{float(val):,.1f} kUSD".replace(",", ".")
             return f"{float(val):,.2f} MM CLP".replace(",", ".")
 
+        def apply_unified_hover(fig):
+            fig.update_layout(
+                hovermode="x unified",
+                hoverlabel=dict(
+                    bgcolor="rgba(255,255,255,0.78)",
+                    bordercolor="rgba(148,163,184,0.22)",
+                    font=dict(size=12, color="#0f172a"),
+                ),
+            )
+            fig.update_xaxes(
+                showspikes=True,
+                spikemode="across",
+                spikesnap="cursor",
+                spikecolor="rgba(185,28,28,0.32)",
+                spikethickness=1.4,
+            )
+            try:
+                fig.update_xaxes(unifiedhovertitle=dict(text="<b>Mes %{x}</b>"))
+            except Exception:
+                pass
+
         with ctrl_col2:
             default_view_index = 0 if "capex_overview" in str(key_prefix) else 1
             view_sel = st.selectbox(
@@ -3904,6 +3936,7 @@ def render_pagos_hitos(
                 name=line_label,
                 yaxis="y2",
                 line=dict(color="#0f172a", width=2),
+                hovertemplate=f"<b>{line_label}</b>: %{{y:.1f}} {axis_unit}<extra></extra>",
             )
             fig_iny.update_layout(
                 barmode="stack",
@@ -3924,6 +3957,11 @@ def render_pagos_hitos(
                     x=0.5,
                 ),
             )
+            fig_iny.update_traces(
+                hovertemplate=f"<b>%{{fullData.name}}</b>: %{{y:.1f}} {axis_unit}<extra></extra>",
+                selector=dict(type="bar"),
+            )
+            apply_unified_hover(fig_iny)
             apply_engineering_chart_typography(fig_iny, title_size=20, body_size=13, tick_size=12, legend_size=11)
             fig_iny.update_xaxes(dtick=1)
             for mes, total in zip(df_flujo_plot["Mes"], df_flujo_plot["Total_plot"]):
@@ -3945,29 +3983,76 @@ def render_pagos_hitos(
                 <div style="margin:10px 0 12px 0;padding:12px 14px;border-radius:14px;background:#F8FAFC;border:1px solid rgba(148,163,184,.22);">
                     <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748B;margin-bottom:8px;">Lectura de hitos</div>
                     <div style="font-size:14px;line-height:1.65;color:#334155;">
-                        <strong>Anticipo</strong> → para iniciar fabricación<br>
-                        <strong>Pago FAT / Entrega</strong> → cuando equipo está listo<br>
-                        <strong>Saldo final</strong> → instalación, puesta en marcha o cierre
+                        <strong>Anticipo</strong> → Para iniciar fabricación, compra de materiales y reserva de producción.<br>
+                        <strong>Pago FAT / Entrega</strong> → Cuando el equipo está fabricado, probado en taller/fábrica y liberado para despacho.<br>
+                        <strong>Pago SAT</strong> → Cuando el equipo está instalado en sitio, comisionado y operando conforme a especificación.
                     </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
             detail_title = "Detalle mensual por hito"
-            detail_df = df_flujo_plot[
-                ["Mes", "Pago_USD_Anticipo", "Pago_USD_Entrega", "Pago_USD_SAT", "Pago_CLP_Sueldos", "Total_USD", "Acum_plot"]
-            ].copy()
-            detail_df["Anticipo"] = scale_usd(detail_df["Pago_USD_Anticipo"])
-            detail_df["Entrega FAT"] = scale_usd(detail_df["Pago_USD_Entrega"])
-            detail_df["SAT"] = scale_usd(detail_df["Pago_USD_SAT"])
-            detail_df["Capital humano técnico"] = scale_clp(detail_df["Pago_CLP_Sueldos"])
-            detail_df["Total mensual"] = scale_usd(detail_df["Total_USD"])
-            detail_df["Acumulado"] = detail_df["Acum_plot"]
-            detail_df = detail_df[
-                ["Mes", "Anticipo", "Entrega FAT", "SAT", "Capital humano técnico", "Total mensual", "Acumulado"]
-            ]
-            for col in ["Anticipo", "Entrega FAT", "SAT", "Capital humano técnico", "Total mensual", "Acumulado"]:
-                detail_df[col] = detail_df[col].map(fmt_pago_detalle)
+            detalle_hito_rows = []
+            for _, row in df_raw_pagos.iterrows():
+                item = str(row.get("Item", "")).strip() or "Sin ítem"
+                categoria = str(row.get("Categoria", "")).strip() or "Sin categoría"
+                mes_ant = pd.to_numeric(row.get("Mes_Anticipo"), errors="coerce")
+                pago_ant = parse_money_usd_robusto(row.get("Pago_USD_Anticipo")) * pagos_scale
+                mes_fat = pd.to_numeric(row.get("Mes_Entrega_FAT"), errors="coerce")
+                pago_fat = parse_money_usd_robusto(row.get("Pago_USD_Entrega")) * pagos_scale
+                mes_sat = pd.to_numeric(row.get("Mes_SAT"), errors="coerce")
+                pago_sat = parse_money_usd_robusto(row.get("Pago_USD_SAT")) * pagos_scale
+
+                meses_item = sorted({int(m) for m in [mes_ant, mes_fat, mes_sat] if pd.notna(m)})
+                for mes in meses_item:
+                    detalle_hito_rows.append(
+                        {
+                            "Categoria": categoria,
+                            "Item": item,
+                            "Mes": mes,
+                            "Anticipo": scale_usd(pd.Series([pago_ant])).iloc[0] if pd.notna(mes_ant) and int(mes_ant) == mes else 0.0,
+                            "Entrega FAT": scale_usd(pd.Series([pago_fat])).iloc[0] if pd.notna(mes_fat) and int(mes_fat) == mes else 0.0,
+                            "Pago SAT": scale_usd(pd.Series([pago_sat])).iloc[0] if pd.notna(mes_sat) and int(mes_sat) == mes else 0.0,
+                        }
+                    )
+            detail_df = pd.DataFrame(detalle_hito_rows)
+            if include_direction_salaries and not df_dir_mensual.empty:
+                df_dir_hito = (
+                    df_dir_mensual.groupby("Mes", as_index=False)
+                    .agg(Pago_CLP=("Pago_CLP", "sum"))
+                    .sort_values("Mes")
+                )
+                if not df_dir_hito.empty:
+                    df_dir_hito["Categoria"] = "Capital humano técnico"
+                    df_dir_hito["Item"] = "Capital humano técnico"
+                    df_dir_hito["Anticipo"] = 0.0
+                    df_dir_hito["Entrega FAT"] = 0.0
+                    df_dir_hito["Pago SAT"] = 0.0
+                    df_dir_hito["Capital humano técnico"] = scale_clp(df_dir_hito["Pago_CLP"])
+                    detail_df = pd.concat(
+                        [
+                            detail_df,
+                            df_dir_hito[["Categoria", "Item", "Mes", "Anticipo", "Entrega FAT", "Pago SAT", "Capital humano técnico"]],
+                        ],
+                        ignore_index=True,
+                    )
+            if not detail_df.empty:
+                if "Capital humano técnico" not in detail_df.columns:
+                    detail_df["Capital humano técnico"] = 0.0
+                detail_df["Pago mensual"] = (
+                    detail_df["Anticipo"]
+                    + detail_df["Entrega FAT"]
+                    + detail_df["Pago SAT"]
+                    + detail_df["Capital humano técnico"]
+                )
+                detail_df = detail_df.sort_values(["Mes", "Categoria", "Item"]).copy()
+                for col in ["Anticipo", "Entrega FAT", "Pago SAT", "Capital humano técnico", "Pago mensual"]:
+                    detail_df[col] = detail_df[col].fillna(0.0)
+                detail_df = detail_df[
+                    ["Mes", "Categoria", "Item", "Anticipo", "Entrega FAT", "Pago SAT", "Capital humano técnico", "Pago mensual"]
+                ]
+                for col in ["Anticipo", "Entrega FAT", "Pago SAT", "Capital humano técnico", "Pago mensual"]:
+                    detail_df[col] = detail_df[col].map(fmt_pago_detalle)
 
         elif view_sel.startswith("2"):
             df_item_periodo_plot = df_item_periodo.copy()
@@ -4022,6 +4107,7 @@ def render_pagos_hitos(
                     name=line_label,
                     yaxis="y2",
                     line=dict(color="#0f172a", width=2),
+                    hovertemplate=f"<b>{line_label}</b>: %{{y:.1f}} {axis_unit}<extra></extra>",
                 )
                 fig_item_iny.update_layout(
                     barmode="stack",
@@ -4047,6 +4133,11 @@ def render_pagos_hitos(
                     ),
                     hoverlabel=dict(bgcolor="white"),
                 )
+                fig_item_iny.update_traces(
+                    hovertemplate=f"<b>%{{fullData.name}}</b>: %{{y:.1f}} {axis_unit}<extra></extra>",
+                    selector=dict(type="bar"),
+                )
+                apply_unified_hover(fig_item_iny)
                 apply_engineering_chart_typography(fig_item_iny, title_size=20, body_size=13, tick_size=12, legend_size=11)
                 fig_item_iny.update_xaxes(dtick=1)
                 for mes, total in zip(df_item_total["Mes"], df_item_total["Total_plot"]):
@@ -4109,6 +4200,11 @@ def render_pagos_hitos(
                         x=0.5,
                     ),
                 )
+                fig_cat_total.update_traces(
+                    hovertemplate=f"<b>%{{fullData.name}}</b>: %{{y:.1f}} {axis_unit}<extra></extra>",
+                    selector=dict(type="bar"),
+                )
+                apply_unified_hover(fig_cat_total)
                 apply_engineering_chart_typography(fig_cat_total, title_size=20, body_size=13, tick_size=12, legend_size=11)
                 fig_cat_total.update_xaxes(dtick=1)
                 for mes, total in zip(df_total["Mes"], df_total["Total_plot"]):
@@ -4890,6 +4986,8 @@ def render_resumen_content(
         )
         fig_item_total.update_yaxes(showgrid=False)
     apply_engineering_chart_typography(fig_item_total, title_size=20, body_size=13, tick_size=12, legend_size=12)
+    fig_item_total.update_layout(hovermode="closest")
+    fig_item_total.update_xaxes(showspikes=False)
     st.plotly_chart(fig_item_total, use_container_width=True)
     st.session_state["fig_item_total"] = fig_item_total
 
