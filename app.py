@@ -247,6 +247,13 @@ RESTANTE_PILOTO_10KW_CSV_URL_DEFAULT = (
     "2PACX-1vQmVzOg9X7VfxAmOImXHuMvyH4dQmxbFL3DIBqOubi32jKLncgqBEBwnl6j0dXWsm5FkRAcrY4y8BD2/"
     "pub?gid=1167653476&single=true&output=csv"
 )
+INGENIERIA_PILOTO_10KW_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vQOu_diukhhZWDV7kIcU9Ewto4lo_xQdSEZ0FMi2oto-Jb4r2e7aRNCBKF3qoVVk_4XsimMFx7eASkt/"
+    "pub?gid=1098900642&single=true&output=csv"
+)
+INGENIERIA_PILOTO_10KW_CACHE_VERSION = 2
+INGENIERIA_PILOTO_10KW_ALLOWED_MONTHS = {"dic", "abr", "may"}
 BULLET_CONTEXTO_10KW_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vQfQcSn40boiOyRvYeX1j5SO2O9w3WoA6DkOEMxxf85v-WiWXuMC-uyBWb3-ff82pUfk1cSaBnmrcqU/"
@@ -271,6 +278,7 @@ FIN_GRID = "rgba(148,163,184,.25)"
 GANTT_DATE_COL_START = "Inicio (AAAA-MM-DD)"
 GANTT_DATE_COL_END_PLAN = "Fin plan (AAAA-MM-DD)"
 GANTT_DATE_COL_END_REAL = "Fin real"
+ASPAS_FRP_GANTT_PHASE_OPTION = "Fabricación ASPAS frp"
 REMOTE_FETCH_TTL_SECONDS = 3600
 REMOTE_CONNECT_TIMEOUT_SECONDS = 5
 REMOTE_READ_TIMEOUT_SECONDS = 20
@@ -611,6 +619,91 @@ def build_restante_piloto_10kw_view(url: str, refresh_nonce: int = 0) -> pd.Data
             df_view = df_view.iloc[1:].reset_index(drop=True)
 
     return df_view
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_ingenieria_piloto_10kw_data(
+    url: str,
+    refresh_nonce: int = 0,
+    source_version: int = INGENIERIA_PILOTO_10KW_CACHE_VERSION,
+) -> pd.DataFrame:
+    df = read_remote_csv(url, refresh_nonce=refresh_nonce + source_version, dtype=str)
+    df.columns = [str(c).strip() for c in df.columns]
+    return df
+
+
+def parse_ingenieria_schedule_date_col(col: str) -> int | None:
+    label = str(col).strip().lower()
+    match = re.fullmatch(r"(\d{1,2})-([a-záéíóúñ]+)", label)
+    if not match:
+        return None
+
+    day = int(match.group(1))
+    month = (
+        match.group(2)
+        .replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+    )
+    month_offsets = {"dic": 0, "ene": 31, "feb": 62, "mar": 90, "abr": 121, "may": 151}
+    if month not in INGENIERIA_PILOTO_10KW_ALLOWED_MONTHS:
+        return None
+    if month not in month_offsets or day < 1 or day > 31:
+        return None
+    return month_offsets[month] + day
+
+
+def build_ingenieria_piloto_10kw_schedule(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
+    df_raw = load_ingenieria_piloto_10kw_data(url, refresh_nonce=refresh_nonce).copy()
+    if df_raw.empty:
+        return pd.DataFrame(columns=["PIEZA", "Tarea", "Fecha", "Fecha_orden", "Fecha_plot", "Carga", "Actividad"])
+
+    pieza_col = find_best_column(df_raw, ["pieza", "piezas"])
+    tarea_col = find_best_column(df_raw, ["tarea", "tareas"])
+    if not pieza_col or not tarea_col:
+        return pd.DataFrame(columns=["PIEZA", "Tarea", "Fecha", "Fecha_orden", "Fecha_plot", "Carga", "Actividad"])
+
+    date_col_orders = [
+        (col, parsed_order)
+        for col in df_raw.columns
+        if col not in {pieza_col, tarea_col}
+        for parsed_order in [parse_ingenieria_schedule_date_col(col)]
+        if parsed_order is not None
+    ]
+    date_col_orders = sorted(date_col_orders, key=lambda item: item[1])
+    date_cols = [col for col, _ in date_col_orders]
+    if not date_cols:
+        return pd.DataFrame(columns=["PIEZA", "Tarea", "Fecha", "Fecha_orden", "Fecha_plot", "Carga", "Actividad"])
+
+    df_raw[pieza_col] = df_raw[pieza_col].replace({"": np.nan, "nan": np.nan}).ffill()
+    df_raw[tarea_col] = df_raw[tarea_col].fillna("").astype(str).str.strip()
+    df_raw = df_raw[df_raw[tarea_col] != ""].copy()
+    df_raw["_row_order"] = range(len(df_raw))
+
+    df_long = df_raw.melt(
+        id_vars=[pieza_col, tarea_col, "_row_order"],
+        value_vars=date_cols,
+        var_name="Fecha",
+        value_name="Carga_raw",
+    )
+    df_long["Carga"] = pd.to_numeric(df_long["Carga_raw"], errors="coerce")
+    df_long = df_long.dropna(subset=["Carga"]).copy()
+    df_long = df_long[df_long["Carga"] > 0].copy()
+    if df_long.empty:
+        return pd.DataFrame(columns=["PIEZA", "Tarea", "Fecha", "Fecha_orden", "Fecha_plot", "Carga", "Actividad"])
+
+    fecha_order = dict(date_col_orders)
+    df_long["Fecha_orden"] = df_long["Fecha"].map(fecha_order)
+    active_dates = sorted(df_long["Fecha_orden"].dropna().unique().tolist())
+    compressed_date_order = {fecha_orden: idx for idx, fecha_orden in enumerate(active_dates, start=1)}
+    df_long["Fecha_plot"] = df_long["Fecha_orden"].map(compressed_date_order)
+    df_long = df_long.rename(columns={pieza_col: "PIEZA", tarea_col: "Tarea"})
+    df_long["PIEZA"] = df_long["PIEZA"].fillna("Sin pieza").astype(str).str.strip()
+    df_long["Tarea"] = df_long["Tarea"].fillna("Sin tarea").astype(str).str.strip()
+    df_long["Actividad"] = df_long["PIEZA"] + " | " + df_long["Tarea"]
+    return df_long.sort_values(["Fecha_orden", "PIEZA", "Tarea"]).reset_index(drop=True)
 
 
 def build_bullet_contexto_10kw_sections(url: str, refresh_nonce: int = 0) -> tuple[str, list[dict]]:
@@ -2897,6 +2990,206 @@ def render_inputs_gantt_phase_legend(df: pd.DataFrame) -> None:
     )
 
 
+def render_inputs_aspas_frp_schedule_chart() -> None:
+    try:
+        df_ing_schedule = build_ingenieria_piloto_10kw_schedule(
+            INGENIERIA_PILOTO_10KW_CSV_URL_DEFAULT,
+            refresh_nonce=data_refresh_nonce,
+        )
+    except Exception as exc:
+        st.error(f"No se pudo construir el cronograma diario de ingeniería: {exc}")
+        return
+
+    if df_ing_schedule.empty:
+        st.info("No hay actividades con fecha válida para construir el cronograma de ingeniería.")
+        return
+
+    st.markdown(
+        '<div class="eng-body-title" style="font-size:15px;font-weight:600;color:#475569;margin:18px 0 10px 0;">Cronograma fabricación ASPAS frp</div>',
+        unsafe_allow_html=True,
+    )
+    tarea_order = (
+        df_ing_schedule[["Tarea", "_row_order"]]
+        .drop_duplicates()
+        .sort_values("_row_order")
+        ["Tarea"]
+        .tolist()
+    )
+    fecha_ticks = (
+        df_ing_schedule[["Fecha", "Fecha_orden", "Fecha_plot"]]
+        .drop_duplicates()
+        .sort_values("Fecha_orden")
+    )
+    month_abbr = {
+        1: "ene",
+        2: "feb",
+        3: "mar",
+        4: "abr",
+        5: "may",
+        6: "jun",
+        7: "jul",
+        8: "ago",
+        9: "sep",
+        10: "oct",
+        11: "nov",
+        12: "dic",
+    }
+    today_ts = pd.Timestamp.now(tz="America/Santiago")
+    today_label = f"{today_ts.day}-{month_abbr.get(today_ts.month, '')}"
+    today_x = None
+    today_match = fecha_ticks[fecha_ticks["Fecha"].astype(str).str.lower().eq(today_label)]
+    if not today_match.empty:
+        today_x = float(today_match.iloc[0]["Fecha_plot"])
+    tick_step = max(1, math.ceil(len(fecha_ticks) / 18))
+    tick_df = fecha_ticks.iloc[::tick_step].copy()
+    pieza_base_color_map = {
+        "aspa 1": "#6B4F3A",
+        "aspa 2": "#D7605E",
+        "aspa 3": "#4F5D6F",
+        "conectores": "#B8860B",
+        "matriz 1": "#A9A7A4",
+        "matriz 2": "#7FA8A4",
+    }
+    pieza_palette_fallback = ["#7FA8A4", "#D7605E", "#D9A766", "#C98C70", "#A9A7A4", "#4F5D6F"]
+    pieza_order_seen = [str(pieza).strip() for pieza in df_ing_schedule["PIEZA"].dropna().drop_duplicates().tolist()]
+    pieza_color_map = {}
+    for idx, pieza in enumerate(pieza_order_seen):
+        pieza_key = pieza.casefold()
+        pieza_color_map[pieza] = pieza_base_color_map.get(
+            pieza_key,
+            pieza_palette_fallback[idx % len(pieza_palette_fallback)],
+        )
+
+    kpi_inicio = fecha_ticks.iloc[0]["Fecha"] if not fecha_ticks.empty else "-"
+    kpi_termino = fecha_ticks.iloc[-1]["Fecha"] if not fecha_ticks.empty else "-"
+    kpi_peak = int(df_ing_schedule.groupby("Fecha_orden").size().max() or 0)
+    today_order = parse_ingenieria_schedule_date_col(today_label)
+    kpi_dias = (
+        int(df_ing_schedule.loc[df_ing_schedule["Fecha_orden"] >= today_order, "Fecha_orden"].nunique() or 0)
+        if today_order is not None
+        else 0
+    )
+    pro_kpi_cols = st.columns(4)
+    with pro_kpi_cols[0]:
+        kpi_card("Inicio plan", str(kpi_inicio), "Primera fecha con actividad.", variant="palette_teal", compact=True)
+    with pro_kpi_cols[1]:
+        kpi_card("Término plan", str(kpi_termino), "Última fecha con actividad.", variant="palette_ochre", compact=True)
+    with pro_kpi_cols[2]:
+        kpi_card("Máx. tareas/día", f"{kpi_peak}", "Mayor cantidad de celdas activas en una fecha.", variant="palette_coral", compact=True)
+    with pro_kpi_cols[3]:
+        kpi_card("Días restantes", f"{kpi_dias}", "Fechas con trabajo desde hoy.", variant="palette_slate", compact=True)
+
+    preferred_legend_order = ["Aspa 1", "Aspa 2", "Aspa 3", "Conectores", "matriz 1", "matriz 2"]
+    legend_order = [
+        pieza for pieza in preferred_legend_order
+        if pieza in pieza_order_seen
+    ] + [
+        pieza for pieza in pieza_order_seen
+        if pieza not in preferred_legend_order
+    ]
+    legend_html = "".join(
+        f"""
+        <span style="display:inline-flex;align-items:center;gap:8px;margin:0 16px 8px 0;font-size:13.8px;color:#475569;font-weight:600;">
+            <span style="width:11px;height:11px;border-radius:999px;background:{pieza_color_map.get(pieza, '#94A3B8')};display:inline-block;border:1px solid rgba(15,23,42,.14);"></span>
+            <span>{html.escape(str(pieza))}</span>
+        </span>
+        """
+        for pieza in legend_order
+    )
+
+    fig_ing_schedule = go.Figure()
+
+    def hex_to_rgba(hex_color: str, alpha: float) -> str:
+        value = str(hex_color).strip().lstrip("#")
+        if len(value) != 6:
+            return f"rgba(148,163,184,{alpha})"
+        r, g, b = int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+
+    for pieza, df_task in df_ing_schedule.groupby("PIEZA", sort=False):
+        pieza_name = str(pieza)
+        trace_color = pieza_color_map.get(pieza_name, "#94A3B8")
+        df_task = df_task.sort_values(["Fecha_orden", "_row_order", "Tarea"])
+        fig_ing_schedule.add_trace(
+            go.Scatter(
+                x=df_task["Fecha_plot"],
+                y=df_task["Tarea"],
+                mode="lines+markers",
+                name=pieza_name,
+                legendgroup=pieza_name,
+                showlegend=True,
+                line=dict(color=hex_to_rgba(trace_color, 0.30), width=0.85),
+                marker=dict(size=8, color=trace_color, opacity=0.94, symbol="circle", line=dict(color="white", width=1.15)),
+                customdata=df_task[["Fecha", "PIEZA", "Tarea", "Carga"]],
+                hovertemplate=(
+                    "<b>%{customdata[1]}</b><br>"
+                    "%{customdata[2]}<br>"
+                    "Fecha: %{customdata[0]}<br>"
+                    "Trabajo registrado en la hoja<br>"
+                    "Inicio y término: %{customdata[0]}<extra></extra>"
+                ),
+            )
+        )
+
+    schedule_y_order = list(reversed(tarea_order))
+    fig_ing_schedule.update_xaxes(
+        tickmode="array",
+        tickvals=tick_df["Fecha_plot"],
+        ticktext=tick_df["Fecha"],
+        title="Fecha",
+        showgrid=True,
+        gridcolor="rgba(148,163,184,0.12)",
+        linecolor="rgba(148,163,184,0.22)",
+        ticklen=3,
+    )
+    fig_ing_schedule.update_yaxes(
+        categoryorder="array",
+        categoryarray=schedule_y_order,
+        tickmode="array",
+        tickvals=schedule_y_order,
+        ticktext=schedule_y_order,
+        title="Tarea",
+        automargin=True,
+        gridcolor="rgba(148,163,184,0.08)",
+    )
+    if today_x is not None:
+        fig_ing_schedule.add_vline(
+            x=today_x,
+            line=dict(color="rgba(185,28,28,0.62)", width=1.4, dash="dash"),
+            annotation_text="Hoy",
+            annotation_position="top",
+            annotation_font=dict(size=11, color="#B91C1C"),
+        )
+    fig_ing_schedule.update_layout(
+        height=max(306, min(576, 83 + 15.3 * len(tarea_order))),
+        margin=dict(l=10, r=10, t=30, b=28),
+        plot_bgcolor="rgba(248,250,252,0.42)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        showlegend=False,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5,
+            title=dict(text="Pieza"),
+            bgcolor="rgba(255,255,255,0)",
+        ),
+    )
+    apply_engineering_chart_typography(fig_ing_schedule, title_size=20, body_size=13, tick_size=11, legend_size=11)
+    fig_ing_schedule.update_layout(hovermode="closest")
+    fig_ing_schedule.update_xaxes(showspikes=False)
+    st.plotly_chart(fig_ing_schedule, use_container_width=True, key="inputs_capex_10kw_ing_schedule_chart")
+    st.markdown(
+        f"""
+        <div style="margin:0 0 12px 0;padding:0 2px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;">
+            {legend_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_inputs_project_gantt():
     try:
         df_gantt = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
@@ -2915,7 +3208,10 @@ def render_inputs_project_gantt():
         fases = sorted(
             df_gantt["Fase"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
         ) if "Fase" in df_gantt.columns else []
-        fase_options = ["Todas"] + fases
+        fase_options = ["Todas", ASPAS_FRP_GANTT_PHASE_OPTION] + [
+            fase for fase in fases
+            if fase != ASPAS_FRP_GANTT_PHASE_OPTION
+        ]
         fase_default = "Instalación Turbina" if "Instalación Turbina" in fases else "Todas"
         fase_saved = st.session_state.pop("inputs_gantt_fase__sticky", None)
         if fase_saved in fase_options:
@@ -2968,6 +3264,10 @@ def render_inputs_project_gantt():
             horizontal=True,
             key="inputs_gantt_color",
         )
+
+    if fase_sel == ASPAS_FRP_GANTT_PHASE_OPTION:
+        render_inputs_aspas_frp_schedule_chart()
+        return
 
     plot_df = df_gantt.copy()
     if fase_sel != "Todas" and "Fase" in plot_df.columns:
@@ -3412,7 +3712,6 @@ def render_inputs_estado_actual_dashboard():
         render_inputs_contexto_block()
         return
     if selected_estado_subblock != "financiero":
-        st.info("Selecciona uno de los sub-bloques para abrir su contenido.")
         return
 
     try:
@@ -4794,14 +5093,49 @@ st.markdown(
     .kpi-card.kpi-card-palette-slate .kpi-sub {
         color: #F8FAFC;
     }
+    .kpi-card.kpi-card-compact {
+        min-height: 76px;
+        border-radius: 0.55rem;
+        padding: 0.58rem 0.78rem 0.52rem 0.78rem;
+        box-shadow: 0 3px 8px rgba(15, 23, 42, 0.045);
+    }
+    .kpi-card.kpi-card-compact .kpi-label {
+        font-size: 0.64rem;
+        letter-spacing: .11em;
+        margin-bottom: 0.08rem;
+    }
+    .kpi-card.kpi-card-compact .kpi-value {
+        font-size: 1.35rem;
+        line-height: 1.05;
+        margin-bottom: 0.08rem;
+    }
+    .kpi-card.kpi-card-compact .kpi-sub {
+        font-size: 0.68rem;
+        line-height: 1.25;
+        margin-top: 0.05rem;
+    }
+    .kpi-card.kpi-card-compact.kpi-card-palette-coral {
+        background: linear-gradient(90deg, rgba(215,96,94,.82) 0%, rgba(215,96,94,.74) 100%);
+    }
+    .kpi-card.kpi-card-compact.kpi-card-palette-ochre {
+        background: linear-gradient(90deg, rgba(217,167,102,.72) 0%, rgba(217,167,102,.64) 100%);
+    }
+    .kpi-card.kpi-card-compact.kpi-card-palette-teal {
+        background: linear-gradient(90deg, rgba(127,168,164,.62) 0%, rgba(127,168,164,.54) 100%);
+    }
+    .kpi-card.kpi-card-compact.kpi-card-palette-slate {
+        background: linear-gradient(90deg, rgba(79,93,111,.88) 0%, rgba(79,93,111,.80) 100%);
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-def kpi_card(title: str, value: str, subtitle: str = "", variant: str = "default"):
+def kpi_card(title: str, value: str, subtitle: str = "", variant: str = "default", compact: bool = False):
     """Renderiza una tarjeta KPI con título, valor y subtítulo."""
     card_class = "kpi-card"
+    if compact:
+        card_class += " kpi-card-compact"
     if variant == "sky":
         card_class += " kpi-card-sky"
     elif variant == "green":
@@ -8006,6 +8340,8 @@ elif selected_input_block == "escalamiento":
             args=("80kw",),
         )
 
+    st.markdown("---")
+
     if capex_10kw_active:
         render_inputs_capex_10kw_detail()
     elif capex_80kw_active:
@@ -8045,8 +8381,8 @@ elif selected_input_block == "escalamiento":
 
         st.markdown(
             """
-            <div style="margin:4px 0 14px 0;padding:14px 16px;border-radius:18px;background:linear-gradient(90deg,#fff8f8 0%,#fff 100%);border:1px solid rgba(239,68,68,.14);">
-                <div style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#b91c1c;margin-bottom:6px;">Mapa de lectura</div>
+            <div style="margin:4px 0 14px 0;padding:14px 16px;border-radius:18px;background:linear-gradient(90deg,#eff8ff 0%,#f8fcff 54%,#ffffff 100%);border:1px solid rgba(14,165,233,.22);">
+                <div style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#0369a1;margin-bottom:6px;">Mapa de lectura</div>
                 <div style="font-size:15px;line-height:1.55;color:#475569;">
                     El <strong>Modelo Consolidado de Inversión</strong> integra el <strong>CAPEX de ingeniería, suministro y montaje</strong> con la <strong>inversión en capital humano</strong>.
                 </div>
@@ -8165,6 +8501,8 @@ elif selected_input_block == "escalamiento":
                 args=("direccion",),
             )
 
+        st.markdown("---")
+
         selected_capex_80kw_view = st.session_state.get(capex_80kw_view_state_key)
         if selected_capex_80kw_view == "dashboard":
             render_resumen_content(
@@ -8182,7 +8520,7 @@ elif selected_input_block == "escalamiento":
         elif selected_capex_80kw_view == "direccion":
             render_direccion_module_content()
     else:
-        st.info("Selecciona `CAPEX 10kW` o `CAPEX 80kW` para abrir el contenido asociado.")
+        pass
 elif selected_input_block == "valorizacion":
     render_valorizacion_module_content(key_prefix="inputs_val_")
 else:
