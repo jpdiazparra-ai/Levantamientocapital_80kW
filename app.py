@@ -3200,6 +3200,25 @@ def render_inputs_gantt_design_css() -> None:
             color:#52657f;font-size:11px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;
             margin:0 0 10px 0;
         }
+        .gantt-filter-marker{display:none;}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-filter-marker){
+            padding:8px 12px 9px 12px!important;
+            border-radius:13px!important;
+            margin-bottom:10px!important;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-filter-marker) div[data-testid="stVerticalBlock"]{
+            gap:.35rem!important;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-filter-marker) .gantt-panel-title{
+            margin:0 0 6px 0;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-filter-marker) div[data-testid="stSelectbox"],
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-filter-marker) div[data-testid="stRadio"]{
+            margin-bottom:0!important;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-filter-marker) div[data-baseweb="select"] > div{
+            min-height:33px!important;
+        }
         .gantt-kpi{
             border-radius:13px;padding:16px 13px 13px 13px;min-height:120px;
             background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%);
@@ -4084,6 +4103,7 @@ def render_inputs_project_gantt():
 
     has_linea = "Línea" in df_gantt.columns
     with st.container(border=True):
+        st.markdown('<span class="gantt-filter-marker"></span>', unsafe_allow_html=True)
         st.markdown('<div class="gantt-panel-title">Filtros de análisis</div>', unsafe_allow_html=True)
         if has_linea:
             c1, c2, c3, c4, c5 = st.columns([3.2, 2.6, 2.1, 1.7, 1.9])
