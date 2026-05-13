@@ -3250,15 +3250,19 @@ def render_inputs_gantt_design_css() -> None:
             border-top:1px solid #dde6f1;
         }
         .gantt-left-head{
-            height:48px;border-right:1px solid #dde6f1;border-bottom:1px solid #dde6f1;
+            height:58px;border-right:1px solid #dde6f1;border-bottom:1px solid #dde6f1;
             display:flex;align-items:center;color:#71819a;font-size:12px;font-weight:900;text-transform:uppercase;
         }
         .gantt-time-head{
-            height:48px;position:relative;border-bottom:1px solid #dde6f1;
+            height:58px;position:relative;border-bottom:1px solid #dde6f1;
             background:repeating-linear-gradient(to right, transparent 0, transparent calc(12.5% - 1px), #e5ebf3 calc(12.5% - 1px), #e5ebf3 12.5%);
         }
-        .gantt-month-label{position:absolute;top:0;height:18px;text-align:center;color:#71819a;font-size:12px;font-weight:900;text-transform:uppercase;}
-        .gantt-week-label{position:absolute;bottom:10px;transform:translateX(-50%);color:#0f172a;font-size:12px;font-weight:700;}
+        .gantt-month-label{
+            position:absolute;top:8px;height:18px;text-align:center;color:#71819a;font-size:12px;
+            font-weight:900;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:clip;
+        }
+        .gantt-month-label.edge{transform:translateX(-100%);text-align:right;overflow:visible;}
+        .gantt-week-label{position:absolute;bottom:9px;transform:translateX(-50%);color:#0f172a;font-size:12px;font-weight:700;}
         .gantt-task-row{display:contents;}
         .gantt-task-cell{
             min-height:43px;border-right:1px solid #dde6f1;border-bottom:1px solid #e7edf4;
@@ -3272,7 +3276,7 @@ def render_inputs_gantt_design_css() -> None:
         }
         .gantt-bar{
             position:absolute;height:11px;top:50%;transform:translateY(-50%);border-radius:999px;
-            background:var(--bar-color);box-shadow:inset 0 -1px 0 rgba(15,23,42,.10);
+            box-shadow:inset 0 -1px 0 rgba(15,23,42,.10);
         }
         .gantt-bar::before{
             content:"";position:absolute;left:-2px;top:50%;width:8px;height:8px;border-radius:50%;
@@ -3286,10 +3290,10 @@ def render_inputs_gantt_design_css() -> None:
             position:absolute;top:50%;transform:translateY(-50%);font-size:12px;color:#334155;font-weight:500;white-space:nowrap;
         }
         .gantt-today-line{
-            position:absolute;top:48px;bottom:0;width:0;border-left:1.5px dashed #111827;z-index:3;
+            position:absolute;top:58px;bottom:0;width:0;border-left:1.5px dashed #111827;z-index:3;
         }
         .gantt-today-label{
-            position:absolute;top:38px;transform:translateX(-50%);z-index:4;
+            position:absolute;top:48px;transform:translateX(-50%);z-index:4;
             background:#374151;color:#fff;border-radius:4px;padding:6px 9px;font-size:12px;font-weight:800;
         }
         div[data-testid="stSelectbox"] label p, div[data-testid="stRadio"] label p{
@@ -3642,12 +3646,6 @@ def render_inputs_gantt_custom_chart(df: pd.DataFrame, date_mode: str, legend_co
     if dfc.empty:
         return
 
-    if "ID" in dfc.columns:
-        dfc = dfc.sort_values(["ID", "_start", "_end"], ascending=[True, True, True])
-    else:
-        dfc = dfc.sort_values(["_start", "_end"], ascending=[True, True])
-    dfc = dfc.head(7).copy()
-
     today_ts = pd.Timestamp.today().normalize()
     days_since_tuesday = (today_ts.weekday() - 1) % 7
     tick_start = today_ts - pd.Timedelta(days=days_since_tuesday + 35)
@@ -3655,6 +3653,15 @@ def render_inputs_gantt_custom_chart(df: pd.DataFrame, date_mode: str, legend_co
     window_start = ticks[0]
     window_end = ticks[-1]
     window_days = max((window_end - window_start).days, 1)
+
+    visible_df = dfc[(dfc["_end"] >= window_start) & (dfc["_start"] <= window_end)].copy()
+    if visible_df.empty:
+        visible_df = dfc.copy()
+    if "ID" in visible_df.columns:
+        visible_df = visible_df.sort_values(["ID", "_start", "_end"], ascending=[True, True, True])
+    else:
+        visible_df = visible_df.sort_values(["_start", "_end"], ascending=[True, True])
+    dfc = visible_df.head(7).copy()
 
     def pct(date_value: pd.Timestamp) -> float:
         return max(0.0, min(100.0, ((date_value - window_start).days / window_days) * 100.0))
@@ -3672,17 +3679,22 @@ def render_inputs_gantt_custom_chart(df: pd.DataFrame, date_mode: str, legend_co
         if span_end > span_start:
             left = pct(span_start)
             width = max(0.0, pct(span_end) - left)
+            is_edge = span_end >= window_end
+            class_name = "gantt-month-label edge" if is_edge and width < 13 else "gantt-month-label"
+            label_left = min(98.8, left + width) if "edge" in class_name else left
+            label_width = width if "edge" not in class_name else min(18.0, width + 10.0)
             month_labels.append(
-                f'<div class="gantt-month-label" style="left:{left:.4f}%;width:{width:.4f}%;">{month_names.get(cursor.month, "")} {cursor.year}</div>'
+                f'<div class="{class_name}" style="left:{label_left:.4f}%;width:{label_width:.4f}%;">{month_names.get(cursor.month, "")} {cursor.year}</div>'
             )
         cursor = next_month
 
     week_labels = "".join(
-        f'<div class="gantt-week-label" style="left:{pct(tick):.4f}%;">{tick.day:02d}</div>'
+        f'<div class="gantt-week-label" style="left:{min(98.6, pct(tick)):.4f}%;">{tick.day:02d}</div>'
         for tick in ticks
     )
 
     line_color_map = build_gantt_line_color_map(dfc)
+    phase_color_map = build_gantt_phase_color_map(dfc)
     rows_html = []
     for _, row in dfc.iterrows():
         start = max(pd.Timestamp(row["_start"]).normalize(), window_start)
@@ -3695,7 +3707,8 @@ def render_inputs_gantt_custom_chart(df: pd.DataFrame, date_mode: str, legend_co
         task = format_gantt_task_label(str(row.get("Tarea / Entregable", "")), max_chars=43, max_lines=2)
         line_name = str(row.get("Línea", "")).strip()
         line_color = line_color_map.get(line_name, "#64748b")
-        bar_color = _gantt_status_color(str(row.get("Estado", "")))
+        phase_name = str(row.get("Fase", "")).strip()
+        bar_color = phase_color_map.get(phase_name) or line_color or _gantt_status_color(str(row.get("Estado", "")))
         date_left = min(97.0, left + width + 1.0)
         rows_html.append(
             textwrap.dedent(
@@ -3706,7 +3719,7 @@ def render_inputs_gantt_custom_chart(df: pd.DataFrame, date_mode: str, legend_co
                     <div class="gantt-task-label">{task}</div>
                   </div>
                   <div class="gantt-bar-cell">
-                    <span class="gantt-bar" style="--bar-color:{bar_color};left:{left:.4f}%;width:{width:.4f}%;"></span>
+                    <span class="gantt-bar" style="--bar-color:{bar_color};background:{bar_color};left:{left:.4f}%;width:{width:.4f}%;"></span>
                     <span class="gantt-end-date" style="left:{date_left:.4f}%;">{html.escape(end_label)}</span>
                   </div>
                 </div>
