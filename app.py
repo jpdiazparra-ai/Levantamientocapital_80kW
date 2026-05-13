@@ -3698,18 +3698,20 @@ def render_inputs_gantt_custom_chart(df: pd.DataFrame, date_mode: str, legend_co
         bar_color = _gantt_status_color(str(row.get("Estado", "")))
         date_left = min(97.0, left + width + 1.0)
         rows_html.append(
-            f"""
-            <div class="gantt-task-row">
-              <div class="gantt-task-cell" style="--line-color:{line_color};">
-                <span class="gantt-task-dot"></span>
-                <div class="gantt-task-label">{task}</div>
-              </div>
-              <div class="gantt-bar-cell">
-                <span class="gantt-bar" style="--bar-color:{bar_color};left:{left:.4f}%;width:{width:.4f}%;"></span>
-                <span class="gantt-end-date" style="left:{date_left:.4f}%;">{html.escape(end_label)}</span>
-              </div>
-            </div>
-            """
+            textwrap.dedent(
+                f"""
+                <div class="gantt-task-row">
+                  <div class="gantt-task-cell" style="--line-color:{line_color};">
+                    <span class="gantt-task-dot"></span>
+                    <div class="gantt-task-label">{task}</div>
+                  </div>
+                  <div class="gantt-bar-cell">
+                    <span class="gantt-bar" style="--bar-color:{bar_color};left:{left:.4f}%;width:{width:.4f}%;"></span>
+                    <span class="gantt-end-date" style="left:{date_left:.4f}%;">{html.escape(end_label)}</span>
+                  </div>
+                </div>
+                """
+            ).strip()
         )
 
     chip_source = legend_color_map or line_color_map
@@ -3724,36 +3726,39 @@ def render_inputs_gantt_custom_chart(df: pd.DataFrame, date_mode: str, legend_co
         )
 
     today_left = pct(today_ts)
-    chart_html = f"""
-    <div class="gantt-chart-card">
-      <div class="gantt-toolbar">
-        <div class="gantt-chip-row">{chips_html}</div>
-        <div class="gantt-range-row">
-          <span class="gantt-range-btn">1m</span>
-          <span class="gantt-range-btn">3m</span>
-          <span class="gantt-range-btn">6m</span>
-          <span class="gantt-range-btn">YTD</span>
-          <span class="gantt-range-btn">1y</span>
-          <span class="gantt-range-btn active">All</span>
+    rows_fragment = "\n".join(rows_html)
+    chart_html = textwrap.dedent(
+        f"""
+        <div class="gantt-chart-card">
+          <div class="gantt-toolbar">
+            <div class="gantt-chip-row">{chips_html}</div>
+            <div class="gantt-range-row">
+              <span class="gantt-range-btn">1m</span>
+              <span class="gantt-range-btn">3m</span>
+              <span class="gantt-range-btn">6m</span>
+              <span class="gantt-range-btn">YTD</span>
+              <span class="gantt-range-btn">1y</span>
+              <span class="gantt-range-btn active">All</span>
+            </div>
+            <div class="gantt-custom-legend">
+              <span><i class="gantt-swatch" style="background:#ef3b2d;"></i>En curso</span>
+              <span><i class="gantt-swatch" style="background:#45a16a;"></i>Completado</span>
+              <span><i class="gantt-swatch" style="background:#a7b1bd;"></i>Plan</span>
+            </div>
+          </div>
+          <div class="gantt-custom-wrap">
+            <div class="gantt-custom-title">Cronograma por frente técnico</div>
+            <div class="gantt-grid">
+              <div class="gantt-left-head">Tarea</div>
+              <div class="gantt-time-head">{''.join(month_labels)}{week_labels}</div>
+              <div class="gantt-today-label" style="left:calc(420px + (100% - 420px) * {today_left / 100:.6f});">Hoy</div>
+              <div class="gantt-today-line" style="left:calc(420px + (100% - 420px) * {today_left / 100:.6f});"></div>
+        {rows_fragment}
+            </div>
+          </div>
         </div>
-        <div class="gantt-custom-legend">
-          <span><i class="gantt-swatch" style="background:#ef3b2d;"></i>En curso</span>
-          <span><i class="gantt-swatch" style="background:#45a16a;"></i>Completado</span>
-          <span><i class="gantt-swatch" style="background:#a7b1bd;"></i>Plan</span>
-        </div>
-      </div>
-      <div class="gantt-custom-wrap">
-        <div class="gantt-custom-title">Cronograma por frente técnico</div>
-        <div class="gantt-grid">
-          <div class="gantt-left-head">Tarea</div>
-          <div class="gantt-time-head">{''.join(month_labels)}{week_labels}</div>
-          <div class="gantt-today-label" style="left:calc(420px + (100% - 420px) * {today_left / 100:.6f});">Hoy</div>
-          <div class="gantt-today-line" style="left:calc(420px + (100% - 420px) * {today_left / 100:.6f});"></div>
-          {''.join(rows_html)}
-        </div>
-      </div>
-    </div>
-    """
+        """
+    ).strip()
     st.markdown(chart_html, unsafe_allow_html=True)
 
 
