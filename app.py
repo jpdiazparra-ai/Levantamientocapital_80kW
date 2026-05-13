@@ -4503,18 +4503,18 @@ def render_inputs_capex_10kw_detail():
     st.markdown(
         """
         <style>
-        .capex10-shell{border:1px solid #d9e2ee;border-radius:13px;background:#fff;padding:14px 15px 13px 15px;box-shadow:0 13px 30px rgba(15,23,42,.05);margin:0 0 11px 0;}
-        .capex10-breadcrumb{display:flex;align-items:center;gap:8px;color:#0f172a;font-size:10px;font-weight:900;margin:0 0 10px 0;}
-        .capex10-brand{font-size:16px;color:#0f766e;margin-right:6px;}
+        .capex10-shell{border:1px solid #d9e2ee;border-radius:13px;background:#fff;padding:12px 18px 10px 18px;box-shadow:0 13px 30px rgba(15,23,42,.05);margin:0 0 11px 0;}
+        .capex10-breadcrumb{display:flex;align-items:center;gap:10px;color:#0f172a;font-size:14px;font-weight:900;margin:0 0 8px 0;}
+        .capex10-brand{font-size:23px;color:#0f766e;margin-right:6px;}
         .capex10-sep{color:#64748b;font-weight:800;}
-        .capex10-title{font-size:17px;line-height:1.08;font-weight:900;color:#08122a;margin:0 0 6px 0;}
-        .capex10-sub{font-size:9px;line-height:1.55;color:#274060;margin:0 0 13px 0;max-width:476px;}
-        .capex10-kpis{display:grid;grid-template-columns:1.04fr 1.02fr .92fr .9fr .92fr;gap:10px;margin:0 0 11px 0;}
-        .capex10-kpi{border:1px solid var(--bd);background:linear-gradient(135deg,var(--bg1),#fff 72%);border-radius:7px;padding:11px 11px;display:grid;grid-template-columns:39px 1fr;gap:10px;align-items:center;min-height:62px;}
-        .capex10-ico{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--ico-bg);color:var(--accent);font-size:20px;font-weight:900;}
-        .capex10-k{font-size:7px;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);font-weight:900;margin:0 0 5px 0;}
-        .capex10-v{font-size:15px;line-height:1;font-weight:900;color:#08122a;margin:0 0 6px 0;}
-        .capex10-s{font-size:8px;color:#14284a;margin:0;}
+        .capex10-title{font-size:24px;line-height:1.02;font-weight:900;color:#08122a;margin:0 0 5px 0;}
+        .capex10-sub{font-size:13px;line-height:1.32;color:#274060;margin:0 0 10px 0;max-width:680px;}
+        .capex10-kpis{display:grid;grid-template-columns:1.04fr 1.02fr .92fr .9fr .92fr;gap:10px;margin:0;}
+        .capex10-kpi{border:1px solid var(--bd);background:linear-gradient(135deg,var(--bg1),#fff 72%);border-radius:8px;padding:8px 12px;display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:center;min-height:64px;}
+        .capex10-ico{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--ico-bg);color:var(--accent);font-size:24px;font-weight:900;}
+        .capex10-k{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);font-weight:900;margin:0 0 4px 0;}
+        .capex10-v{font-size:22px;line-height:.95;font-weight:900;color:#08122a;margin:0 0 4px 0;}
+        .capex10-s{font-size:11px;line-height:1.12;color:#14284a;margin:0;}
         .capex10-main{display:grid;grid-template-columns:1.05fr 1fr;gap:16px;margin:0 0 16px 0;}
         .capex10-panel{border:1px solid #d9e2ee;border-radius:14px;background:#fff;padding:18px 18px 16px 18px;height:520px;box-sizing:border-box;overflow:hidden;}
         .capex10-panel-body{height:calc(100% - 38px);display:flex;flex-direction:column;}
