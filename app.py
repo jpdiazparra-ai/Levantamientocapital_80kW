@@ -1,6 +1,7 @@
 # capex_piloto_80kw.py
 # Dashboard CAPEX Piloto Eólico 80 kW (versión mejorada)
 
+import ast
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -2952,8 +2953,12 @@ def render_inputs_factor_chart(df_in: pd.DataFrame):
 
 
 def gantt_infer_piloto(row):
-    val = str(row.get("Piloto", "")).strip()
-    if val:
+    raw_value = row.get("Piloto", "")
+    val = "" if pd.isna(raw_value) else str(raw_value).strip()
+    if val and val.lower() not in {"nan", "none"}:
+        pilot_match = re.fullmatch(r"piloto\s*(\d+)\s*k\s*w", val, flags=re.IGNORECASE)
+        if pilot_match:
+            return f"Piloto {pilot_match.group(1)} kW"
         return val
     texto = " ".join([
         str(row.get("Fase", "")),
@@ -2990,7 +2995,8 @@ def gantt_normalize_linea(row: pd.Series) -> str:
 def gantt_process_df(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     if "ID" in df.columns:
-        df["ID"] = pd.to_numeric(df["ID"], errors="coerce").astype("Int64")
+        # The execution sheet uses alphanumeric task IDs (for example A02/A14).
+        df["ID"] = df["ID"].astype("string").str.strip().replace({"": pd.NA})
     if "Línea" in df.columns:
         df["Línea"] = df.apply(gantt_normalize_linea, axis=1)
     for col in [GANTT_DATE_COL_START, GANTT_DATE_COL_END_PLAN, GANTT_DATE_COL_END_REAL]:
@@ -3036,12 +3042,6 @@ def build_gantt_phase_color_map(df: pd.DataFrame) -> dict[str, str]:
 def build_gantt_line_color_map(df: pd.DataFrame) -> dict[str, str]:
     if "Línea" not in df.columns:
         return {}
-    preferred_colors = {
-        "Acople Central": "#4fb5ad",
-        "Acople Externo": "#0b3358",
-        "Freno Mecánico": "#f5a623",
-        "Freno Mecanico": "#f5a623",
-    }
     lineas = sorted(
         {
             str(val).strip()
@@ -3049,8 +3049,16 @@ def build_gantt_line_color_map(df: pd.DataFrame) -> dict[str, str]:
             if str(val).strip() and str(val).strip().lower() not in {"nan", "none"}
         }
     )
-    fallback = ["#4fb5ad", "#0b3358", "#f5a623", "#ef3b2d", "#45a16a", "#8b3ff4", "#64748b"]
-    return {linea: preferred_colors.get(linea, fallback[idx % len(fallback)]) for idx, linea in enumerate(lineas)}
+    # Exclusive palette for technical lines; status bars use red, green and amber separately.
+    line_palette = [
+        "#0057B8", "#7B2CBF", "#00A6D6", "#C2185B", "#5E548E", "#006064",
+        "#4361EE", "#9D4EDD", "#0077B6", "#AD1457", "#3A0CA3", "#008DA8",
+        "#6A1B9A", "#1976D2", "#8E24AA", "#01579B", "#AB47BC", "#0097A7",
+        "#283593", "#CE4DA7", "#0277BD", "#5E35B1", "#006C84", "#BA68C8",
+        "#184E77", "#8B1E6B", "#29B6D1", "#512DA8", "#2F6DAE", "#D04F9B",
+        "#174C78", "#7251B5", "#007FA3", "#9B4D96",
+    ]
+    return {linea: line_palette[idx % len(line_palette)] for idx, linea in enumerate(lineas)}
 
 
 def format_gantt_task_label(label: str, max_chars: int = 42, max_lines: int = 2) -> str:
@@ -3241,24 +3249,21 @@ def render_inputs_gantt_design_css() -> None:
         .gantt-mini-legend{display:flex;gap:18px;align-items:center;justify-content:flex-end;flex-wrap:wrap;font-size:12px;color:#0f172a;}
         .gantt-mini-legend span{display:inline-flex;align-items:center;gap:7px;}
         .gantt-swatch{width:17px;height:9px;border-radius:2px;display:inline-block;}
-        .gantt-toolbar{
-            display:grid;grid-template-columns:1.4fr 1fr 1.4fr;align-items:center;gap:12px;
-            margin:0 0 10px 0;
+        .gantt-toolbar{display:grid;gap:7px;margin:0 0 10px 0;}
+        .gantt-legend-row{
+            display:grid;grid-template-columns:112px minmax(0,1fr);align-items:start;gap:10px;
+            border:1px solid #e5ebf3;border-radius:9px;background:#fbfdff;padding:7px 10px;
         }
-        .gantt-chip-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0;}
+        .gantt-legend-label{
+            padding-top:6px;font-size:10px;font-weight:900;color:#52657f;
+            text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;
+        }
+        .gantt-chip-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:0;}
         .gantt-chip{
-            display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:999px;
+            display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;
             background:#fbfdff;border:1px solid rgba(203,213,225,.9);font-size:11px;font-weight:800;color:#102039;
         }
         .gantt-chip-dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:#94a3b8;flex:0 0 auto;}
-        .gantt-range-row{display:flex;align-items:center;justify-content:center;gap:6px;}
-        .gantt-range-btn{
-            height:22px;padding:0 7px;border-radius:4px;border:1px solid #d7dee9;background:#fff;
-            color:#52657f;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;
-        }
-        .gantt-range-btn.active{border-color:#38b2a6;color:#0f9485;background:#ecfffc;}
-        .gantt-custom-legend{display:flex;gap:21px;align-items:center;justify-content:flex-end;font-size:10px;color:#0f172a;}
-        .gantt-custom-legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
         .gantt-custom-wrap{
             border:1px solid #dde6f1;border-radius:10px;background:#fff;overflow:hidden;
             padding:13px 14px 18px 14px;
@@ -3301,7 +3306,7 @@ def render_inputs_gantt_design_css() -> None:
         }
         .gantt-bar{
             position:absolute;height:9px;top:50%;transform:translateY(-50%);border-radius:999px;
-            box-shadow:inset 0 -1px 0 rgba(15,23,42,.10);
+            box-shadow:inset 0 -1px 0 rgba(15,23,42,.10);cursor:help;
         }
         .gantt-bar::before{
             content:"";position:absolute;left:-2px;top:50%;width:6px;height:6px;border-radius:50%;
@@ -3333,8 +3338,8 @@ def render_inputs_gantt_design_css() -> None:
             .gantt-progress{min-width:0;width:100%;grid-template-columns:58px 1fr;}
             .gantt-divider{display:none;}
             .gantt-title{font-size:19px;}
-            .gantt-toolbar{grid-template-columns:1fr;}
-            .gantt-custom-legend{justify-content:flex-start;}
+            .gantt-legend-row{grid-template-columns:1fr;}
+            .gantt-legend-label{padding-top:0;}
             .gantt-grid{grid-template-columns:264px minmax(560px,1fr);}
         }
         </style>
@@ -3657,7 +3662,8 @@ def render_inputs_gantt_group_legend(color_map: dict[str, str]) -> None:
 def render_inputs_gantt_custom_chart(
     df: pd.DataFrame,
     date_mode: str,
-    legend_color_map: dict[str, str] | None,
+    color_by: str = "Estado",
+    time_range: str = "Todo",
     title: str = "Cronograma",
 ) -> None:
     if df.empty:
@@ -3677,21 +3683,30 @@ def render_inputs_gantt_custom_chart(
         return
 
     today_ts = pd.Timestamp.today().normalize()
-    days_since_tuesday = (today_ts.weekday() - 1) % 7
-    tick_start = today_ts - pd.Timedelta(days=days_since_tuesday + 35)
-    ticks = [tick_start + pd.Timedelta(days=7 * i) for i in range(9)]
-    window_start = ticks[0]
-    window_end = ticks[-1]
+    task_start = dfc["_start"].min().normalize()
+    task_end = dfc["_end"].max().normalize()
+    range_months = {"1M": 1, "3M": 3, "6M": 6}.get(time_range)
+    if range_months:
+        range_end = min(task_end, task_start + pd.DateOffset(months=range_months))
+        dfc = dfc[(dfc["_end"] >= task_start) & (dfc["_start"] <= range_end)].copy()
+        task_end = range_end
+    if dfc.empty:
+        st.info("No hay actividades dentro del horizonte temporal seleccionado.")
+        return
+    task_span_days = max((task_end - task_start).days, 1)
+    padding_days = max(7, min(21, math.ceil(task_span_days * 0.06)))
+    window_start = task_start - pd.Timedelta(days=padding_days)
+    window_end = task_end + pd.Timedelta(days=padding_days)
     window_days = max((window_end - window_start).days, 1)
+    first_tuesday = window_start + pd.Timedelta(days=(1 - window_start.weekday()) % 7)
+    all_ticks = list(pd.date_range(first_tuesday, window_end, freq="7D"))
+    tick_step = max(1, math.ceil(len(all_ticks) / 12))
+    ticks = all_ticks[::tick_step]
 
-    visible_df = dfc[(dfc["_end"] >= window_start) & (dfc["_start"] <= window_end)].copy()
-    if visible_df.empty:
-        visible_df = dfc.copy()
-    if "ID" in visible_df.columns:
-        visible_df = visible_df.sort_values(["ID", "_start", "_end"], ascending=[True, True, True])
+    if "ID" in dfc.columns:
+        dfc = dfc.sort_values(["ID", "_start", "_end"], ascending=[True, True, True])
     else:
-        visible_df = visible_df.sort_values(["_start", "_end"], ascending=[True, True])
-    dfc = visible_df.copy()
+        dfc = dfc.sort_values(["_start", "_end"], ascending=[True, True])
 
     def pct(date_value: pd.Timestamp) -> float:
         return max(0.0, min(100.0, ((date_value - window_start).days / window_days) * 100.0))
@@ -3724,19 +3739,70 @@ def render_inputs_gantt_custom_chart(
     )
 
     line_color_map = build_gantt_line_color_map(dfc)
+    if color_by == "Línea" and "Línea" in dfc.columns:
+        color_field = "Línea"
+        default_color = "#64748b"
+    elif color_by == "Piloto" and "Piloto" in dfc.columns:
+        color_field = "Piloto"
+        default_color = "#64748b"
+    else:
+        color_field = "Estado"
+        default_color = "#64748b"
+
+    def chart_color_group(value: object) -> str:
+        if pd.isna(value):
+            return "Sin clasificación"
+        text = str(value).strip()
+        return "Sin clasificación" if not text or text.lower() in {"nan", "none"} else text
+
+    dfc["_color_group"] = dfc.get(color_field, pd.Series(index=dfc.index, dtype=object)).map(chart_color_group)
+    visible_groups = sorted(dfc["_color_group"].drop_duplicates().tolist())
+    if color_field == "Línea":
+        bar_color_map = {group: line_color_map.get(group, default_color) for group in visible_groups}
+    elif color_field == "Piloto":
+        bar_color_map = {group: PX_COLORS[idx % len(PX_COLORS)] for idx, group in enumerate(visible_groups)}
+    else:
+        bar_color_map = {
+            group: _gantt_status_color(group) if group != "Sin clasificación" else default_color
+            for group in visible_groups
+        }
+    show_full_task_text = len(dfc) <= 12
     rows_html = []
     for _, row in dfc.iterrows():
         start = max(pd.Timestamp(row["_start"]).normalize(), window_start)
-        end = min(pd.Timestamp(row["_end"]).normalize(), window_end)
+        end = min(pd.Timestamp(row["_end"]).normalize(), task_end)
         if end <= start:
             end = start + pd.Timedelta(days=1)
         left = pct(start)
         width = max(1.5, pct(end) - left)
         end_label = pd.Timestamp(row["_end"]).strftime("%d-%m-%Y")
-        task = format_gantt_task_label(str(row.get("Tarea / Entregable", "")), max_chars=43, max_lines=2)
+        task_text = str(row.get("Tarea / Entregable", ""))
+        task = (
+            html.escape(task_text)
+            if show_full_task_text
+            else format_gantt_task_label(task_text, max_chars=43, max_lines=2)
+        )
         line_name = str(row.get("Línea", "")).strip()
-        line_color = line_color_map.get(line_name, "#64748b")
-        bar_color = _gantt_status_color(str(row.get("Estado", "")))
+        line_color = line_color_map.get(line_name, "#111827")
+        bar_group = str(row.get("_color_group", "Sin clasificación"))
+        bar_color = bar_color_map.get(bar_group, "#64748b")
+        duration_days = max(int((pd.Timestamp(row["_end"]) - pd.Timestamp(row["_start"])).days), 1)
+        status_name = str(row.get("Estado", "")).strip() or "Sin estado"
+        phase_name = str(row.get("Fase", "")).strip() or "Sin fase"
+        tooltip = html.escape(
+            "\n".join(
+                [
+                    task_text,
+                    f"Fase: {phase_name}",
+                    f"Línea: {line_name or 'Sin línea'}",
+                    f"Estado: {status_name}",
+                    f"Inicio: {pd.Timestamp(row['_start']).strftime('%d-%m-%Y')}",
+                    f"Término: {pd.Timestamp(row['_end']).strftime('%d-%m-%Y')}",
+                    f"Duración: {duration_days} días",
+                ]
+            ),
+            quote=True,
+        )
         date_left = min(97.0, left + width + 1.0)
         rows_html.append(
             textwrap.dedent(
@@ -3747,7 +3813,7 @@ def render_inputs_gantt_custom_chart(
                     <div class="gantt-task-label">{task}</div>
                   </div>
                   <div class="gantt-bar-cell">
-                    <span class="gantt-bar" style="--bar-color:{bar_color};background:{bar_color};left:{left:.4f}%;width:{width:.4f}%;"></span>
+                    <span class="gantt-bar" title="{tooltip}" aria-label="{tooltip}" style="--bar-color:{bar_color};background:{bar_color};left:{left:.4f}%;width:{width:.4f}%;"></span>
                     <span class="gantt-end-date" style="left:{date_left:.4f}%;">{html.escape(end_label)}</span>
                   </div>
                 </div>
@@ -3755,36 +3821,39 @@ def render_inputs_gantt_custom_chart(
             ).strip()
         )
 
-    chip_source = line_color_map or legend_color_map
-    chips_html = "".join(
+    line_chips_html = "".join(
         f'<span class="gantt-chip"><span class="gantt-chip-dot" style="background-color:{color};"></span>{html.escape(label)}</span>'
-        for label, color in chip_source.items()
+        for label, color in line_color_map.items()
     )
-    if not chips_html:
-        chips_html = "".join(
-            f'<span class="gantt-chip"><span class="gantt-chip-dot" style="background-color:{color};"></span>{html.escape(label)}</span>'
-            for label, color in line_color_map.items()
-        )
+    if not line_chips_html:
+        line_chips_html = '<span class="gantt-chip">Sin línea</span>'
+
+    bar_chips_html = "".join(
+        f'<span class="gantt-chip"><span class="gantt-chip-dot" style="background-color:{color};"></span>{html.escape(label)}</span>'
+        for label, color in bar_color_map.items()
+    )
+    if not bar_chips_html:
+        bar_chips_html = '<span class="gantt-chip">Sin clasificación</span>'
 
     today_left = pct(today_ts)
+    today_marker = ""
+    if window_start <= today_ts <= window_end:
+        today_marker = (
+            f'<div class="gantt-today-label" style="left:calc(336px + (100% - 336px) * {today_left / 100:.6f});">Hoy</div>'
+            f'<div class="gantt-today-line" style="left:calc(336px + (100% - 336px) * {today_left / 100:.6f});"></div>'
+        )
     rows_fragment = "\n".join(rows_html)
     chart_html = textwrap.dedent(
         f"""
         <div class="gantt-chart-card">
           <div class="gantt-toolbar">
-            <div class="gantt-chip-row">{chips_html}</div>
-            <div class="gantt-range-row">
-              <span class="gantt-range-btn">1m</span>
-              <span class="gantt-range-btn">3m</span>
-              <span class="gantt-range-btn">6m</span>
-              <span class="gantt-range-btn">YTD</span>
-              <span class="gantt-range-btn">1y</span>
-              <span class="gantt-range-btn active">All</span>
+            <div class="gantt-legend-row">
+              <div class="gantt-legend-label">Líneas</div>
+              <div class="gantt-chip-row">{line_chips_html}</div>
             </div>
-            <div class="gantt-custom-legend">
-              <span><i class="gantt-swatch" style="background:#ef3b2d;"></i>En curso</span>
-              <span><i class="gantt-swatch" style="background:#45a16a;"></i>Completado</span>
-              <span><i class="gantt-swatch" style="background:#a7b1bd;"></i>Plan</span>
+            <div class="gantt-legend-row">
+              <div class="gantt-legend-label">Barras por {html.escape(color_field)}</div>
+              <div class="gantt-chip-row">{bar_chips_html}</div>
             </div>
           </div>
           <div class="gantt-custom-wrap">
@@ -3793,8 +3862,7 @@ def render_inputs_gantt_custom_chart(
               <div class="gantt-grid">
                 <div class="gantt-left-head">Tarea</div>
                 <div class="gantt-time-head">{''.join(month_labels)}{week_labels}</div>
-              <div class="gantt-today-label" style="left:calc(336px + (100% - 336px) * {today_left / 100:.6f});">Hoy</div>
-              <div class="gantt-today-line" style="left:calc(336px + (100% - 336px) * {today_left / 100:.6f});"></div>
+              {today_marker}
         {rows_fragment}
               </div>
             </div>
@@ -4113,7 +4181,7 @@ def render_inputs_project_gantt():
             fases = sorted(
                 df_gantt["Fase"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
             ) if "Fase" in df_gantt.columns else []
-            fase_options = ["Todas", ASPAS_FRP_GANTT_PHASE_OPTION] + [
+            fase_options = ["Todas"] + [
                 fase for fase in fases
                 if fase != ASPAS_FRP_GANTT_PHASE_OPTION
             ]
@@ -4201,10 +4269,6 @@ def render_inputs_project_gantt():
                 key="inputs_gantt_color",
             )
 
-    if fase_sel == ASPAS_FRP_GANTT_PHASE_OPTION:
-        render_inputs_aspas_frp_schedule_chart()
-        return
-
     plot_df = df_gantt.copy()
     if fase_sel != "Todas" and "Fase" in plot_df.columns:
         plot_df = plot_df[plot_df["Fase"].astype(str).str.strip() == fase_sel].copy()
@@ -4218,18 +4282,77 @@ def render_inputs_project_gantt():
 
     render_inputs_gantt_kpis(plot_df, date_mode=date_mode)
 
-    legend_color_map = None
-    if fase_sel == "Todas":
-        legend_color_map = build_gantt_phase_color_map(plot_df)
-    elif "Línea" in plot_df.columns and linea_sel == "Todas":
-        legend_color_map = build_gantt_line_color_map(plot_df)
     gantt_title = "Cronograma" if fase_sel == "Todas" else f"Cronograma {fase_sel}"
+    time_range = st.segmented_control(
+        "Horizonte visible",
+        options=["1M", "3M", "6M", "Todo"],
+        default="Todo",
+        key="inputs_gantt_time_range",
+        help="Muestra las actividades que intersectan el horizonte contado desde el inicio del bloque filtrado.",
+    )
     render_inputs_gantt_custom_chart(
         plot_df,
         date_mode=date_mode,
-        legend_color_map=legend_color_map,
+        color_by=color_by,
+        time_range=time_range or "Todo",
         title=gantt_title,
     )
+
+
+@st.cache_resource(show_spinner=False)
+def load_pilotos_ana_embedded_module(source_path: str, source_version: int) -> dict[str, object]:
+    """Load the local 10 kW dashboard without issuing a second page configuration."""
+    del source_version
+    source = Path(source_path).read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=source_path)
+    tree.body = [
+        node
+        for node in tree.body
+        if not (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Attribute)
+            and isinstance(node.value.func.value, ast.Name)
+            and node.value.func.value.id == "st"
+            and node.value.func.attr == "set_page_config"
+        )
+    ]
+    ast.fix_missing_locations(tree)
+    namespace: dict[str, object] = {
+        "__name__": "_pilotos_ana_capex80kw_embedded_",
+        "__file__": source_path,
+    }
+    exec(compile(tree, source_path, "exec"), namespace)
+    return namespace
+
+
+def render_pilotos_ana_embedded_view() -> None:
+    source_path = Path(__file__).resolve().parent.parent / "app.py"
+    if not source_path.exists():
+        st.warning("No se encontró la vista PILOTOS_ANA_CAPEX80KW/app.py para integrarla bajo el Gantt.")
+        return
+
+    st.markdown(
+        """
+        <div style="margin:30px 0 14px;padding:15px 18px;border:1px solid #DCE6EF;border-radius:12px;background:#FFFFFF;">
+          <div style="font-size:11px;font-weight:900;letter-spacing:.10em;text-transform:uppercase;color:#0F766E;">Vista integrada · Piloto 10 kW</div>
+          <div style="margin-top:5px;font-size:18px;font-weight:900;color:#23457A;">PILOTOS_ANA_CAPEX80KW</div>
+          <div style="margin-top:4px;font-size:12px;color:#64748B;">Panel operativo incorporado debajo del Cronograma de Ejecución y Validación.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    try:
+        embedded_module = load_pilotos_ana_embedded_module(
+            str(source_path),
+            source_path.stat().st_mtime_ns,
+        )
+        embedded_main = embedded_module.get("main")
+        if not callable(embedded_main):
+            raise ValueError("La aplicación original no expone una función main() ejecutable.")
+        embedded_main()
+    except Exception as exc:
+        st.error(f"No se pudo cargar la vista integrada PILOTOS_ANA_CAPEX80KW: {exc}")
 
 
 def render_inputs_contexto_block():
@@ -4507,6 +4630,7 @@ def render_inputs_capex_10kw_detail():
     if resumen_10kw.empty:
         st.info("La columna C no contiene valores numéricos válidos para el gráfico de torta.")
         render_inputs_project_gantt()
+        render_pilotos_ana_embedded_view()
         return
 
     capex_palette = [
@@ -4720,6 +4844,7 @@ def render_inputs_capex_10kw_detail():
     )
 
     render_inputs_project_gantt()
+    render_pilotos_ana_embedded_view()
 
 
 def render_inputs_estado_actual_dashboard():
