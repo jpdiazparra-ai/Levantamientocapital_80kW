@@ -4328,9 +4328,11 @@ def load_pilotos_ana_embedded_module(source_path: str, source_version: int) -> d
 
 
 def render_pilotos_ana_embedded_view() -> None:
-    source_path = Path(__file__).resolve().parent.parent / "app.py"
+    bundled_path = Path(__file__).resolve().parent / "pilotos_ana_capex80kw_embedded.py"
+    local_source_path = Path(__file__).resolve().parent.parent / "app.py"
+    source_path = bundled_path if bundled_path.exists() else local_source_path
     if not source_path.exists():
-        st.warning("No se encontró la vista PILOTOS_ANA_CAPEX80KW/app.py para integrarla bajo el Gantt.")
+        st.warning("No se encontró el módulo integrado del panel PILOTOS_ANA_CAPEX80KW.")
         return
 
     st.markdown(
