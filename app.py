@@ -3076,15 +3076,15 @@ def format_gantt_task_label(label: str, max_chars: int = 42, max_lines: int = 2)
 def _gantt_status_color(status: str) -> str:
     status_l = str(status or "").strip().lower()
     if "curso" in status_l:
-        return "#ef3b2d"
+        return "#991B1B"
     if "complet" in status_l:
-        return "#45a16a"
+        return "#166534"
     if "plan" in status_l:
-        return "#a7b1bd"
+        return "#475569"
     if "pend" in status_l:
-        return "#f5a623"
+        return "#B45309"
     if "recurrente" in status_l:
-        return "#0b3358"
+        return "#0F3D4C"
     return "#64748b"
 
 
@@ -3112,6 +3112,12 @@ def _gantt_summary(df: pd.DataFrame, date_mode: str = "Real") -> dict[str, objec
             "progress_pct": 0,
             "delay_value": "0 d",
             "delay_note": "Sin brecha positiva entre fin plan y fin real",
+            "milestones": 0,
+            "dependencies": 0,
+            "window_days": 0,
+            "window_note": "Sin fechas disponibles",
+            "heaviest_line": "-",
+            "heaviest_line_tasks": 0,
         }
 
     today_ts = pd.Timestamp.today().normalize()
@@ -3136,6 +3142,36 @@ def _gantt_summary(df: pd.DataFrame, date_mode: str = "Real") -> dict[str, objec
         delay_value = f"{int(atraso_row['_delay_days'])} d"
         atraso_task_label = str(atraso_row.get("Tarea / Entregable", "")).strip() or "Tarea sin nombre"
         delay_note = f"Mayor atraso vs plan: {atraso_task_label[:58]}"
+    milestone_values = (
+        dfk["Hito (S/N)"].fillna("").astype(str).str.strip().str.upper()
+        if "Hito (S/N)" in dfk.columns
+        else pd.Series("", index=dfk.index)
+    )
+    milestones = int(milestone_values.isin({"S", "SI", "SÍ", "X"}).sum())
+    dependency_values = (
+        dfk["Depende de"].fillna("").astype(str).str.strip()
+        if "Depende de" in dfk.columns
+        else pd.Series("", index=dfk.index)
+    )
+    dependencies = int(
+        (~dependency_values.str.lower().isin({"", "nan", "none", "-", "—", "–"})).sum()
+        if len(dependency_values) else 0
+    )
+    window_start = dfk["_start"].min().normalize()
+    window_end = dfk["_end"].max().normalize()
+    window_days = int(np.busday_count(window_start.date(), (window_end + pd.Timedelta(days=1)).date()))
+    window_note = f"{window_start.strftime('%d-%m-%Y')} a {window_end.strftime('%d-%m-%Y')}"
+    if "Línea" in dfk.columns:
+        line_counts = (
+            dfk["Línea"].fillna("").astype(str).str.strip()
+            .replace({"": np.nan, "nan": np.nan, "None": np.nan})
+            .dropna()
+            .value_counts()
+        )
+    else:
+        line_counts = pd.Series(dtype=int)
+    heaviest_line = str(line_counts.index[0]) if not line_counts.empty else "-"
+    heaviest_line_tasks = int(line_counts.iloc[0]) if not line_counts.empty else 0
 
     return {
         "total_tasks": total_tasks,
@@ -3148,6 +3184,12 @@ def _gantt_summary(df: pd.DataFrame, date_mode: str = "Real") -> dict[str, objec
         "progress_pct": progress_pct,
         "delay_value": delay_value,
         "delay_note": delay_note,
+        "milestones": milestones,
+        "dependencies": dependencies,
+        "window_days": window_days,
+        "window_note": window_note,
+        "heaviest_line": heaviest_line,
+        "heaviest_line_tasks": heaviest_line_tasks,
     }
 
 
@@ -3221,115 +3263,185 @@ def render_inputs_gantt_design_css() -> None:
             margin:0 0 6px 0;
         }
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-filter-marker) div[data-testid="stSelectbox"],
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-filter-marker) div[data-testid="stMultiSelect"],
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-filter-marker) div[data-testid="stRadio"]{
             margin-bottom:0!important;
         }
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-filter-marker) div[data-baseweb="select"] > div{
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-filter-marker) div[data-baseweb="select"] > div,
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-filter-marker) div[data-baseweb="tag-input-container"]{
             min-height:33px!important;
         }
+        .gantt-kpi-band{
+            display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;
+            margin:3px 0 14px 0;border:1px solid #dfe8f2;border-radius:13px;
+            background:#fff;box-shadow:0 8px 20px rgba(15,23,42,.04);overflow:hidden;
+        }
         .gantt-kpi{
-            border-radius:13px;padding:16px 13px 13px 13px;min-height:120px;
-            background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%);
-            border:1px solid rgba(226,232,240,.95);
-            box-shadow:0 10px 22px rgba(15,23,42,.06);
-            border-top:4px solid var(--accent);
+            min-height:107px;padding:16px 13px 14px;background:#fff;
+            border-right:1px solid #e5ebf3;
         }
-        .gantt-kpi-top{display:flex;gap:11px;align-items:flex-start;margin-bottom:11px;}
+        .gantt-kpi:last-child{border-right:0;}
+        .gantt-kpi-top{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;}
         .gantt-kpi-ico{
-            width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+            width:39px;height:39px;border-radius:11px;display:flex;align-items:center;justify-content:center;
             background:color-mix(in srgb, var(--accent) 14%, #ffffff);
-            color:var(--accent);font-size:22px;font-weight:800;flex:0 0 auto;
+            color:var(--accent);font-size:20px;font-weight:850;flex:0 0 auto;
         }
-        .gantt-kpi-label{font-size:8.5px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:#16213a;margin-bottom:6px;}
-        .gantt-kpi-value{font-size:22px;font-weight:900;line-height:1;color:#071125;}
-        .gantt-kpi-note{font-size:11px;line-height:1.38;color:#0f172a;margin-top:8px;}
+        .gantt-kpi-label{font-size:8.5px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:#334155;margin-bottom:6px;}
+        .gantt-kpi-value{font-size:22px;font-weight:900;line-height:1;color:#091329;}
+        .gantt-kpi-note{font-size:10px;line-height:1.32;color:#64748b;margin-top:7px;font-weight:650;}
         .gantt-chart-card{padding:10px 11px 11px 11px;margin-top:13px;}
+        .gantt-controls-marker{display:none;}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-controls-marker){
+            padding:10px 15px!important;margin:3px 0 10px 0!important;border-radius:12px!important;
+            border-color:#dfe8f2!important;background:#fff!important;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-controls-marker) div[data-testid="stVerticalBlock"]{
+            gap:.2rem!important;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.gantt-controls-marker) div[role="radiogroup"]{gap:11px;}
+        .gantt-control-label{
+            font-size:10px;font-weight:900;color:#52657f;text-transform:uppercase;
+            letter-spacing:.04em;margin:0 0 7px;
+        }
+        .gantt-control-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:34px;}
+        .gantt-control-chip{
+            display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border-radius:8px;
+            border:1px solid #dfe8f2;background:#fff;font-size:11px;font-weight:800;color:#102039;
+        }
+        .gantt-control-dot{width:10px;height:10px;border-radius:999px;display:inline-block;}
+        .gantt-control-symbols{display:flex;align-items:center;justify-content:flex-end;gap:16px;min-height:48px;}
+        .gantt-control-symbols span{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:#334155;font-weight:750;}
         .gantt-chart-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 8px 0;}
         .gantt-chart-title{font-size:15px;font-weight:900;color:#0f172a;margin:0;}
         .gantt-mini-legend{display:flex;gap:18px;align-items:center;justify-content:flex-end;flex-wrap:wrap;font-size:12px;color:#0f172a;}
         .gantt-mini-legend span{display:inline-flex;align-items:center;gap:7px;}
         .gantt-swatch{width:17px;height:9px;border-radius:2px;display:inline-block;}
-        .gantt-toolbar{display:grid;gap:7px;margin:0 0 10px 0;}
-        .gantt-legend-row{
-            display:grid;grid-template-columns:112px minmax(0,1fr);align-items:start;gap:10px;
-            border:1px solid #e5ebf3;border-radius:9px;background:#fbfdff;padding:7px 10px;
+        .gantt-toolbar{
+            display:flex;align-items:flex-start;gap:22px;flex-wrap:wrap;
+            border:1px solid #dfe8f2;border-radius:12px;background:#fff;
+            padding:13px 16px;margin:0 0 10px 0;
         }
+        .gantt-legend-row{display:flex;align-items:flex-start;gap:12px;min-width:0;}
         .gantt-legend-label{
-            padding-top:6px;font-size:10px;font-weight:900;color:#52657f;
+            padding-top:7px;font-size:10px;font-weight:900;color:#52657f;
             text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;
         }
         .gantt-chip-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:0;}
         .gantt-chip{
-            display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;
-            background:#fbfdff;border:1px solid rgba(203,213,225,.9);font-size:11px;font-weight:800;color:#102039;
+            display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:8px;
+            background:#fff;border:1px solid #dfe8f2;font-size:11px;font-weight:800;color:#102039;
+            box-shadow:0 2px 7px rgba(15,23,42,.03);
         }
-        .gantt-chip-dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:#94a3b8;flex:0 0 auto;}
+        .gantt-chip-dot{width:11px;height:11px;border-radius:50%;display:inline-block;background:#94a3b8;flex:0 0 auto;}
+        .gantt-symbol-legend{
+            margin-left:auto;display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+            padding-top:7px;font-size:11px;color:#334155;font-weight:700;
+        }
+        .gantt-symbol-legend span{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
+        .gantt-diamond{width:10px;height:10px;transform:rotate(45deg);display:inline-block;border:1.5px solid #334155;background:#fff;}
+        .gantt-diamond.filled{background:#24324c;}
+        .gantt-today-key{width:19px;border-top:2px dashed #334155;display:inline-block;}
         .gantt-custom-wrap{
             border:1px solid #dde6f1;border-radius:10px;background:#fff;overflow:hidden;
-            padding:13px 14px 18px 14px;
+            padding:12px 0 10px 0;
         }
         .gantt-custom-scroll{
             overflow-x:auto;
             overflow-y:visible;
             padding-bottom:2px;
         }
-        .gantt-custom-title{font-size:12px;font-weight:900;color:#0f172a;margin:0 0 8px 0;}
-        .gantt-grid{
-            display:grid;grid-template-columns:336px minmax(608px, 1fr);position:relative;
-            border-top:1px solid #dde6f1;
-            min-width:944px;
-        }
+        .gantt-custom-title{font-size:15px;font-weight:900;color:#0f172a;margin:0 14px 12px;}
+        .gantt-grid{position:relative;min-width:1080px;border-top:1px solid #dde6f1;}
+        .gantt-board-head,.gantt-line-block{display:grid;grid-template-columns:148px 322px minmax(610px,1fr);}
+        .gantt-board-head{position:relative;}
         .gantt-left-head{
-            height:46px;border-right:1px solid #dde6f1;border-bottom:1px solid #dde6f1;
-            display:flex;align-items:center;color:#71819a;font-size:10px;font-weight:900;text-transform:uppercase;
+            grid-column:1 / 3;height:55px;border-right:1px solid #dde6f1;border-bottom:1px solid #dde6f1;
+            display:flex;align-items:center;padding-left:18px;color:#52657f;font-size:10px;font-weight:900;text-transform:uppercase;
         }
         .gantt-time-head{
-            height:46px;position:relative;border-bottom:1px solid #dde6f1;
-            background:repeating-linear-gradient(to right, transparent 0, transparent calc(12.5% - 1px), #e5ebf3 calc(12.5% - 1px), #e5ebf3 12.5%);
+            grid-column:3;height:55px;position:relative;border-bottom:1px solid #dde6f1;background:#fff;
         }
-        .gantt-month-label{
-            position:absolute;top:6px;height:14px;text-align:center;color:#71819a;font-size:10px;
-            font-weight:900;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:clip;
+        .gantt-month-cell{
+            position:absolute;top:0;height:26px;text-align:center;color:#52657f;font-size:10px;
+            font-weight:900;text-transform:uppercase;white-space:nowrap;overflow:hidden;
+            border-left:1px solid #e5ebf3;border-right:1px solid #e5ebf3;padding:7px 4px 0;
         }
-        .gantt-month-label.edge{transform:translateX(-100%);text-align:right;overflow:visible;}
-        .gantt-week-label{position:absolute;bottom:7px;transform:translateX(-50%);color:#0f172a;font-size:10px;font-weight:700;}
-        .gantt-task-row{display:contents;}
+        .gantt-week-label{position:absolute;bottom:9px;transform:translateX(-50%);color:#0f172a;font-size:10px;font-weight:750;}
+        .gantt-line-block{
+            --rows:1;position:relative;border-bottom:1px solid #dfe8f2;overflow:hidden;
+            grid-auto-rows:minmax(42px,auto);align-items:stretch;
+        }
+        .gantt-line-panel{
+            grid-column:1;grid-row:1 / span var(--rows);min-height:0;
+            background:linear-gradient(135deg,color-mix(in srgb,var(--line-color) 9%,#ffffff),#ffffff);
+            border-right:1px solid #dfe8f2;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            text-align:center;padding:13px 9px;color:var(--line-color);
+        }
+        .gantt-line-icon{width:54px;height:54px;display:flex;align-items:center;justify-content:center;margin-bottom:7px;}
+        .gantt-line-icon svg{width:52px;height:52px;}
+        .gantt-line-name{font-size:10px;line-height:1.2;font-weight:950;text-transform:uppercase;max-width:128px;}
+        .gantt-line-count{font-size:9px;margin-top:5px;font-weight:800;color:#64748b;}
+        .gantt-line-block.compact{grid-auto-rows:58px;}
+        .gantt-line-block.compact .gantt-line-panel{flex-direction:row;gap:7px;padding:8px 7px;}
+        .gantt-line-block.compact .gantt-line-icon{width:29px;height:29px;margin:0;flex:0 0 auto;}
+        .gantt-line-block.compact .gantt-line-icon svg{width:29px;height:29px;}
+        .gantt-line-block.compact .gantt-line-name{font-size:9px;max-width:72px;text-align:left;}
+        .gantt-line-block.compact .gantt-line-count{font-size:8px;margin-top:3px;text-align:left;}
         .gantt-task-cell{
-            min-height:34px;border-right:1px solid #dde6f1;border-bottom:1px solid #e7edf4;
+            grid-column:2;min-height:42px;border-right:1px solid #dde6f1;border-bottom:1px solid #e7edf4;
             display:grid;grid-template-columns:16px 1fr;align-items:center;gap:8px;padding:5px 10px 5px 5px;
         }
+        .gantt-task-cell.is-milestone{background:color-mix(in srgb,var(--line-color) 5%,#ffffff);}
         .gantt-task-dot{width:9px;height:9px;border-radius:50%;background:#94a3b8;justify-self:center;}
-        .gantt-task-label{font-size:10.5px;line-height:1.25;color:#0f172a;font-weight:500;}
+        .gantt-task-label{font-size:10.5px;line-height:1.27;color:#0f172a;font-weight:600;}
+        .gantt-milestone-badge{
+            display:inline-flex;align-items:center;gap:5px;margin-left:7px;padding:3px 6px;
+            border-radius:999px;background:#e9eef7;color:#24324c;font-size:8px;font-weight:950;
+            letter-spacing:.05em;text-transform:uppercase;vertical-align:middle;
+        }
+        .gantt-milestone-badge::before{
+            content:"";width:7px;height:7px;background:#24324c;display:inline-block;transform:rotate(45deg);
+        }
         .gantt-bar-cell{
-            min-height:34px;position:relative;border-bottom:1px solid #e7edf4;
-            background:repeating-linear-gradient(to right, transparent 0, transparent calc(12.5% - 1px), #e5ebf3 calc(12.5% - 1px), #e5ebf3 12.5%);
+            grid-column:3;min-height:42px;position:relative;border-bottom:1px solid #e7edf4;
+            background:repeating-linear-gradient(to right, transparent 0, transparent calc(12.5% - 1px), rgba(226,232,240,.74) calc(12.5% - 1px), rgba(226,232,240,.74) 12.5%);
         }
         .gantt-bar{
-            position:absolute;height:9px;top:50%;transform:translateY(-50%);border-radius:999px;
-            box-shadow:inset 0 -1px 0 rgba(15,23,42,.10);cursor:help;
+            position:absolute;height:13px;top:50%;transform:translateY(-50%);border-radius:999px;
+            background:linear-gradient(180deg,color-mix(in srgb,var(--bar-color) 82%,#ffffff),var(--bar-color))!important;
+            box-shadow:0 4px 11px color-mix(in srgb,var(--bar-color) 24%,transparent), inset 0 1px 0 rgba(255,255,255,.34);
+            cursor:help;
         }
         .gantt-bar::before{
-            content:"";position:absolute;left:-2px;top:50%;width:6px;height:6px;border-radius:50%;
-            transform:translateY(-50%);background:var(--bar-color);border:2px solid #fff;
+            content:"";position:absolute;left:0;top:50%;width:7px;height:7px;border-radius:50%;
+            transform:translate(3px,-50%);background:rgba(255,255,255,.45);
         }
         .gantt-bar::after{
-            content:"";position:absolute;right:-5px;top:50%;width:9px;height:9px;
-            transform:translateY(-50%) rotate(45deg);background:var(--bar-color);border:1px solid #fff;
+            content:"";position:absolute;right:-6px;top:50%;width:10px;height:10px;
+            transform:translateY(-50%) rotate(45deg);background:#fff;border:2px solid var(--bar-color);
+        }
+        .gantt-bar.is-milestone::after{
+            background:var(--bar-color);border-color:#fff;box-shadow:0 0 0 2px var(--bar-color);
         }
         .gantt-end-date{
-            position:absolute;top:50%;transform:translateY(-50%);font-size:10px;color:#334155;font-weight:500;white-space:nowrap;
+            position:absolute;top:50%;transform:translateY(-50%);font-size:10px;color:#52657f;font-weight:650;white-space:nowrap;
+        }
+        .gantt-today-in-row{
+            position:absolute;top:0;bottom:0;width:0;border-left:1.5px dashed #24324c;z-index:3;pointer-events:none;
         }
         .gantt-today-line{
-            position:absolute;top:46px;bottom:0;width:0;border-left:1.5px dashed #111827;z-index:3;
+            display:none;
         }
         .gantt-today-label{
-            position:absolute;top:38px;transform:translateX(-50%);z-index:4;
-            background:#374151;color:#fff;border-radius:4px;padding:5px 7px;font-size:10px;font-weight:800;
+            position:absolute;bottom:4px;transform:translateX(-50%);z-index:4;
+            background:#24324c;color:#fff;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:850;
         }
-        div[data-testid="stSelectbox"] label p, div[data-testid="stRadio"] label p{
+        div[data-testid="stSelectbox"] label p, div[data-testid="stMultiSelect"] label p, div[data-testid="stRadio"] label p{
             font-size:13px!important;color:#0f172a!important;font-weight:700!important;
         }
-        div[data-testid="stSelectbox"] div[data-baseweb="select"] > div{
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+        div[data-testid="stMultiSelect"] div[data-baseweb="select"] > div{
             min-height:37px;border-radius:7px;border-color:#d5dde8;background:#fbfdff;
         }
         div[role="radiogroup"]{gap:18px;}
@@ -3338,9 +3450,15 @@ def render_inputs_gantt_design_css() -> None:
             .gantt-progress{min-width:0;width:100%;grid-template-columns:58px 1fr;}
             .gantt-divider{display:none;}
             .gantt-title{font-size:19px;}
-            .gantt-legend-row{grid-template-columns:1fr;}
+            .gantt-toolbar{display:grid;}
+            .gantt-legend-row{display:grid;}
             .gantt-legend-label{padding-top:0;}
-            .gantt-grid{grid-template-columns:264px minmax(560px,1fr);}
+            .gantt-symbol-legend{margin-left:0;}
+            .gantt-control-symbols{justify-content:flex-start;}
+            .gantt-kpi-band{grid-template-columns:repeat(2,minmax(0,1fr));}
+            .gantt-kpi:nth-child(2n){border-right:0;}
+            .gantt-kpi{border-bottom:1px solid #e5ebf3;}
+            .gantt-board-head,.gantt-line-block{grid-template-columns:124px 264px minmax(560px,1fr);}
         }
         </style>
         """,
@@ -3389,34 +3507,71 @@ def render_inputs_gantt_kpis(df: pd.DataFrame, date_mode: str = "Real") -> None:
     summary = _gantt_summary(df, date_mode=date_mode)
 
     cards = [
-        ("ACTIVIDADES DEL BLOQUE", str(summary["total_tasks"]), "Filas visibles en el cronograma", "#0f9d8a", "☷"),
-        ("AVANCE REAL", f'{summary["completed_tasks"]} · {summary["progress_pct"]}%', "Cierre del bloque filtrado", "#16a34a", "◔"),
-        ("ACTIVIDADES CRÍTICAS", str(summary["overdue_tasks"]), "No completadas con fecha vencida", "#f97316", "◷"),
-        ("PRÓXIMOS HITOS", str(summary["due_soon_tasks"]), "Tareas próximas a vencer (< 5 días)", "#8b3ff4", "▣"),
-        ("BRECHA CRÍTICA", str(summary["delay_value"]), str(summary["delay_note"]), "#ef2424", "△"),
-        ("PLAZO PROMEDIO", f'{summary["avg_duration"]} d', "Duración promedio por tarea", "#1267d8", "◔"),
+        ("ACTIVIDADES VISIBLES", str(summary["total_tasks"]), "Tareas del filtro activo", "#0f9d8a", "☷"),
+        ("LÍNEAS ACTIVAS", str(summary["active_lines"]), "Frentes técnicos representados", "#1267d8", "◎"),
+        ("HITOS DE CONTROL", str(summary["milestones"]), "Entregables marcados como hito", "#8b3ff4", "⚑"),
+        ("DEPENDENCIAS", str(summary["dependencies"]), "Tareas con predecesor declarado", "#ef6c35", "⇄"),
+        ("VENTANA DE EJECUCIÓN", f'{summary["window_days"]} d', f'Días hábiles · {summary["window_note"]}', "#16a34a", "◷"),
+        ("MAYOR CARGA", f'{summary["heaviest_line_tasks"]} tar.', str(summary["heaviest_line"]), "#475569", "▦"),
     ]
-    if summary["active_lines"]:
-        cards.append(("FRENTES ACTIVOS", str(summary["active_lines"]), "Subfrentes activos del bloque", "#475569", "⌘"))
+    cards_html = "".join(
+        f'<div class="gantt-kpi" style="--accent:{accent};">'
+        f'<div class="gantt-kpi-top"><div class="gantt-kpi-ico">{html.escape(icon)}</div>'
+        f'<div><div class="gantt-kpi-label">{html.escape(label)}</div>'
+        f'<div class="gantt-kpi-value">{html.escape(value)}</div></div></div>'
+        f'<div class="gantt-kpi-note">{html.escape(note)}</div></div>'
+        for label, value, note, accent, icon in cards
+    )
+    st.markdown(f'<div class="gantt-kpi-band">{cards_html}</div>', unsafe_allow_html=True)
 
-    cols = st.columns(len(cards))
-    for col, (label, value, note, accent, icon) in zip(cols, cards):
-        with col:
+
+def render_inputs_gantt_chart_controls(df: pd.DataFrame) -> str:
+    def normalized_group(value: object) -> str:
+        if pd.isna(value):
+            return "Sin clasificación"
+        text = str(value).strip()
+        return "Sin clasificación" if not text or text.lower() in {"nan", "none"} else text
+
+    color_field = "Estado"
+    groups = sorted(df["Estado"].map(normalized_group).drop_duplicates().tolist()) if "Estado" in df.columns else []
+    color_map = {
+        group: _gantt_status_color(group) if group != "Sin clasificación" else "#64748b"
+        for group in groups
+    }
+
+    chips = "".join(
+        f'<span class="gantt-control-chip"><i class="gantt-control-dot" style="background:{color};"></i>{html.escape(group)}</span>'
+        for group, color in color_map.items()
+    ) or '<span class="gantt-control-chip">Sin clasificación</span>'
+
+    with st.container(border=True):
+        st.markdown('<span class="gantt-controls-marker"></span>', unsafe_allow_html=True)
+        legend_col, horizon_col, symbol_col = st.columns([3.4, 2.0, 2.2])
+        with legend_col:
             st.markdown(
-                f"""
-                <div class="gantt-kpi" style="--accent:{accent};">
-                    <div class="gantt-kpi-top">
-                        <div class="gantt-kpi-ico">{html.escape(icon)}</div>
-                        <div>
-                            <div class="gantt-kpi-label">{html.escape(label)}</div>
-                            <div class="gantt-kpi-value">{html.escape(value)}</div>
-                        </div>
-                    </div>
-                    <div class="gantt-kpi-note">{html.escape(note)}</div>
-                </div>
-                """,
+                f'<div class="gantt-control-label">Barras por {html.escape(color_field)}</div>'
+                f'<div class="gantt-control-inline">{chips}</div>',
                 unsafe_allow_html=True,
             )
+        with horizon_col:
+            time_range = st.radio(
+                "Horizonte visible",
+                ["1M", "3M", "6M", "Todo"],
+                index=3,
+                horizontal=True,
+                key="inputs_gantt_time_range",
+                help="Muestra actividades que intersectan el horizonte contado desde el inicio del bloque filtrado.",
+            )
+        with symbol_col:
+            st.markdown(
+                '<div class="gantt-control-symbols">'
+                '<span><i class="gantt-diamond filled"></i> Hito</span>'
+                '<span><i class="gantt-diamond"></i> Fin programado</span>'
+                '<span><i class="gantt-today-key"></i> Hoy</span>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+    return time_range
 
 
 def build_inputs_gantt_figure(
@@ -3659,10 +3814,43 @@ def render_inputs_gantt_group_legend(color_map: dict[str, str]) -> None:
     )
 
 
+def gantt_line_icon_svg(line_name: str, color: str) -> str:
+    name = normalize_key(line_name)
+    if any(term in name for term in ("freno", "torque", "balance")):
+        symbol = """
+        <circle cx="28" cy="28" r="15"/><circle cx="28" cy="28" r="7"/>
+        <path d="M28 8v5M28 43v5M8 28h5M43 28h5M14 14l4 4M38 38l4 4"/>
+        """
+    elif any(term in name for term in ("elect", "tierra", "proteccion", "instrument", "datos")):
+        symbol = """
+        <path d="M31 7 16 30h12l-3 19 16-25H29z"/>
+        <path d="M10 45h12M34 45h12"/>
+        """
+    elif any(term in name for term in ("aspa", "frp", "extrusion", "matriz")):
+        symbol = """
+        <circle cx="28" cy="28" r="5"/>
+        <path d="M28 23C23 14 23 7 27 5c5 5 6 12 5 19M33 28c9-5 16-5 18-1-5 6-12 7-19 6M26 33c-4 10-9 15-13 13 0-8 4-14 11-18"/>
+        """
+    elif any(term in name for term in ("montaje", "izaje", "instalacion", "armado")):
+        symbol = """
+        <path d="M12 45h33M21 45V11h15v34M16 18h25M28 11V6"/>
+        <path d="M36 20h10v14h-6"/>
+        """
+    else:
+        symbol = """
+        <path d="M9 22h11l7-8h10l5 8h5v14h-9l-6 6H20l-6-6H9z"/>
+        <circle cx="27" cy="28" r="7"/><path d="M5 25v7M51 25v7"/>
+        """
+    symbol = re.sub(r"\s+", " ", symbol).strip()
+    return (
+        f'<svg viewBox="0 0 56 56" fill="none" stroke="{color}" stroke-width="2.2" '
+        f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{symbol}</svg>'
+    )
+
+
 def render_inputs_gantt_custom_chart(
     df: pd.DataFrame,
     date_mode: str,
-    color_by: str = "Estado",
     time_range: str = "Todo",
     title: str = "Cronograma",
 ) -> None:
@@ -3724,12 +3912,13 @@ def render_inputs_gantt_custom_chart(
         if span_end > span_start:
             left = pct(span_start)
             width = max(0.0, pct(span_end) - left)
-            is_edge = span_end >= window_end
-            class_name = "gantt-month-label edge" if is_edge and width < 13 else "gantt-month-label"
-            label_left = min(98.8, left + width) if "edge" in class_name else left
-            label_width = width if "edge" not in class_name else min(18.0, width + 10.0)
+            month_text = (
+                f"{month_names.get(cursor.month, '')[:3]} {cursor.year}"
+                if width < 14
+                else f"{month_names.get(cursor.month, '')} {cursor.year}"
+            )
             month_labels.append(
-                f'<div class="{class_name}" style="left:{label_left:.4f}%;width:{label_width:.4f}%;">{month_names.get(cursor.month, "")} {cursor.year}</div>'
+                f'<div class="gantt-month-cell" style="left:{left:.4f}%;width:{width:.4f}%;">{month_text}</div>'
             )
         cursor = next_month
 
@@ -3739,15 +3928,8 @@ def render_inputs_gantt_custom_chart(
     )
 
     line_color_map = build_gantt_line_color_map(dfc)
-    if color_by == "Línea" and "Línea" in dfc.columns:
-        color_field = "Línea"
-        default_color = "#64748b"
-    elif color_by == "Piloto" and "Piloto" in dfc.columns:
-        color_field = "Piloto"
-        default_color = "#64748b"
-    else:
-        color_field = "Estado"
-        default_color = "#64748b"
+    color_field = "Estado"
+    default_color = "#64748b"
 
     def chart_color_group(value: object) -> str:
         if pd.isna(value):
@@ -3757,109 +3939,103 @@ def render_inputs_gantt_custom_chart(
 
     dfc["_color_group"] = dfc.get(color_field, pd.Series(index=dfc.index, dtype=object)).map(chart_color_group)
     visible_groups = sorted(dfc["_color_group"].drop_duplicates().tolist())
-    if color_field == "Línea":
-        bar_color_map = {group: line_color_map.get(group, default_color) for group in visible_groups}
-    elif color_field == "Piloto":
-        bar_color_map = {group: PX_COLORS[idx % len(PX_COLORS)] for idx, group in enumerate(visible_groups)}
-    else:
-        bar_color_map = {
-            group: _gantt_status_color(group) if group != "Sin clasificación" else default_color
-            for group in visible_groups
-        }
+    bar_color_map = {
+        group: _gantt_status_color(group) if group != "Sin clasificación" else default_color
+        for group in visible_groups
+    }
+    dfc["_line_group"] = dfc.get("Línea", pd.Series(index=dfc.index, dtype=object)).map(chart_color_group)
+    line_order = {name: index for index, name in enumerate(line_color_map)}
+    dfc["_line_order"] = dfc["_line_group"].map(line_order).fillna(len(line_order))
+    sort_columns = ["_line_order", "_line_group", "_start", "_end"]
+    if "ID" in dfc.columns:
+        sort_columns.append("ID")
+    dfc = dfc.sort_values(sort_columns, na_position="last")
+
     show_full_task_text = len(dfc) <= 12
-    rows_html = []
-    for _, row in dfc.iterrows():
-        start = max(pd.Timestamp(row["_start"]).normalize(), window_start)
-        end = min(pd.Timestamp(row["_end"]).normalize(), task_end)
-        if end <= start:
-            end = start + pd.Timedelta(days=1)
-        left = pct(start)
-        width = max(1.5, pct(end) - left)
-        end_label = pd.Timestamp(row["_end"]).strftime("%d-%m-%Y")
-        task_text = str(row.get("Tarea / Entregable", ""))
-        task = (
-            html.escape(task_text)
-            if show_full_task_text
-            else format_gantt_task_label(task_text, max_chars=43, max_lines=2)
-        )
-        line_name = str(row.get("Línea", "")).strip()
-        line_color = line_color_map.get(line_name, "#111827")
-        bar_group = str(row.get("_color_group", "Sin clasificación"))
-        bar_color = bar_color_map.get(bar_group, "#64748b")
-        duration_days = max(int((pd.Timestamp(row["_end"]) - pd.Timestamp(row["_start"])).days), 1)
-        status_name = str(row.get("Estado", "")).strip() or "Sin estado"
-        phase_name = str(row.get("Fase", "")).strip() or "Sin fase"
-        tooltip_lines = [
-            task_text,
-            f"Fase: {phase_name}",
-            f"Línea: {line_name or 'Sin línea'}",
-            f"Estado: {status_name}",
-            f"Inicio: {pd.Timestamp(row['_start']).strftime('%d-%m-%Y')}",
-            f"Término: {pd.Timestamp(row['_end']).strftime('%d-%m-%Y')}",
-            f"Duración: {duration_days} días",
-        ]
-        tooltip = "&#10;".join(html.escape(line, quote=True) for line in tooltip_lines)
-        date_left = min(97.0, left + width + 1.0)
-        rows_html.append(
-            textwrap.dedent(
-                f"""
-                <div class="gantt-task-row">
-                  <div class="gantt-task-cell">
-                    <span class="gantt-task-dot" style="background-color:{line_color};"></span>
-                    <div class="gantt-task-label">{task}</div>
-                  </div>
-                  <div class="gantt-bar-cell">
-                    <span class="gantt-bar" title="{tooltip}" aria-label="{tooltip}" style="--bar-color:{bar_color};background:{bar_color};left:{left:.4f}%;width:{width:.4f}%;"></span>
-                    <span class="gantt-end-date" style="left:{date_left:.4f}%;">{html.escape(end_label)}</span>
-                  </div>
-                </div>
-                """
-            ).strip()
-        )
-
-    line_chips_html = "".join(
-        f'<span class="gantt-chip"><span class="gantt-chip-dot" style="background-color:{color};"></span>{html.escape(label)}</span>'
-        for label, color in line_color_map.items()
-    )
-    if not line_chips_html:
-        line_chips_html = '<span class="gantt-chip">Sin línea</span>'
-
-    bar_chips_html = "".join(
-        f'<span class="gantt-chip"><span class="gantt-chip-dot" style="background-color:{color};"></span>{html.escape(label)}</span>'
-        for label, color in bar_color_map.items()
-    )
-    if not bar_chips_html:
-        bar_chips_html = '<span class="gantt-chip">Sin clasificación</span>'
-
     today_left = pct(today_ts)
-    today_marker = ""
-    if window_start <= today_ts <= window_end:
-        today_marker = (
-            f'<div class="gantt-today-label" style="left:calc(336px + (100% - 336px) * {today_left / 100:.6f});">Hoy</div>'
-            f'<div class="gantt-today-line" style="left:calc(336px + (100% - 336px) * {today_left / 100:.6f});"></div>'
+    show_today = window_start <= today_ts <= window_end
+    row_today_marker = (
+        f'<span class="gantt-today-in-row" style="left:{today_left:.4f}%;"></span>' if show_today else ""
+    )
+    groups_html = []
+    for line_name, line_df in dfc.groupby("_line_group", sort=False):
+        line_color = line_color_map.get(line_name, "#111827")
+        line_icon = gantt_line_icon_svg(line_name, line_color)
+        task_rows = []
+        for _, row in line_df.iterrows():
+            start = max(pd.Timestamp(row["_start"]).normalize(), window_start)
+            end = min(pd.Timestamp(row["_end"]).normalize(), task_end)
+            if end <= start:
+                end = start + pd.Timedelta(days=1)
+            left = pct(start)
+            width = max(1.5, pct(end) - left)
+            end_label = pd.Timestamp(row["_end"]).strftime("%d-%m-%Y")
+            task_text = str(row.get("Tarea / Entregable", ""))
+            task = (
+                html.escape(task_text)
+                if show_full_task_text
+                else format_gantt_task_label(task_text, max_chars=43, max_lines=2)
+            )
+            bar_group = str(row.get("_color_group", "Sin clasificación"))
+            bar_color = bar_color_map.get(bar_group, "#64748b")
+            duration_days = max(int((pd.Timestamp(row["_end"]) - pd.Timestamp(row["_start"])).days), 1)
+            status_name = str(row.get("Estado", "")).strip() or "Sin estado"
+            phase_name = str(row.get("Fase", "")).strip() or "Sin fase"
+            milestone_value = str(row.get("Hito (S/N)", "")).strip().upper()
+            is_milestone = milestone_value in {"S", "SI", "SÍ", "X"}
+            milestone_class = " is-milestone" if is_milestone else ""
+            milestone_badge = '<span class="gantt-milestone-badge">Hito</span>' if is_milestone else ""
+            tooltip_lines = [
+                task_text,
+                f"Fase: {phase_name}",
+                f"Línea: {line_name}",
+                f"Estado: {status_name}",
+                f"Inicio: {pd.Timestamp(row['_start']).strftime('%d-%m-%Y')}",
+                f"Término: {pd.Timestamp(row['_end']).strftime('%d-%m-%Y')}",
+                f"Duración: {duration_days} días",
+            ]
+            if is_milestone:
+                tooltip_lines.append("Hito: Sí")
+            tooltip = "&#10;".join(html.escape(line, quote=True) for line in tooltip_lines)
+            date_left = min(96.0, left + width + 1.2)
+            task_rows.append(
+                f'<div class="gantt-task-cell{milestone_class}">'
+                f'<span class="gantt-task-dot" style="background-color:{line_color};"></span>'
+                f'<div class="gantt-task-label">{task}{milestone_badge}</div>'
+                f'</div>'
+                f'<div class="gantt-bar-cell">'
+                f'{row_today_marker}'
+                f'<span class="gantt-bar{milestone_class}" title="{tooltip}" aria-label="{tooltip}" '
+                f'style="--bar-color:{bar_color};left:{left:.4f}%;width:{width:.4f}%;"></span>'
+                f'<span class="gantt-end-date" style="left:{date_left:.4f}%;">{html.escape(end_label)}</span>'
+                f'</div>'
+            )
+        groups_html.append(
+            f'<div class="gantt-line-block{" compact" if len(line_df) <= 2 else ""}" style="--rows:{len(line_df)};--line-color:{line_color};">'
+            f'<div class="gantt-line-panel">'
+            f'<div class="gantt-line-icon">{line_icon}</div>'
+            f'<div><div class="gantt-line-name">{html.escape(line_name)}</div>'
+            f'<div class="gantt-line-count">{len(line_df)} {"tarea" if len(line_df) == 1 else "tareas"}</div></div>'
+            f'</div>'
+            f'{"".join(task_rows)}'
+            f'</div>'
         )
-    rows_fragment = "\n".join(rows_html)
+
+    today_marker = (
+        f'<div class="gantt-today-label" style="left:{today_left:.4f}%;">Hoy</div>' if show_today else ""
+    )
+    rows_fragment = "".join(groups_html)
     chart_html = textwrap.dedent(
         f"""
         <div class="gantt-chart-card">
-          <div class="gantt-toolbar">
-            <div class="gantt-legend-row">
-              <div class="gantt-legend-label">Líneas</div>
-              <div class="gantt-chip-row">{line_chips_html}</div>
-            </div>
-            <div class="gantt-legend-row">
-              <div class="gantt-legend-label">Barras por {html.escape(color_field)}</div>
-              <div class="gantt-chip-row">{bar_chips_html}</div>
-            </div>
-          </div>
           <div class="gantt-custom-wrap">
             <div class="gantt-custom-title">{html.escape(title)}</div>
             <div class="gantt-custom-scroll">
               <div class="gantt-grid">
-                <div class="gantt-left-head">Tarea</div>
-                <div class="gantt-time-head">{''.join(month_labels)}{week_labels}</div>
-              {today_marker}
-        {rows_fragment}
+                <div class="gantt-board-head">
+                  <div class="gantt-left-head">Línea / Tarea</div>
+                  <div class="gantt-time-head">{''.join(month_labels)}{week_labels}{today_marker}</div>
+                </div>{rows_fragment}
               </div>
             </div>
           </div>
@@ -4170,9 +4346,9 @@ def render_inputs_project_gantt():
         st.markdown('<span class="gantt-filter-marker"></span>', unsafe_allow_html=True)
         st.markdown('<div class="gantt-panel-title">Filtros de análisis</div>', unsafe_allow_html=True)
         if has_linea:
-            c1, c2, c3, c4, c5 = st.columns([3.2, 2.6, 2.1, 1.7, 1.9])
+            c1, c2, c3, c4 = st.columns([3.2, 3.0, 2.5, 1.8])
         else:
-            c1, c3, c4, c5 = st.columns([4, 2.2, 1.8, 1.8])
+            c1, c3, c4 = st.columns([4, 2.5, 1.8])
         with c1:
             fases = sorted(
                 df_gantt["Fase"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
@@ -4201,7 +4377,7 @@ def render_inputs_project_gantt():
                 fase_options,
                 key="inputs_gantt_fase",
             )
-        linea_sel = "Todas"
+        linea_sel: list[str] = []
         if has_linea:
             with c2:
                 lineas_df = df_gantt.copy()
@@ -4210,36 +4386,39 @@ def render_inputs_project_gantt():
                 lineas = sorted(
                     lineas_df["Línea"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
                 )
-                linea_options = ["Todas"] + lineas
                 linea_saved = st.session_state.pop("inputs_gantt_linea__sticky", None)
-                if linea_saved in linea_options:
-                    st.session_state["inputs_gantt_linea"] = linea_saved
-                linea_default = st.session_state.get("inputs_gantt_linea", "Todas")
-                if linea_default not in linea_options:
-                    linea_default = "Todas"
-                    st.session_state["inputs_gantt_linea"] = linea_default
-                linea_sel = st.selectbox(
+                if isinstance(linea_saved, str) and linea_saved in lineas:
+                    st.session_state["inputs_gantt_linea"] = [linea_saved]
+                elif isinstance(linea_saved, list):
+                    st.session_state["inputs_gantt_linea"] = [linea for linea in linea_saved if linea in lineas]
+                linea_default = st.session_state.get("inputs_gantt_linea", [])
+                if isinstance(linea_default, str):
+                    linea_default = [] if linea_default == "Todas" else [linea_default]
+                st.session_state["inputs_gantt_linea"] = [linea for linea in linea_default if linea in lineas]
+                linea_sel = st.multiselect(
                     "Línea",
-                    linea_options,
-                    index=linea_options.index(linea_default),
+                    lineas,
+                    placeholder="Todas las líneas",
                     key="inputs_gantt_linea",
                 )
         with c3:
             estados = sorted(
                 df_gantt["Estado"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
             ) if "Estado" in df_gantt.columns else []
-            estado_options = ["Todos"] + estados
             estado_saved = st.session_state.pop("inputs_gantt_estado__sticky", None)
-            if estado_saved in estado_options:
-                st.session_state["inputs_gantt_estado"] = estado_saved
-            estado_default = st.session_state.get("inputs_gantt_estado", "Todos")
-            if estado_default not in estado_options:
-                estado_default = "Todos"
-                st.session_state["inputs_gantt_estado"] = estado_default
-            estado_sel = st.selectbox(
+            if isinstance(estado_saved, str) and estado_saved in estados:
+                st.session_state["inputs_gantt_estado"] = [estado_saved]
+            elif isinstance(estado_saved, list):
+                st.session_state["inputs_gantt_estado"] = [estado for estado in estado_saved if estado in estados]
+            estado_default = st.session_state.get("inputs_gantt_estado", [])
+            if isinstance(estado_default, str):
+                estado_default = [] if estado_default == "Todos" else [estado_default]
+            estado_default = [estado for estado in estado_default if estado in estados]
+            st.session_state["inputs_gantt_estado"] = estado_default
+            estado_sel = st.multiselect(
                 "Estado",
-                estado_options,
-                index=estado_options.index(estado_default),
+                estados,
+                placeholder="Todos los estados",
                 key="inputs_gantt_estado",
             )
         with c4:
@@ -4253,25 +4432,14 @@ def render_inputs_project_gantt():
                 horizontal=True,
                 key="inputs_gantt_mode",
             )
-        with c5:
-            color_saved = st.session_state.pop("inputs_gantt_color__sticky", None)
-            color_options = ["Estado", "Línea", "Piloto"] if has_linea else ["Estado", "Piloto"]
-            if color_saved in color_options:
-                st.session_state["inputs_gantt_color"] = color_saved
-            color_by = st.radio(
-                "Color por",
-                color_options,
-                horizontal=True,
-                key="inputs_gantt_color",
-            )
 
     plot_df = df_gantt.copy()
     if fase_sel != "Todas" and "Fase" in plot_df.columns:
         plot_df = plot_df[plot_df["Fase"].astype(str).str.strip() == fase_sel].copy()
-    if linea_sel != "Todas" and "Línea" in plot_df.columns:
-        plot_df = plot_df[plot_df["Línea"].astype(str).str.strip() == linea_sel].copy()
-    if estado_sel != "Todos" and "Estado" in plot_df.columns:
-        plot_df = plot_df[plot_df["Estado"].astype(str).str.strip() == estado_sel].copy()
+    if linea_sel and "Línea" in plot_df.columns:
+        plot_df = plot_df[plot_df["Línea"].astype(str).str.strip().isin(linea_sel)].copy()
+    if estado_sel and "Estado" in plot_df.columns:
+        plot_df = plot_df[plot_df["Estado"].astype(str).str.strip().isin(estado_sel)].copy()
     if plot_df.empty:
         st.info("No hay tareas para los filtros seleccionados.")
         return
@@ -4279,18 +4447,10 @@ def render_inputs_project_gantt():
     render_inputs_gantt_kpis(plot_df, date_mode=date_mode)
 
     gantt_title = "Cronograma" if fase_sel == "Todas" else f"Cronograma {fase_sel}"
-    time_range = st.radio(
-        "Horizonte visible",
-        ["1M", "3M", "6M", "Todo"],
-        index=3,
-        horizontal=True,
-        key="inputs_gantt_time_range",
-        help="Muestra las actividades que intersectan el horizonte contado desde el inicio del bloque filtrado.",
-    )
+    time_range = render_inputs_gantt_chart_controls(plot_df)
     render_inputs_gantt_custom_chart(
         plot_df,
         date_mode=date_mode,
-        color_by=color_by,
         time_range=time_range,
         title=gantt_title,
     )
@@ -4336,7 +4496,7 @@ def render_pilotos_ana_embedded_view() -> None:
         <div style="margin:30px 0 14px;padding:15px 18px;border:1px solid #DCE6EF;border-radius:12px;background:#FFFFFF;">
           <div style="font-size:11px;font-weight:900;letter-spacing:.10em;text-transform:uppercase;color:#0F766E;">Vista integrada · Piloto 10 kW</div>
           <div style="margin-top:5px;font-size:18px;font-weight:900;color:#23457A;">PILOTOS_ANA_CAPEX80KW</div>
-          <div style="margin-top:4px;font-size:12px;color:#64748B;">Panel operativo incorporado debajo del Cronograma de Ejecución y Validación.</div>
+          <div style="margin-top:4px;font-size:12px;color:#64748B;">Lectura ejecutiva previa al detalle de inversión y al cronograma de validación.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -4626,10 +4786,11 @@ def render_inputs_capex_10kw_detail():
     resumen_10kw["Pct_total"] = np.where(total_10kw > 0, resumen_10kw["Monto_CLP"] / total_10kw * 100.0, 0.0)
     resumen_10kw["Monto_fmt"] = resumen_10kw["Monto_CLP"].apply(format_clp)
 
+    render_pilotos_ana_embedded_view()
+
     if resumen_10kw.empty:
         st.info("La columna C no contiene valores numéricos válidos para el gráfico de torta.")
         render_inputs_project_gantt()
-        render_pilotos_ana_embedded_view()
         return
 
     capex_palette = [
@@ -4648,6 +4809,7 @@ def render_inputs_capex_10kw_detail():
         <style>
         .capex10-shell{border:1px solid #d9e2ee;border-radius:13px;background:#fff;padding:12px 18px 10px 18px;box-shadow:0 13px 30px rgba(15,23,42,.05);margin:0 0 22px 0;}
         .capex10-breadcrumb{display:flex;align-items:center;gap:10px;color:#0f172a;font-size:14px;font-weight:900;margin:0 0 8px 0;}
+        .capex10-end-nav{border:1px solid #d9e2ee;border-radius:13px;background:#fff;padding:15px 18px 9px;box-shadow:0 13px 30px rgba(15,23,42,.05);margin:26px 0 0;}
         .capex10-brand{font-size:23px;color:#0f766e;margin-right:6px;}
         .capex10-sep{color:#64748b;font-weight:800;}
         .capex10-title{font-size:24px;line-height:1.02;font-weight:900;color:#08122a;margin:0 0 5px 0;}
@@ -4700,7 +4862,6 @@ def render_inputs_capex_10kw_detail():
     st.markdown(
         f"""
         <div class="capex10-shell">
-          <div class="capex10-breadcrumb"><span class="capex10-brand">✈</span><span>Levantamiento Capital 80kW</span><span class="capex10-sep">›</span><span>Piloto 10 kW</span></div>
           <h2 class="capex10-title">Brecha de Inversión – Piloto 10 kW</h2>
           <p class="capex10-sub">Lectura consolidada de la inversión pendiente del piloto 10 kW,<br>con foco en componentes, cronograma y base de ingeniería.</p>
           <div class="capex10-kpis">
@@ -4843,7 +5004,14 @@ def render_inputs_capex_10kw_detail():
     )
 
     render_inputs_project_gantt()
-    render_pilotos_ana_embedded_view()
+    st.markdown(
+        """
+        <div class="capex10-end-nav">
+          <div class="capex10-breadcrumb"><span class="capex10-brand">✈</span><span>Levantamiento Capital 80kW</span><span class="capex10-sep">›</span><span>Piloto 10 kW</span></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_inputs_estado_actual_dashboard():
@@ -6099,7 +6267,6 @@ if st.sidebar.button("🔁 Actualizar datos desde URL"):
         "inputs_gantt_linea",
         "inputs_gantt_estado",
         "inputs_gantt_mode",
-        "inputs_gantt_color",
     ):
         if key in st.session_state:
             st.session_state[f"{key}__sticky"] = st.session_state[key]

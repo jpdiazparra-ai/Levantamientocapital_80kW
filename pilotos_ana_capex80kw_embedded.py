@@ -2532,7 +2532,7 @@ def render_release_cutoff_intelligence(df: pd.DataFrame) -> None:
 
     detail_panels = "".join(
         f"""
-        <div class="release-panel {'active expanded' if idx == 0 else ''}" data-panel="{idx}" style="--panel-color:{html.escape(str(panel['color']))};">
+        <div class="release-panel {'active' if idx == 0 else ''}" data-panel="{idx}" style="--panel-color:{html.escape(str(panel['color']))};">
           <button class="panel-head" type="button">
             <div><b>Control operacional por área</b><small>{html.escape(str(panel["date"]))} · {html.escape(str(panel["thesis"]))}</small></div>
             <span>{money_mm(float(panel["total"]))} · {int(panel["partidas"])} partidas <i>⌄</i></span>
