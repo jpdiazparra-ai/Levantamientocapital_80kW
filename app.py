@@ -4283,10 +4283,11 @@ def render_inputs_project_gantt():
     render_inputs_gantt_kpis(plot_df, date_mode=date_mode)
 
     gantt_title = "Cronograma" if fase_sel == "Todas" else f"Cronograma {fase_sel}"
-    time_range = st.segmented_control(
+    time_range = st.radio(
         "Horizonte visible",
-        options=["1M", "3M", "6M", "Todo"],
-        default="Todo",
+        ["1M", "3M", "6M", "Todo"],
+        index=3,
+        horizontal=True,
         key="inputs_gantt_time_range",
         help="Muestra las actividades que intersectan el horizonte contado desde el inicio del bloque filtrado.",
     )
@@ -4294,7 +4295,7 @@ def render_inputs_project_gantt():
         plot_df,
         date_mode=date_mode,
         color_by=color_by,
-        time_range=time_range or "Todo",
+        time_range=time_range,
         title=gantt_title,
     )
 
