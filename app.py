@@ -3789,20 +3789,16 @@ def render_inputs_gantt_custom_chart(
         duration_days = max(int((pd.Timestamp(row["_end"]) - pd.Timestamp(row["_start"])).days), 1)
         status_name = str(row.get("Estado", "")).strip() or "Sin estado"
         phase_name = str(row.get("Fase", "")).strip() or "Sin fase"
-        tooltip = html.escape(
-            "\n".join(
-                [
-                    task_text,
-                    f"Fase: {phase_name}",
-                    f"Línea: {line_name or 'Sin línea'}",
-                    f"Estado: {status_name}",
-                    f"Inicio: {pd.Timestamp(row['_start']).strftime('%d-%m-%Y')}",
-                    f"Término: {pd.Timestamp(row['_end']).strftime('%d-%m-%Y')}",
-                    f"Duración: {duration_days} días",
-                ]
-            ),
-            quote=True,
-        )
+        tooltip_lines = [
+            task_text,
+            f"Fase: {phase_name}",
+            f"Línea: {line_name or 'Sin línea'}",
+            f"Estado: {status_name}",
+            f"Inicio: {pd.Timestamp(row['_start']).strftime('%d-%m-%Y')}",
+            f"Término: {pd.Timestamp(row['_end']).strftime('%d-%m-%Y')}",
+            f"Duración: {duration_days} días",
+        ]
+        tooltip = "&#10;".join(html.escape(line, quote=True) for line in tooltip_lines)
         date_left = min(97.0, left + width + 1.0)
         rows_html.append(
             textwrap.dedent(
