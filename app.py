@@ -3592,6 +3592,10 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
     def fmt_money(value: float) -> str:
         return format_clp(float(value))
 
+    def fmt_signed_money(value: float) -> str:
+        sign = "-" if float(value) < 0 else ""
+        return f"{sign}{format_clp(abs(float(value)))}"
+
     def fmt_mm(value: float) -> str:
         return f"{float(value) / 1_000_000:.1f}".replace(".", ",")
 
@@ -3612,70 +3616,98 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
     reduction_value = total_comercial - total_piloto
     reduction_pct = (reduction_value / total_piloto * 100) if total_piloto else 0.0
 
-    report_breakdown = [
-        {
-            "label": "Suministro Turbina",
-            "note": "(Supply)",
-            "pilot": 36_900_000,
-            "commercial": 15_593_979,
-            "color": "#087F75",
-            "icon": "⚙",
-        },
-        {
-            "label": "Obras y Montaje",
-            "note": "(BOS)",
-            "pilot": 19_600_000,
-            "commercial": 9_454_631,
-            "color": "#7EB356",
-            "icon": "⚒",
-        },
-        {
-            "label": "Ingeniería y Validación",
-            "note": "",
-            "pilot": 6_100_000,
-            "commercial": 1_900_000,
-            "color": "#F2AE00",
-            "icon": "⚙",
-        },
-        {
-            "label": "Integración y Comisionamiento",
-            "note": "",
-            "pilot": 2_800_000,
-            "commercial": 800_000,
-            "color": "#9B52C9",
-            "icon": "✕",
-        },
-        {
-            "label": "Gestión y PMO",
-            "note": "",
-            "pilot": max(total_piloto - 65_400_000, 0),
-            "commercial": max(total_comercial - 27_748_610, 0),
-            "color": "#9AA3AD",
-            "icon": "▤",
-        },
-    ]
-    commercial_remainder = total_comercial - sum(item["commercial"] for item in report_breakdown[:-1])
-    pilot_remainder = total_piloto - sum(item["pilot"] for item in report_breakdown[:-1])
-    report_breakdown[-1]["commercial"] = max(commercial_remainder, 0)
-    report_breakdown[-1]["pilot"] = max(pilot_remainder, 0)
+    scope_col = "ALCANCE CAPEX" if "ALCANCE CAPEX" in cost_df.columns else "TIPO EPC"
+    if scope_col not in cost_df.columns:
+        scope_col = "Fase" if "Fase" in cost_df.columns else "Línea"
 
-    supply = report_breakdown[0]
-    bos = report_breakdown[1]
+    scope_order = [
+        "Suministro Turbina",
+        "Obras y Montaje (BOS)",
+        "Ingeniería y Validación",
+        "Integración y Comisionamiento",
+        "Gestión PMO",
+    ]
+    scope_meta = {
+        "Suministro Turbina": {"note": "Supply", "color": "#0F766E", "icon": "⚙"},
+        "Obras y Montaje (BOS)": {"note": "BOS", "color": "#86A95C", "icon": "⌂"},
+        "Ingeniería y Validación": {"note": "Validación", "color": "#E9B23D", "icon": "◎"},
+        "Integración y Comisionamiento": {"note": "Comisionamiento", "color": "#6B7280", "icon": "⇄"},
+        "Gestión PMO": {"note": "PMO", "color": "#94A3B8", "icon": "▦"},
+    }
+
+    def normalize_scope(value: object) -> str:
+        text = clean_label(value)
+        key = normalize_key(text)
+        if "suministro" in key or "turbina" in key or "supply" in key:
+            return "Suministro Turbina"
+        if "obra" in key or "montaje" in key or "bos" in key or "sitio" in key:
+            return "Obras y Montaje (BOS)"
+        if "ingenier" in key or "validacion" in key:
+            return "Ingeniería y Validación"
+        if "integracion" in key or "comision" in key:
+            return "Integración y Comisionamiento"
+        if "gestion" in key or "pmo" in key:
+            return "Gestión PMO"
+        return text
+
+    cost_df["_scope"] = cost_df[scope_col].map(normalize_scope)
+    grouped_scope = (
+        cost_df.groupby("_scope", as_index=False)
+        .agg(
+            pilot=("Costo piloto Num", "sum"),
+            commercial=("Costo comercial Num", "sum"),
+            tasks=("Tarea / Entregable", "count"),
+        )
+    )
+    grouped_by_scope = grouped_scope.set_index("_scope")
+    report_breakdown = []
+    for scope in scope_order:
+        row = grouped_by_scope.loc[scope] if scope in grouped_by_scope.index else None
+        meta = scope_meta[scope]
+        report_breakdown.append(
+            {
+                "label": scope,
+                "note": meta["note"],
+                "pilot": float(row["pilot"]) if row is not None else 0.0,
+                "commercial": float(row["commercial"]) if row is not None else 0.0,
+                "tasks": int(row["tasks"]) if row is not None else 0,
+                "color": meta["color"],
+                "icon": meta["icon"],
+            }
+        )
+    for _, row in grouped_scope[~grouped_scope["_scope"].isin(scope_order)].iterrows():
+        report_breakdown.append(
+            {
+                "label": str(row["_scope"]),
+                "note": "",
+                "pilot": float(row["pilot"]),
+                "commercial": float(row["commercial"]),
+                "tasks": int(row["tasks"]),
+                "color": "#64748B",
+                "icon": "•",
+            }
+        )
+
+    supply = next((item for item in report_breakdown if item["label"] == "Suministro Turbina"), report_breakdown[0])
+    bos = next((item for item in report_breakdown if item["label"] == "Obras y Montaje (BOS)"), report_breakdown[0])
     supply_pct = (supply["commercial"] / total_comercial * 100) if total_comercial else 0.0
     bos_pct = (bos["commercial"] / total_comercial * 100) if total_comercial else 0.0
-    eng_reduction = -4_100_000
+    eng_scopes = {"Ingeniería y Validación", "Integración y Comisionamiento", "Gestión PMO"}
+    eng_pilot = sum(item["pilot"] for item in report_breakdown if item["label"] in eng_scopes)
+    eng_commercial = sum(item["commercial"] for item in report_breakdown if item["label"] in eng_scopes)
+    eng_reduction = eng_commercial - eng_pilot
     replicable_pct = supply_pct
     site_dependent_pct = bos_pct
     max_axis_mm = max(max(item["pilot"], item["commercial"]) for item in report_breakdown) / 1_000_000
-    max_axis_mm = max(math.ceil(max_axis_mm / 5) * 5, 40)
+    max_axis_mm = max(math.ceil(max_axis_mm / 5) * 5, 5)
 
     kpi_cards = [
-        ("COSTO PILOTO", fmt_money(total_piloto), "100% del total", "#087F75"),
-        ("COSTO COMERCIAL", fmt_money(total_comercial), "100% del total", "#1D4ED8"),
-        ("BRECHA (PILOTO - COMERCIAL)", fmt_money(reduction_value), "Reducción esperada", "#087F75"),
-        ("REDUCCIÓN ESPERADA", fmt_pct_local(reduction_pct), "Respecto al piloto", "#087F75"),
-        ("% CAPEX REPLICABLE (SUPPLY)", fmt_pct_local(replicable_pct), "Del costo comercial", "#087F75"),
-        ("% CAPEX SITIO DEPENDIENTE (BOS)", fmt_pct_local(site_dependent_pct), "Del costo comercial", "#087F75"),
+        ("COSTO PILOTO", fmt_money(total_piloto), "Inversión experimental", "#0F766E"),
+        ("COSTO COMERCIAL", fmt_money(total_comercial), "Referencia objetivo", "#1D4ED8"),
+        ("BRECHA", fmt_signed_money(reduction_value), "Piloto vs comercial", "#0F766E"),
+        ("REDUCCIÓN", fmt_pct_local(reduction_pct), "Respecto al piloto", "#0F766E"),
+        ("% REPLICABLE", fmt_pct_local(replicable_pct), "Supply comercial", "#0F766E"),
+        ("% SITIO", fmt_pct_local(site_dependent_pct), "BOS comercial", "#64748B"),
     ]
     kpi_html = "".join(
         f"""
@@ -3723,7 +3755,7 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
             f"""
             <div class="epc-donut-legend-item">
               <span style="background:{item['color']};"></span>
-              <b>{html.escape(item['label'])}<small>{html.escape(item['note'])}</small></b>
+              <b>{html.escape(item['label'])}<small>{fmt_pct_local(pct_value)} comercial</small></b>
             </div>
             """
         )
@@ -3734,10 +3766,10 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
     )
 
     strategic_cards = [
-        ("CAPEX REPLICABLE (SUPPLY)", "Parte del costo que se fabrica en planta y es escalable.", fmt_money(supply["commercial"]), f"{fmt_pct_local(supply_pct)} del total comercial", "#087F75", "▦"),
-        ("CAPEX SITIO DEPENDIENTE (BOS)", "Parte del costo que depende del sitio y condiciones de montaje.", fmt_money(bos["commercial"]), f"{fmt_pct_local(bos_pct)} del total comercial", "#7EB356", "⌂"),
-        ("REDUCCIÓN INGENIERÍA Y PMO", "Efecto de estandarización y aprendizaje al escalar.", fmt_money(eng_reduction), "Reducción esperada", "#F2AE00", "⌁"),
-        ("REDUCCIÓN TOTAL ESPERADA", "Brecha entre piloto y referencia comercial.", fmt_money(reduction_value), f"{fmt_pct_local(reduction_pct)} de reducción", "#9B52C9", "%"),
+        ("CAPEX REPLICABLE SUPPLY", "Producto turbina fabricable y escalable.", fmt_money(supply["commercial"]), f"{fmt_pct_local(supply_pct)} del comercial", "#0F766E", "▦"),
+        ("CAPEX DEPENDIENTE DEL SITIO", "Obras, montaje y condiciones locales.", fmt_money(bos["commercial"]), f"{fmt_pct_local(bos_pct)} del comercial", "#86A95C", "⌂"),
+        ("BAJA INGENIERÍA / PMO", "Menos esfuerzo no recurrente al escalar.", fmt_signed_money(eng_reduction), "Variación esperada", "#E9B23D", "⌁"),
+        ("REDUCCIÓN TOTAL", "Brecha entre piloto y referencia comercial.", fmt_signed_money(reduction_value), f"{fmt_pct_local(reduction_pct)} vs piloto", "#1D4ED8", "%"),
     ]
     strategic_html = "".join(
         f"""
@@ -3752,20 +3784,12 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
 
     table_source = cost_df.copy()
     table_source["_fase"] = table_source.get("Fase", pd.Series(index=table_source.index, dtype=object)).map(clean_label)
-    table_source["_epc"] = table_source.get("TIPO EPC", pd.Series(index=table_source.index, dtype=object)).map(clean_label)
+    table_source["_epc"] = table_source["_scope"]
     phase_order = (
         table_source.groupby("_fase")["Costo piloto Num"].sum().sort_values(ascending=False).index.tolist()
     )
-    epc_order = [item["label"] + (f" {item['note']}" if item["note"] else "") for item in report_breakdown]
-    epc_alias = {
-        "Suministro Turbina": epc_order[0],
-        "Obras y Montaje (BOS)": epc_order[1],
-        "Ingeniería y Validación": epc_order[2],
-        "Integración y Comisionamiento": epc_order[3],
-        "Gestión PMO": epc_order[4],
-        "Gestión y PMO": epc_order[4],
-    }
-    table_source["_epc_display"] = table_source["_epc"].map(lambda val: epc_alias.get(val, val))
+    epc_order = [item["label"] for item in report_breakdown]
+    table_source["_epc_display"] = table_source["_epc"]
     phase_rows = []
     for phase in phase_order[:9]:
         phase_df = table_source[table_source["_fase"].eq(phase)]
@@ -3790,72 +3814,72 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
     )
 
     insights = [
-        f"El costo comercial se reduce en un {fmt_pct_local(abs(reduction_pct))} respecto al piloto.",
-        f"El {fmt_pct_local(supply_pct)} del costo comercial corresponde a Suministro de Turbina, replicable e industrializable.",
-        f"Las Obras y Montaje (BOS) representan el {fmt_pct_local(bos_pct)} y dependen del sitio.",
-        "Ingeniería, PMO y Comisionamiento disminuyen significativamente al escalar y estandarizar.",
-        "La mayor oportunidad de reducción está en ingeniería, integración y actividades no recurrentes del piloto.",
+        f"Producto turbina: {fmt_money(supply['commercial'])}, equivalente al {fmt_pct_local(supply_pct)} del costo comercial.",
+        f"Obras, montaje y sitio: {fmt_money(bos['commercial'])}, equivalente al {fmt_pct_local(bos_pct)} del costo comercial.",
+        f"La referencia comercial baja {fmt_signed_money(reduction_value)} frente al piloto ({fmt_pct_local(reduction_pct)}).",
+        f"Ingeniería, integración y PMO cambian {fmt_signed_money(eng_reduction)} por estandarización y aprendizaje.",
     ]
     insights_html = "".join(f"<li>{html.escape(item)}</li>" for item in insights)
 
     epc_html = textwrap.dedent(f"""
         <style>
         .epc-report{{font-family:inherit;color:#102039;margin:18px 0 8px;width:100%;max-width:none;overflow:hidden;}}
-        .epc-title{{font-family:inherit;font-size:24px;line-height:1.05;font-weight:950;letter-spacing:.02em;color:#0b1736;margin:0 0 7px;text-transform:uppercase;}}
-        .epc-subtitle{{font-family:inherit;font-size:13px;color:#52657f;font-weight:650;margin:0 0 15px;}}
-        .epc-kpi-grid{{display:grid;grid-template-columns:repeat(6,minmax(138px,1fr));gap:11px;margin-bottom:12px;}}
-        .epc-kpi,.epc-panel{{border:1px solid #dfe8f2;border-radius:10px;background:#fff;box-shadow:0 7px 17px rgba(15,23,42,.06);}}
-        .epc-kpi{{padding:15px 18px 14px;min-height:92px;min-width:0;}}
-        .epc-kpi-label{{font-family:inherit;font-size:9px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;}}
-        .epc-kpi-value{{font-size:clamp(16px,1.35vw,23px);font-weight:950;color:#071a44;line-height:1;white-space:nowrap;}}
-        .epc-kpi-note{{font-size:11px;color:#52657f;font-weight:800;margin-top:10px;}}
-        .epc-main-grid{{display:grid;grid-template-columns:minmax(0,1.46fr) minmax(0,.94fr) minmax(0,1fr);gap:0;margin-bottom:0;}}
-        .epc-panel{{border-radius:10px 10px 0 0;box-shadow:none;padding:14px 18px 12px;min-height:363px;min-width:0;}}
+        .epc-title{{font-family:inherit;font-size:24px;line-height:1.05;font-weight:950;letter-spacing:.02em;color:#0b1736;margin:0 0 6px;text-transform:uppercase;}}
+        .epc-subtitle{{font-family:inherit;font-size:13px;color:#52657f;font-weight:650;margin:0 0 13px;}}
+        .epc-kpi-grid{{display:grid;grid-template-columns:repeat(6,minmax(128px,1fr));gap:10px;margin-bottom:12px;}}
+        .epc-kpi,.epc-panel{{border:1px solid #dfe8f2;border-radius:9px;background:#fff;box-shadow:0 7px 17px rgba(15,23,42,.055);}}
+        .epc-kpi{{padding:10px 14px;min-height:70px;min-width:0;}}
+        .epc-kpi-label{{font-family:inherit;font-size:8.5px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
+        .epc-kpi-value{{font-size:clamp(15px,1.18vw,21px);font-weight:950;color:#071a44;line-height:1;white-space:nowrap;}}
+        .epc-kpi-note{{font-size:10.5px;color:#52657f;font-weight:800;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
+        .epc-main-grid{{display:grid;grid-template-columns:minmax(0,3fr) minmax(360px,2fr);gap:0;margin-bottom:0;}}
+        .epc-panel{{border-radius:9px 9px 0 0;box-shadow:none;padding:15px 18px 13px;min-height:314px;min-width:0;}}
         .epc-panel + .epc-panel{{border-left:0;}}
         .epc-panel-title{{font-family:inherit;font-size:14px;font-weight:950;color:#0b1b43;margin:0 0 7px;}}
         .epc-panel-sub{{font-family:inherit;font-size:11px;font-weight:750;color:#657692;margin:0 0 11px;}}
-        .epc-chart-legend{{display:flex;gap:clamp(14px,3vw,34px);justify-content:center;align-items:center;margin:0 0 8px;font-size:12px;color:#102039;}}
+        .epc-chart-legend{{display:flex;gap:clamp(14px,3vw,34px);justify-content:center;align-items:center;margin:0 0 7px;font-size:12px;color:#102039;}}
         .epc-chart-legend span{{display:inline-flex;align-items:center;gap:8px;}}
         .epc-legend-box{{width:12px;height:12px;border-radius:1px;display:inline-block;}}
-        .epc-bar-row{{display:grid;grid-template-columns:minmax(155px,28%) minmax(0,1fr);gap:12px;align-items:center;margin:12px 0;}}
-        .epc-bar-label{{display:grid;grid-template-columns:42px 1fr;column-gap:10px;align-items:center;min-width:0;}}
-        .epc-icon{{grid-row:1 / 3;width:35px;height:35px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--c);color:#fff;font-size:18px;font-weight:950;}}
+        .epc-bar-row{{display:grid;grid-template-columns:minmax(150px,24%) minmax(0,1fr);gap:13px;align-items:center;margin:9px 0;}}
+        .epc-bar-label{{display:grid;grid-template-columns:36px 1fr;column-gap:9px;align-items:center;min-width:0;}}
+        .epc-icon{{grid-row:1 / 3;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--c);color:#fff;font-size:16px;font-weight:950;}}
         .epc-bar-label b{{font-size:12px;line-height:1.15;color:#0b1736;font-weight:950;}}
         .epc-bar-label small{{font-size:11px;color:#2f405e;font-weight:750;}}
-        .epc-bars{{height:35px;position:relative;}}
-        .epc-bar{{position:absolute;left:0;height:12px;border-radius:0;background:#087F75;}}
-        .epc-pilot{{top:3px;background:#087F75;}}
-        .epc-commercial{{top:21px;background:#1D4ED8;}}
-        .epc-bar-value{{position:absolute;top:0;font-style:normal;font-size:12px;font-weight:800;color:#24324c;white-space:nowrap;}}
-        .epc-bar-value.epc-blue{{top:18px;}}
-        .epc-axis{{height:22px;position:relative;margin:1px 0 0 calc(28% + 12px);border-top:1px solid transparent;}}
+        .epc-bars{{height:30px;position:relative;}}
+        .epc-bar{{position:absolute;left:0;height:10px;border-radius:0;background:#0F766E;box-shadow:0 1px 4px rgba(15,118,110,.12);}}
+        .epc-pilot{{top:2px;background:#0F766E;}}
+        .epc-commercial{{top:18px;background:#1D4ED8;}}
+        .epc-bar-value{{position:absolute;top:-1px;font-style:normal;font-size:11.5px;font-weight:850;color:#24324c;white-space:nowrap;}}
+        .epc-bar-value.epc-blue{{top:15px;}}
+        .epc-axis{{height:20px;position:relative;margin:1px 0 0 calc(24% + 13px);border-top:1px solid transparent;}}
         .epc-axis span{{position:absolute;transform:translateX(-50%);font-size:11px;color:#52657f;font-weight:700;}}
         .epc-axis-label{{text-align:center;font-size:12px;color:#52657f;font-weight:750;margin-top:2px;}}
-        .epc-callout{{margin:10px 0 0 auto;width:min(42%,230px);border:1px solid #d6dee9;border-radius:7px;background:#fbfdff;padding:12px 13px;font-size:11px;line-height:1.35;color:#102039;font-weight:650;}}
-        .epc-donut-wrap{{display:grid;grid-template-columns:minmax(145px,1fr) minmax(105px,.62fr);gap:10px;align-items:center;margin-top:2px;}}
-        .epc-donut{{position:relative;width:min(100%,196px);aspect-ratio:1 / 1;border-radius:50%;margin:8px auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.72);}}
+        .epc-donut-wrap{{display:grid;grid-template-columns:minmax(150px,1fr) minmax(128px,.72fr);gap:12px;align-items:center;margin-top:2px;}}
+        .epc-donut{{position:relative;width:min(100%,180px);aspect-ratio:1 / 1;border-radius:50%;margin:6px auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.72);}}
         .epc-donut::after{{content:"";position:absolute;inset:27.5%;border-radius:50%;background:#fff;box-shadow:0 0 0 1px #e6edf6;}}
         .epc-donut-center{{position:absolute;inset:33% 24%;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}}
-        .epc-donut-center small{{font-size:11px;color:#52657f;font-weight:750;}}
-        .epc-donut-center b{{font-size:clamp(12px,1vw,17px);color:#071a44;font-weight:950;margin:5px 0 2px;white-space:nowrap;}}
-        .epc-donut-center span{{font-size:10px;color:#102039;font-weight:850;}}
-        .epc-donut-pct{{position:absolute;z-index:3;color:#fff;font-size:13px;font-weight:950;text-shadow:0 1px 2px rgba(15,23,42,.22);}}
+        .epc-donut-center small{{font-size:10px;color:#52657f;font-weight:750;}}
+        .epc-donut-center b{{font-size:clamp(11px,.92vw,15px);color:#071a44;font-weight:950;margin:4px 0 2px;white-space:nowrap;}}
+        .epc-donut-center span{{font-size:9px;color:#102039;font-weight:850;}}
+        .epc-donut-pct{{position:absolute;z-index:3;color:#fff;font-size:12px;font-weight:950;text-shadow:0 1px 2px rgba(15,23,42,.22);}}
         .epc-donut-pct-0{{right:9%;top:49%;}}.epc-donut-pct-1{{left:14%;top:57%;}}.epc-donut-pct-2{{left:26%;top:20%;}}.epc-donut-pct-3{{left:49%;top:5%;color:#52657f;text-shadow:none;}}
         .epc-donut-legend{{display:grid;gap:8px;font-size:10px;color:#102039;min-width:0;}}
         .epc-donut-legend-item{{display:grid;grid-template-columns:12px 1fr;gap:8px;align-items:start;}}
         .epc-donut-legend-item span{{width:11px;height:11px;border-radius:50%;margin-top:2px;}}
         .epc-donut-legend-item b{{font-size:10px;line-height:1.18;font-weight:850;min-width:0;}}
         .epc-donut-legend-item small{{display:block;font-weight:700;color:#52657f;}}
-        .epc-orange-note{{border:1px solid #ffe0a8;background:#fffaf0;border-radius:8px;padding:10px 13px;margin-top:9px;font-size:12px;font-weight:800;color:#102039;display:flex;gap:10px;align-items:center;}}
-        .epc-target{{font-size:25px;color:#ff4040;line-height:1;}}
-        .epc-strategy-stack{{display:grid;gap:12px;margin-top:7px;}}
-        .epc-strategy-card{{display:grid;grid-template-columns:44px minmax(0,1fr) minmax(112px,.44fr);gap:12px;align-items:center;border:1px solid color-mix(in srgb,var(--c) 18%,#dfe8f2);border-radius:8px;background:linear-gradient(90deg,color-mix(in srgb,var(--c) 7%,#fff),#fff);padding:10px 12px;min-height:69px;}}
-        .epc-strategy-icon{{width:42px;height:42px;border-radius:50%;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:950;}}
+        .epc-orange-note,.epc-insight-card{{border:1px solid #f5d79c;background:#fffaf0;border-radius:8px;padding:10px 12px;margin-top:9px;font-size:12px;font-weight:800;color:#102039;display:flex;gap:10px;align-items:center;}}
+        .epc-insight-card{{border-color:#d6dee9;background:#fbfdff;line-height:1.35;font-size:11.5px;align-items:flex-start;}}
+        .epc-target{{font-size:24px;color:#ff4040;line-height:1;}}
+        .epc-strategy-section{{border:1px solid #dfe8f2;border-top:0;background:#fff;padding:12px 18px 14px;}}
+        .epc-strategy-stack{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:8px;}}
+        .epc-strategy-card{{display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;align-items:center;border:1px solid #dfe8f2;border-left:4px solid var(--c);border-radius:8px;background:#fff;padding:10px 12px;min-height:74px;}}
+        .epc-strategy-icon{{width:36px;height:36px;border-radius:50%;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:950;}}
         .epc-strategy-text b{{display:block;font-size:11px;font-weight:950;color:#102039;letter-spacing:.02em;}}
-        .epc-strategy-text span{{display:block;margin-top:4px;font-size:11px;line-height:1.3;color:#24324c;font-weight:650;}}
-        .epc-strategy-value{{text-align:left;}}
-        .epc-strategy-value b{{font-size:clamp(14px,1.05vw,18px);color:#087F75;font-weight:950;white-space:nowrap;}}
-        .epc-strategy-value span{{display:block;font-size:10px;color:#102039;font-weight:850;margin-top:5px;}}
+        .epc-strategy-text span{{display:block;margin-top:3px;font-size:10.5px;line-height:1.25;color:#24324c;font-weight:650;}}
+        .epc-strategy-value{{grid-column:1 / -1;text-align:left;border-top:1px solid #edf2f7;padding-top:7px;}}
+        .epc-strategy-value b{{font-size:clamp(14px,1.05vw,18px);color:#0F766E;font-weight:950;white-space:nowrap;}}
+        .epc-strategy-value span{{display:block;font-size:10px;color:#102039;font-weight:850;margin-top:4px;}}
         .epc-bottom-grid{{display:grid;grid-template-columns:minmax(0,2.28fr) minmax(320px,.92fr);gap:0;align-items:stretch;}}
         .epc-table-panel{{border-radius:0 0 0 10px;padding:10px 10px 11px;overflow:hidden;}}
         .epc-insight-panel{{border-radius:0 0 10px 0;border-left:0;padding:13px 21px;}}
@@ -3868,9 +3892,9 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
         .epc-insights li{{position:relative;padding-left:26px;font-size:12px;line-height:1.35;color:#24324c;font-weight:700;}}
         .epc-insights li::before{{content:"✓";position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#249A8D;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:950;}}
         .epc-foot{{font-size:10px;color:#657692;font-weight:650;margin:12px 0 0 12px;}}
-        @media(max-width:1480px){{.epc-main-grid{{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);}}.epc-main-grid .epc-panel:nth-child(3){{grid-column:1 / -1;min-height:0;}}.epc-strategy-stack{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
-        @media(max-width:1200px){{.epc-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.epc-main-grid,.epc-bottom-grid{{grid-template-columns:1fr;}}.epc-panel,.epc-panel+.epc-panel,.epc-table-panel,.epc-insight-panel{{border-radius:10px;border-left:1px solid #dfe8f2;margin-bottom:10px;}}.epc-strategy-stack{{grid-template-columns:1fr;}}.epc-callout{{width:min(60%,260px);}}}}
-        @media(max-width:760px){{.epc-kpi-grid{{grid-template-columns:1fr;}}.epc-bar-row{{grid-template-columns:1fr;}}.epc-axis{{margin-left:0;}}.epc-callout{{width:100%;}}.epc-donut-wrap{{grid-template-columns:1fr;}}.epc-strategy-card{{grid-template-columns:44px 1fr;}}.epc-strategy-value{{grid-column:2;}}}}
+        @media(max-width:1480px){{.epc-strategy-stack{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
+        @media(max-width:1200px){{.epc-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.epc-main-grid,.epc-bottom-grid{{grid-template-columns:1fr;}}.epc-panel,.epc-panel+.epc-panel,.epc-table-panel,.epc-insight-panel{{border-radius:9px;border-left:1px solid #dfe8f2;margin-bottom:10px;}}.epc-strategy-section{{border:1px solid #dfe8f2;border-radius:9px;margin-bottom:10px;}}}}
+        @media(max-width:760px){{.epc-kpi-grid{{grid-template-columns:1fr;}}.epc-bar-row{{grid-template-columns:1fr;}}.epc-axis{{margin-left:0;}}.epc-donut-wrap,.epc-strategy-stack{{grid-template-columns:1fr;}}}}
         </style>
         <div class="epc-report">
           <h2 class="epc-title">Análisis de Costos – Piloto vs Comercial</h2>
@@ -3884,7 +3908,6 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
               {bar_rows}
               <div class="epc-axis">{axis_labels}</div>
               <div class="epc-axis-label">MM CLP</div>
-              <div class="epc-callout">El costo comercial se concentra principalmente en Suministro de Turbina ({fmt_pct_local(supply_pct)}) y Obras y Montaje ({fmt_pct_local(bos_pct)}).<br><br>La ingeniería y PMO disminuyen drásticamente al escalar.</div>
             </div>
             <div class="epc-panel">
               <div class="epc-panel-title">2. PARTICIPACIÓN POR ALCANCE – COSTO COMERCIAL</div>
@@ -3894,11 +3917,12 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
                 <div class="epc-donut-legend">{''.join(donut_legend)}</div>
               </div>
               <div class="epc-orange-note"><span class="epc-target">◎</span><span>El {fmt_pct_local(supply_pct + bos_pct)} del costo comercial corresponde a costos industriales (Supply + BOS).</span></div>
+              <div class="epc-insight-card"><span>Lectura</span><span>El costo comercial se concentra en producto turbina ({fmt_pct_local(supply_pct)}) y obras/sitio ({fmt_pct_local(bos_pct)}). La baja principal viene de estandarizar ingeniería, integración y PMO.</span></div>
             </div>
-            <div class="epc-panel">
-              <div class="epc-panel-title">3. KPIs ESTRATÉGICOS</div>
-              <div class="epc-strategy-stack">{strategic_html}</div>
-            </div>
+          </div>
+          <div class="epc-strategy-section">
+            <div class="epc-panel-title">3. KPIs ESTRATÉGICOS</div>
+            <div class="epc-strategy-stack">{strategic_html}</div>
           </div>
           <div class="epc-bottom-grid">
             <div class="epc-panel epc-table-panel">
