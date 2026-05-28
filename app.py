@@ -282,7 +282,7 @@ GANTT_DATE_COL_START = "Inicio (AAAA-MM-DD)"
 GANTT_DATE_COL_END_PLAN = "Fin plan (AAAA-MM-DD)"
 GANTT_DATE_COL_END_REAL = "Fin real"
 ASPAS_FRP_GANTT_PHASE_OPTION = "Fabricación ASPAS frp"
-GANTT_PROJECT_SOURCE_VERSION = 2
+GANTT_PROJECT_SOURCE_VERSION = 3
 GANTT_COLUMN_ALIASES = {
     "LÃ\xadnea": "Línea",
     "MÃ©todo": "Método",
@@ -3798,8 +3798,7 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
     ]
     insights_html = "".join(f"<li>{html.escape(item)}</li>" for item in insights)
 
-    st.markdown(
-        textwrap.dedent(f"""
+    epc_html = textwrap.dedent(f"""
         <style>
         .epc-report{{font-family:inherit;color:#102039;margin:18px 0 8px;width:100%;max-width:none;overflow:hidden;}}
         .epc-title{{font-family:inherit;font-size:24px;line-height:1.05;font-weight:950;letter-spacing:.02em;color:#0b1736;margin:0 0 7px;text-transform:uppercase;}}
@@ -3920,9 +3919,11 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
           </div>
           <div class="epc-foot">Valores expresados en millones de CLP (MM CLP) &nbsp; | &nbsp; Piloto: Inversión experimental &nbsp; | &nbsp; Comercial: Referencia objetivo a escala comercial</div>
         </div>
-        """).strip(),
-        unsafe_allow_html=True,
-    )
+        """).strip()
+    if hasattr(st, "html"):
+        st.html(epc_html)
+    else:
+        components.html(epc_html, height=920, scrolling=False)
 
 
 def build_inputs_gantt_figure(
