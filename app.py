@@ -3720,24 +3720,62 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
         for label, value, note, color in kpi_cards
     )
 
-    bar_rows = "".join(
+    def fmt_scope_note(item: dict) -> str:
+        note = str(item.get("note") or "").strip()
+        return note if note else f"{int(item.get('tasks', 0))} partidas asociadas"
+
+    capex_rows = "".join(
         f"""
-        <div class="epc-bar-row">
-          <div class="epc-bar-label">
-            <span class="epc-icon" style="--c:{item['color']};">{html.escape(item['icon'])}</span>
-            <b>{html.escape(item['label'])}</b>
-            <small>{html.escape(item['note'])}</small>
+        <div class="epc-capex-pro-row" style="--c:{item['color']};">
+          <div class="epc-capex-pro-scope">
+            <span class="epc-capex-pro-icon">{html.escape(item['icon'])}</span>
+            <div>
+              <b>{html.escape(item['label'])}</b>
+              <small>{html.escape(fmt_scope_note(item))}</small>
+            </div>
           </div>
-          <div class="epc-bars">
-            <span class="epc-bar epc-pilot" style="width:{(item['pilot'] / 1_000_000 / max_axis_mm * 100):.4f}%;"></span>
-            <em class="epc-bar-value" style="left:{min(96, item['pilot'] / 1_000_000 / max_axis_mm * 100 + 1.2):.4f}%;">{fmt_mm(item['pilot'])}</em>
-            <span class="epc-bar epc-commercial" style="width:{(item['commercial'] / 1_000_000 / max_axis_mm * 100):.4f}%;"></span>
-            <em class="epc-bar-value epc-blue" style="left:{min(96, item['commercial'] / 1_000_000 / max_axis_mm * 100 + 1.2):.4f}%;">{fmt_mm(item['commercial'])}</em>
+
+          <div class="epc-capex-pro-metric">
+            <b>{fmt_mm(item['pilot'])}</b>
+            <span>{fmt_pct_local(item['pilot'] / total_piloto * 100 if total_piloto else 0)} del piloto</span>
+            <i><em style="width:{min(100, item['pilot'] / max(total_piloto, 1) * 100):.4f}%;"></em></i>
+          </div>
+
+          <div class="epc-capex-pro-metric commercial">
+            <b>{fmt_mm(item['commercial'])}</b>
+            <span>{fmt_pct_local(item['commercial'] / total_comercial * 100 if total_comercial else 0)} del comercial</span>
+            <i><em style="width:{min(100, item['commercial'] / max(total_comercial, 1) * 100):.4f}%;"></em></i>
+          </div>
+
+          <div class="epc-capex-pro-gap">
+            <b>{fmt_signed_money(item['commercial'] - item['pilot'])}</b>
+            <span>{fmt_pct_local(((item['commercial'] - item['pilot']) / item['pilot'] * 100) if item['pilot'] else 0)}</span>
           </div>
         </div>
         """
         for item in report_breakdown
     )
+
+    capex_score_html = f"""
+        <div class="epc-capex-pro-score">
+          <div class="epc-capex-pro-score-card pilot">
+            <span>Costo piloto</span>
+            <b>{fmt_money(total_piloto)}</b>
+            <small>Base experimental</small>
+          </div>
+          <div class="epc-capex-pro-arrow">→</div>
+          <div class="epc-capex-pro-score-card commercial">
+            <span>Costo comercial</span>
+            <b>{fmt_money(total_comercial)}</b>
+            <small>Referencia escalable</small>
+          </div>
+          <div class="epc-capex-pro-score-card reduction">
+            <span>Brecha total</span>
+            <b>{fmt_signed_money(reduction_value)}</b>
+            <small>{fmt_pct_local(reduction_pct)} de reducción</small>
+          </div>
+        </div>
+    """
 
     axis_labels = "".join(
         f'<span style="left:{(tick / max_axis_mm * 100):.4f}%;">{int(tick)}</span>'
@@ -3754,8 +3792,10 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
         donut_legend.append(
             f"""
             <div class="epc-donut-legend-item">
-              <span style="background:{item['color']};"></span>
+              <span class="epc-donut-dot" style="background:{item['color']};"></span>
               <b>{html.escape(item['label'])}<small>{html.escape(item['note'])}</small></b>
+              <strong>{fmt_money(item['commercial'])}</strong>
+              <em>{fmt_pct_local(pct_value)}</em>
             </div>
             """
         )
@@ -3824,20 +3864,50 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
 
     epc_html = textwrap.dedent(f"""
         <style>
-        .epc-report{{font-family:inherit;color:#102039;margin:18px 0 8px;width:100%;max-width:none;overflow:hidden;}}
+        .epc-report{{font-family:inherit;color:#102039;margin:18px 0 8px;width:100%;max-width:none;overflow:visible;}}
         .epc-title{{font-family:inherit;font-size:24px;line-height:1.05;font-weight:950;letter-spacing:.02em;color:#0b1736;margin:0 0 7px;text-transform:uppercase;}}
         .epc-subtitle{{font-family:inherit;font-size:13px;color:#52657f;font-weight:650;margin:0 0 15px;}}
-        .epc-kpi-grid{{display:grid;grid-template-columns:repeat(6,minmax(138px,1fr));gap:11px;margin-bottom:12px;}}
+        .epc-kpi-grid{{display:grid;grid-template-columns:repeat(6,minmax(132px,1fr));gap:10px;margin-bottom:12px;}}
         .epc-kpi,.epc-panel{{border:1px solid #dfe8f2;border-radius:10px;background:#fff;box-shadow:0 7px 17px rgba(15,23,42,.06);}}
-        .epc-kpi{{padding:15px 18px 14px;min-height:92px;min-width:0;}}
+        .epc-kpi{{padding:12px 16px;min-height:82px;min-width:0;}}
         .epc-kpi-label{{font-family:inherit;font-size:9px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;}}
-        .epc-kpi-value{{font-size:clamp(16px,1.35vw,23px);font-weight:950;color:#071a44;line-height:1;white-space:nowrap;}}
-        .epc-kpi-note{{font-size:11px;color:#52657f;font-weight:800;margin-top:10px;}}
-        .epc-main-grid{{display:grid;grid-template-columns:minmax(0,1.46fr) minmax(0,.94fr) minmax(0,1fr);gap:0;margin-bottom:0;}}
-        .epc-panel{{border-radius:10px 10px 0 0;box-shadow:none;padding:14px 18px 12px;min-height:363px;min-width:0;}}
-        .epc-panel + .epc-panel{{border-left:0;}}
+        .epc-kpi-value{{font-size:clamp(16px,1.26vw,22px);font-weight:950;color:#071a44;line-height:1;white-space:nowrap;}}
+        .epc-kpi-note{{font-size:10.5px;color:#52657f;font-weight:800;margin-top:8px;}}
+        .epc-main-grid{{display:grid;grid-template-columns:minmax(0,1.48fr) minmax(360px,.92fr);gap:14px;margin-bottom:14px;align-items:stretch;}}
+        .epc-panel{{border-radius:12px;box-shadow:0 7px 17px rgba(15,23,42,.04);padding:15px 18px;min-height:0;min-width:0;overflow:hidden;}}
+        .epc-panel + .epc-panel{{border-left:1px solid #dfe8f2;}}
         .epc-panel-title{{font-family:inherit;font-size:14px;font-weight:950;color:#0b1b43;margin:0 0 7px;}}
         .epc-panel-sub{{font-family:inherit;font-size:11px;font-weight:750;color:#657692;margin:0 0 11px;}}
+        .epc-capex-pro-panel{{padding:16px 18px;background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);}}
+        .epc-capex-pro-score{{display:grid;grid-template-columns:minmax(0,1fr) 22px minmax(0,1fr) minmax(0,1fr);gap:9px;align-items:stretch;margin:2px 0 12px;}}
+        .epc-capex-pro-score-card{{border:1px solid #d9e5f1;border-radius:12px;background:#ffffff;padding:11px 13px;box-shadow:0 8px 18px rgba(15,23,42,.04);min-width:0;}}
+        .epc-capex-pro-score-card span{{display:block;font-size:9px;font-weight:950;letter-spacing:.07em;text-transform:uppercase;color:#60728d;margin-bottom:7px;}}
+        .epc-capex-pro-score-card b{{display:block;font-size:clamp(16px,1.08vw,21px);font-weight:950;line-height:1;color:#071a44;white-space:nowrap;}}
+        .epc-capex-pro-score-card small{{display:block;margin-top:6px;font-size:9.5px;font-weight:850;color:#52657f;}}
+        .epc-capex-pro-score-card.pilot{{border-left:5px solid #087F75;background:linear-gradient(180deg,#f4fbfa 0%,#ffffff 100%);}}
+        .epc-capex-pro-score-card.commercial{{border-left:5px solid #1D4ED8;background:linear-gradient(180deg,#f5f8ff 0%,#ffffff 100%);}}
+        .epc-capex-pro-score-card.reduction{{border-left:5px solid #0f766e;background:linear-gradient(180deg,#ecfdf8 0%,#ffffff 100%);}}
+        .epc-capex-pro-score-card.reduction b{{color:#087F75;}}
+        .epc-capex-pro-arrow{{display:flex;align-items:center;justify-content:center;color:#64748b;font-size:18px;font-weight:950;}}
+        .epc-capex-pro-head,.epc-capex-pro-row{{display:grid;grid-template-columns:minmax(190px,1.46fr) minmax(100px,.6fr) minmax(100px,.6fr) minmax(126px,.72fr);gap:11px;align-items:center;}}
+        .epc-capex-pro-head{{padding:8px 11px;border-radius:10px;background:linear-gradient(180deg,#f2f6fb 0%,#edf2f7 100%);color:#52657f;font-size:9px;font-weight:950;letter-spacing:.055em;text-transform:uppercase;margin:0 0 7px;}}
+        .epc-capex-pro-head span:not(:first-child){{text-align:right;}}
+        .epc-capex-pro-table{{display:grid;gap:7px;}}
+        .epc-capex-pro-row{{padding:9px 11px;border:1px solid #dfe8f2;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);box-shadow:0 6px 14px rgba(15,23,42,.03);}}
+        .epc-capex-pro-scope{{display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;align-items:center;min-width:0;}}
+        .epc-capex-pro-icon{{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--c) 14%,#ffffff);color:var(--c);font-size:16px;font-weight:950;}}
+        .epc-capex-pro-scope b{{display:block;font-size:12px;line-height:1.18;color:#0b1736;font-weight:950;}}
+        .epc-capex-pro-scope small{{display:block;margin-top:3px;font-size:9.5px;line-height:1.15;color:#657692;font-weight:800;}}
+        .epc-capex-pro-metric,.epc-capex-pro-gap{{text-align:right;min-width:0;}}
+        .epc-capex-pro-metric b,.epc-capex-pro-gap b{{display:block;font-size:15px;line-height:1;color:#071a44;font-weight:950;white-space:nowrap;}}
+        .epc-capex-pro-metric span,.epc-capex-pro-gap span{{display:block;margin-top:5px;font-size:9.5px;color:#52657f;font-weight:850;white-space:nowrap;}}
+        .epc-capex-pro-metric i{{display:block;width:100%;height:5px;border-radius:999px;background:#e3e9f1;margin-top:7px;overflow:hidden;}}
+        .epc-capex-pro-metric i em{{display:block;height:100%;border-radius:999px;background:#087F75;}}
+        .epc-capex-pro-metric.commercial i em{{background:#1D4ED8;}}
+        .epc-capex-pro-gap{{padding:8px 10px;border-radius:10px;background:#fbfdff;border-left:4px solid #9aa3ad;}}
+        .epc-capex-pro-gap b{{color:#087F75;}}
+        .epc-capex-pro-note{{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;align-items:center;margin-top:11px;padding:11px 13px;border:1px solid #cfe7e3;border-radius:12px;background:linear-gradient(180deg,#f0fbfa 0%,#ffffff 100%);font-size:11px;line-height:1.35;color:#24324c;font-weight:750;}}
+        .epc-capex-pro-note span{{font-size:10px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;color:#087F75;}}
         .epc-chart-legend{{display:flex;gap:clamp(14px,3vw,34px);justify-content:center;align-items:center;margin:0 0 8px;font-size:12px;color:#102039;}}
         .epc-chart-legend span{{display:inline-flex;align-items:center;gap:8px;}}
         .epc-legend-box{{width:12px;height:12px;border-radius:1px;display:inline-block;}}
@@ -3856,73 +3926,109 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
         .epc-axis span{{position:absolute;transform:translateX(-50%);font-size:11px;color:#52657f;font-weight:700;}}
         .epc-axis-label{{text-align:center;font-size:12px;color:#52657f;font-weight:750;margin-top:2px;}}
         .epc-callout{{margin:10px 0 0 auto;width:min(42%,230px);border:1px solid #d6dee9;border-radius:7px;background:#fbfdff;padding:12px 13px;font-size:11px;line-height:1.35;color:#102039;font-weight:650;}}
-        .epc-donut-wrap{{display:grid;grid-template-columns:minmax(145px,1fr) minmax(105px,.62fr);gap:10px;align-items:center;margin-top:2px;}}
-        .epc-donut{{position:relative;width:min(100%,196px);aspect-ratio:1 / 1;border-radius:50%;margin:8px auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.72);}}
-        .epc-donut::after{{content:"";position:absolute;inset:27.5%;border-radius:50%;background:#fff;box-shadow:0 0 0 1px #e6edf6;}}
-        .epc-donut-center{{position:absolute;inset:33% 24%;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}}
-        .epc-donut-center small{{font-size:11px;color:#52657f;font-weight:750;}}
-        .epc-donut-center b{{font-size:clamp(12px,1vw,17px);color:#071a44;font-weight:950;margin:5px 0 2px;white-space:nowrap;}}
-        .epc-donut-center span{{font-size:10px;color:#102039;font-weight:850;}}
+        .epc-distribution-panel{{padding:16px 16px 15px;}}
+        .epc-panel-head{{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px 0;}}
+        .epc-info{{width:17px;height:17px;border-radius:50%;border:1px solid #94a3b8;color:#64748b;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:950;}}
+        .epc-donut-wrap{{display:grid;grid-template-columns:minmax(190px,1fr) minmax(180px,.88fr);gap:14px;align-items:center;margin-top:4px;}}
+        .epc-donut{{position:relative;width:min(100%,250px);aspect-ratio:1 / 1;border-radius:50%;margin:4px auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.72),0 14px 30px rgba(8,127,117,.10);}}
+        .epc-donut::after{{content:"";position:absolute;inset:29%;border-radius:50%;background:#fff;box-shadow:0 0 0 1px #e6edf6;}}
+        .epc-donut-center{{position:absolute;inset:34% 22%;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}}
+        .epc-donut-center small{{font-size:11px;color:#52657f;font-weight:900;text-transform:uppercase;}}
+        .epc-donut-center b{{font-size:clamp(14px,1vw,18px);color:#071a44;font-weight:950;margin:6px 0 3px;white-space:nowrap;}}
+        .epc-donut-center span{{font-size:10px;color:#102039;font-weight:950;}}
         .epc-donut-pct{{position:absolute;z-index:3;color:#fff;font-size:13px;font-weight:950;text-shadow:0 1px 2px rgba(15,23,42,.22);}}
-        .epc-donut-pct-0{{right:9%;top:49%;}}.epc-donut-pct-1{{left:14%;top:57%;}}.epc-donut-pct-2{{left:26%;top:20%;}}.epc-donut-pct-3{{left:49%;top:5%;color:#52657f;text-shadow:none;}}
-        .epc-donut-legend{{display:grid;gap:8px;font-size:10px;color:#102039;min-width:0;}}
-        .epc-donut-legend-item{{display:grid;grid-template-columns:12px 1fr;gap:8px;align-items:start;}}
-        .epc-donut-legend-item span{{width:11px;height:11px;border-radius:50%;margin-top:2px;}}
-        .epc-donut-legend-item b{{font-size:10px;line-height:1.18;font-weight:850;min-width:0;}}
-        .epc-donut-legend-item small{{display:block;font-weight:700;color:#52657f;}}
+        .epc-donut-pct-0{{right:8%;top:50%;}}.epc-donut-pct-1{{left:12%;top:27%;}}.epc-donut-pct-2{{left:46%;top:1%;color:#102039;text-shadow:none;}}.epc-donut-pct-3{{left:55%;top:0;color:#52657f;text-shadow:none;}}
+        .epc-donut-legend{{display:grid;gap:0;font-size:11px;color:#102039;min-width:0;border:1px solid #dfe8f2;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 8px 17px rgba(15,23,42,.04);}}
+        .epc-donut-legend-item{{display:grid;grid-template-columns:13px minmax(0,1fr) auto 42px;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid #e8eef6;}}
+        .epc-donut-legend-item:last-child{{border-bottom:0;}}
+        .epc-donut-dot{{width:11px;height:11px;border-radius:50%;display:inline-block;}}
+        .epc-donut-legend-item b{{font-size:11px;line-height:1.2;font-weight:950;min-width:0;color:#102039;}}
+        .epc-donut-legend-item small{{display:block;font-weight:800;color:#52657f;font-size:9px;margin-top:2px;}}
+        .epc-donut-legend-item strong{{font-size:11px;color:#071a44;font-weight:950;white-space:nowrap;}}
+        .epc-donut-legend-item em{{font-style:normal;font-size:10px;color:#52657f;font-weight:950;text-align:right;}}
+        .epc-distribution-callout{{display:grid;grid-template-columns:38px minmax(0,1fr);gap:11px;align-items:center;border:1px solid #d9e5f5;border-radius:12px;background:#fbfdff;margin-top:11px;padding:11px 13px;}}
+        .epc-distribution-callout .epc-target{{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eef5ff;color:#1d4ed8;font-size:20px;line-height:1;}}
+        .epc-distribution-callout b{{display:block;font-size:12px;color:#1d4ed8;font-weight:950;margin-bottom:4px;}}
+        .epc-distribution-callout span:last-child{{font-size:11.5px;line-height:1.35;color:#274060;font-weight:750;}}
         .epc-orange-note{{border:1px solid #ffe0a8;background:#fffaf0;border-radius:8px;padding:10px 13px;margin-top:9px;font-size:12px;font-weight:800;color:#102039;display:flex;gap:10px;align-items:center;}}
         .epc-target{{font-size:25px;color:#ff4040;line-height:1;}}
-        .epc-strategy-stack{{display:grid;gap:12px;margin-top:7px;}}
-        .epc-strategy-card{{display:grid;grid-template-columns:44px minmax(0,1fr) minmax(112px,.44fr);gap:12px;align-items:center;border:1px solid #dfe8f2;border-radius:8px;background:#fff;padding:10px 12px;min-height:69px;}}
-        .epc-strategy-icon{{width:42px;height:42px;border-radius:50%;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:950;}}
-        .epc-strategy-text b{{display:block;font-size:11px;font-weight:950;color:#102039;letter-spacing:.02em;}}
-        .epc-strategy-text span{{display:block;margin-top:4px;font-size:11px;line-height:1.3;color:#24324c;font-weight:650;}}
-        .epc-strategy-value{{text-align:left;}}
-        .epc-strategy-value b{{font-size:clamp(14px,1.05vw,18px);color:#087F75;font-weight:950;white-space:nowrap;}}
+        .epc-strategy-panel{{min-height:auto;margin:0 0 14px 0;}}
+        .epc-strategy-stack{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:10px;}}
+        .epc-strategy-card{{display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;align-items:start;border:1px solid #dfe8f2;border-radius:11px;background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);padding:12px 13px;min-height:104px;}}
+        .epc-strategy-icon{{width:36px;height:36px;border-radius:50%;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:950;box-shadow:0 10px 18px color-mix(in srgb,var(--c) 18%,transparent);}}
+        .epc-strategy-text b{{display:block;font-size:12px;font-weight:950;color:#102039;letter-spacing:.02em;line-height:1.18;}}
+        .epc-strategy-text span{{display:block;margin-top:5px;font-size:10.5px;line-height:1.3;color:#24324c;font-weight:700;}}
+        .epc-strategy-value{{text-align:left;grid-column:2;margin-top:3px;}}
+        .epc-strategy-value b{{font-size:clamp(15px,1.12vw,20px);color:#087F75;font-weight:950;white-space:nowrap;}}
         .epc-strategy-value span{{display:block;font-size:10px;color:#102039;font-weight:850;margin-top:5px;}}
         .epc-bottom-grid{{display:grid;grid-template-columns:minmax(0,2.28fr) minmax(320px,.92fr);gap:0;align-items:stretch;}}
         .epc-table-panel{{border-radius:0 0 0 10px;padding:10px 10px 11px;overflow:hidden;}}
         .epc-insight-panel{{border-radius:0 0 10px 0;border-left:0;padding:13px 21px;}}
-        .epc-table{{width:100%;border-collapse:collapse;font-size:9px;text-align:center;}}
-        .epc-table th{{background:#0b1736;color:#fff;border:1px solid #33415f;padding:5px 4px;font-weight:950;line-height:1.05;}}
-        .epc-table td{{border:1px solid #dfe8f2;padding:4px 5px;color:#102039;font-weight:650;}}
+        .epc-table{{width:100%;border-collapse:collapse;font-size:8.6px;text-align:center;}}
+        .epc-table th{{background:#0b1736;color:#fff;border:1px solid #33415f;padding:4px 4px;font-weight:950;line-height:1.05;}}
+        .epc-table td{{border:1px solid #dfe8f2;padding:3px 4px;color:#102039;font-weight:650;}}
         .epc-table .epc-phase-name{{text-align:left;min-width:210px;font-weight:750;}}
         .epc-table tfoot td{{background:#eefaf8;color:#087F75;font-weight:950;font-size:11px;}}
         .epc-insights{{margin:15px 0 0;padding:0;list-style:none;display:grid;gap:14px;}}
         .epc-insights li{{position:relative;padding-left:26px;font-size:12px;line-height:1.35;color:#24324c;font-weight:700;}}
         .epc-insights li::before{{content:"✓";position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#249A8D;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:950;}}
         .epc-foot{{font-size:10px;color:#657692;font-weight:650;margin:12px 0 0 12px;}}
-        @media(max-width:1480px){{.epc-main-grid{{grid-template-columns:minmax(0,1.38fr) minmax(0,.9fr) minmax(0,.95fr);}}.epc-strategy-card{{grid-template-columns:40px minmax(0,1fr);}}.epc-strategy-value{{grid-column:2;}}}}
-        @media(max-width:1200px){{.epc-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.epc-main-grid,.epc-bottom-grid{{grid-template-columns:1fr;}}.epc-panel,.epc-panel+.epc-panel,.epc-table-panel,.epc-insight-panel{{border-radius:10px;border-left:1px solid #dfe8f2;margin-bottom:10px;}}.epc-strategy-stack{{grid-template-columns:1fr;}}.epc-callout{{width:min(60%,260px);}}}}
-        @media(max-width:760px){{.epc-kpi-grid{{grid-template-columns:1fr;}}.epc-bar-row{{grid-template-columns:1fr;}}.epc-axis{{margin-left:0;}}.epc-callout{{width:100%;}}.epc-donut-wrap{{grid-template-columns:1fr;}}.epc-strategy-card{{grid-template-columns:44px 1fr;}}.epc-strategy-value{{grid-column:2;}}}}
+        @media(max-width:1480px){{.epc-main-grid{{grid-template-columns:minmax(0,1.36fr) minmax(0,.98fr);}}.epc-strategy-stack{{grid-template-columns:repeat(4,minmax(0,1fr));}}.epc-donut-wrap{{grid-template-columns:1fr;}}.epc-donut{{width:min(100%,220px);}}}}
+        @media(max-width:1300px){{.epc-main-grid{{grid-template-columns:1fr;}}.epc-donut-wrap{{grid-template-columns:minmax(220px,.8fr) minmax(220px,1fr);}}}}
+        @media(max-width:1200px){{.epc-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.epc-main-grid,.epc-bottom-grid{{grid-template-columns:1fr;}}.epc-panel,.epc-panel+.epc-panel,.epc-table-panel,.epc-insight-panel{{border-radius:10px;border-left:1px solid #dfe8f2;margin-bottom:10px;}}.epc-strategy-stack{{grid-template-columns:repeat(2,minmax(0,1fr));}}.epc-callout{{width:min(60%,260px);}}}}
+        @media(max-width:760px){{.epc-capex-pro-score,.epc-capex-pro-head,.epc-capex-pro-row,.epc-capex-pro-note{{grid-template-columns:1fr;}}.epc-capex-pro-arrow{{display:none;}}.epc-capex-pro-head span:not(:first-child),.epc-capex-pro-metric,.epc-capex-pro-gap{{text-align:left;}}.epc-kpi-grid{{grid-template-columns:1fr;}}.epc-bar-row{{grid-template-columns:1fr;}}.epc-axis{{margin-left:0;}}.epc-callout{{width:100%;}}.epc-donut-wrap{{grid-template-columns:1fr;}}.epc-strategy-stack{{grid-template-columns:1fr;}}.epc-strategy-card{{grid-template-columns:44px 1fr;}}.epc-strategy-value{{grid-column:2;}}}}
         </style>
         <div class="epc-report">
           <h2 class="epc-title">Análisis de Costos – Piloto vs Comercial</h2>
           <p class="epc-subtitle">Lectura por alcance EPC para comparar inversión experimental y referencia comercial.</p>
           <div class="epc-kpi-grid">{kpi_html}</div>
           <div class="epc-main-grid">
-            <div class="epc-panel">
-              <div class="epc-panel-title">1. CAPEX POR ALCANCE EPC</div>
-              <div class="epc-panel-sub">Comparación Piloto vs Comercial (MM CLP)</div>
-              <div class="epc-chart-legend"><span><i class="epc-legend-box" style="background:#087F75;"></i>Costo Piloto</span><span><i class="epc-legend-box" style="background:#1D4ED8;"></i>Costo Comercial</span></div>
-              {bar_rows}
-              <div class="epc-axis">{axis_labels}</div>
-              <div class="epc-axis-label">MM CLP</div>
-              <div class="epc-callout">El costo comercial se concentra principalmente en Suministro de Turbina ({fmt_pct_local(supply_pct)}) y Obras y Montaje ({fmt_pct_local(bos_pct)}).<br><br>La ingeniería y PMO disminuyen drásticamente al escalar.</div>
+            <div class="epc-panel epc-capex-pro-panel">
+              <div class="epc-panel-head">
+                <div>
+                  <div class="epc-panel-title">1. CAPEX POR ALCANCE EPC</div>
+                  <div class="epc-panel-sub">Comparativo ejecutivo entre costo piloto y referencia comercial</div>
+                </div>
+                <span class="epc-info">i</span>
+              </div>
+
+              {capex_score_html}
+
+              <div class="epc-capex-pro-head">
+                <span>Alcance EPC</span>
+                <span>Piloto</span>
+                <span>Comercial</span>
+                <span>Brecha</span>
+              </div>
+
+              <div class="epc-capex-pro-table">
+                {capex_rows}
+              </div>
+
+              <div class="epc-capex-pro-note">
+                <span>Lectura ejecutiva</span>
+                El comparativo separa gasto experimental, partidas replicables y costos reducibles por estandarización. La brecha se interpreta como eficiencia esperada al pasar de piloto a arquitectura comercial.
+              </div>
             </div>
-            <div class="epc-panel">
-              <div class="epc-panel-title">2. PARTICIPACIÓN POR ALCANCE – COSTO COMERCIAL</div>
-              <div class="epc-panel-sub">Distribución porcentual</div>
+            <div class="epc-panel epc-distribution-panel">
+              <div class="epc-panel-head">
+                <div>
+                  <div class="epc-panel-title">2. DISTRIBUCIÓN RELATIVA POR ALCANCE</div>
+                  <div class="epc-panel-sub">Costo comercial por componente EPC</div>
+                </div>
+                <span class="epc-info">i</span>
+              </div>
               <div class="epc-donut-wrap">
-                <div class="epc-donut">{donut_labels}<div class="epc-donut-center"><small>Total Comercial</small><b>{fmt_money(total_comercial)}</b><span>MM CLP</span></div></div>
+                <div class="epc-donut">{donut_labels}<div class="epc-donut-center"><small>Total comercial</small><b>{fmt_money(total_comercial)}</b><span>MM CLP</span></div></div>
                 <div class="epc-donut-legend">{''.join(donut_legend)}</div>
               </div>
-              <div class="epc-orange-note"><span class="epc-target">◎</span><span>El {fmt_pct_local(supply_pct + bos_pct)} del costo comercial corresponde a costos industriales (Supply + BOS).</span></div>
+              <div class="epc-distribution-callout"><span class="epc-target">♢</span><span><b>Información clave</b>Los dos principales alcances concentran el <b style="display:inline;color:#087f6f;">{fmt_pct_local(supply_pct + bos_pct)}</b> del costo comercial objetivo.</span></div>
             </div>
-            <div class="epc-panel">
-              <div class="epc-panel-title">3. KPIs ESTRATÉGICOS</div>
-              <div class="epc-strategy-stack">{strategic_html}</div>
-            </div>
+          </div>
+          <div class="epc-panel epc-strategy-panel">
+            <div class="epc-panel-title">3. KPIs ESTRATÉGICOS</div>
+            <div class="epc-panel-sub">Lectura ejecutiva de replicabilidad, sitio-dependencia y reducción esperada</div>
+            <div class="epc-strategy-stack">{strategic_html}</div>
           </div>
           <div class="epc-bottom-grid">
             <div class="epc-panel epc-table-panel">
