@@ -3628,11 +3628,11 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
         "Gestión PMO",
     ]
     scope_meta = {
-        "Suministro Turbina": {"note": "Supply", "color": "#0F766E", "icon": "⚙"},
-        "Obras y Montaje (BOS)": {"note": "BOS", "color": "#86A95C", "icon": "⌂"},
-        "Ingeniería y Validación": {"note": "Validación", "color": "#E9B23D", "icon": "◎"},
-        "Integración y Comisionamiento": {"note": "Comisionamiento", "color": "#6B7280", "icon": "⇄"},
-        "Gestión PMO": {"note": "PMO", "color": "#94A3B8", "icon": "▦"},
+        "Suministro Turbina": {"note": "Supply", "color": "#0F766E", "icon": ""},
+        "Obras y Montaje (BOS)": {"note": "BOS", "color": "#64748B", "icon": ""},
+        "Ingeniería y Validación": {"note": "Validación", "color": "#94A3B8", "icon": ""},
+        "Integración y Comisionamiento": {"note": "Comisionamiento", "color": "#CBD5E1", "icon": ""},
+        "Gestión PMO": {"note": "PMO", "color": "#E2E8F0", "icon": ""},
     }
 
     def normalize_scope(value: object) -> str:
@@ -3684,7 +3684,7 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
                 "commercial": float(row["commercial"]),
                 "tasks": int(row["tasks"]),
                 "color": "#64748B",
-                "icon": "•",
+                "icon": "",
             }
         )
 
@@ -3724,7 +3724,7 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
         f"""
         <div class="epc-bar-row">
           <div class="epc-bar-label">
-            <span class="epc-icon" style="--c:{item['color']};">{html.escape(item['icon'])}</span>
+            <span class="epc-scope-rule" style="--c:{item['color']};"></span>
             <b>{html.escape(item['label'])}</b>
             <small>{html.escape(item['note'])}</small>
           </div>
@@ -3766,15 +3766,14 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
     )
 
     strategic_cards = [
-        ("CAPEX REPLICABLE SUPPLY", "Producto turbina fabricable y escalable.", fmt_money(supply["commercial"]), f"{fmt_pct_local(supply_pct)} del comercial", "#0F766E", "▦"),
-        ("CAPEX DEPENDIENTE DEL SITIO", "Obras, montaje y condiciones locales.", fmt_money(bos["commercial"]), f"{fmt_pct_local(bos_pct)} del comercial", "#86A95C", "⌂"),
-        ("BAJA INGENIERÍA / PMO", "Menos esfuerzo no recurrente al escalar.", fmt_signed_money(eng_reduction), "Variación esperada", "#E9B23D", "⌁"),
-        ("REDUCCIÓN TOTAL", "Brecha entre piloto y referencia comercial.", fmt_signed_money(reduction_value), f"{fmt_pct_local(reduction_pct)} vs piloto", "#1D4ED8", "%"),
+        ("CAPEX REPLICABLE SUPPLY", "Producto turbina fabricable y escalable.", fmt_money(supply["commercial"]), f"{fmt_pct_local(supply_pct)} del comercial", "#0F766E", ""),
+        ("CAPEX DEPENDIENTE DEL SITIO", "Obras, montaje y condiciones locales.", fmt_money(bos["commercial"]), f"{fmt_pct_local(bos_pct)} del comercial", "#64748B", ""),
+        ("BAJA INGENIERÍA / PMO", "Menos esfuerzo no recurrente al escalar.", fmt_signed_money(eng_reduction), "Variación esperada", "#64748B", ""),
+        ("REDUCCIÓN TOTAL", "Brecha entre piloto y referencia comercial.", fmt_signed_money(reduction_value), f"{fmt_pct_local(reduction_pct)} vs piloto", "#1D4ED8", ""),
     ]
     strategic_html = "".join(
         f"""
         <div class="epc-strategy-card" style="--c:{color};">
-          <div class="epc-strategy-icon">{html.escape(icon)}</div>
           <div class="epc-strategy-text"><b>{html.escape(title)}</b><span>{html.escape(desc)}</span></div>
           <div class="epc-strategy-value"><b>{html.escape(value)}</b><span>{html.escape(note)}</span></div>
         </div>
@@ -3823,75 +3822,75 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
 
     epc_html = textwrap.dedent(f"""
         <style>
-        .epc-report{{font-family:inherit;color:#102039;margin:18px 0 8px;width:100%;max-width:none;overflow:hidden;}}
-        .epc-title{{font-family:inherit;font-size:24px;line-height:1.05;font-weight:950;letter-spacing:.02em;color:#0b1736;margin:0 0 6px;text-transform:uppercase;}}
-        .epc-subtitle{{font-family:inherit;font-size:13px;color:#52657f;font-weight:650;margin:0 0 13px;}}
-        .epc-kpi-grid{{display:grid;grid-template-columns:repeat(6,minmax(128px,1fr));gap:10px;margin-bottom:12px;}}
-        .epc-kpi,.epc-panel{{border:1px solid #dfe8f2;border-radius:9px;background:#fff;box-shadow:0 7px 17px rgba(15,23,42,.055);}}
-        .epc-kpi{{padding:10px 14px;min-height:70px;min-width:0;}}
-        .epc-kpi-label{{font-family:inherit;font-size:8.5px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
-        .epc-kpi-value{{font-size:clamp(15px,1.18vw,21px);font-weight:950;color:#071a44;line-height:1;white-space:nowrap;}}
-        .epc-kpi-note{{font-size:10.5px;color:#52657f;font-weight:800;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
-        .epc-main-grid{{display:grid;grid-template-columns:minmax(0,3fr) minmax(360px,2fr);gap:0;margin-bottom:0;}}
-        .epc-panel{{border-radius:9px 9px 0 0;box-shadow:none;padding:15px 18px 13px;min-height:314px;min-width:0;}}
+        .epc-report{{font-family:inherit;color:#102039;margin:12px 0 8px;width:100%;max-width:none;overflow:hidden;}}
+        .epc-title{{font-family:inherit;font-size:21px;line-height:1.08;font-weight:900;letter-spacing:.01em;color:#0b1736;margin:0 0 4px;text-transform:uppercase;}}
+        .epc-subtitle{{font-family:inherit;font-size:12px;color:#52657f;font-weight:600;margin:0 0 11px;}}
+        .epc-kpi-grid{{display:grid;grid-template-columns:repeat(6,minmax(126px,1fr));gap:8px;margin-bottom:10px;}}
+        .epc-kpi,.epc-panel{{border:1px solid #d9e2ee;border-radius:6px;background:#fff;box-shadow:0 1px 4px rgba(15,23,42,.035);}}
+        .epc-kpi{{padding:9px 12px;min-height:64px;max-height:88px;min-width:0;}}
+        .epc-kpi-label{{font-family:inherit;font-size:8px;font-weight:850;letter-spacing:.055em;text-transform:uppercase;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
+        .epc-kpi-value{{font-size:clamp(15px,1.05vw,20px);font-weight:900;color:#071a44;line-height:1;white-space:nowrap;}}
+        .epc-kpi-note{{font-size:10px;color:#64748b;font-weight:650;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
+        .epc-main-grid{{display:grid;grid-template-columns:minmax(0,65fr) minmax(330px,35fr);gap:0;margin-bottom:0;}}
+        .epc-panel{{border-radius:6px 6px 0 0;box-shadow:none;padding:12px 16px 11px;min-height:266px;min-width:0;}}
         .epc-panel + .epc-panel{{border-left:0;}}
-        .epc-panel-title{{font-family:inherit;font-size:14px;font-weight:950;color:#0b1b43;margin:0 0 7px;}}
-        .epc-panel-sub{{font-family:inherit;font-size:11px;font-weight:750;color:#657692;margin:0 0 11px;}}
-        .epc-chart-legend{{display:flex;gap:clamp(14px,3vw,34px);justify-content:center;align-items:center;margin:0 0 7px;font-size:12px;color:#102039;}}
-        .epc-chart-legend span{{display:inline-flex;align-items:center;gap:8px;}}
-        .epc-legend-box{{width:12px;height:12px;border-radius:1px;display:inline-block;}}
-        .epc-bar-row{{display:grid;grid-template-columns:minmax(150px,24%) minmax(0,1fr);gap:13px;align-items:center;margin:9px 0;}}
-        .epc-bar-label{{display:grid;grid-template-columns:36px 1fr;column-gap:9px;align-items:center;min-width:0;}}
-        .epc-icon{{grid-row:1 / 3;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--c);color:#fff;font-size:16px;font-weight:950;}}
-        .epc-bar-label b{{font-size:12px;line-height:1.15;color:#0b1736;font-weight:950;}}
-        .epc-bar-label small{{font-size:11px;color:#2f405e;font-weight:750;}}
-        .epc-bars{{height:30px;position:relative;}}
-        .epc-bar{{position:absolute;left:0;height:10px;border-radius:0;background:#0F766E;box-shadow:0 1px 4px rgba(15,118,110,.12);}}
+        .epc-panel-title{{font-family:inherit;font-size:12.5px;font-weight:900;color:#0b1b43;margin:0 0 5px;letter-spacing:.01em;}}
+        .epc-panel-sub{{font-family:inherit;font-size:10.5px;font-weight:650;color:#64748b;margin:0 0 8px;}}
+        .epc-chart-legend{{display:flex;gap:clamp(18px,3vw,42px);justify-content:flex-end;align-items:center;margin:-18px 4px 8px 0;font-size:11px;color:#334155;}}
+        .epc-chart-legend span{{display:inline-flex;align-items:center;gap:7px;}}
+        .epc-legend-box{{width:10px;height:10px;border-radius:1px;display:inline-block;}}
+        .epc-bar-row{{display:grid;grid-template-columns:minmax(148px,21%) minmax(0,1fr);gap:14px;align-items:center;margin:7px 0;}}
+        .epc-bar-label{{display:grid;grid-template-columns:4px 1fr;column-gap:10px;align-items:center;min-width:0;}}
+        .epc-scope-rule{{grid-row:1 / 3;width:4px;height:28px;border-radius:2px;background:var(--c);display:block;}}
+        .epc-bar-label b{{font-size:11.3px;line-height:1.12;color:#0b1736;font-weight:850;}}
+        .epc-bar-label small{{font-size:10px;color:#64748b;font-weight:650;}}
+        .epc-bars{{height:25px;position:relative;}}
+        .epc-bar{{position:absolute;left:0;height:8px;border-radius:1px;background:#0F766E;}}
         .epc-pilot{{top:2px;background:#0F766E;}}
-        .epc-commercial{{top:18px;background:#1D4ED8;}}
-        .epc-bar-value{{position:absolute;top:-1px;font-style:normal;font-size:11.5px;font-weight:850;color:#24324c;white-space:nowrap;}}
-        .epc-bar-value.epc-blue{{top:15px;}}
-        .epc-axis{{height:20px;position:relative;margin:1px 0 0 calc(24% + 13px);border-top:1px solid transparent;}}
-        .epc-axis span{{position:absolute;transform:translateX(-50%);font-size:11px;color:#52657f;font-weight:700;}}
-        .epc-axis-label{{text-align:center;font-size:12px;color:#52657f;font-weight:750;margin-top:2px;}}
-        .epc-donut-wrap{{display:grid;grid-template-columns:minmax(150px,1fr) minmax(128px,.72fr);gap:12px;align-items:center;margin-top:2px;}}
-        .epc-donut{{position:relative;width:min(100%,180px);aspect-ratio:1 / 1;border-radius:50%;margin:6px auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.72);}}
+        .epc-commercial{{top:15px;background:#1D4ED8;}}
+        .epc-bar-value{{position:absolute;top:-2px;font-style:normal;font-size:10.5px;font-weight:750;color:#334155;white-space:nowrap;}}
+        .epc-bar-value.epc-blue{{top:12px;}}
+        .epc-axis{{height:17px;position:relative;margin:1px 0 0 calc(21% + 14px);border-top:1px solid #eef2f7;}}
+        .epc-axis span{{position:absolute;transform:translateX(-50%);font-size:10px;color:#64748b;font-weight:650;padding-top:3px;}}
+        .epc-axis-label{{text-align:center;font-size:10.5px;color:#64748b;font-weight:650;margin-top:0;}}
+        .epc-donut-wrap{{display:grid;grid-template-columns:minmax(120px,.9fr) minmax(126px,1fr);gap:12px;align-items:center;margin-top:0;}}
+        .epc-donut{{position:relative;width:min(100%,138px);aspect-ratio:1 / 1;border-radius:50%;margin:4px auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.72);}}
         .epc-donut::after{{content:"";position:absolute;inset:27.5%;border-radius:50%;background:#fff;box-shadow:0 0 0 1px #e6edf6;}}
         .epc-donut-center{{position:absolute;inset:33% 24%;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}}
-        .epc-donut-center small{{font-size:10px;color:#52657f;font-weight:750;}}
-        .epc-donut-center b{{font-size:clamp(11px,.92vw,15px);color:#071a44;font-weight:950;margin:4px 0 2px;white-space:nowrap;}}
-        .epc-donut-center span{{font-size:9px;color:#102039;font-weight:850;}}
-        .epc-donut-pct{{position:absolute;z-index:3;color:#fff;font-size:12px;font-weight:950;text-shadow:0 1px 2px rgba(15,23,42,.22);}}
+        .epc-donut-center small{{font-size:8.8px;color:#64748b;font-weight:650;}}
+        .epc-donut-center b{{font-size:clamp(10px,.8vw,12px);color:#071a44;font-weight:900;margin:3px 0 1px;white-space:nowrap;}}
+        .epc-donut-center span{{font-size:8px;color:#334155;font-weight:700;}}
+        .epc-donut-pct{{display:none;}}
         .epc-donut-pct-0{{right:9%;top:49%;}}.epc-donut-pct-1{{left:14%;top:57%;}}.epc-donut-pct-2{{left:26%;top:20%;}}.epc-donut-pct-3{{left:49%;top:5%;color:#52657f;text-shadow:none;}}
-        .epc-donut-legend{{display:grid;gap:8px;font-size:10px;color:#102039;min-width:0;}}
-        .epc-donut-legend-item{{display:grid;grid-template-columns:12px 1fr;gap:8px;align-items:start;}}
-        .epc-donut-legend-item span{{width:11px;height:11px;border-radius:50%;margin-top:2px;}}
-        .epc-donut-legend-item b{{font-size:10px;line-height:1.18;font-weight:850;min-width:0;}}
-        .epc-donut-legend-item small{{display:block;font-weight:700;color:#52657f;}}
-        .epc-orange-note,.epc-insight-card{{border:1px solid #f5d79c;background:#fffaf0;border-radius:8px;padding:10px 12px;margin-top:9px;font-size:12px;font-weight:800;color:#102039;display:flex;gap:10px;align-items:center;}}
-        .epc-insight-card{{border-color:#d6dee9;background:#fbfdff;line-height:1.35;font-size:11.5px;align-items:flex-start;}}
-        .epc-target{{font-size:24px;color:#ff4040;line-height:1;}}
-        .epc-strategy-section{{border:1px solid #dfe8f2;border-top:0;background:#fff;padding:12px 18px 14px;}}
-        .epc-strategy-stack{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:8px;}}
-        .epc-strategy-card{{display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;align-items:center;border:1px solid #dfe8f2;border-left:4px solid var(--c);border-radius:8px;background:#fff;padding:10px 12px;min-height:74px;}}
-        .epc-strategy-icon{{width:36px;height:36px;border-radius:50%;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:950;}}
-        .epc-strategy-text b{{display:block;font-size:11px;font-weight:950;color:#102039;letter-spacing:.02em;}}
-        .epc-strategy-text span{{display:block;margin-top:3px;font-size:10.5px;line-height:1.25;color:#24324c;font-weight:650;}}
-        .epc-strategy-value{{grid-column:1 / -1;text-align:left;border-top:1px solid #edf2f7;padding-top:7px;}}
-        .epc-strategy-value b{{font-size:clamp(14px,1.05vw,18px);color:#0F766E;font-weight:950;white-space:nowrap;}}
-        .epc-strategy-value span{{display:block;font-size:10px;color:#102039;font-weight:850;margin-top:4px;}}
-        .epc-bottom-grid{{display:grid;grid-template-columns:minmax(0,2.28fr) minmax(320px,.92fr);gap:0;align-items:stretch;}}
-        .epc-table-panel{{border-radius:0 0 0 10px;padding:10px 10px 11px;overflow:hidden;}}
-        .epc-insight-panel{{border-radius:0 0 10px 0;border-left:0;padding:13px 21px;}}
-        .epc-table{{width:100%;border-collapse:collapse;font-size:9px;text-align:center;}}
-        .epc-table th{{background:#0b1736;color:#fff;border:1px solid #33415f;padding:5px 4px;font-weight:950;line-height:1.05;}}
-        .epc-table td{{border:1px solid #dfe8f2;padding:4px 5px;color:#102039;font-weight:650;}}
+        .epc-donut-legend{{display:grid;gap:5px;font-size:9.3px;color:#102039;min-width:0;}}
+        .epc-donut-legend-item{{display:grid;grid-template-columns:9px 1fr;gap:7px;align-items:start;}}
+        .epc-donut-legend-item span{{width:8px;height:8px;border-radius:1px;margin-top:2px;}}
+        .epc-donut-legend-item b{{font-size:9.3px;line-height:1.14;font-weight:750;min-width:0;}}
+        .epc-donut-legend-item small{{display:block;font-weight:600;color:#64748b;}}
+        .epc-summary-note,.epc-insight-card{{border:1px solid #d9e2ee;background:#f8fafc;border-radius:5px;padding:8px 10px;margin-top:8px;font-size:10.7px;font-weight:700;color:#102039;display:flex;gap:8px;align-items:center;}}
+        .epc-insight-card{{line-height:1.32;align-items:flex-start;}}
+        .epc-strategy-section{{border:1px solid #d9e2ee;border-top:0;background:#f8fafc;padding:10px 14px 11px;}}
+        .epc-strategy-stack{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin-top:7px;border:1px solid #d9e2ee;background:#fff;}}
+        .epc-strategy-card{{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;border:0;border-left:1px solid #e5ebf3;background:#fff;padding:9px 12px;min-height:52px;}}
+        .epc-strategy-card:first-child{{border-left:0;}}
+        .epc-strategy-card{{box-shadow:inset 3px 0 0 var(--c);}}
+        .epc-strategy-text b{{display:block;font-size:9.3px;font-weight:850;color:#0b1736;letter-spacing:.045em;text-transform:uppercase;}}
+        .epc-strategy-text span{{display:block;margin-top:2px;font-size:9.5px;line-height:1.2;color:#64748b;font-weight:600;}}
+        .epc-strategy-value{{text-align:right;}}
+        .epc-strategy-value b{{font-size:clamp(13px,.95vw,17px);color:#0b1736;font-weight:900;white-space:nowrap;}}
+        .epc-strategy-value span{{display:block;font-size:9px;color:#64748b;font-weight:650;margin-top:3px;white-space:nowrap;}}
+        .epc-bottom-grid{{display:grid;grid-template-columns:minmax(0,2.35fr) minmax(300px,.85fr);gap:0;align-items:stretch;}}
+        .epc-table-panel{{border-radius:0 0 0 6px;padding:9px 10px 10px;overflow:hidden;}}
+        .epc-insight-panel{{border-radius:0 0 6px 0;border-left:0;padding:11px 16px;}}
+        .epc-table{{width:100%;border-collapse:collapse;font-size:8.6px;text-align:center;}}
+        .epc-table th{{background:#0b1736;color:#fff;border:1px solid #263653;padding:4px 4px;font-weight:800;line-height:1.05;}}
+        .epc-table td{{border:0;border-bottom:1px solid #edf2f7;padding:4px 5px;color:#102039;font-weight:600;}}
         .epc-table .epc-phase-name{{text-align:left;min-width:210px;font-weight:750;}}
-        .epc-table tfoot td{{background:#eefaf8;color:#087F75;font-weight:950;font-size:11px;}}
-        .epc-insights{{margin:15px 0 0;padding:0;list-style:none;display:grid;gap:14px;}}
-        .epc-insights li{{position:relative;padding-left:26px;font-size:12px;line-height:1.35;color:#24324c;font-weight:700;}}
-        .epc-insights li::before{{content:"✓";position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#249A8D;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:950;}}
-        .epc-foot{{font-size:10px;color:#657692;font-weight:650;margin:12px 0 0 12px;}}
+        .epc-table tfoot td{{background:#f1f5f9;color:#0b1736;font-weight:850;font-size:9.5px;border-top:1px solid #d9e2ee;}}
+        .epc-insights{{margin:11px 0 0;padding:0;list-style:none;display:grid;gap:10px;}}
+        .epc-insights li{{position:relative;padding-left:14px;font-size:10.7px;line-height:1.35;color:#334155;font-weight:650;}}
+        .epc-insights li::before{{content:"";position:absolute;left:0;top:.45em;width:5px;height:5px;border-radius:50%;background:#0F766E;}}
+        .epc-foot{{font-size:9.5px;color:#64748b;font-weight:600;margin:9px 0 0 8px;}}
         @media(max-width:1480px){{.epc-strategy-stack{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
         @media(max-width:1200px){{.epc-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.epc-main-grid,.epc-bottom-grid{{grid-template-columns:1fr;}}.epc-panel,.epc-panel+.epc-panel,.epc-table-panel,.epc-insight-panel{{border-radius:9px;border-left:1px solid #dfe8f2;margin-bottom:10px;}}.epc-strategy-section{{border:1px solid #dfe8f2;border-radius:9px;margin-bottom:10px;}}}}
         @media(max-width:760px){{.epc-kpi-grid{{grid-template-columns:1fr;}}.epc-bar-row{{grid-template-columns:1fr;}}.epc-axis{{margin-left:0;}}.epc-donut-wrap,.epc-strategy-stack{{grid-template-columns:1fr;}}}}
@@ -3916,7 +3915,7 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
                 <div class="epc-donut">{donut_labels}<div class="epc-donut-center"><small>Total Comercial</small><b>{fmt_money(total_comercial)}</b><span>MM CLP</span></div></div>
                 <div class="epc-donut-legend">{''.join(donut_legend)}</div>
               </div>
-              <div class="epc-orange-note"><span class="epc-target">◎</span><span>El {fmt_pct_local(supply_pct + bos_pct)} del costo comercial corresponde a costos industriales (Supply + BOS).</span></div>
+              <div class="epc-summary-note">El {fmt_pct_local(supply_pct + bos_pct)} del costo comercial corresponde a costos industriales (Supply + BOS).</div>
               <div class="epc-insight-card"><span>Lectura</span><span>El costo comercial se concentra en producto turbina ({fmt_pct_local(supply_pct)}) y obras/sitio ({fmt_pct_local(bos_pct)}). La baja principal viene de estandarizar ingeniería, integración y PMO.</span></div>
             </div>
           </div>
