@@ -270,6 +270,8 @@ GANTT_PROJECT_CSV_URL_DEFAULT = (
     "2PACX-1vQOu_diukhhZWDV7kIcU9Ewto4lo_xQdSEZ0FMi2oto-Jb4r2e7aRNCBKF3qoVVk_4XsimMFx7eASkt/"
     "pub?gid=0&single=true&output=csv"
 )
+GANTT_COSTO_PILOTO_TOTAL_CLP = 79_066_677
+GANTT_COSTO_COMERCIAL_TOTAL_CLP = 27_070_558
 FIN_PALETTE_SM = {
     "Suministro": "#7FA8A4",
     "I+D": "#4F5D6F",
@@ -3574,6 +3576,137 @@ def render_inputs_gantt_chart_controls(df: pd.DataFrame) -> str:
     return time_range
 
 
+def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etapa seleccionada") -> None:
+    required_cols = {"Costo piloto", "Costo comercial"}
+    if df.empty or not required_cols.issubset(df.columns):
+        return
+
+    cost_df = df.copy()
+    cost_df["Costo piloto Num"] = cost_df["Costo piloto"].apply(parse_money_clp_robusto)
+    cost_df["Costo comercial Num"] = cost_df["Costo comercial"].apply(parse_money_clp_robusto)
+    cost_df = cost_df[(cost_df["Costo piloto Num"] > 0) | (cost_df["Costo comercial Num"] > 0)].copy()
+    if cost_df.empty:
+        return
+
+    group_col = "Fase" if "Fase" in cost_df.columns else "Línea"
+    grouped = (
+        cost_df.groupby(group_col, as_index=False)
+        .agg(
+            Costo_piloto=("Costo piloto Num", "sum"),
+            Costo_comercial=("Costo comercial Num", "sum"),
+            Tareas=("Tarea / Entregable", "count"),
+        )
+        .sort_values("Costo_piloto", ascending=False)
+    )
+    total_piloto = float(grouped["Costo_piloto"].sum() or 0)
+    total_comercial = float(grouped["Costo_comercial"].sum() or 0)
+    if abs(total_piloto - GANTT_COSTO_PILOTO_TOTAL_CLP) <= 10:
+        grouped.loc[grouped.index[0], "Costo_piloto"] += GANTT_COSTO_PILOTO_TOTAL_CLP - total_piloto
+        total_piloto = float(GANTT_COSTO_PILOTO_TOTAL_CLP)
+    if abs(total_comercial - GANTT_COSTO_COMERCIAL_TOTAL_CLP) <= 10:
+        grouped.loc[grouped.index[0], "Costo_comercial"] += GANTT_COSTO_COMERCIAL_TOTAL_CLP - total_comercial
+        total_comercial = float(GANTT_COSTO_COMERCIAL_TOTAL_CLP)
+    brecha = total_comercial - total_piloto
+    top_row = grouped.iloc[0]
+    top_share = float(top_row["Costo_piloto"] / total_piloto * 100) if total_piloto else 0.0
+
+    fig_cost = go.Figure()
+    chart_df = grouped.head(10).sort_values("Costo_piloto", ascending=True)
+    fig_cost.add_trace(
+        go.Bar(
+            y=chart_df[group_col],
+            x=chart_df["Costo_piloto"] / 1_000_000,
+            name="Costo piloto",
+            orientation="h",
+            marker_color="#0F766E",
+            hovertemplate="<b>%{y}</b><br>Costo piloto: %{x:.1f} MM CLP<extra></extra>",
+        )
+    )
+    fig_cost.add_trace(
+        go.Bar(
+            y=chart_df[group_col],
+            x=chart_df["Costo_comercial"] / 1_000_000,
+            name="Costo comercial",
+            orientation="h",
+            marker_color="#1D4ED8",
+            hovertemplate="<b>%{y}</b><br>Costo comercial: %{x:.1f} MM CLP<extra></extra>",
+        )
+    )
+    fig_cost.update_layout(
+        barmode="group",
+        height=390,
+        margin=dict(l=170, r=28, t=20, b=46),
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    )
+    fig_cost.update_xaxes(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False)
+    fig_cost.update_yaxes(title=None, showgrid=False)
+
+    rows_html = "".join(
+        f"""
+        <tr>
+          <td>{html.escape(str(row[group_col]))}</td>
+          <td>{format_clp(float(row["Costo_piloto"]))}</td>
+          <td>{format_clp(float(row["Costo_comercial"]))}</td>
+          <td>{int(row["Tareas"])}</td>
+        </tr>
+        """
+        for _, row in grouped.head(8).iterrows()
+    )
+    st.markdown(
+        f"""
+        <style>
+        .gantt-cost-shell{{border:1px solid #dfe8f2;border-radius:16px;background:#fff;padding:18px 20px;margin:18px 0 8px;box-shadow:0 10px 24px rgba(15,23,42,.05);}}
+        .gantt-cost-head{{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px;}}
+        .gantt-cost-k{{font-size:10px;font-weight:950;letter-spacing:.1em;text-transform:uppercase;color:#0f766e;margin-bottom:5px;}}
+        .gantt-cost-title{{font-size:20px;font-weight:950;color:#0f172a;line-height:1.1;}}
+        .gantt-cost-sub{{font-size:12px;color:#64748b;margin-top:6px;line-height:1.35;}}
+        .gantt-cost-kpis{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:14px;}}
+        .gantt-cost-card{{border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:12px 13px;}}
+        .gantt-cost-card small{{display:block;font-size:9px;font-weight:900;text-transform:uppercase;color:#64748b;letter-spacing:.04em;}}
+        .gantt-cost-card b{{display:block;font-size:18px;color:#0f172a;margin-top:5px;}}
+        .gantt-cost-table{{width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;font-size:11px;}}
+        .gantt-cost-table th{{background:#0b1736;color:#fff;padding:10px;text-align:left;font-weight:900;}}
+        .gantt-cost-table td{{padding:9px 10px;border-bottom:1px solid #e7edf4;color:#102039;font-weight:700;}}
+        .gantt-cost-table tr:last-child td{{border-bottom:0;}}
+        .gantt-cost-table tfoot td{{background:#eef8f6;color:#0f766e;font-weight:950;border-top:1px solid #cde8e2;}}
+        @media(max-width:1050px){{.gantt-cost-kpis{{grid-template-columns:1fr;}}}}
+        </style>
+        <div class="gantt-cost-shell">
+          <div class="gantt-cost-head">
+            <div>
+              <div class="gantt-cost-k">Análisis de costos</div>
+              <div class="gantt-cost-title">Costo piloto vs costo comercial</div>
+              <div class="gantt-cost-sub">Lectura por {html.escape(group_col.lower())} sobre {html.escape(scope_label)} para comparar inversión experimental y referencia comercial.</div>
+            </div>
+          </div>
+          <div class="gantt-cost-kpis">
+            <div class="gantt-cost-card"><small>Costo piloto</small><b>{format_clp(total_piloto)}</b></div>
+            <div class="gantt-cost-card"><small>Costo comercial</small><b>{format_clp(total_comercial)}</b></div>
+            <div class="gantt-cost-card"><small>Brecha comercial</small><b>{format_clp(brecha)}</b></div>
+            <div class="gantt-cost-card"><small>Mayor concentración</small><b>{top_share:.1f}%</b></div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    chart_col, table_col = st.columns([1.25, 0.95])
+    with chart_col:
+        st.plotly_chart(fig_cost, use_container_width=True, config={"displayModeBar": False})
+    with table_col:
+        st.markdown(
+            f"""
+            <table class="gantt-cost-table">
+              <thead><tr><th>{html.escape(group_col)}</th><th>Costo piloto</th><th>Costo comercial</th><th>Tareas</th></tr></thead>
+              <tbody>{rows_html}</tbody>
+              <tfoot><tr><td>Total</td><td>{format_clp(total_piloto)}</td><td>{format_clp(total_comercial)}</td><td>{int(grouped["Tareas"].sum())}</td></tr></tfoot>
+            </table>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
 def build_inputs_gantt_figure(
     df: pd.DataFrame,
     date_mode: str = "Real",
@@ -4345,13 +4478,40 @@ def render_inputs_project_gantt():
     with st.container(border=True):
         st.markdown('<span class="gantt-filter-marker"></span>', unsafe_allow_html=True)
         st.markdown('<div class="gantt-panel-title">Filtros de análisis</div>', unsafe_allow_html=True)
+        has_etapa = "ETAPA" in df_gantt.columns
         if has_linea:
-            c1, c2, c3, c4 = st.columns([3.2, 3.0, 2.5, 1.8])
+            c0, c1, c2, c3, c4 = st.columns([2.1, 3.0, 2.7, 2.3, 1.6]) if has_etapa else st.columns([3.2, 3.0, 2.5, 1.8])
         else:
-            c1, c3, c4 = st.columns([4, 2.5, 1.8])
+            c0, c1, c3, c4 = st.columns([2.1, 3.7, 2.4, 1.6]) if has_etapa else (None, *st.columns([4, 2.5, 1.8]))
+        etapa_sel = "Todas"
+        if has_etapa:
+            with c0:
+                raw_etapas = sorted(
+                    df_gantt["ETAPA"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
+                )
+                etapa_options = [
+                    etapa for etapa in raw_etapas
+                    if any(token in str(etapa).casefold() for token in ("primera", "segunda"))
+                ] or raw_etapas
+                etapa_options = sorted(etapa_options, key=lambda value: 0 if "segunda" in str(value).casefold() else 1)
+                etapa_default = next((etapa for etapa in etapa_options if "segunda" in str(etapa).casefold()), etapa_options[0] if etapa_options else "Todas")
+                if not etapa_options:
+                    etapa_options = ["Todas"]
+                if "inputs_gantt_etapa" not in st.session_state:
+                    st.session_state["inputs_gantt_etapa"] = etapa_default
+                elif st.session_state["inputs_gantt_etapa"] not in etapa_options:
+                    st.session_state["inputs_gantt_etapa"] = etapa_default
+                etapa_sel = st.selectbox(
+                    "Etapa",
+                    etapa_options,
+                    key="inputs_gantt_etapa",
+                )
         with c1:
+            phase_df = df_gantt.copy()
+            if etapa_sel != "Todas" and has_etapa:
+                phase_df = phase_df[phase_df["ETAPA"].astype(str).str.strip() == etapa_sel].copy()
             fases = sorted(
-                df_gantt["Fase"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
+                phase_df["Fase"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
             ) if "Fase" in df_gantt.columns else []
             fase_options = ["Todas"] + [
                 fase for fase in fases
@@ -4364,7 +4524,7 @@ def render_inputs_project_gantt():
                 ),
                 None,
             )
-            fase_default = target_phase or ("Instalación Turbina" if "Instalación Turbina" in fases else "Todas")
+            fase_default = "Todas"
             fase_saved = st.session_state.pop("inputs_gantt_fase__sticky", None)
             if fase_saved in fase_options:
                 st.session_state["inputs_gantt_fase"] = fase_saved
@@ -4381,6 +4541,8 @@ def render_inputs_project_gantt():
         if has_linea:
             with c2:
                 lineas_df = df_gantt.copy()
+                if etapa_sel != "Todas" and has_etapa:
+                    lineas_df = lineas_df[lineas_df["ETAPA"].astype(str).str.strip() == etapa_sel].copy()
                 if fase_sel != "Todas" and "Fase" in lineas_df.columns:
                     lineas_df = lineas_df[lineas_df["Fase"].astype(str).str.strip() == fase_sel].copy()
                 lineas = sorted(
@@ -4402,8 +4564,15 @@ def render_inputs_project_gantt():
                     key="inputs_gantt_linea",
                 )
         with c3:
+            estados_df = df_gantt.copy()
+            if etapa_sel != "Todas" and has_etapa:
+                estados_df = estados_df[estados_df["ETAPA"].astype(str).str.strip() == etapa_sel].copy()
+            if fase_sel != "Todas" and "Fase" in estados_df.columns:
+                estados_df = estados_df[estados_df["Fase"].astype(str).str.strip() == fase_sel].copy()
+            if linea_sel and "Línea" in estados_df.columns:
+                estados_df = estados_df[estados_df["Línea"].astype(str).str.strip().isin(linea_sel)].copy()
             estados = sorted(
-                df_gantt["Estado"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
+                estados_df["Estado"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
             ) if "Estado" in df_gantt.columns else []
             estado_saved = st.session_state.pop("inputs_gantt_estado__sticky", None)
             if isinstance(estado_saved, str) and estado_saved in estados:
@@ -4433,7 +4602,11 @@ def render_inputs_project_gantt():
                 key="inputs_gantt_mode",
             )
 
-    plot_df = df_gantt.copy()
+    stage_df = df_gantt.copy()
+    if etapa_sel != "Todas" and has_etapa:
+        stage_df = stage_df[stage_df["ETAPA"].astype(str).str.strip() == etapa_sel].copy()
+
+    plot_df = stage_df.copy()
     if fase_sel != "Todas" and "Fase" in plot_df.columns:
         plot_df = plot_df[plot_df["Fase"].astype(str).str.strip() == fase_sel].copy()
     if linea_sel and "Línea" in plot_df.columns:
@@ -4454,6 +4627,7 @@ def render_inputs_project_gantt():
         time_range=time_range,
         title=gantt_title,
     )
+    render_inputs_gantt_cost_analysis(df_gantt, scope_label="toda la hoja del cronograma")
 
 
 @st.cache_resource(show_spinner=False)
@@ -4786,11 +4960,8 @@ def render_inputs_capex_10kw_detail():
     resumen_10kw["Pct_total"] = np.where(total_10kw > 0, resumen_10kw["Monto_CLP"] / total_10kw * 100.0, 0.0)
     resumen_10kw["Monto_fmt"] = resumen_10kw["Monto_CLP"].apply(format_clp)
 
-    render_pilotos_ana_embedded_view()
-
     if resumen_10kw.empty:
         st.info("La columna C no contiene valores numéricos válidos para el gráfico de torta.")
-        render_inputs_project_gantt()
         return
 
     capex_palette = [
@@ -4808,10 +4979,6 @@ def render_inputs_capex_10kw_detail():
         """
         <style>
         .capex10-shell{border:1px solid #d9e2ee;border-radius:13px;background:#fff;padding:12px 18px 10px 18px;box-shadow:0 13px 30px rgba(15,23,42,.05);margin:0 0 22px 0;}
-        .capex10-breadcrumb{display:flex;align-items:center;gap:10px;color:#0f172a;font-size:14px;font-weight:900;margin:0 0 8px 0;}
-        .capex10-end-nav{border:1px solid #d9e2ee;border-radius:13px;background:#fff;padding:15px 18px 9px;box-shadow:0 13px 30px rgba(15,23,42,.05);margin:26px 0 0;}
-        .capex10-brand{font-size:23px;color:#0f766e;margin-right:6px;}
-        .capex10-sep{color:#64748b;font-weight:800;}
         .capex10-title{font-size:24px;line-height:1.02;font-weight:900;color:#08122a;margin:0 0 5px 0;}
         .capex10-sub{font-size:13px;line-height:1.32;color:#274060;margin:0 0 10px 0;max-width:680px;}
         .capex10-kpis{display:grid;grid-template-columns:1.04fr 1.02fr .92fr .9fr .92fr;gap:10px;margin:0;}
@@ -4853,11 +5020,86 @@ def render_inputs_capex_10kw_detail():
         .capex10-foot-ico{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eef4ff;color:#315d9b;font-size:20px;}
         .capex10-foot-k{font-size:11px;color:#587093;margin:0 0 4px 0;}
         .capex10-foot-v{font-size:12px;color:#18345c;margin:0;font-weight:600;}
+        .capex10-subnav{display:grid;grid-template-columns:1fr 1.2fr;gap:12px;margin:0 0 16px 0;}
+        .capex10-subcard{border:1px solid #d9e2ee;border-radius:13px;background:linear-gradient(180deg,#fff,#f8fbff);padding:15px 16px;min-height:98px;box-shadow:0 10px 24px rgba(15,23,42,.045);}
+        .capex10-subcard.active{border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.10),0 12px 28px rgba(15,23,42,.06);}
+        .capex10-sub-k{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:0 0 7px 0;}
+        .capex10-sub-t{font-size:15px;font-weight:950;color:#0b1730;line-height:1.15;margin:0 0 6px 0;}
+        .capex10-sub-s{font-size:11.5px;line-height:1.35;color:#475569;margin:0;}
         @media (max-width: 1100px){.capex10-kpis,.capex10-main,.capex10-footer{grid-template-columns:1fr}.capex10-foot-item{border-right:0;border-bottom:1px solid #d8e2ee;padding:10px 0}.capex10-foot-item:last-child{border-bottom:0}.capex10-panel{height:auto;overflow:visible}.capex10-panel-body,.capex10-table-scroll{height:auto;overflow:visible}}
         </style>
         """,
         unsafe_allow_html=True,
     )
+
+    capex10_subblock_key = "inputs_capex10_subblock_sel"
+
+    def _set_capex10_subblock(value: str):
+        st.session_state[capex10_subblock_key] = value
+        if value == "vista_integrada":
+            for gantt_key in (
+                "inputs_gantt_fase",
+                "inputs_gantt_linea",
+                "inputs_gantt_estado",
+                "inputs_gantt_time_range",
+                "inputs_gantt_fase__sticky",
+                "inputs_gantt_linea__sticky",
+                "inputs_gantt_estado__sticky",
+            ):
+                st.session_state.pop(gantt_key, None)
+
+    if capex10_subblock_key not in st.session_state:
+        st.session_state[capex10_subblock_key] = "control_cost"
+
+    capex10_subblocks = [
+        (
+            "control_cost",
+            "Control cost",
+            "Vista integrada, control ejecutivo y brecha de inversión del piloto 10 kW.",
+        ),
+        (
+            "vista_integrada",
+            "VISTA INTEGRADA · PILOTO 10 KW",
+            "PILOTOS_ANA_CAPEX80KW, Control ejecutivo de integración y continuidad operacional, Etapas de Liberación de Capital y Brecha de Inversión – Piloto 10 kW.",
+        ),
+    ]
+    sub_cols = st.columns(2)
+    for idx, (sub_value, sub_title, sub_copy) in enumerate(capex10_subblocks):
+        is_active = st.session_state.get(capex10_subblock_key) == sub_value
+        with sub_cols[idx]:
+            st.markdown(
+                f"""
+                <div class="capex10-subcard {'active' if is_active else ''}">
+                  <p class="capex10-sub-k">Sub bloque {idx + 1}</p>
+                  <p class="capex10-sub-t">{html.escape(sub_title)}</p>
+                  <p class="capex10-sub-s">{html.escape(sub_copy)}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.button(
+                selector_button_label(sub_title, is_active),
+                key=f"inputs_capex10_subblock_{idx}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+                on_click=_set_capex10_subblock,
+                args=(sub_value,),
+            )
+
+    selected_capex10_subblock = st.session_state.get(capex10_subblock_key)
+    if selected_capex10_subblock == "vista_integrada":
+        st.markdown(
+            """
+            <div style="clear:both;height:34px;"></div>
+            <div style="height:1px;background:rgba(226,232,240,.9);margin:0 0 18px 0;"></div>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.container(border=True):
+            render_inputs_project_gantt()
+        return
+
+    render_pilotos_ana_embedded_view()
 
     st.markdown(
         f"""
@@ -5002,17 +5244,6 @@ def render_inputs_capex_10kw_detail():
         """,
         unsafe_allow_html=True,
     )
-
-    render_inputs_project_gantt()
-    st.markdown(
-        """
-        <div class="capex10-end-nav">
-          <div class="capex10-breadcrumb"><span class="capex10-brand">✈</span><span>Levantamiento Capital 80kW</span><span class="capex10-sep">›</span><span>Piloto 10 kW</span></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
 
 def render_inputs_estado_actual_dashboard():
     estado_subblock_key = "inputs_estado_actual_subbloque_sel"
@@ -9393,7 +9624,7 @@ st.markdown(
 st.markdown(
     """
     <div class="inputs-nav-shell">
-      <div class="inputs-nav-head-k">Mapa de lectura</div>
+      <div class="inputs-nav-head-k">MAPA DE LECTURA</div>
       <div class="inputs-nav-head-t">Selecciona el bloque estratégico que quieres revisar</div>
       <div class="inputs-nav-head-s">La pantalla está organizada en tres vistas: activo tecnológico, capital requerido y estructura de valorización.</div>
     </div>

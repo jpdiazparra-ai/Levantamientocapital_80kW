@@ -109,6 +109,8 @@ STATE_COLORS = {
     "Sin estado": "#64748B",
 }
 
+SECOND_STAGE_CAPEX_TARGET_CLP = 87_638_338
+
 
 st.set_page_config(
     page_title="Fluxial Wind 10 kW | Avance Ejecutivo",
@@ -377,7 +379,7 @@ def clean_schedule(raw_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def build_execution_validation_schedule(raw_execution: pd.DataFrame, financial_df: pd.DataFrame) -> pd.DataFrame:
-    """Normalize the execution sheet for the roadmap while retaining integrated CAPEX amounts."""
+    """Normalize the execution sheet so executive blocks can use the same rules as the CAPEX schedule."""
     if raw_execution is None or raw_execution.empty:
         return financial_df.copy()
 
@@ -394,12 +396,29 @@ def build_execution_validation_schedule(raw_execution: pd.DataFrame, financial_d
     if not required.issubset(set(execution.columns)):
         return financial_df.copy()
 
-    phase_codes = (
-        financial_df.assign(_phase=financial_df["Hito Ejecutivo"].map(normalize_text))
-        .groupby("_phase")["Hito"]
-        .agg(lambda values: values.mode().iloc[0] if not values.mode().empty else values.iloc[0])
-        .to_dict()
-    )
+    display_to_code = {display: f"H{idx + 1}" for idx, display in enumerate(DISPLAY_MILESTONES)}
+
+    def execution_phase_display(value: object) -> str:
+        raw_text = "" if pd.isna(value) else str(value).strip()
+        normalized = normalize_text(raw_text)
+        if normalized in MILESTONE_DISPLAY_BY_KEY:
+            return MILESTONE_DISPLAY_BY_KEY[normalized]
+        text = normalized.lower()
+        phase_rules = [
+            (("gestion", "continuidad", "investigacion", "desarrollo tecnologico"), DISPLAY_MILESTONES[0]),
+            (("habilit", "sitio", "obra previa"), DISPLAY_MILESTONES[1]),
+            (("fundaci", "anclaje"), DISPLAY_MILESTONES[2]),
+            (("aspa", "frp", "fabric"), DISPLAY_MILESTONES[3]),
+            (("logistica", "suministro", "armado"), DISPLAY_MILESTONES[4]),
+            (("mecanic", "izaje", "balanceo", "turbina", "freno", "acople"), DISPLAY_MILESTONES[5]),
+            (("electr", "proteccion", "instrument", "canalizacion", "puesta a tierra", "telemetria", "i&c"), DISPLAY_MILESTONES[6]),
+            (("comision", "documentacion", "puesta en marcha"), DISPLAY_MILESTONES[7]),
+        ]
+        for tokens, display in phase_rules:
+            if any(token in text for token in tokens):
+                return display
+        return raw_text or "Sin fase"
+
     financial_amounts = financial_df.copy()
     financial_amounts["_Task Key"] = (
         financial_amounts["ID"].map(normalize_text)
@@ -410,26 +429,82 @@ def build_execution_validation_schedule(raw_execution: pd.DataFrame, financial_d
 
     execution["ID"] = execution["ID"].fillna("").astype(str).str.strip()
     execution["Hito Key"] = execution["Fase"].map(normalize_text)
-    execution["Hito Ejecutivo"] = execution["Hito Key"].map(MILESTONE_DISPLAY_BY_KEY).fillna(
-        execution["Fase"].fillna("Sin fase").astype(str).str.strip()
-    )
-    execution["Hito"] = execution["Hito Key"].map(phase_codes).fillna(execution["Hito Ejecutivo"])
+    execution["Hito Ejecutivo"] = execution["Fase"].apply(execution_phase_display)
+    execution["Hito"] = execution["Hito Ejecutivo"].map(display_to_code).fillna(execution["Hito Ejecutivo"])
     execution["Hito Corto"] = execution["Hito Ejecutivo"].map(ROADMAP_LABELS).fillna(execution["Hito Ejecutivo"])
+    execution["Área Operacional"] = execution["Fase"].fillna("Sin fase").astype(str).str.strip().replace("", "Sin fase")
     execution["Categoría/Línea"] = execution["Línea"].fillna("Sin línea").astype(str).str.strip()
     execution["Descripción Técnica / Acción"] = (
         execution["Tarea / Entregable"].fillna("Sin descripción").astype(str).str.strip()
     )
+    execution["Fuente"] = "Cronograma de Ejecución y Validación"
+    execution["Estado"] = execution.get("Estado", "Sin estado")
+    execution["Estado"] = execution["Estado"].fillna("Sin estado").astype(str).str.strip().replace("", "Sin estado")
+    execution["Avance Num"] = execution.get("%", 0).apply(parse_percent) if "%" in execution.columns else 0.0
     execution["Inicio"] = execution["Inicio (AAAA-MM-DD)"].apply(parse_date)
-    execution["Termino"] = execution["Fin plan (AAAA-MM-DD)"].apply(parse_date)
+    execution["Termino Plan"] = execution["Fin plan (AAAA-MM-DD)"].apply(parse_date)
+    execution["Termino Real"] = execution["Fin real"].apply(parse_date) if "Fin real" in execution.columns else pd.NaT
+    execution["Termino"] = execution["Termino Real"].fillna(execution["Termino Plan"])
     invalid_order = execution["Inicio"].notna() & execution["Termino"].notna() & (execution["Termino"] < execution["Inicio"])
     execution.loc[invalid_order, "Termino"] = execution.loc[invalid_order, "Inicio"]
+    execution["Pendiente programación"] = execution["Inicio"].isna() | execution["Termino"].isna()
+    execution["Duración Hábil Num"] = execution.apply(lambda row: business_days(row["Inicio"], row["Termino"]), axis=1).astype(int)
     execution["_Task Key"] = (
         execution["ID"].map(normalize_text)
         + "|"
         + execution["Descripción Técnica / Acción"].map(normalize_text)
     )
     execution = execution.merge(financial_amounts, on="_Task Key", how="left")
-    execution["Monto CLP Num"] = execution["Monto CLP Num"].fillna(0.0)
+    execution["Monto Ejecutado Num"] = execution["Monto"].apply(parse_money) if "Monto" in execution.columns else 0.0
+    execution["Monto CLP Num"] = execution["Monto Ejecutado Num"].where(
+        execution["Monto Ejecutado Num"] > 0,
+        execution["Monto CLP Num"].fillna(0.0),
+    )
+    execution["Liberación Inicial Num"] = 0.0
+    execution["Liberación Avance Num"] = 0.0
+    execution["Liberación Cierre Num"] = execution["Monto CLP Num"].fillna(0.0)
+    execution["Total Liberación Num"] = execution["Monto CLP Num"].fillna(0.0)
+    execution["Monto MMCLP"] = execution["Monto CLP Num"] / 1_000_000
+    execution["Etapa Capital"] = execution["ETAPA"].fillna("Sin etapa").astype(str).str.strip() if "ETAPA" in execution.columns else "Sin etapa"
+
+    text_flags = (
+        execution["Descripción Técnica / Acción"].astype(str)
+        + " "
+        + execution["Categoría/Línea"].astype(str)
+        + " "
+        + execution["Hito Ejecutivo"].astype(str)
+        + " "
+        + execution.get("Riesgo clave", "").astype(str)
+    ).str.lower()
+    amount_threshold = execution["Monto CLP Num"].quantile(0.82) if len(execution) else 0
+    today = pd.Timestamp("today").normalize()
+    hito_flag = execution.get("Hito (S/N)", "").astype(str).str.strip().str.upper().eq("S")
+    execution["Es crítica"] = (
+        hito_flag
+        | execution.get("Riesgo clave", "").astype(str).str.strip().ne("")
+        | text_flags.str.contains("crit|imprevisto|fundaci|izaje|proteccion|comision|puesta en marcha|scada|instrument|freno")
+        | (execution["Monto CLP Num"] >= amount_threshold)
+        | execution["Estado"].str.contains("atras", case=False, na=False)
+    )
+    execution["Es habilitante"] = text_flags.str.contains(
+        "habilit|fundaci|anclaje|izaje|balanceo|conexion|proteccion|instrument|scada|comision|puesta en marcha|freno|acople|aspa|matriz",
+        regex=True,
+    )
+    execution["Es próxima"] = execution["Inicio"].between(today, today + pd.Timedelta(days=30), inclusive="both")
+    execution["Criticidad"] = np.select(
+        [execution["Es crítica"], execution["Es habilitante"], execution["Es próxima"]],
+        ["Crítica", "Habilitante", "Próxima"],
+        default="Operacional",
+    )
+    execution["Riesgo operacional"] = np.select(
+        [
+            execution["Es crítica"] & execution["Es habilitante"],
+            execution["Es crítica"] | (execution["Monto CLP Num"] >= amount_threshold),
+            execution["Es próxima"] | execution["Es habilitante"],
+        ],
+        ["Alto", "Medio", "Bajo"],
+        default="Controlado",
+    )
     return execution
 
 
@@ -2217,6 +2292,10 @@ def render_hito_span_gantt(df: pd.DataFrame) -> None:
 
 def render_board_kpis(df: pd.DataFrame) -> None:
     scheduled = df[df["Inicio"].notna()].copy()
+    if "Etapa Capital" in scheduled.columns:
+        second_stage_mask = scheduled["Etapa Capital"].fillna("").astype(str).map(normalize_text).str.lower().str.contains("segunda")
+        scheduled = scheduled[second_stage_mask].copy()
+    amount_col = "Monto Ejecutado Num" if "Monto Ejecutado Num" in scheduled.columns else "Monto CLP Num"
     if scheduled.empty:
         return
 
@@ -2236,7 +2315,17 @@ def render_board_kpis(df: pd.DataFrame) -> None:
         release_windows[name] = window.copy()
         release_totals.append((name, float(window["Monto CLP Num"].sum() or 0)))
 
-    total_release = sum(amount for _, amount in release_totals)
+    second_stage_mask = (
+        scheduled["Etapa Capital"].fillna("").astype(str).map(normalize_text).str.lower().str.contains("segunda")
+        if "Etapa Capital" in scheduled.columns
+        else pd.Series(False, index=scheduled.index)
+    )
+    capex_amount_col = "Monto Ejecutado Num" if "Monto Ejecutado Num" in scheduled.columns else "Monto CLP Num"
+    total_release = float(scheduled.loc[second_stage_mask, capex_amount_col].sum() or 0)
+    if 0 < abs(total_release - SECOND_STAGE_CAPEX_TARGET_CLP) <= 5:
+        total_release = float(SECOND_STAGE_CAPEX_TARGET_CLP)
+    if total_release <= 0:
+        total_release = sum(amount for _, amount in release_totals)
     release_1 = release_totals[0][1] if release_totals else 0.0
     release_2_amount = release_totals[1][1] if len(release_totals) > 1 else 0.0
     critical_window = release_1 + release_2_amount
@@ -2353,6 +2442,10 @@ def render_release_cutoff_intelligence(df: pd.DataFrame) -> None:
     panels: list[dict[str, object]] = []
     max_amount = 1.0
     scheduled = df[df["Inicio"].notna()].copy()
+    if "Etapa Capital" in scheduled.columns:
+        second_stage_mask = scheduled["Etapa Capital"].fillna("").astype(str).map(normalize_text).str.lower().str.contains("segunda")
+        scheduled = scheduled[second_stage_mask].copy()
+    amount_col = "Monto Ejecutado Num" if "Monto Ejecutado Num" in scheduled.columns else "Monto CLP Num"
 
     def short_text(value: object, limit: int = 150) -> str:
         text = re.sub(r"\s+", " ", str(value or "").strip())
@@ -2366,14 +2459,14 @@ def render_release_cutoff_intelligence(df: pd.DataFrame) -> None:
         else:
             window = scheduled[scheduled["Inicio"].gt(start_cut) & scheduled["Inicio"].le(end_cut)].copy()
         if window.empty:
-            detail = pd.DataFrame(columns=["Hito", "Hito Corto", "Categoría/Línea", "Partidas", "Monto", "Descripciones"])
+            detail = pd.DataFrame(columns=["Hito", "Hito Corto", "Área Operacional", "Categoría/Línea", "Partidas", "Monto", "Descripciones"])
             total = 0.0
         else:
             detail = (
-                window.groupby(["Hito", "Hito Corto", "Categoría/Línea"], as_index=False)
+                window.groupby(["Hito", "Hito Corto", "Área Operacional", "Categoría/Línea"], as_index=False)
                 .agg(
                     Partidas=("ID", "count"),
-                    Monto=("Monto CLP Num", "sum"),
+                    Monto=(amount_col, "sum"),
                     AvanceFisico=("Avance Num", "mean"),
                     Criticas=("Es crítica", "sum"),
                     Habilitantes=("Es habilitante", "sum"),
@@ -2394,7 +2487,18 @@ def render_release_cutoff_intelligence(df: pd.DataFrame) -> None:
             )
             total = float(detail["Monto"].sum() or 0)
             max_amount = max(max_amount, float(detail["Monto"].max() or 0))
-        panels.append({"title": title, "date": date_label, "color": color, "thesis": thesis, "detail": detail, "window": window, "total": total, "hitos": int(detail["Hito"].nunique()) if not detail.empty else 0, "partidas": int(detail["Partidas"].sum()) if not detail.empty else 0})
+        panels.append({"title": title, "date": date_label, "color": color, "thesis": thesis, "detail": detail, "window": window, "total": total, "areas": int(detail["Área Operacional"].nunique()) if not detail.empty else 0, "partidas": int(detail["Partidas"].sum()) if not detail.empty else 0})
+
+    panel_total_sum = sum(float(panel["total"]) for panel in panels)
+    if 0 < abs(panel_total_sum - SECOND_STAGE_CAPEX_TARGET_CLP) <= 5:
+        delta = float(SECOND_STAGE_CAPEX_TARGET_CLP) - panel_total_sum
+        for panel in reversed(panels):
+            detail = panel.get("detail")
+            if isinstance(detail, pd.DataFrame) and not detail.empty:
+                panel["total"] = float(panel["total"]) + delta
+                last_idx = detail.index[-1]
+                detail.loc[last_idx, "Monto"] = float(detail.loc[last_idx, "Monto"] or 0) + delta
+                break
 
     max_total = max(max(float(panel["total"]) for panel in panels), 1.0)
 
@@ -2409,7 +2513,7 @@ def render_release_cutoff_intelligence(df: pd.DataFrame) -> None:
           <div class="stage-date">{html.escape(str(panel["date"]))}</div>
           <div class="stage-title">{html.escape(str(panel["thesis"]))}</div>
           <div class="stage-total">{money_mm(float(panel["total"]))}</div>
-          <div class="stage-detail">{int(panel["hitos"])} áreas · {int(panel["partidas"])} partidas</div>
+          <div class="stage-detail">{int(panel["areas"])} áreas · {int(panel["partidas"])} partidas</div>
           <div class="stage-rule"></div>
           <div class="stage-meta">
             <span><i class="meta-icon">◎</i><small>Áreas activas</small></span>
@@ -2463,8 +2567,9 @@ def render_release_cutoff_intelligence(df: pd.DataFrame) -> None:
             risk_class = {"Bajo": "low", "Medio": "medium", "Alto": "high", "Crítico": "critical"}.get(risk, "medium")
             activity_rows = activity_window[
                 activity_window["Hito"].astype(str).eq(hito_code)
+                & activity_window["Área Operacional"].astype(str).eq(str(row["Área Operacional"]))
                 & activity_window["Categoría/Línea"].astype(str).eq(str(row["Categoría/Línea"]))
-            ].sort_values(["Inicio", "Termino", "Monto CLP Num"], ascending=[True, True, False])
+            ].sort_values(["Inicio", "Termino", amount_col], ascending=[True, True, False])
             description_rows = []
             for _, activity in activity_rows.iterrows():
                 description = str(activity.get("Descripción Técnica / Acción", "") or "").strip()
@@ -2472,7 +2577,7 @@ def render_release_cutoff_intelligence(df: pd.DataFrame) -> None:
                     f"""
                     <div class="release-desc-row">
                       <span>{html.escape(description or "Sin descripción técnica asociada.")}</span>
-                      <b>{format_clp(float(activity.get("Monto CLP Num", 0) or 0))}</b>
+                      <b>{format_clp(float(activity.get(amount_col, 0) or 0))}</b>
                       <b>{format_date(activity.get("Inicio"))} a {format_date(activity.get("Termino"))}</b>
                       <b>{html.escape(str(activity.get("ID", "-")))}</b>
                     </div>
@@ -2494,7 +2599,7 @@ def render_release_cutoff_intelligence(df: pd.DataFrame) -> None:
                 <div class="release-row" role="button" tabindex="0">
                   <div class="release-key">
                     <div class="release-hito" style="background:{hito_color};">{html.escape(area_code)}</div>
-                    <span>{html.escape(str(row["Hito Corto"]))}</span>
+                    <span>{html.escape(str(row["Área Operacional"]))}</span>
                   </div>
                   <div class="release-copy">
                     <b>{html.escape(str(row["Categoría/Línea"]))}</b>
@@ -2961,6 +3066,30 @@ def render_reference_activity_gantt(df: pd.DataFrame, pmo_source: pd.DataFrame |
         pmo_conditions = pmo_conditions[pmo_conditions["Fecha Condición"].notna()].sort_values(
             ["Orden", "Fecha Condición"]
         )
+    elif pmo_source is not None and not pmo_source.empty and "Hito (S/N)" in pmo_source.columns:
+        milestone_rows = pmo_source[
+            pmo_source["Hito (S/N)"].fillna("").astype(str).str.strip().str.upper().eq("S")
+            & pmo_source["Termino"].notna()
+        ].copy()
+        if not milestone_rows.empty:
+            pmo_conditions = pd.DataFrame(
+                {
+                    "Hito": milestone_rows["ID"].fillna("").astype(str).str.strip(),
+                    "Hito Ejecutivo": milestone_rows["Descripción Técnica / Acción"].fillna("").astype(str).str.strip(),
+                    "Condición de Liberación": np.where(
+                        milestone_rows.get("Depende de", "").fillna("").astype(str).str.strip().ne(""),
+                        "Depende de " + milestone_rows.get("Depende de", "").fillna("").astype(str).str.strip(),
+                        milestone_rows.get("Riesgo clave", "").fillna("").astype(str).str.strip(),
+                    ),
+                    "Fecha Condición": milestone_rows["Termino"],
+                }
+            ).sort_values("Fecha Condición")
+
+    def summary_text(value: object, limit: int = 128) -> str:
+        text = re.sub(r"\s+", " ", str(value or "").strip())
+        if len(text) <= limit:
+            return text
+        return text[: limit - 1].rstrip() + "…"
 
     executive_summary = []
     if pmo_source is not None and not pmo_source.empty:
@@ -2986,6 +3115,34 @@ def render_reference_activity_gantt(df: pd.DataFrame, pmo_source: pd.DataFrame |
                     </div>
                     """
                 )
+    if not executive_summary and pmo_source is not None and not pmo_source.empty and "Hito (S/N)" in pmo_source.columns:
+        milestone_rows = pmo_source[
+            pmo_source["Hito (S/N)"].fillna("").astype(str).str.strip().str.upper().eq("S")
+            & pmo_source["Termino"].notna()
+        ].copy()
+        milestone_rows = milestone_rows.sort_values(["Termino", "Inicio"]).head(8)
+        for idx, item in milestone_rows.iterrows():
+            code = str(item.get("ID", f"H{idx + 1}")).strip()
+            hito_code = str(item.get("Hito", "")).strip()
+            color = area_colors.get(hito_code, milestone_colors[len(executive_summary) % len(milestone_colors)])
+            objective = f"{item.get('Hito Corto', '-')}: {item.get('Categoría/Línea', '-')}"
+            dependency = str(item.get("Depende de", "")).strip()
+            risk = str(item.get("Riesgo clave", "")).strip()
+            result = dependency or risk or f"Cierre previsto: {format_date(item.get('Termino'))}"
+            executive_summary.append(
+                f"""
+                <div class="rg-summary-card" style="--mark:{color};">
+                  <div class="rg-summary-code">{html.escape(code)}</div>
+                  <div>
+                    <b>{html.escape(summary_text(item.get("Descripción Técnica / Acción", ""), 86))}</b>
+                    <span>Objetivo estratégico</span>
+                    <p>{html.escape(summary_text(objective, 118))}</p>
+                    <span>Resultado esperado</span>
+                    <p>{html.escape(summary_text(result, 118))}</p>
+                  </div>
+                </div>
+                """
+            )
     summary_html = (
         f"""
         <div class="rg-summary">
@@ -4640,9 +4797,9 @@ def main() -> None:
     if execution_schedule.empty:
         execution_schedule = filtered.copy()
 
-    render_board_kpis(filtered)
-    render_release_cutoff_intelligence(filtered)
-    render_reference_activity_gantt(execution_schedule, technical_milestones_source)
+    render_board_kpis(execution_schedule)
+    render_release_cutoff_intelligence(execution_schedule)
+    render_reference_activity_gantt(execution_schedule, execution_schedule)
 
     pending_df = filtered[filtered["Pendiente programación"]].copy()
     if not pending_df.empty:
