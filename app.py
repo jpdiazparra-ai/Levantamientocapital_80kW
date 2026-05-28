@@ -3799,22 +3799,22 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
     insights_html = "".join(f"<li>{html.escape(item)}</li>" for item in insights)
 
     st.markdown(
-        f"""
+        textwrap.dedent(f"""
         <style>
-        .epc-report{{font-family:Arial,Helvetica,sans-serif;color:#102039;margin:18px 0 8px;width:100%;max-width:none;overflow:hidden;}}
-        .epc-title{{font-size:24px;line-height:1.05;font-weight:950;letter-spacing:.02em;color:#0b1736;margin:0 0 7px;text-transform:uppercase;}}
-        .epc-subtitle{{font-size:13px;color:#52657f;font-weight:650;margin:0 0 15px;}}
+        .epc-report{{font-family:inherit;color:#102039;margin:18px 0 8px;width:100%;max-width:none;overflow:hidden;}}
+        .epc-title{{font-family:inherit;font-size:24px;line-height:1.05;font-weight:950;letter-spacing:.02em;color:#0b1736;margin:0 0 7px;text-transform:uppercase;}}
+        .epc-subtitle{{font-family:inherit;font-size:13px;color:#52657f;font-weight:650;margin:0 0 15px;}}
         .epc-kpi-grid{{display:grid;grid-template-columns:repeat(6,minmax(138px,1fr));gap:11px;margin-bottom:12px;}}
         .epc-kpi,.epc-panel{{border:1px solid #dfe8f2;border-radius:10px;background:#fff;box-shadow:0 7px 17px rgba(15,23,42,.06);}}
         .epc-kpi{{padding:15px 18px 14px;min-height:92px;min-width:0;}}
-        .epc-kpi-label{{font-size:9px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;}}
+        .epc-kpi-label{{font-family:inherit;font-size:9px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;}}
         .epc-kpi-value{{font-size:clamp(16px,1.35vw,23px);font-weight:950;color:#071a44;line-height:1;white-space:nowrap;}}
         .epc-kpi-note{{font-size:11px;color:#52657f;font-weight:800;margin-top:10px;}}
         .epc-main-grid{{display:grid;grid-template-columns:minmax(0,1.46fr) minmax(0,.94fr) minmax(0,1fr);gap:0;margin-bottom:0;}}
         .epc-panel{{border-radius:10px 10px 0 0;box-shadow:none;padding:14px 18px 12px;min-height:363px;min-width:0;}}
         .epc-panel + .epc-panel{{border-left:0;}}
-        .epc-panel-title{{font-size:14px;font-weight:950;color:#0b1b43;margin:0 0 7px;}}
-        .epc-panel-sub{{font-size:11px;font-weight:750;color:#657692;margin:0 0 11px;}}
+        .epc-panel-title{{font-family:inherit;font-size:14px;font-weight:950;color:#0b1b43;margin:0 0 7px;}}
+        .epc-panel-sub{{font-family:inherit;font-size:11px;font-weight:750;color:#657692;margin:0 0 11px;}}
         .epc-chart-legend{{display:flex;gap:clamp(14px,3vw,34px);justify-content:center;align-items:center;margin:0 0 8px;font-size:12px;color:#102039;}}
         .epc-chart-legend span{{display:inline-flex;align-items:center;gap:8px;}}
         .epc-legend-box{{width:12px;height:12px;border-radius:1px;display:inline-block;}}
@@ -3920,7 +3920,7 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
           </div>
           <div class="epc-foot">Valores expresados en millones de CLP (MM CLP) &nbsp; | &nbsp; Piloto: Inversión experimental &nbsp; | &nbsp; Comercial: Referencia objetivo a escala comercial</div>
         </div>
-        """,
+        """).strip(),
         unsafe_allow_html=True,
     )
 
