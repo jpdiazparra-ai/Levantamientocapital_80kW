@@ -3411,6 +3411,7 @@ def render_inputs_gantt_design_css() -> None:
         }
         .gantt-bar{
             position:absolute;height:13px;top:50%;transform:translateY(-50%);border-radius:999px;
+            background:var(--bar-color,#64748b);
             background:linear-gradient(180deg,color-mix(in srgb,var(--bar-color) 82%,#ffffff),var(--bar-color))!important;
             box-shadow:0 4px 11px color-mix(in srgb,var(--bar-color) 24%,transparent), inset 0 1px 0 rgba(255,255,255,.34);
             cursor:help;
@@ -4139,7 +4140,8 @@ def render_inputs_gantt_custom_chart(
                 f'<div class="gantt-bar-cell">'
                 f'{row_today_marker}'
                 f'<span class="gantt-bar{milestone_class}" title="{tooltip}" aria-label="{tooltip}" '
-                f'style="--bar-color:{bar_color};left:{left:.4f}%;width:{width:.4f}%;"></span>'
+                f'style="--bar-color:{bar_color};background-color:{bar_color};'
+                f'left:{left:.4f}%;width:{width:.4f}%;"></span>'
                 f'<span class="gantt-end-date" style="left:{date_left:.4f}%;">{html.escape(end_label)}</span>'
                 f'</div>'
             )
