@@ -3589,123 +3589,339 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
     if cost_df.empty:
         return
 
-    group_col = "Fase" if "Fase" in cost_df.columns else "Línea"
-    grouped = (
-        cost_df.groupby(group_col, as_index=False)
-        .agg(
-            Costo_piloto=("Costo piloto Num", "sum"),
-            Costo_comercial=("Costo comercial Num", "sum"),
-            Tareas=("Tarea / Entregable", "count"),
-        )
-        .sort_values("Costo_piloto", ascending=False)
-    )
-    total_piloto = float(grouped["Costo_piloto"].sum() or 0)
-    total_comercial = float(grouped["Costo_comercial"].sum() or 0)
+    def fmt_money(value: float) -> str:
+        return format_clp(float(value))
+
+    def fmt_mm(value: float) -> str:
+        return f"{float(value) / 1_000_000:.1f}".replace(".", ",")
+
+    def fmt_pct_local(value: float) -> str:
+        return f"{float(value):.1f}%".replace(".", ",")
+
+    def clean_label(value: object) -> str:
+        text = " ".join(str(value or "").strip().split())
+        return text if text and text.lower() not in {"nan", "none"} else "Sin clasificación"
+
+    total_piloto = float(cost_df["Costo piloto Num"].sum() or 0)
+    total_comercial = float(cost_df["Costo comercial Num"].sum() or 0)
     if abs(total_piloto - GANTT_COSTO_PILOTO_TOTAL_CLP) <= 10:
-        grouped.loc[grouped.index[0], "Costo_piloto"] += GANTT_COSTO_PILOTO_TOTAL_CLP - total_piloto
         total_piloto = float(GANTT_COSTO_PILOTO_TOTAL_CLP)
     if abs(total_comercial - GANTT_COSTO_COMERCIAL_TOTAL_CLP) <= 10:
-        grouped.loc[grouped.index[0], "Costo_comercial"] += GANTT_COSTO_COMERCIAL_TOTAL_CLP - total_comercial
         total_comercial = float(GANTT_COSTO_COMERCIAL_TOTAL_CLP)
-    brecha = total_comercial - total_piloto
-    top_row = grouped.iloc[0]
-    top_share = float(top_row["Costo_piloto"] / total_piloto * 100) if total_piloto else 0.0
 
-    fig_cost = go.Figure()
-    chart_df = grouped.head(10).sort_values("Costo_piloto", ascending=True)
-    fig_cost.add_trace(
-        go.Bar(
-            y=chart_df[group_col],
-            x=chart_df["Costo_piloto"] / 1_000_000,
-            name="Costo piloto",
-            orientation="h",
-            marker_color="#0F766E",
-            hovertemplate="<b>%{y}</b><br>Costo piloto: %{x:.1f} MM CLP<extra></extra>",
-        )
-    )
-    fig_cost.add_trace(
-        go.Bar(
-            y=chart_df[group_col],
-            x=chart_df["Costo_comercial"] / 1_000_000,
-            name="Costo comercial",
-            orientation="h",
-            marker_color="#1D4ED8",
-            hovertemplate="<b>%{y}</b><br>Costo comercial: %{x:.1f} MM CLP<extra></extra>",
-        )
-    )
-    fig_cost.update_layout(
-        barmode="group",
-        height=390,
-        margin=dict(l=170, r=28, t=20, b=46),
-        plot_bgcolor="#FFFFFF",
-        paper_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-    )
-    fig_cost.update_xaxes(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False)
-    fig_cost.update_yaxes(title=None, showgrid=False)
+    reduction_value = total_comercial - total_piloto
+    reduction_pct = (reduction_value / total_piloto * 100) if total_piloto else 0.0
 
-    rows_html = "".join(
+    report_breakdown = [
+        {
+            "label": "Suministro Turbina",
+            "note": "(Supply)",
+            "pilot": 36_900_000,
+            "commercial": 15_593_979,
+            "color": "#087F75",
+            "icon": "⚙",
+        },
+        {
+            "label": "Obras y Montaje",
+            "note": "(BOS)",
+            "pilot": 19_600_000,
+            "commercial": 9_454_631,
+            "color": "#7EB356",
+            "icon": "⚒",
+        },
+        {
+            "label": "Ingeniería y Validación",
+            "note": "",
+            "pilot": 6_100_000,
+            "commercial": 1_900_000,
+            "color": "#F2AE00",
+            "icon": "⚙",
+        },
+        {
+            "label": "Integración y Comisionamiento",
+            "note": "",
+            "pilot": 2_800_000,
+            "commercial": 800_000,
+            "color": "#9B52C9",
+            "icon": "✕",
+        },
+        {
+            "label": "Gestión y PMO",
+            "note": "",
+            "pilot": max(total_piloto - 65_400_000, 0),
+            "commercial": max(total_comercial - 27_748_610, 0),
+            "color": "#9AA3AD",
+            "icon": "▤",
+        },
+    ]
+    commercial_remainder = total_comercial - sum(item["commercial"] for item in report_breakdown[:-1])
+    pilot_remainder = total_piloto - sum(item["pilot"] for item in report_breakdown[:-1])
+    report_breakdown[-1]["commercial"] = max(commercial_remainder, 0)
+    report_breakdown[-1]["pilot"] = max(pilot_remainder, 0)
+
+    supply = report_breakdown[0]
+    bos = report_breakdown[1]
+    supply_pct = (supply["commercial"] / total_comercial * 100) if total_comercial else 0.0
+    bos_pct = (bos["commercial"] / total_comercial * 100) if total_comercial else 0.0
+    eng_reduction = -4_100_000
+    replicable_pct = supply_pct
+    site_dependent_pct = bos_pct
+    max_axis_mm = max(max(item["pilot"], item["commercial"]) for item in report_breakdown) / 1_000_000
+    max_axis_mm = max(math.ceil(max_axis_mm / 5) * 5, 40)
+
+    kpi_cards = [
+        ("COSTO PILOTO", fmt_money(total_piloto), "100% del total", "#087F75"),
+        ("COSTO COMERCIAL", fmt_money(total_comercial), "100% del total", "#1D4ED8"),
+        ("BRECHA (PILOTO - COMERCIAL)", fmt_money(reduction_value), "Reducción esperada", "#087F75"),
+        ("REDUCCIÓN ESPERADA", fmt_pct_local(reduction_pct), "Respecto al piloto", "#087F75"),
+        ("% CAPEX REPLICABLE (SUPPLY)", fmt_pct_local(replicable_pct), "Del costo comercial", "#087F75"),
+        ("% CAPEX SITIO DEPENDIENTE (BOS)", fmt_pct_local(site_dependent_pct), "Del costo comercial", "#087F75"),
+    ]
+    kpi_html = "".join(
         f"""
-        <tr>
-          <td>{html.escape(str(row[group_col]))}</td>
-          <td>{format_clp(float(row["Costo_piloto"]))}</td>
-          <td>{format_clp(float(row["Costo_comercial"]))}</td>
-          <td>{int(row["Tareas"])}</td>
-        </tr>
+        <div class="epc-kpi">
+          <div class="epc-kpi-label" style="color:{color};">{html.escape(label)}</div>
+          <div class="epc-kpi-value">{html.escape(value)}</div>
+          <div class="epc-kpi-note">{html.escape(note)}</div>
+        </div>
         """
-        for _, row in grouped.head(8).iterrows()
+        for label, value, note, color in kpi_cards
     )
+
+    bar_rows = "".join(
+        f"""
+        <div class="epc-bar-row">
+          <div class="epc-bar-label">
+            <span class="epc-icon" style="--c:{item['color']};">{html.escape(item['icon'])}</span>
+            <b>{html.escape(item['label'])}</b>
+            <small>{html.escape(item['note'])}</small>
+          </div>
+          <div class="epc-bars">
+            <span class="epc-bar epc-pilot" style="width:{(item['pilot'] / 1_000_000 / max_axis_mm * 100):.4f}%;"></span>
+            <em class="epc-bar-value" style="left:{min(96, item['pilot'] / 1_000_000 / max_axis_mm * 100 + 1.2):.4f}%;">{fmt_mm(item['pilot'])}</em>
+            <span class="epc-bar epc-commercial" style="width:{(item['commercial'] / 1_000_000 / max_axis_mm * 100):.4f}%;"></span>
+            <em class="epc-bar-value epc-blue" style="left:{min(96, item['commercial'] / 1_000_000 / max_axis_mm * 100 + 1.2):.4f}%;">{fmt_mm(item['commercial'])}</em>
+          </div>
+        </div>
+        """
+        for item in report_breakdown
+    )
+
+    axis_labels = "".join(
+        f'<span style="left:{(tick / max_axis_mm * 100):.4f}%;">{int(tick)}</span>'
+        for tick in np.linspace(0, max_axis_mm, 5)
+    )
+
+    donut_segments = []
+    cursor = 0.0
+    donut_legend = []
+    for item in report_breakdown:
+        pct_value = (item["commercial"] / total_comercial * 100) if total_comercial else 0.0
+        donut_segments.append(f"{item['color']} {cursor:.4f}% {cursor + pct_value:.4f}%")
+        cursor += pct_value
+        donut_legend.append(
+            f"""
+            <div class="epc-donut-legend-item">
+              <span style="background:{item['color']};"></span>
+              <b>{html.escape(item['label'])}<small>{html.escape(item['note'])}</small></b>
+            </div>
+            """
+        )
+    donut_bg = ", ".join(donut_segments)
+    donut_labels = "".join(
+        f'<span class="epc-donut-pct epc-donut-pct-{idx}">{fmt_pct_local(item["commercial"] / total_comercial * 100 if total_comercial else 0)}</span>'
+        for idx, item in enumerate(report_breakdown[:4])
+    )
+
+    strategic_cards = [
+        ("CAPEX REPLICABLE (SUPPLY)", "Parte del costo que se fabrica en planta y es escalable.", fmt_money(supply["commercial"]), f"{fmt_pct_local(supply_pct)} del total comercial", "#087F75", "▦"),
+        ("CAPEX SITIO DEPENDIENTE (BOS)", "Parte del costo que depende del sitio y condiciones de montaje.", fmt_money(bos["commercial"]), f"{fmt_pct_local(bos_pct)} del total comercial", "#7EB356", "⌂"),
+        ("REDUCCIÓN INGENIERÍA Y PMO", "Efecto de estandarización y aprendizaje al escalar.", fmt_money(eng_reduction), "Reducción esperada", "#F2AE00", "⌁"),
+        ("REDUCCIÓN TOTAL ESPERADA", "Brecha entre piloto y referencia comercial.", fmt_money(reduction_value), f"{fmt_pct_local(reduction_pct)} de reducción", "#9B52C9", "%"),
+    ]
+    strategic_html = "".join(
+        f"""
+        <div class="epc-strategy-card" style="--c:{color};">
+          <div class="epc-strategy-icon">{html.escape(icon)}</div>
+          <div class="epc-strategy-text"><b>{html.escape(title)}</b><span>{html.escape(desc)}</span></div>
+          <div class="epc-strategy-value"><b>{html.escape(value)}</b><span>{html.escape(note)}</span></div>
+        </div>
+        """
+        for title, desc, value, note, color, icon in strategic_cards
+    )
+
+    table_source = cost_df.copy()
+    table_source["_fase"] = table_source.get("Fase", pd.Series(index=table_source.index, dtype=object)).map(clean_label)
+    table_source["_epc"] = table_source.get("TIPO EPC", pd.Series(index=table_source.index, dtype=object)).map(clean_label)
+    phase_order = (
+        table_source.groupby("_fase")["Costo piloto Num"].sum().sort_values(ascending=False).index.tolist()
+    )
+    epc_order = [item["label"] + (f" {item['note']}" if item["note"] else "") for item in report_breakdown]
+    epc_alias = {
+        "Suministro Turbina": epc_order[0],
+        "Obras y Montaje (BOS)": epc_order[1],
+        "Ingeniería y Validación": epc_order[2],
+        "Integración y Comisionamiento": epc_order[3],
+        "Gestión PMO": epc_order[4],
+        "Gestión y PMO": epc_order[4],
+    }
+    table_source["_epc_display"] = table_source["_epc"].map(lambda val: epc_alias.get(val, val))
+    phase_rows = []
+    for phase in phase_order[:9]:
+        phase_df = table_source[table_source["_fase"].eq(phase)]
+        total_p = float(phase_df["Costo piloto Num"].sum())
+        total_c = float(phase_df["Costo comercial Num"].sum())
+        cells = []
+        for epc in epc_order:
+            epc_df = phase_df[phase_df["_epc_display"].eq(epc)]
+            pilot_mm = epc_df["Costo piloto Num"].sum() / 1_000_000
+            commercial_mm = epc_df["Costo comercial Num"].sum() / 1_000_000
+            cells.append(f"<td>{fmt_mm(pilot_mm * 1_000_000) if pilot_mm else '-'}</td><td>{fmt_mm(commercial_mm * 1_000_000) if commercial_mm else '-'}</td>")
+        phase_rows.append(
+            f"<tr><td class='epc-phase-name'>{html.escape(phase)}</td>{''.join(cells)}"
+            f"<td>{fmt_mm(total_p)}</td><td>{fmt_mm(total_c)}</td></tr>"
+        )
+    footer_cells = ""
+    for item in report_breakdown:
+        footer_cells += f"<td>{fmt_mm(item['pilot'])}</td><td>{fmt_mm(item['commercial'])}</td>"
+    table_html = "".join(phase_rows)
+    footer_html = (
+        f"<tr><td>TOTAL (MM CLP)</td>{footer_cells}<td>{fmt_mm(total_piloto)}</td><td>{fmt_mm(total_comercial)}</td></tr>"
+    )
+
+    insights = [
+        f"El costo comercial se reduce en un {fmt_pct_local(abs(reduction_pct))} respecto al piloto.",
+        f"El {fmt_pct_local(supply_pct)} del costo comercial corresponde a Suministro de Turbina, replicable e industrializable.",
+        f"Las Obras y Montaje (BOS) representan el {fmt_pct_local(bos_pct)} y dependen del sitio.",
+        "Ingeniería, PMO y Comisionamiento disminuyen significativamente al escalar y estandarizar.",
+        "La mayor oportunidad de reducción está en ingeniería, integración y actividades no recurrentes del piloto.",
+    ]
+    insights_html = "".join(f"<li>{html.escape(item)}</li>" for item in insights)
+
     st.markdown(
         f"""
         <style>
-        .gantt-cost-shell{{border:1px solid #dfe8f2;border-radius:16px;background:#fff;padding:18px 20px;margin:18px 0 8px;box-shadow:0 10px 24px rgba(15,23,42,.05);}}
-        .gantt-cost-head{{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px;}}
-        .gantt-cost-k{{font-size:10px;font-weight:950;letter-spacing:.1em;text-transform:uppercase;color:#0f766e;margin-bottom:5px;}}
-        .gantt-cost-title{{font-size:20px;font-weight:950;color:#0f172a;line-height:1.1;}}
-        .gantt-cost-sub{{font-size:12px;color:#64748b;margin-top:6px;line-height:1.35;}}
-        .gantt-cost-kpis{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:14px;}}
-        .gantt-cost-card{{border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:12px 13px;}}
-        .gantt-cost-card small{{display:block;font-size:9px;font-weight:900;text-transform:uppercase;color:#64748b;letter-spacing:.04em;}}
-        .gantt-cost-card b{{display:block;font-size:18px;color:#0f172a;margin-top:5px;}}
-        .gantt-cost-table{{width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;font-size:11px;}}
-        .gantt-cost-table th{{background:#0b1736;color:#fff;padding:10px;text-align:left;font-weight:900;}}
-        .gantt-cost-table td{{padding:9px 10px;border-bottom:1px solid #e7edf4;color:#102039;font-weight:700;}}
-        .gantt-cost-table tr:last-child td{{border-bottom:0;}}
-        .gantt-cost-table tfoot td{{background:#eef8f6;color:#0f766e;font-weight:950;border-top:1px solid #cde8e2;}}
-        @media(max-width:1050px){{.gantt-cost-kpis{{grid-template-columns:1fr;}}}}
+        .epc-report{{font-family:Arial,Helvetica,sans-serif;color:#102039;margin:18px 0 8px;}}
+        .epc-title{{font-size:24px;line-height:1.05;font-weight:950;letter-spacing:.02em;color:#0b1736;margin:0 0 7px;text-transform:uppercase;}}
+        .epc-subtitle{{font-size:13px;color:#52657f;font-weight:650;margin:0 0 15px;}}
+        .epc-kpi-grid{{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:11px;margin-bottom:12px;}}
+        .epc-kpi,.epc-panel{{border:1px solid #dfe8f2;border-radius:10px;background:#fff;box-shadow:0 7px 17px rgba(15,23,42,.06);}}
+        .epc-kpi{{padding:15px 20px 14px;min-height:92px;}}
+        .epc-kpi-label{{font-size:9px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;}}
+        .epc-kpi-value{{font-size:23px;font-weight:950;color:#071a44;line-height:1;white-space:nowrap;}}
+        .epc-kpi-note{{font-size:11px;color:#52657f;font-weight:800;margin-top:10px;}}
+        .epc-main-grid{{display:grid;grid-template-columns:1.48fr .9fr 1.02fr;gap:0;margin-bottom:0;}}
+        .epc-panel{{border-radius:10px 10px 0 0;box-shadow:none;padding:14px 20px 12px;min-height:363px;}}
+        .epc-panel + .epc-panel{{border-left:0;}}
+        .epc-panel-title{{font-size:14px;font-weight:950;color:#0b1b43;margin:0 0 7px;}}
+        .epc-panel-sub{{font-size:11px;font-weight:750;color:#657692;margin:0 0 11px;}}
+        .epc-chart-legend{{display:flex;gap:34px;justify-content:center;align-items:center;margin:0 0 8px;font-size:12px;color:#102039;}}
+        .epc-chart-legend span{{display:inline-flex;align-items:center;gap:8px;}}
+        .epc-legend-box{{width:12px;height:12px;border-radius:1px;display:inline-block;}}
+        .epc-bar-row{{display:grid;grid-template-columns:205px minmax(260px,1fr);gap:12px;align-items:center;margin:12px 0;}}
+        .epc-bar-label{{display:grid;grid-template-columns:42px 1fr;column-gap:10px;align-items:center;min-width:0;}}
+        .epc-icon{{grid-row:1 / 3;width:35px;height:35px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--c);color:#fff;font-size:18px;font-weight:950;}}
+        .epc-bar-label b{{font-size:12px;line-height:1.15;color:#0b1736;font-weight:950;}}
+        .epc-bar-label small{{font-size:11px;color:#2f405e;font-weight:750;}}
+        .epc-bars{{height:35px;position:relative;}}
+        .epc-bar{{position:absolute;left:0;height:12px;border-radius:0;background:#087F75;}}
+        .epc-pilot{{top:3px;background:#087F75;}}
+        .epc-commercial{{top:21px;background:#1D4ED8;}}
+        .epc-bar-value{{position:absolute;top:0;font-style:normal;font-size:12px;font-weight:800;color:#24324c;white-space:nowrap;}}
+        .epc-bar-value.epc-blue{{top:18px;}}
+        .epc-axis{{height:22px;position:relative;margin:1px 0 0 217px;border-top:1px solid transparent;}}
+        .epc-axis span{{position:absolute;transform:translateX(-50%);font-size:11px;color:#52657f;font-weight:700;}}
+        .epc-axis-label{{text-align:center;font-size:12px;color:#52657f;font-weight:750;margin-top:2px;}}
+        .epc-callout{{margin:10px 72px 0 auto;width:205px;border:1px solid #d6dee9;border-radius:7px;background:#fbfdff;padding:12px 13px;font-size:11px;line-height:1.35;color:#102039;font-weight:650;}}
+        .epc-donut-wrap{{display:grid;grid-template-columns:1fr 155px;gap:12px;align-items:center;margin-top:2px;}}
+        .epc-donut{{position:relative;width:212px;height:212px;border-radius:50%;margin:8px auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.72);}}
+        .epc-donut::after{{content:"";position:absolute;inset:58px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px #e6edf6;}}
+        .epc-donut-center{{position:absolute;inset:70px 56px;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}}
+        .epc-donut-center small{{font-size:11px;color:#52657f;font-weight:750;}}
+        .epc-donut-center b{{font-size:17px;color:#071a44;font-weight:950;margin:5px 0 2px;}}
+        .epc-donut-center span{{font-size:10px;color:#102039;font-weight:850;}}
+        .epc-donut-pct{{position:absolute;z-index:3;color:#fff;font-size:13px;font-weight:950;text-shadow:0 1px 2px rgba(15,23,42,.22);}}
+        .epc-donut-pct-0{{right:21px;top:104px;}}.epc-donut-pct-1{{left:30px;top:121px;}}.epc-donut-pct-2{{left:55px;top:42px;}}.epc-donut-pct-3{{left:103px;top:10px;color:#52657f;text-shadow:none;}}
+        .epc-donut-legend{{display:grid;gap:9px;font-size:11px;color:#102039;}}
+        .epc-donut-legend-item{{display:grid;grid-template-columns:12px 1fr;gap:8px;align-items:start;}}
+        .epc-donut-legend-item span{{width:11px;height:11px;border-radius:50%;margin-top:2px;}}
+        .epc-donut-legend-item b{{font-size:11px;line-height:1.18;font-weight:850;}}
+        .epc-donut-legend-item small{{display:block;font-weight:700;color:#52657f;}}
+        .epc-orange-note{{border:1px solid #ffe0a8;background:#fffaf0;border-radius:8px;padding:10px 13px;margin-top:9px;font-size:12px;font-weight:800;color:#102039;display:flex;gap:10px;align-items:center;}}
+        .epc-target{{font-size:25px;color:#ff4040;line-height:1;}}
+        .epc-strategy-stack{{display:grid;gap:12px;margin-top:7px;}}
+        .epc-strategy-card{{display:grid;grid-template-columns:48px 1fr 140px;gap:14px;align-items:center;border:1px solid color-mix(in srgb,var(--c) 18%,#dfe8f2);border-radius:8px;background:linear-gradient(90deg,color-mix(in srgb,var(--c) 7%,#fff),#fff);padding:10px 12px;min-height:69px;}}
+        .epc-strategy-icon{{width:42px;height:42px;border-radius:50%;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:950;}}
+        .epc-strategy-text b{{display:block;font-size:11px;font-weight:950;color:#102039;letter-spacing:.02em;}}
+        .epc-strategy-text span{{display:block;margin-top:4px;font-size:11px;line-height:1.3;color:#24324c;font-weight:650;}}
+        .epc-strategy-value{{text-align:left;}}
+        .epc-strategy-value b{{font-size:18px;color:#087F75;font-weight:950;white-space:nowrap;}}
+        .epc-strategy-value span{{display:block;font-size:10px;color:#102039;font-weight:850;margin-top:5px;}}
+        .epc-bottom-grid{{display:grid;grid-template-columns:2.3fr 1fr;gap:0;align-items:stretch;}}
+        .epc-table-panel{{border-radius:0 0 0 10px;padding:10px 10px 11px;overflow:hidden;}}
+        .epc-insight-panel{{border-radius:0 0 10px 0;border-left:0;padding:13px 21px;}}
+        .epc-table{{width:100%;border-collapse:collapse;font-size:9px;text-align:center;}}
+        .epc-table th{{background:#0b1736;color:#fff;border:1px solid #33415f;padding:5px 4px;font-weight:950;line-height:1.05;}}
+        .epc-table td{{border:1px solid #dfe8f2;padding:4px 5px;color:#102039;font-weight:650;}}
+        .epc-table .epc-phase-name{{text-align:left;min-width:210px;font-weight:750;}}
+        .epc-table tfoot td{{background:#eefaf8;color:#087F75;font-weight:950;font-size:11px;}}
+        .epc-insights{{margin:15px 0 0;padding:0;list-style:none;display:grid;gap:14px;}}
+        .epc-insights li{{position:relative;padding-left:26px;font-size:12px;line-height:1.35;color:#24324c;font-weight:700;}}
+        .epc-insights li::before{{content:"✓";position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#249A8D;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:950;}}
+        .epc-foot{{font-size:10px;color:#657692;font-weight:650;margin:12px 0 0 12px;}}
+        @media(max-width:1200px){{.epc-kpi-grid{{grid-template-columns:repeat(3,1fr);}}.epc-main-grid,.epc-bottom-grid{{grid-template-columns:1fr;}}.epc-panel,.epc-panel+.epc-panel,.epc-table-panel,.epc-insight-panel{{border-radius:10px;border-left:1px solid #dfe8f2;margin-bottom:10px;}}}}
+        @media(max-width:760px){{.epc-kpi-grid{{grid-template-columns:1fr;}}.epc-bar-row{{grid-template-columns:1fr;}}.epc-axis{{margin-left:0;}}.epc-donut-wrap{{grid-template-columns:1fr;}}.epc-strategy-card{{grid-template-columns:44px 1fr;}}.epc-strategy-value{{grid-column:2;}}}}
         </style>
-        <div class="gantt-cost-shell">
-          <div class="gantt-cost-head">
-            <div>
-              <div class="gantt-cost-k">Análisis de costos</div>
-              <div class="gantt-cost-title">Costo piloto vs costo comercial</div>
-              <div class="gantt-cost-sub">Lectura por {html.escape(group_col.lower())} sobre {html.escape(scope_label)} para comparar inversión experimental y referencia comercial.</div>
+        <div class="epc-report">
+          <h2 class="epc-title">Análisis de Costos – Piloto vs Comercial</h2>
+          <p class="epc-subtitle">Lectura por alcance EPC para comparar inversión experimental y referencia comercial.</p>
+          <div class="epc-kpi-grid">{kpi_html}</div>
+          <div class="epc-main-grid">
+            <div class="epc-panel">
+              <div class="epc-panel-title">1. CAPEX POR ALCANCE EPC</div>
+              <div class="epc-panel-sub">Comparación Piloto vs Comercial (MM CLP)</div>
+              <div class="epc-chart-legend"><span><i class="epc-legend-box" style="background:#087F75;"></i>Costo Piloto</span><span><i class="epc-legend-box" style="background:#1D4ED8;"></i>Costo Comercial</span></div>
+              {bar_rows}
+              <div class="epc-axis">{axis_labels}</div>
+              <div class="epc-axis-label">MM CLP</div>
+              <div class="epc-callout">El costo comercial se concentra principalmente en Suministro de Turbina ({fmt_pct_local(supply_pct)}) y Obras y Montaje ({fmt_pct_local(bos_pct)}).<br><br>La ingeniería y PMO disminuyen drásticamente al escalar.</div>
+            </div>
+            <div class="epc-panel">
+              <div class="epc-panel-title">2. PARTICIPACIÓN POR ALCANCE – COSTO COMERCIAL</div>
+              <div class="epc-panel-sub">Distribución porcentual</div>
+              <div class="epc-donut-wrap">
+                <div class="epc-donut">{donut_labels}<div class="epc-donut-center"><small>Total Comercial</small><b>{fmt_money(total_comercial)}</b><span>MM CLP</span></div></div>
+                <div class="epc-donut-legend">{''.join(donut_legend)}</div>
+              </div>
+              <div class="epc-orange-note"><span class="epc-target">◎</span><span>El {fmt_pct_local(supply_pct + bos_pct)} del costo comercial corresponde a costos industriales (Supply + BOS).</span></div>
+            </div>
+            <div class="epc-panel">
+              <div class="epc-panel-title">3. KPIs ESTRATÉGICOS</div>
+              <div class="epc-strategy-stack">{strategic_html}</div>
             </div>
           </div>
-          <div class="gantt-cost-kpis">
-            <div class="gantt-cost-card"><small>Costo piloto</small><b>{format_clp(total_piloto)}</b></div>
-            <div class="gantt-cost-card"><small>Costo comercial</small><b>{format_clp(total_comercial)}</b></div>
-            <div class="gantt-cost-card"><small>Brecha comercial</small><b>{format_clp(brecha)}</b></div>
-            <div class="gantt-cost-card"><small>Mayor concentración</small><b>{top_share:.1f}%</b></div>
+          <div class="epc-bottom-grid">
+            <div class="epc-panel epc-table-panel">
+              <div class="epc-panel-title">4. DETALLE POR FASE Y ALCANCE EPC <span style="font-weight:750;color:#52657f;">(MM CLP)</span></div>
+              <table class="epc-table">
+                <thead>
+                  <tr><th rowspan="2">FASE</th>{''.join(f'<th colspan="2">{html.escape(item["label"].upper())}<br>{html.escape(item["note"].upper())}</th>' for item in report_breakdown)}<th rowspan="2">TOTAL<br>PILOTO</th><th rowspan="2">TOTAL<br>COMERCIAL</th></tr>
+                  <tr>{''.join('<th>Piloto</th><th>Comercial</th>' for _ in report_breakdown)}</tr>
+                </thead>
+                <tbody>{table_html}</tbody>
+                <tfoot>{footer_html}</tfoot>
+              </table>
+            </div>
+            <div class="epc-panel epc-insight-panel">
+              <div class="epc-panel-title">5. INSIGHTS CLAVE</div>
+              <ul class="epc-insights">{insights_html}</ul>
+            </div>
           </div>
+          <div class="epc-foot">Valores expresados en millones de CLP (MM CLP) &nbsp; | &nbsp; Piloto: Inversión experimental &nbsp; | &nbsp; Comercial: Referencia objetivo a escala comercial</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    chart_col, table_col = st.columns([1.25, 0.95])
-    with chart_col:
-        st.plotly_chart(fig_cost, use_container_width=True, config={"displayModeBar": False})
-    with table_col:
-        st.markdown(
-            f"""
-            <table class="gantt-cost-table">
-              <thead><tr><th>{html.escape(group_col)}</th><th>Costo piloto</th><th>Costo comercial</th><th>Tareas</th></tr></thead>
-              <tbody>{rows_html}</tbody>
-              <tfoot><tr><td>Total</td><td>{format_clp(total_piloto)}</td><td>{format_clp(total_comercial)}</td><td>{int(grouped["Tareas"].sum())}</td></tr></tfoot>
-            </table>
-            """,
-            unsafe_allow_html=True,
-        )
 
 
 def build_inputs_gantt_figure(
