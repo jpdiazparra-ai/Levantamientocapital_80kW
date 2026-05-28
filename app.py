@@ -3801,24 +3801,24 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
     st.markdown(
         f"""
         <style>
-        .epc-report{{font-family:Arial,Helvetica,sans-serif;color:#102039;margin:18px 0 8px;}}
+        .epc-report{{font-family:Arial,Helvetica,sans-serif;color:#102039;margin:18px 0 8px;width:100%;max-width:none;overflow:hidden;}}
         .epc-title{{font-size:24px;line-height:1.05;font-weight:950;letter-spacing:.02em;color:#0b1736;margin:0 0 7px;text-transform:uppercase;}}
         .epc-subtitle{{font-size:13px;color:#52657f;font-weight:650;margin:0 0 15px;}}
-        .epc-kpi-grid{{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:11px;margin-bottom:12px;}}
+        .epc-kpi-grid{{display:grid;grid-template-columns:repeat(6,minmax(138px,1fr));gap:11px;margin-bottom:12px;}}
         .epc-kpi,.epc-panel{{border:1px solid #dfe8f2;border-radius:10px;background:#fff;box-shadow:0 7px 17px rgba(15,23,42,.06);}}
-        .epc-kpi{{padding:15px 20px 14px;min-height:92px;}}
+        .epc-kpi{{padding:15px 18px 14px;min-height:92px;min-width:0;}}
         .epc-kpi-label{{font-size:9px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;}}
-        .epc-kpi-value{{font-size:23px;font-weight:950;color:#071a44;line-height:1;white-space:nowrap;}}
+        .epc-kpi-value{{font-size:clamp(16px,1.35vw,23px);font-weight:950;color:#071a44;line-height:1;white-space:nowrap;}}
         .epc-kpi-note{{font-size:11px;color:#52657f;font-weight:800;margin-top:10px;}}
-        .epc-main-grid{{display:grid;grid-template-columns:1.48fr .9fr 1.02fr;gap:0;margin-bottom:0;}}
-        .epc-panel{{border-radius:10px 10px 0 0;box-shadow:none;padding:14px 20px 12px;min-height:363px;}}
+        .epc-main-grid{{display:grid;grid-template-columns:minmax(0,1.46fr) minmax(0,.94fr) minmax(0,1fr);gap:0;margin-bottom:0;}}
+        .epc-panel{{border-radius:10px 10px 0 0;box-shadow:none;padding:14px 18px 12px;min-height:363px;min-width:0;}}
         .epc-panel + .epc-panel{{border-left:0;}}
         .epc-panel-title{{font-size:14px;font-weight:950;color:#0b1b43;margin:0 0 7px;}}
         .epc-panel-sub{{font-size:11px;font-weight:750;color:#657692;margin:0 0 11px;}}
-        .epc-chart-legend{{display:flex;gap:34px;justify-content:center;align-items:center;margin:0 0 8px;font-size:12px;color:#102039;}}
+        .epc-chart-legend{{display:flex;gap:clamp(14px,3vw,34px);justify-content:center;align-items:center;margin:0 0 8px;font-size:12px;color:#102039;}}
         .epc-chart-legend span{{display:inline-flex;align-items:center;gap:8px;}}
         .epc-legend-box{{width:12px;height:12px;border-radius:1px;display:inline-block;}}
-        .epc-bar-row{{display:grid;grid-template-columns:205px minmax(260px,1fr);gap:12px;align-items:center;margin:12px 0;}}
+        .epc-bar-row{{display:grid;grid-template-columns:minmax(155px,28%) minmax(0,1fr);gap:12px;align-items:center;margin:12px 0;}}
         .epc-bar-label{{display:grid;grid-template-columns:42px 1fr;column-gap:10px;align-items:center;min-width:0;}}
         .epc-icon{{grid-row:1 / 3;width:35px;height:35px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--c);color:#fff;font-size:18px;font-weight:950;}}
         .epc-bar-label b{{font-size:12px;line-height:1.15;color:#0b1736;font-weight:950;}}
@@ -3829,35 +3829,35 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
         .epc-commercial{{top:21px;background:#1D4ED8;}}
         .epc-bar-value{{position:absolute;top:0;font-style:normal;font-size:12px;font-weight:800;color:#24324c;white-space:nowrap;}}
         .epc-bar-value.epc-blue{{top:18px;}}
-        .epc-axis{{height:22px;position:relative;margin:1px 0 0 217px;border-top:1px solid transparent;}}
+        .epc-axis{{height:22px;position:relative;margin:1px 0 0 calc(28% + 12px);border-top:1px solid transparent;}}
         .epc-axis span{{position:absolute;transform:translateX(-50%);font-size:11px;color:#52657f;font-weight:700;}}
         .epc-axis-label{{text-align:center;font-size:12px;color:#52657f;font-weight:750;margin-top:2px;}}
-        .epc-callout{{margin:10px 72px 0 auto;width:205px;border:1px solid #d6dee9;border-radius:7px;background:#fbfdff;padding:12px 13px;font-size:11px;line-height:1.35;color:#102039;font-weight:650;}}
-        .epc-donut-wrap{{display:grid;grid-template-columns:1fr 155px;gap:12px;align-items:center;margin-top:2px;}}
-        .epc-donut{{position:relative;width:212px;height:212px;border-radius:50%;margin:8px auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.72);}}
-        .epc-donut::after{{content:"";position:absolute;inset:58px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px #e6edf6;}}
-        .epc-donut-center{{position:absolute;inset:70px 56px;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}}
+        .epc-callout{{margin:10px 0 0 auto;width:min(42%,230px);border:1px solid #d6dee9;border-radius:7px;background:#fbfdff;padding:12px 13px;font-size:11px;line-height:1.35;color:#102039;font-weight:650;}}
+        .epc-donut-wrap{{display:grid;grid-template-columns:minmax(145px,1fr) minmax(105px,.62fr);gap:10px;align-items:center;margin-top:2px;}}
+        .epc-donut{{position:relative;width:min(100%,196px);aspect-ratio:1 / 1;border-radius:50%;margin:8px auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.72);}}
+        .epc-donut::after{{content:"";position:absolute;inset:27.5%;border-radius:50%;background:#fff;box-shadow:0 0 0 1px #e6edf6;}}
+        .epc-donut-center{{position:absolute;inset:33% 24%;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}}
         .epc-donut-center small{{font-size:11px;color:#52657f;font-weight:750;}}
-        .epc-donut-center b{{font-size:17px;color:#071a44;font-weight:950;margin:5px 0 2px;}}
+        .epc-donut-center b{{font-size:clamp(12px,1vw,17px);color:#071a44;font-weight:950;margin:5px 0 2px;white-space:nowrap;}}
         .epc-donut-center span{{font-size:10px;color:#102039;font-weight:850;}}
         .epc-donut-pct{{position:absolute;z-index:3;color:#fff;font-size:13px;font-weight:950;text-shadow:0 1px 2px rgba(15,23,42,.22);}}
-        .epc-donut-pct-0{{right:21px;top:104px;}}.epc-donut-pct-1{{left:30px;top:121px;}}.epc-donut-pct-2{{left:55px;top:42px;}}.epc-donut-pct-3{{left:103px;top:10px;color:#52657f;text-shadow:none;}}
-        .epc-donut-legend{{display:grid;gap:9px;font-size:11px;color:#102039;}}
+        .epc-donut-pct-0{{right:9%;top:49%;}}.epc-donut-pct-1{{left:14%;top:57%;}}.epc-donut-pct-2{{left:26%;top:20%;}}.epc-donut-pct-3{{left:49%;top:5%;color:#52657f;text-shadow:none;}}
+        .epc-donut-legend{{display:grid;gap:8px;font-size:10px;color:#102039;min-width:0;}}
         .epc-donut-legend-item{{display:grid;grid-template-columns:12px 1fr;gap:8px;align-items:start;}}
         .epc-donut-legend-item span{{width:11px;height:11px;border-radius:50%;margin-top:2px;}}
-        .epc-donut-legend-item b{{font-size:11px;line-height:1.18;font-weight:850;}}
+        .epc-donut-legend-item b{{font-size:10px;line-height:1.18;font-weight:850;min-width:0;}}
         .epc-donut-legend-item small{{display:block;font-weight:700;color:#52657f;}}
         .epc-orange-note{{border:1px solid #ffe0a8;background:#fffaf0;border-radius:8px;padding:10px 13px;margin-top:9px;font-size:12px;font-weight:800;color:#102039;display:flex;gap:10px;align-items:center;}}
         .epc-target{{font-size:25px;color:#ff4040;line-height:1;}}
         .epc-strategy-stack{{display:grid;gap:12px;margin-top:7px;}}
-        .epc-strategy-card{{display:grid;grid-template-columns:48px 1fr 140px;gap:14px;align-items:center;border:1px solid color-mix(in srgb,var(--c) 18%,#dfe8f2);border-radius:8px;background:linear-gradient(90deg,color-mix(in srgb,var(--c) 7%,#fff),#fff);padding:10px 12px;min-height:69px;}}
+        .epc-strategy-card{{display:grid;grid-template-columns:44px minmax(0,1fr) minmax(112px,.44fr);gap:12px;align-items:center;border:1px solid color-mix(in srgb,var(--c) 18%,#dfe8f2);border-radius:8px;background:linear-gradient(90deg,color-mix(in srgb,var(--c) 7%,#fff),#fff);padding:10px 12px;min-height:69px;}}
         .epc-strategy-icon{{width:42px;height:42px;border-radius:50%;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:950;}}
         .epc-strategy-text b{{display:block;font-size:11px;font-weight:950;color:#102039;letter-spacing:.02em;}}
         .epc-strategy-text span{{display:block;margin-top:4px;font-size:11px;line-height:1.3;color:#24324c;font-weight:650;}}
         .epc-strategy-value{{text-align:left;}}
-        .epc-strategy-value b{{font-size:18px;color:#087F75;font-weight:950;white-space:nowrap;}}
+        .epc-strategy-value b{{font-size:clamp(14px,1.05vw,18px);color:#087F75;font-weight:950;white-space:nowrap;}}
         .epc-strategy-value span{{display:block;font-size:10px;color:#102039;font-weight:850;margin-top:5px;}}
-        .epc-bottom-grid{{display:grid;grid-template-columns:2.3fr 1fr;gap:0;align-items:stretch;}}
+        .epc-bottom-grid{{display:grid;grid-template-columns:minmax(0,2.28fr) minmax(320px,.92fr);gap:0;align-items:stretch;}}
         .epc-table-panel{{border-radius:0 0 0 10px;padding:10px 10px 11px;overflow:hidden;}}
         .epc-insight-panel{{border-radius:0 0 10px 0;border-left:0;padding:13px 21px;}}
         .epc-table{{width:100%;border-collapse:collapse;font-size:9px;text-align:center;}}
@@ -3869,8 +3869,9 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
         .epc-insights li{{position:relative;padding-left:26px;font-size:12px;line-height:1.35;color:#24324c;font-weight:700;}}
         .epc-insights li::before{{content:"✓";position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#249A8D;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:950;}}
         .epc-foot{{font-size:10px;color:#657692;font-weight:650;margin:12px 0 0 12px;}}
-        @media(max-width:1200px){{.epc-kpi-grid{{grid-template-columns:repeat(3,1fr);}}.epc-main-grid,.epc-bottom-grid{{grid-template-columns:1fr;}}.epc-panel,.epc-panel+.epc-panel,.epc-table-panel,.epc-insight-panel{{border-radius:10px;border-left:1px solid #dfe8f2;margin-bottom:10px;}}}}
-        @media(max-width:760px){{.epc-kpi-grid{{grid-template-columns:1fr;}}.epc-bar-row{{grid-template-columns:1fr;}}.epc-axis{{margin-left:0;}}.epc-donut-wrap{{grid-template-columns:1fr;}}.epc-strategy-card{{grid-template-columns:44px 1fr;}}.epc-strategy-value{{grid-column:2;}}}}
+        @media(max-width:1480px){{.epc-main-grid{{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);}}.epc-main-grid .epc-panel:nth-child(3){{grid-column:1 / -1;min-height:0;}}.epc-strategy-stack{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
+        @media(max-width:1200px){{.epc-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.epc-main-grid,.epc-bottom-grid{{grid-template-columns:1fr;}}.epc-panel,.epc-panel+.epc-panel,.epc-table-panel,.epc-insight-panel{{border-radius:10px;border-left:1px solid #dfe8f2;margin-bottom:10px;}}.epc-strategy-stack{{grid-template-columns:1fr;}}.epc-callout{{width:min(60%,260px);}}}}
+        @media(max-width:760px){{.epc-kpi-grid{{grid-template-columns:1fr;}}.epc-bar-row{{grid-template-columns:1fr;}}.epc-axis{{margin-left:0;}}.epc-callout{{width:100%;}}.epc-donut-wrap{{grid-template-columns:1fr;}}.epc-strategy-card{{grid-template-columns:44px 1fr;}}.epc-strategy-value{{grid-column:2;}}}}
         </style>
         <div class="epc-report">
           <h2 class="epc-title">Análisis de Costos – Piloto vs Comercial</h2>
