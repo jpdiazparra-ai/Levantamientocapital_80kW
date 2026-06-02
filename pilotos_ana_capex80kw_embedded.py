@@ -34,7 +34,7 @@ TECHNICAL_MILESTONES_URL = (
 EXECUTION_VALIDATION_URL = (
     "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vQOu_diukhhZWDV7kIcU9Ewto4lo_xQdSEZ0FMi2oto-Jb4r2e7aRNCBKF3qoVVk_4XsimMFx7eASkt/"
-    "pub?gid=0&single=true&output=csv"
+    "pub?gid=2063654006&single=true&output=csv"
 )
 
 TECHNICAL_MILESTONES = [
@@ -466,6 +466,11 @@ def build_execution_validation_schedule(raw_execution: pd.DataFrame, financial_d
     execution["Total Liberación Num"] = execution["Monto CLP Num"].fillna(0.0)
     execution["Monto MMCLP"] = execution["Monto CLP Num"] / 1_000_000
     execution["Etapa Capital"] = execution["ETAPA"].fillna("Sin etapa").astype(str).str.strip() if "ETAPA" in execution.columns else "Sin etapa"
+    execution["Estado Pago Capital"] = (
+        execution["Estado.1"].fillna("Sin estado de pago").astype(str).str.strip()
+        if "Estado.1" in execution.columns
+        else "Sin estado de pago"
+    )
 
     text_flags = (
         execution["Descripción Técnica / Acción"].astype(str)
@@ -858,16 +863,7 @@ def add_css() -> None:
 
 
 def render_hero() -> None:
-    st.markdown(
-        """
-        <div class="hero">
-            <div class="hero-kicker">FLUXIAL WIND · PILOTO 10 KW</div>
-            <div class="hero-title">Control ejecutivo de integración y continuidad operacional</div>
-            <div class="hero-copy">Seguimiento técnico, financiero y PMO del piloto eólico vertical.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    return
 
 
 def render_kpis(df: pd.DataFrame) -> None:
@@ -2313,17 +2309,9 @@ def render_board_kpis(df: pd.DataFrame) -> None:
         else:
             window = scheduled[scheduled["Inicio"].gt(start_cut) & scheduled["Inicio"].le(end_cut)]
         release_windows[name] = window.copy()
-        release_totals.append((name, float(window["Monto CLP Num"].sum() or 0)))
+        release_totals.append((name, float(window[amount_col].sum() or 0)))
 
-    second_stage_mask = (
-        scheduled["Etapa Capital"].fillna("").astype(str).map(normalize_text).str.lower().str.contains("segunda")
-        if "Etapa Capital" in scheduled.columns
-        else pd.Series(False, index=scheduled.index)
-    )
-    capex_amount_col = "Monto Ejecutado Num" if "Monto Ejecutado Num" in scheduled.columns else "Monto CLP Num"
-    total_release = float(scheduled.loc[second_stage_mask, capex_amount_col].sum() or 0)
-    if 0 < abs(total_release - SECOND_STAGE_CAPEX_TARGET_CLP) <= 5:
-        total_release = float(SECOND_STAGE_CAPEX_TARGET_CLP)
+    total_release = float(scheduled[amount_col].sum() or 0)
     if total_release <= 0:
         total_release = sum(amount for _, amount in release_totals)
     release_1 = release_totals[0][1] if release_totals else 0.0
@@ -2335,7 +2323,7 @@ def render_board_kpis(df: pd.DataFrame) -> None:
 
     release_2 = release_windows.get("Liberación 2", pd.DataFrame())
     weighted_progress = (
-        float((scheduled["Monto CLP Num"] * scheduled["Avance Num"]).sum() / total_release)
+        float((scheduled[amount_col] * scheduled["Avance Num"]).sum() / total_release)
         if total_release
         else 0.0
     )
@@ -2367,7 +2355,7 @@ def render_board_kpis(df: pd.DataFrame) -> None:
     risk_display = risk_value.title()
     risk_phrase = "Brecha controlable" if risk_value == "MEDIO" else "Atención inmediata" if risk_value == "ALTO" else "Continuidad controlada"
     recommendation = "Priorizar liberación inicial y asegurar fondos de avance para sostener ruta crítica del cronograma."
-    decision = "Asegurar liberación inicial y fondos de avance"
+    decision = "Liberar fondos no pagados de los próximos cortes"
 
     html_doc = f"""
     <style>
@@ -2401,10 +2389,10 @@ def render_board_kpis(df: pd.DataFrame) -> None:
         <div class="exec-block">
           <div class="exec-icon">$</div>
           <div>
-            <div class="exec-label">CAPEX requerido</div>
+            <div class="exec-label">Capital segunda etapa</div>
             <div class="exec-money">{html.escape(money_mm(total_release))}</div>
-            <div class="exec-copy">Para completar integración, validación y puesta en marcha.</div>
-            <div class="exec-pill">Capital pendiente</div>
+            <div class="exec-copy">Monto total de liberación programado para las cuatro ventanas de referencia.</div>
+            <div class="exec-pill">ETAPA Segunda</div>
           </div>
         </div>
         <div class="exec-block">
@@ -2490,14 +2478,14 @@ def render_release_cutoff_intelligence(df: pd.DataFrame) -> None:
         panels.append({"title": title, "date": date_label, "color": color, "thesis": thesis, "detail": detail, "window": window, "total": total, "areas": int(detail["Área Operacional"].nunique()) if not detail.empty else 0, "partidas": int(detail["Partidas"].sum()) if not detail.empty else 0})
 
     panel_total_sum = sum(float(panel["total"]) for panel in panels)
-    if 0 < abs(panel_total_sum - SECOND_STAGE_CAPEX_TARGET_CLP) <= 5:
+    if 0 < abs(panel_total_sum - SECOND_STAGE_CAPEX_TARGET_CLP) <= 10:
         delta = float(SECOND_STAGE_CAPEX_TARGET_CLP) - panel_total_sum
-        for panel in reversed(panels):
+        for panel in panels:
             detail = panel.get("detail")
             if isinstance(detail, pd.DataFrame) and not detail.empty:
                 panel["total"] = float(panel["total"]) + delta
-                last_idx = detail.index[-1]
-                detail.loc[last_idx, "Monto"] = float(detail.loc[last_idx, "Monto"] or 0) + delta
+                first_idx = detail.index[0]
+                detail.loc[first_idx, "Monto"] = float(detail.loc[first_idx, "Monto"] or 0) + delta
                 break
 
     max_total = max(max(float(panel["total"]) for panel in panels), 1.0)
@@ -2703,14 +2691,15 @@ border-top:1px solid rgba(15,23,42,.10);border-radius:18px;padding:24px 28px 22p
     .release-control-summary div{{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:11px;padding:10px 11px;box-shadow:0 8px 18px rgba(15,23,42,.035);}}
     .release-control-summary small{{display:block;font-size:9px;color:#64748B;font-weight:900;text-transform:uppercase;letter-spacing:.04em;}}
     .release-control-summary b{{display:block;margin-top:5px;font-size:15px;color:#0B1633;font-weight:950;}}
-    .release-table-head{{display:grid;grid-template-columns:96px minmax(0,1.05fr) minmax(140px,.7fr) 122px minmax(170px,1fr) 96px;gap:10px;padding:8px 11px;background:#EEF4F8;border:1px solid #DCE6EF;border-radius:10px;color:#475569;font-size:9px;font-weight:950;text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0;z-index:2;}}
-    .release-row{{display:grid;grid-template-columns:96px minmax(0,1.05fr) minmax(140px,.7fr) 122px minmax(170px,1fr) 96px;gap:10px;align-items:center;padding:12px;border:1px solid #E8EEF5;border-radius:14px;background:#FFFFFF;box-shadow:0 8px 18px rgba(15,23,42,.028);transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease;cursor:pointer;}}
+    .release-table-head{{display:grid;grid-template-columns:minmax(170px,.9fr) minmax(250px,1.24fr) minmax(145px,.68fr) minmax(120px,.52fr) minmax(190px,.92fr) minmax(104px,.42fr);gap:14px;padding:8px 12px;background:#EEF4F8;border:1px solid #DCE6EF;border-radius:10px;color:#475569;font-size:9px;font-weight:950;text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0;z-index:2;min-width:1080px;}}
+    .release-row{{display:grid;grid-template-columns:minmax(170px,.9fr) minmax(250px,1.24fr) minmax(145px,.68fr) minmax(120px,.52fr) minmax(190px,.92fr) minmax(104px,.42fr);gap:14px;align-items:center;padding:12px;border:1px solid #E8EEF5;border-radius:14px;background:#FFFFFF;box-shadow:0 8px 18px rgba(15,23,42,.028);transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease;cursor:pointer;min-width:1080px;}}
     .release-row:hover{{transform:translateY(-1px);border-color:#CBD5E1;box-shadow:0 12px 24px rgba(15,23,42,.055);}}
     .release-row:focus{{outline:2px solid color-mix(in srgb,var(--panel-color) 38%,#94A3B8);outline-offset:2px;}}
-    .release-key{{display:flex;align-items:center;gap:8px;min-width:0;}}
-    .release-key span{{font-size:9px;color:#64748B;font-weight:850;line-height:1.1;}}
+    .release-key{{display:grid;grid-template-columns:34px minmax(0,1fr);align-items:center;gap:9px;min-width:0;overflow:hidden;}}
+    .release-key span{{display:block;font-size:10px;color:#475569;font-weight:900;line-height:1.16;white-space:normal;overflow-wrap:anywhere;}}
     .release-hito{{width:34px;height:32px;border-radius:10px;background:#0B1B3A;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;box-shadow:0 8px 16px rgba(15,23,42,.14);flex:0 0 auto;}}
-    .release-copy b{{display:block;font-size:11px;color:#0B1633;line-height:1.15;}}.release-copy span{{display:block;font-size:9px;color:#64748B;margin-top:4px;line-height:1.15;font-weight:750;}}
+    .release-copy{{min-width:0;overflow:hidden;}}
+    .release-copy b{{display:block;font-size:11.5px;color:#0B1633;line-height:1.18;white-space:normal;overflow-wrap:anywhere;}}.release-copy span{{display:block;font-size:9.5px;color:#64748B;margin-top:4px;line-height:1.18;font-weight:750;white-space:normal;overflow-wrap:anywhere;}}
     .release-metrics{{display:grid;gap:5px;}}
     .mini-bar span{{display:flex;justify-content:space-between;font-size:9px;color:#475569;font-weight:850;margin-bottom:3px;}}
     .mini-bar i{{display:block;height:6px;background:#E2E8F0;border-radius:999px;overflow:hidden;}}
@@ -2739,8 +2728,8 @@ border-top:1px solid rgba(15,23,42,.10);border-radius:18px;padding:24px 28px 22p
     </style>
     <div class="release-shell" id="release-shell-main">
       <div class="release-head">
-        <div><div class="release-title">Etapas de Liberación de Capital</div><div class="release-sub">Secuencia ejecutiva de activación financiera, continuidad técnica y control PMO del piloto 10 kW.</div></div>
-        <div class="release-badge">Fuente: Cronograma Integrado</div>
+        <div><div class="release-title">Etapas de Liberación de Capital</div><div class="release-sub">Capital de segunda etapa, ordenado por fecha de inicio para activar continuidad técnica, integración y cierre operacional del piloto 10 kW.</div></div>
+        <div class="release-badge">Fuente: Cronograma Integrado · ETAPA Segunda</div>
       </div>
       <div class="release-flow">
         <div class="release-line"></div>
@@ -3115,12 +3104,12 @@ def render_reference_activity_gantt(df: pd.DataFrame, pmo_source: pd.DataFrame |
                     </div>
                     """
                 )
-    if not executive_summary and pmo_source is not None and not pmo_source.empty and "Hito (S/N)" in pmo_source.columns:
+    if pmo_source is not None and not pmo_source.empty and "Hito (S/N)" in pmo_source.columns:
         milestone_rows = pmo_source[
             pmo_source["Hito (S/N)"].fillna("").astype(str).str.strip().str.upper().eq("S")
             & pmo_source["Termino"].notna()
         ].copy()
-        milestone_rows = milestone_rows.sort_values(["Termino", "Inicio"]).head(8)
+        milestone_rows = milestone_rows.sort_values(["Termino", "Inicio"]).head(12)
         for idx, item in milestone_rows.iterrows():
             code = str(item.get("ID", f"H{idx + 1}")).strip()
             hito_code = str(item.get("Hito", "")).strip()
@@ -3148,7 +3137,7 @@ def render_reference_activity_gantt(df: pd.DataFrame, pmo_source: pd.DataFrame |
         <div class="rg-summary">
           <div class="rg-summary-head">
             <b>Resumen ejecutivo de hitos</b>
-            <span>Objetivos estratégicos y resultados esperados asociados a la ruta técnica.</span>
+            <span>Hitos marcados en la columna Hito (S/N) de la hoja de liberación.</span>
           </div>
           <div class="rg-summary-grid">{''.join(executive_summary)}</div>
         </div>

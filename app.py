@@ -268,7 +268,7 @@ KNOWHOW_RESUMEN_CSV_URL_DEFAULT = (
 GANTT_PROJECT_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vQOu_diukhhZWDV7kIcU9Ewto4lo_xQdSEZ0FMi2oto-Jb4r2e7aRNCBKF3qoVVk_4XsimMFx7eASkt/"
-    "pub?gid=0&single=true&output=csv"
+    "pub?gid=2063654006&single=true&output=csv"
 )
 GANTT_COSTO_PILOTO_TOTAL_CLP = 79_066_677
 GANTT_COSTO_COMERCIAL_TOTAL_CLP = 27_070_558
@@ -282,7 +282,7 @@ GANTT_DATE_COL_START = "Inicio (AAAA-MM-DD)"
 GANTT_DATE_COL_END_PLAN = "Fin plan (AAAA-MM-DD)"
 GANTT_DATE_COL_END_REAL = "Fin real"
 ASPAS_FRP_GANTT_PHASE_OPTION = "Fabricación ASPAS frp"
-GANTT_PROJECT_SOURCE_VERSION = 3
+GANTT_PROJECT_SOURCE_VERSION = 4
 GANTT_COLUMN_ALIASES = {
     "LÃ\xadnea": "Línea",
     "MÃ©todo": "Método",
@@ -3090,6 +3090,21 @@ def _gantt_status_color(status: str) -> str:
     return "#64748b"
 
 
+def _gantt_due_soon_mask(df: pd.DataFrame, date_mode: str = "Real", days: int = 7) -> pd.Series:
+    if df.empty:
+        return pd.Series(False, index=df.index)
+    dfk = df.copy()
+    dfk["_start"] = pd.to_datetime(dfk.get(GANTT_DATE_COL_START), errors="coerce")
+    dfk["_end_plan"] = pd.to_datetime(dfk.get(GANTT_DATE_COL_END_PLAN), errors="coerce")
+    dfk["_end_real"] = pd.to_datetime(dfk.get(GANTT_DATE_COL_END_REAL), errors="coerce")
+    dfk["_end"] = dfk["_end_real"] if date_mode == "Real" else dfk["_end_plan"]
+    dfk["_end"] = dfk["_end"].fillna(dfk["_end_plan"]).fillna(dfk["_end_real"]).fillna(dfk["_start"])
+    today_ts = pd.Timestamp.today().normalize()
+    estado = dfk["Estado"].astype(str) if "Estado" in dfk.columns else pd.Series("", index=dfk.index)
+    completed_mask = estado.str.contains("complet", case=False, na=False)
+    return (dfk["_end"] >= today_ts) & (dfk["_end"] < today_ts + pd.Timedelta(days=days)) & ~completed_mask
+
+
 def _gantt_summary(df: pd.DataFrame, date_mode: str = "Real") -> dict[str, object]:
     dfk = df.copy()
     dfk["_start"] = pd.to_datetime(dfk.get(GANTT_DATE_COL_START), errors="coerce")
@@ -3128,7 +3143,7 @@ def _gantt_summary(df: pd.DataFrame, date_mode: str = "Real") -> dict[str, objec
     completed_tasks = int(completed_mask.sum())
     in_progress_tasks = int(estado.str.contains("curso", case=False, na=False).sum())
     overdue_tasks = int(((dfk["_end"] < today_ts) & ~completed_mask).sum())
-    due_soon_tasks = int(((dfk["_end"] >= today_ts) & (dfk["_end"] <= today_ts + pd.Timedelta(days=5)) & ~completed_mask).sum())
+    due_soon_tasks = int(_gantt_due_soon_mask(dfk, date_mode=date_mode, days=7).sum())
     active_lines = int(
         dfk["Línea"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().nunique()
     ) if "Línea" in dfk.columns else 0
@@ -3283,6 +3298,7 @@ def render_inputs_gantt_design_css() -> None:
             border-right:1px solid #e5ebf3;
         }
         .gantt-kpi:last-child{border-right:0;}
+        .gantt-kpi.is-active{background:color-mix(in srgb,var(--accent) 8%,#ffffff);box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--accent) 28%,#ffffff);}
         .gantt-kpi-top{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;}
         .gantt-kpi-ico{
             width:39px;height:39px;border-radius:11px;display:flex;align-items:center;justify-content:center;
@@ -3350,13 +3366,14 @@ def render_inputs_gantt_design_css() -> None:
         }
         .gantt-custom-scroll{
             overflow-x:auto;
-            overflow-y:visible;
+            overflow-y:auto;
+            max-height:min(68vh,760px);
             padding-bottom:2px;
         }
         .gantt-custom-title{font-size:15px;font-weight:900;color:#0f172a;margin:0 14px 12px;}
         .gantt-grid{position:relative;min-width:1080px;border-top:1px solid #dde6f1;}
         .gantt-board-head,.gantt-line-block{display:grid;grid-template-columns:148px 322px minmax(610px,1fr);}
-        .gantt-board-head{position:relative;}
+        .gantt-board-head{position:sticky;top:0;z-index:20;background:#fff;box-shadow:0 7px 12px rgba(15,23,42,.06);}
         .gantt-left-head{
             grid-column:1 / 3;height:55px;border-right:1px solid #dde6f1;border-bottom:1px solid #dde6f1;
             display:flex;align-items:center;padding-left:18px;color:#52657f;font-size:10px;font-weight:900;text-transform:uppercase;
@@ -3483,7 +3500,7 @@ def render_inputs_gantt_header(df: pd.DataFrame, date_mode: str = "Real") -> Non
             </div>
             <div>
               <h2 class="gantt-title">Cronograma de Ejecución y Validación</h2>
-              <p class="gantt-subtitle">Vista integrada del cronograma del proyecto antes del análisis financiero por categorías.</p>
+              <p class="gantt-subtitle">Ruta de ejecución, hitos y validación del piloto 10 kW para seguimiento de liberación de capital.</p>
             </div>
           </div>
           <div class="gantt-progress">
@@ -3517,18 +3534,20 @@ def render_inputs_gantt_kpis(df: pd.DataFrame, date_mode: str = "Real") -> None:
         ("VENTANA DE EJECUCIÓN", f'{summary["window_days"]} d', f'Días hábiles · {summary["window_note"]}', "#16a34a", "◷"),
         ("MAYOR CARGA", f'{summary["heaviest_line_tasks"]} tar.', str(summary["heaviest_line"]), "#475569", "▦"),
     ]
-    cards_html = "".join(
+    cards_html = ""
+    for label, value, note, accent, icon in cards:
+        card_html = (
         f'<div class="gantt-kpi" style="--accent:{accent};">'
         f'<div class="gantt-kpi-top"><div class="gantt-kpi-ico">{html.escape(icon)}</div>'
         f'<div><div class="gantt-kpi-label">{html.escape(label)}</div>'
         f'<div class="gantt-kpi-value">{html.escape(value)}</div></div></div>'
         f'<div class="gantt-kpi-note">{html.escape(note)}</div></div>'
-        for label, value, note, accent, icon in cards
-    )
+        )
+        cards_html += card_html
     st.markdown(f'<div class="gantt-kpi-band">{cards_html}</div>', unsafe_allow_html=True)
 
 
-def render_inputs_gantt_chart_controls(df: pd.DataFrame) -> str:
+def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real") -> str:
     def normalized_group(value: object) -> str:
         if pd.isna(value):
             return "Sin clasificación"
@@ -3546,6 +3565,8 @@ def render_inputs_gantt_chart_controls(df: pd.DataFrame) -> str:
         f'<span class="gantt-control-chip"><i class="gantt-control-dot" style="background:{color};"></i>{html.escape(group)}</span>'
         for group, color in color_map.items()
     ) or '<span class="gantt-control-chip">Sin clasificación</span>'
+    due_soon_active = bool(st.session_state.get("inputs_gantt_due_soon_only", False))
+    due_soon_count = int(_gantt_due_soon_mask(df, date_mode=date_mode, days=7).sum())
 
     with st.container(border=True):
         st.markdown('<span class="gantt-controls-marker"></span>', unsafe_allow_html=True)
@@ -3556,6 +3577,20 @@ def render_inputs_gantt_chart_controls(df: pd.DataFrame) -> str:
                 f'<div class="gantt-control-inline">{chips}</div>',
                 unsafe_allow_html=True,
             )
+            button_label = (
+                "Mostrar todas las actividades"
+                if due_soon_active
+                else f"Ver vencen <7 días ({due_soon_count})"
+            )
+            if st.button(
+                button_label,
+                key="inputs_gantt_due_soon_button",
+                use_container_width=True,
+                type="secondary",
+                disabled=(not due_soon_active and due_soon_count == 0),
+            ):
+                st.session_state["inputs_gantt_due_soon_only"] = not due_soon_active
+                st.rerun()
         with horizon_col:
             time_range = st.radio(
                 "Horizonte visible",
@@ -3575,6 +3610,577 @@ def render_inputs_gantt_chart_controls(df: pd.DataFrame) -> str:
                 unsafe_allow_html=True,
             )
     return time_range
+
+
+def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Real") -> None:
+    if df.empty:
+        return
+
+    dfk = df.copy()
+    dfk["_end_plan"] = pd.to_datetime(dfk.get(GANTT_DATE_COL_END_PLAN), errors="coerce")
+    dfk["_end_real"] = pd.to_datetime(dfk.get(GANTT_DATE_COL_END_REAL), errors="coerce")
+    estado = dfk["Estado"].astype(str) if "Estado" in dfk.columns else pd.Series("", index=dfk.index)
+    completed_mask = estado.str.contains("complet", case=False, na=False)
+    today_ts = pd.Timestamp.today().normalize()
+
+    dfk["_delay_days"] = (dfk["_end_real"] - dfk["_end_plan"]).dt.days
+    dfk["_observed_delay"] = dfk["_delay_days"].where(dfk["_delay_days"] > 0, 0).fillna(0)
+    dfk["_open_delay"] = np.where(
+        dfk["_end_real"].isna() & dfk["_end_plan"].notna() & (dfk["_end_plan"] < today_ts) & ~completed_mask,
+        (today_ts - dfk["_end_plan"]).dt.days,
+        0,
+    )
+
+    delayed_df = dfk[dfk["_observed_delay"] > 0].copy()
+    open_delay_df = dfk[dfk["_open_delay"] > 0].copy()
+    comparable_df = dfk[dfk["_end_plan"].notna() & dfk["_end_real"].notna()].copy()
+
+    total_tasks = int(len(dfk))
+    comparable_tasks = int(len(comparable_df))
+    delayed_tasks = int(len(delayed_df))
+    on_time_tasks = int((comparable_df["_delay_days"].fillna(0) <= 0).sum()) if comparable_tasks else 0
+    on_time_pct = (on_time_tasks / comparable_tasks * 100.0) if comparable_tasks else 100.0
+    task_delay_days = int(delayed_df["_observed_delay"].sum()) if not delayed_df.empty else 0
+    unique_delay_dates: set[pd.Timestamp] = set()
+    for _, delay_row in delayed_df.iterrows():
+        if pd.isna(delay_row["_end_plan"]) or pd.isna(delay_row["_end_real"]):
+            continue
+        start_delay = pd.Timestamp(delay_row["_end_plan"]).normalize() + pd.Timedelta(days=1)
+        end_delay = pd.Timestamp(delay_row["_end_real"]).normalize()
+        if pd.notna(start_delay) and pd.notna(end_delay) and end_delay >= start_delay:
+            unique_delay_dates.update(pd.date_range(start_delay, end_delay, freq="D").tolist())
+    total_delay_days = len(unique_delay_dates)
+    avg_delay_days = float(delayed_df["_observed_delay"].mean()) if not delayed_df.empty else 0.0
+    max_delay_days = int(delayed_df["_observed_delay"].max()) if not delayed_df.empty else 0
+    open_delay_task_days = int(open_delay_df["_open_delay"].sum()) if not open_delay_df.empty else 0
+    unique_open_delay_dates: set[pd.Timestamp] = set()
+    for _, open_row in open_delay_df.iterrows():
+        if pd.isna(open_row["_end_plan"]):
+            continue
+        start_delay = pd.Timestamp(open_row["_end_plan"]).normalize() + pd.Timedelta(days=1)
+        if pd.notna(start_delay) and today_ts >= start_delay:
+            unique_open_delay_dates.update(pd.date_range(start_delay, today_ts, freq="D").tolist())
+    open_delay_days = len(unique_open_delay_dates)
+
+    if not delayed_df.empty:
+        max_delay_row = delayed_df.sort_values(["_observed_delay", "_end_real"], ascending=[False, False]).iloc[0]
+        max_delay_task = str(max_delay_row.get("Tarea / Entregable", "")).strip() or "Actividad sin nombre"
+        max_delay_line = str(max_delay_row.get("Línea", "")).strip() or "Sin línea"
+    else:
+        max_delay_task = "Sin atrasos observados en el filtro activo"
+        max_delay_line = "Controlado"
+
+    if "Línea" in dfk.columns and not delayed_df.empty:
+        line_delay = delayed_df.groupby("Línea", dropna=False)["_observed_delay"].sum().sort_values(ascending=False)
+        critical_line = str(line_delay.index[0]) if not line_delay.empty else "Sin línea crítica"
+        critical_line_days = int(line_delay.iloc[0]) if not line_delay.empty else 0
+    else:
+        critical_line = "Sin línea crítica"
+        critical_line_days = 0
+
+    if "Fase" in dfk.columns and not delayed_df.empty:
+        phase_delay = delayed_df.groupby("Fase", dropna=False)["_observed_delay"].sum().sort_values(ascending=False)
+        critical_phase = str(phase_delay.index[0]) if not phase_delay.empty else "Sin fase crítica"
+    else:
+        critical_phase = "Sin fase crítica"
+
+    if total_delay_days == 0 and open_delay_days == 0:
+        executive_read = "El filtro activo no muestra desviaciones relevantes contra la fecha planificada."
+        posture = "Controlado"
+        posture_color = "#0F766E"
+    elif open_delay_days > total_delay_days:
+        executive_read = "La principal presión del cronograma proviene de actividades abiertas vencidas."
+        posture = "Atención ejecutiva"
+        posture_color = "#B45309"
+    else:
+        executive_read = "El atraso calendario se calcula sin duplicar tareas que se solapan en el mismo periodo."
+        posture = "Desviación medida"
+        posture_color = "#1E4D92"
+
+    insight_cards = [
+        ("Foco crítico", critical_line, f"{critical_line_days} días acumulados por línea"),
+        ("Fase sensible", critical_phase, "Mayor concentración de desviación"),
+        ("Mayor atraso", max_delay_line, f"{max_delay_days} días · {max_delay_task[:64]}"),
+    ]
+    insight_html = "".join(
+        f"""
+        <div class="gantt-exec-insight">
+          <span>{html.escape(kicker)}</span>
+          <b>{html.escape(title)}</b>
+          <p>{html.escape(note)}</p>
+        </div>
+        """
+        for kicker, title, note in insight_cards
+    )
+
+    summary_html = textwrap.dedent(f"""
+        <style>
+        .gantt-exec-wrap{{margin:18px 0 8px 0;color:#071427;font-family:inherit;}}
+        .gantt-exec-shell{{position:relative;overflow:hidden;border-radius:26px;background:radial-gradient(circle at 92% 8%,rgba(20,184,166,.16),transparent 26%),linear-gradient(135deg,#FFFFFF 0%,#F8FAFC 54%,#EEFDF9 100%);box-shadow:0 24px 58px rgba(15,23,42,.10);padding:24px 26px;}}
+        .gantt-exec-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px;}}
+        .gantt-exec-kicker{{font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#0F766E;margin:0 0 6px 0;}}
+        .gantt-exec-title{{font-size:28px;line-height:1.02;font-weight:950;letter-spacing:.01em;color:#071427;margin:0;}}
+        .gantt-exec-sub{{font-size:13px;line-height:1.45;color:#64748B;font-weight:750;margin:8px 0 0 0;max-width:820px;}}
+        .gantt-exec-badge{{border-radius:999px;background:{posture_color};color:#FFFFFF;padding:10px 14px;font-size:11px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;box-shadow:0 14px 28px rgba(15,23,42,.12);}}
+        .gantt-exec-grid{{display:grid;grid-template-columns:1.08fr .92fr;gap:18px;align-items:stretch;}}
+        .gantt-exec-score{{border-radius:24px;background:#071427;color:#FFFFFF;padding:24px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;align-items:center;box-shadow:0 24px 48px rgba(7,20,39,.18);}}
+        .gantt-exec-score-main span{{display:block;color:#7DD3C7;font-size:12px;font-weight:950;letter-spacing:.10em;text-transform:uppercase;margin-bottom:8px;}}
+        .gantt-exec-score-main b{{display:block;font-size:72px;line-height:.85;font-weight:950;letter-spacing:-.055em;color:#FFFFFF;}}
+        .gantt-exec-score-main p{{margin:10px 0 0 0;color:#CBD5E1;font-size:13px;font-weight:800;}}
+        .gantt-exec-metric{{border-left:1px solid rgba(255,255,255,.16);padding-left:18px;min-height:112px;display:flex;flex-direction:column;justify-content:center;}}
+        .gantt-exec-metric span{{font-size:11px;color:#94A3B8;font-weight:950;letter-spacing:.08em;text-transform:uppercase;}}
+        .gantt-exec-metric b{{font-size:42px;line-height:1;color:#14B8A6;font-weight:950;margin:8px 0 5px;}}
+        .gantt-exec-metric p{{margin:0;color:#CBD5E1;font-size:12px;font-weight:800;line-height:1.35;}}
+        .gantt-exec-insights{{display:grid;grid-template-columns:1fr;gap:11px;}}
+        .gantt-exec-insight{{border-radius:20px;background:rgba(255,255,255,.82);padding:16px 18px;box-shadow:0 12px 28px rgba(15,23,42,.065);}}
+        .gantt-exec-insight span{{display:block;font-size:10px;color:#0F766E;font-weight:950;letter-spacing:.09em;text-transform:uppercase;margin-bottom:6px;}}
+        .gantt-exec-insight b{{display:block;color:#071427;font-size:18px;line-height:1.12;font-weight:950;}}
+        .gantt-exec-insight p{{margin:6px 0 0 0;color:#64748B;font-size:12px;line-height:1.35;font-weight:750;}}
+        .gantt-exec-read{{margin-top:16px;border-radius:20px;background:#FFFFFF;padding:16px 18px;display:grid;grid-template-columns:42px 1fr;gap:13px;align-items:center;box-shadow:0 12px 30px rgba(15,23,42,.06);}}
+        .gantt-exec-read i{{width:42px;height:42px;border-radius:15px;background:#E6FFFA;color:#0F766E;display:flex;align-items:center;justify-content:center;font-style:normal;font-size:22px;font-weight:950;}}
+        .gantt-exec-read b{{display:block;color:#071427;font-size:14px;font-weight:950;margin-bottom:3px;}}
+        .gantt-exec-read span{{display:block;color:#475569;font-size:13px;line-height:1.42;font-weight:750;}}
+        @media(max-width:1050px){{.gantt-exec-grid,.gantt-exec-score{{grid-template-columns:1fr;}}.gantt-exec-metric{{border-left:0;border-top:1px solid rgba(255,255,255,.16);padding:18px 0 0 0;}}.gantt-exec-head{{display:block;}}.gantt-exec-badge{{display:inline-flex;margin-top:12px;}}}}
+        </style>
+        <div class="gantt-exec-wrap">
+          <div class="gantt-exec-shell">
+            <div class="gantt-exec-head">
+              <div>
+                <p class="gantt-exec-kicker">Resumen ejecutivo · filtro activo</p>
+                <h3 class="gantt-exec-title">Lectura de cumplimiento del cronograma</h3>
+                <p class="gantt-exec-sub">Calculado sobre las actividades visibles según los selectores de etapa, fase, línea, estado y modo de fecha.</p>
+              </div>
+              <div class="gantt-exec-badge">{html.escape(posture)}</div>
+            </div>
+            <div class="gantt-exec-grid">
+              <div>
+                <div class="gantt-exec-score">
+                  <div class="gantt-exec-score-main"><span>Atraso calendario</span><b>{total_delay_days}</b><p>días únicos entre fin plan y fin real, sin duplicar solapes</p></div>
+                  <div class="gantt-exec-metric"><span>Carga de atraso</span><b>{task_delay_days}</b><p>días-tarea acumulados para análisis operativo</p></div>
+                  <div class="gantt-exec-metric"><span>Cumplimiento comparables</span><b>{on_time_pct:.0f}%</b><p>{on_time_tasks} de {comparable_tasks} con cierre en plazo o anticipado</p></div>
+                </div>
+                <div class="gantt-exec-read"><i>↘</i><div><b>{html.escape(executive_read)}</b><span>Promedio por tarea atrasada: {avg_delay_days:.1f} días. Atraso abierto potencial: {open_delay_days} días calendario / {open_delay_task_days} días-tarea.</span></div></div>
+              </div>
+              <div class="gantt-exec-insights">{insight_html}</div>
+            </div>
+          </div>
+        </div>
+    """).strip()
+    summary_html = "\n".join(line.lstrip() for line in summary_html.splitlines())
+    st.markdown(summary_html, unsafe_allow_html=True)
+
+
+def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
+    if df.empty:
+        return
+
+    def norm_col(value: object) -> str:
+        text = unicodedata.normalize("NFKD", str(value or ""))
+        text = "".join(ch for ch in text if not unicodedata.combining(ch))
+        return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+    normalized_cols = {norm_col(col): col for col in df.columns}
+
+    def find_col(candidates: list[str]) -> str | None:
+        for candidate in candidates:
+            key = norm_col(candidate)
+            if key in normalized_cols:
+                return normalized_cols[key]
+        for candidate in candidates:
+            key = norm_col(candidate)
+            for norm_name, original in normalized_cols.items():
+                if key and (key in norm_name or norm_name in key):
+                    return original
+        return None
+
+    col_map = {
+        "bac": find_col(["Presupuesto Base (CLP)", "Presupuesto Base", "BAC", "Budget At Completion", "Monto"]),
+        "ac": find_col(["Costo Real AC (CLP)", "Costo Real AC", "AC Costo Real", "Actual Cost", "Monto"]),
+        "avance_real": find_col(["Avance Real %", "%", "Avance"]),
+        "avance_plan": find_col(["Avance Planificado %", "Avance Plan %", "Planificado %"]),
+        "ev": find_col(["EV Valor Ganado (CLP)", "EV Valor Ganado", "Valor Ganado", "Earned Value"]),
+        "pv": find_col(["PV Valor Planificado (CLP)", "PV Valor Planificado", "Valor Planificado", "Planned Value"]),
+        "cv": find_col(["CV Variación Costo (CLP)", "CV Variacion Costo", "Variación Costo", "EV - AC"]),
+        "sv": find_col(["SV Variación Cronograma (CLP)", "SV Variacion Cronograma", "Variación Cronograma", "EV - PV"]),
+        "cpi": find_col(["CPI Índice Costo", "CPI Indice Costo", "CPI"]),
+        "spi": find_col(["SPI Índice Plazo", "SPI Indice Plazo", "SPI"]),
+        "desv_pct": find_col(["Desviación Presupuesto %", "Desviacion Presupuesto %", "Desviación %"]),
+        "eac": find_col(["Forecast EAC (CLP)", "Forecast EAC", "EAC"]),
+        "etc": find_col(["ETC por Ejecutar (CLP)", "ETC por Ejecutar", "ETC"]),
+        "vac": find_col(["VAC Variación al Cierre (CLP)", "VAC Variacion al Cierre", "VAC"]),
+        "tipo": find_col(["Tipo Costo Control", "Tipo Costo", "TIPO EPC", "Línea"]),
+        "fecha": find_col(["Fin real", "Fin plan (AAAA-MM-DD)", "Inicio (AAAA-MM-DD)", "Fecha"]),
+        "fase": find_col(["Fase", "Hito Ejecutivo", "ETAPA"]),
+        "id": find_col(["ID"]),
+    }
+    required_any = [col_map["bac"], col_map["ac"], col_map["ev"], col_map["pv"]]
+    if not any(required_any):
+        return
+
+    evm_df = df.copy()
+
+    def evm_money(value: object) -> float:
+        if pd.isna(value):
+            return 0.0
+        if isinstance(value, (int, float, np.integer, np.floating)):
+            return float(value)
+        text = str(value).strip()
+        if not text or text.lower() in {"nan", "none", "-", "—"}:
+            return 0.0
+        negative = text.startswith("(") and text.endswith(")")
+        cleaned = re.sub(r"[^0-9,\.-]", "", text).replace(".", "").replace(",", ".")
+        try:
+            number = float(cleaned) if cleaned not in {"", "-", "."} else 0.0
+        except ValueError:
+            number = 0.0
+        return -abs(number) if negative else number
+
+    def evm_ratio(value: object) -> float:
+        if pd.isna(value):
+            return 0.0
+        if isinstance(value, (int, float, np.integer, np.floating)):
+            number = float(value)
+            return number / 100 if number > 5 else number
+        text = str(value).strip().lower().replace("x", "").replace("%", "")
+        text = re.sub(r"[^0-9,\.-]", "", text).replace(".", "").replace(",", ".")
+        try:
+            number = float(text) if text not in {"", "-", "."} else 0.0
+        except ValueError:
+            return 0.0
+        return number / 100 if "%" in str(value) or number > 5 else number
+
+    for key in ["bac", "ac", "ev", "pv", "cv", "sv", "eac", "etc", "vac"]:
+        col = col_map.get(key)
+        evm_df[f"_{key}"] = evm_df[col].apply(evm_money) if col else 0.0
+    for key in ["avance_real", "avance_plan", "cpi", "spi", "desv_pct"]:
+        col = col_map.get(key)
+        evm_df[f"_{key}"] = evm_df[col].apply(evm_ratio) if col else 0.0
+
+    if evm_df["_ev"].sum() <= 0 and evm_df["_bac"].sum() > 0:
+        evm_df["_ev"] = evm_df["_bac"] * evm_df["_avance_real"]
+    if evm_df["_pv"].sum() <= 0 and evm_df["_bac"].sum() > 0:
+        evm_df["_pv"] = evm_df["_bac"] * evm_df["_avance_plan"]
+    if evm_df["_cv"].abs().sum() <= 0:
+        evm_df["_cv"] = evm_df["_ev"] - evm_df["_ac"]
+    if evm_df["_sv"].abs().sum() <= 0:
+        evm_df["_sv"] = evm_df["_ev"] - evm_df["_pv"]
+    if evm_df["_eac"].sum() <= 0:
+        cpi_fallback = evm_df["_ev"].sum() / evm_df["_ac"].sum() if evm_df["_ac"].sum() else 1.0
+        evm_df["_eac"] = evm_df["_bac"] / max(cpi_fallback, 0.01)
+    if evm_df["_etc"].sum() <= 0:
+        evm_df["_etc"] = np.maximum(evm_df["_eac"] - evm_df["_ac"], 0)
+    if evm_df["_vac"].abs().sum() <= 0:
+        evm_df["_vac"] = evm_df["_bac"] - evm_df["_eac"]
+
+    total_bac = float(evm_df["_bac"].sum())
+    total_ac = float(evm_df["_ac"].sum())
+    total_ev = float(evm_df["_ev"].sum())
+    total_pv = float(evm_df["_pv"].sum())
+    total_eac = float(evm_df["_eac"].sum())
+    total_etc = float(evm_df["_etc"].sum())
+    total_cv = float(total_ev - total_ac)
+    total_sv = float(total_ev - total_pv)
+    total_vac = float(total_bac - total_eac)
+    cpi = total_ev / total_ac if total_ac else 0.0
+    spi = total_ev / total_pv if total_pv else 0.0
+    deviation_pct = (total_eac - total_bac) / total_bac if total_bac else 0.0
+
+    def money_clp(value: float) -> str:
+        return format_clp(float(value))
+
+    def money_mm(value: float) -> str:
+        return f"${float(value) / 1_000_000:,.1f} MM".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def money_display(value: float) -> str:
+        return money_mm(value) if abs(float(value)) >= 1_000_000 else money_clp(value)
+
+    def pct_fmt(value: float) -> str:
+        return f"{float(value) * 100:.1f}%".replace(".", ",")
+
+    def idx_fmt(value: float) -> str:
+        return f"{float(value):.2f}".replace(".", ",")
+
+    def traffic(value: float, mode: str = "index") -> tuple[str, str, str]:
+        if mode == "variance":
+            if value >= 0:
+                return "#548235", "EN CONTROL", "Favorable"
+            return "#C00000", "DESVIACIÓN", "Desfavorable"
+        if value >= 1:
+            return "#548235", "EN CONTROL", "Rendimiento sano"
+        if value >= 0.90:
+            return "#FFC000", "ATENCIÓN", "Zona de atención"
+        return "#C00000", "CRÍTICO", "Bajo umbral"
+
+    cpi_color, cpi_status, cpi_note = traffic(cpi)
+    spi_color, spi_status, spi_note = traffic(spi)
+
+    date_col = col_map.get("fecha")
+    if date_col:
+        evm_df["_axis_date"] = pd.to_datetime(evm_df[date_col], errors="coerce")
+        if evm_df["_axis_date"].notna().any():
+            evm_df = evm_df.sort_values(["_axis_date", col_map.get("id") or evm_df.index.name or evm_df.columns[0]])
+            evm_df["_axis"] = evm_df["_axis_date"].dt.strftime("%d-%m-%Y").fillna("")
+        else:
+            evm_df["_axis"] = ""
+    else:
+        evm_df["_axis"] = ""
+    if evm_df["_axis"].astype(str).str.strip().eq("").all():
+        fallback_col = col_map.get("fase") or col_map.get("id")
+        evm_df["_axis"] = evm_df[fallback_col].fillna("").astype(str) if fallback_col else [str(i + 1) for i in range(len(evm_df))]
+        evm_df = evm_df.reset_index(drop=True)
+
+    curve_df = evm_df[["_axis", "_pv", "_ev", "_ac", "_eac"]].copy()
+    curve_df = curve_df.groupby("_axis", sort=False, as_index=False).sum()
+    for metric in ["_pv", "_ev", "_ac", "_eac"]:
+        curve_df[metric] = curve_df[metric].cumsum()
+    if len(curve_df) > 42:
+        step = max(1, math.ceil(len(curve_df) / 42))
+        curve_df = curve_df.iloc[::step].copy()
+
+    curve_fig = go.Figure()
+    curve_series = [
+        ("PV Valor Planificado (CLP)", "_pv", "#1F4E78", "dash"),
+        ("EV Valor Ganado (CLP)", "_ev", "#548235", "solid"),
+        ("AC Costo Real (CLP)", "_ac", "#C00000", "solid"),
+        ("EAC Forecast (CLP)", "_eac", "#6F42C1", "dash"),
+    ]
+    for label, metric, color, dash in curve_series:
+        curve_fig.add_trace(
+            go.Scatter(
+                x=curve_df["_axis"],
+                y=curve_df[metric] / 1_000_000,
+                mode="lines+markers",
+                name=label,
+                line=dict(color=color, width=3, dash=dash),
+                marker=dict(size=5),
+                hovertemplate=f"<b>{label}</b><br>%{{x}}<br>%{{y:.1f}} MM CLP<extra></extra>",
+            )
+        )
+    curve_fig.update_layout(
+        height=360,
+        margin=dict(l=18, r=18, t=42, b=42),
+        title=dict(text="CURVA S – PRESUPUESTO VS VALOR GANADO VS COSTO REAL", font=dict(size=15, color="#0B1F3A")),
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", y=1.08, x=0, font=dict(size=10)),
+        xaxis=dict(title="", showgrid=False, tickfont=dict(size=9)),
+        yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.22)", tickfont=dict(size=10)),
+    )
+
+    def gauge_fig(title: str, value: float, status: str, color: str) -> go.Figure:
+        fig = go.Figure(
+            go.Indicator(
+                mode="gauge+number",
+                value=max(0.7, min(1.3, value if value else 0.7)),
+                number={"valueformat": ".2f", "font": {"size": 36, "color": "#111827"}},
+                title={"text": f"<b>{title}</b><br><span style='font-size:13px;color:{color}'>{status}</span>", "font": {"size": 15}},
+                gauge={
+                    "axis": {"range": [0.7, 1.3], "tickwidth": 1, "tickcolor": "#0B1F3A"},
+                    "bar": {"color": "#333333", "thickness": 0.13},
+                    "bgcolor": "white",
+                    "borderwidth": 1,
+                    "bordercolor": "#D9E2EC",
+                    "steps": [
+                        {"range": [0.7, 0.9], "color": "#F8D7DA"},
+                        {"range": [0.9, 1.0], "color": "#FFF2CC"},
+                        {"range": [1.0, 1.3], "color": "#DDEFD7"},
+                    ],
+                    "threshold": {"line": {"color": "#0B1F3A", "width": 3}, "thickness": 0.75, "value": 1.0},
+                },
+            )
+        )
+        fig.update_layout(height=270, margin=dict(l=18, r=18, t=36, b=12), paper_bgcolor="rgba(0,0,0,0)")
+        return fig
+
+    max_var = max(abs(total_cv), abs(total_sv), 1.0)
+    variation_fig = go.Figure()
+    variation_fig.add_trace(
+        go.Bar(
+            y=["CV – Variación Costo", "SV – Variación Cronograma"],
+            x=[total_cv / 1_000_000, total_sv / 1_000_000],
+            orientation="h",
+            marker=dict(color=["#C00000" if total_cv < 0 else "#548235", "#C00000" if total_sv < 0 else "#548235"]),
+            text=[money_mm(total_cv), money_mm(total_sv)],
+            textposition="outside",
+            hovertemplate="<b>%{y}</b><br>%{x:.1f} MM CLP<extra></extra>",
+        )
+    )
+    variation_fig.add_vline(x=0, line=dict(color="#0B1F3A", width=2))
+    variation_fig.update_layout(
+        height=255,
+        margin=dict(l=12, r=32, t=42, b=28),
+        title=dict(text="VARIACIONES", font=dict(size=15, color="#0B1F3A")),
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(range=[-max_var / 1_000_000 * 1.35, max_var / 1_000_000 * 1.35], title="MM CLP", gridcolor="rgba(148,163,184,.22)"),
+        yaxis=dict(title="", tickfont=dict(size=11)),
+        showlegend=False,
+    )
+
+    type_col = col_map.get("tipo")
+    type_df = (
+        evm_df.assign(_tipo=evm_df[type_col].fillna("Otros").astype(str).str.strip().replace("", "Otros") if type_col else "Otros")
+        .groupby("_tipo", as_index=False)["_ac"]
+        .sum()
+        .sort_values("_ac", ascending=False)
+    )
+    donut_fig = px.pie(
+        type_df,
+        values="_ac",
+        names="_tipo",
+        hole=0.58,
+        color_discrete_sequence=["#1F77D0", "#548235", "#FFC000", "#6F42C1", "#94A3B8", "#C00000"],
+    )
+    donut_fig.update_traces(
+        textinfo="percent",
+        textfont=dict(size=12, color="#FFFFFF"),
+        marker=dict(line=dict(color="#FFFFFF", width=2)),
+        hovertemplate="<b>%{label}</b><br>%{value:,.0f} CLP<br>%{percent}<extra></extra>",
+    )
+    donut_fig.update_layout(height=280, margin=dict(l=0, r=0, t=36, b=0), title=dict(text="TIPO COSTO CONTROL", font=dict(size=14, color="#0B1F3A")), showlegend=True)
+
+    def kpi_card(title: str, value: str, note: str, color: str, icon: str, status: str = "") -> str:
+        return f"""
+        <div class="evm-kpi" style="--accent:{color};">
+          <div class="evm-kpi-title">{html.escape(title)}</div>
+          <div class="evm-kpi-body"><div class="evm-kpi-icon">{html.escape(icon)}</div><div><b>{html.escape(value)}</b><span>{html.escape(note)}</span></div></div>
+          {f'<div class="evm-kpi-status">{html.escape(status)}</div>' if status else ''}
+        </div>
+        """
+
+    kpis_html = "".join(
+        [
+            kpi_card("PRESUPUESTO BASE (CLP)", money_display(total_bac), "Línea base aprobada", "#0B1F3A", "$"),
+            kpi_card("COSTO REAL AC (CLP)", money_display(total_ac), "Capital ejecutado", "#548235", "$"),
+            kpi_card("EV VALOR GANADO (CLP)", money_display(total_ev), "Valor generado", "#1F4E78", "EV"),
+            kpi_card("CPI ÍNDICE COSTO", idx_fmt(cpi), cpi_note, cpi_color, "CPI", cpi_status),
+            kpi_card("SPI ÍNDICE PLAZO", idx_fmt(spi), spi_note, spi_color, "SPI", spi_status),
+            kpi_card("FORECAST EAC (CLP)", money_display(total_eac), "Estimación al cierre", "#0B1F3A", "↗"),
+        ]
+    )
+
+    summary_items = [
+        ("CV Variación Costo (CLP)", total_cv, "Por debajo del valor ganado" if total_cv < 0 else "Favorable frente al valor ganado", "variance"),
+        ("SV Variación Cronograma (CLP)", total_sv, "Proyecto adelantado" if total_sv >= 0 else "Proyecto atrasado", "variance"),
+        ("Desviación Presupuesto", deviation_pct, "Sobre el presupuesto base" if deviation_pct > 0 else "Bajo presupuesto base", "percent"),
+        ("ETC por Ejecutar (CLP)", total_etc, "Monto por ejecutar", "neutral"),
+        ("VAC Variación al Cierre (CLP)", total_vac, "Sobre estimación final" if total_vac < 0 else "Holgura al cierre", "variance"),
+    ]
+    summary_cards_html = []
+    for label, value, note, mode in summary_items:
+        if mode == "percent":
+            color = "#C00000" if value > 0.05 else "#FFC000" if value > 0 else "#548235"
+            display = pct_fmt(value)
+        elif mode == "neutral":
+            color = "#0B1F3A"
+            display = money_clp(value)
+        else:
+            color, _, _ = traffic(value, "variance")
+            display = money_clp(value)
+        summary_cards_html.append(textwrap.dedent(f"""
+        <div class="evm-side-card" style="--accent:{color};">
+          <span>{html.escape(label)}</span>
+          <b>{html.escape(display)}</b>
+          <small>{html.escape(note)}</small>
+        </div>
+        """).strip())
+
+    fase_col = col_map.get("fase")
+    current_phase = "Ejecución"
+    if fase_col and not evm_df.empty:
+        recent_df = evm_df.sort_values("_axis_date") if "_axis_date" in evm_df.columns and evm_df["_axis_date"].notna().any() else evm_df
+        current_phase = str(recent_df[fase_col].dropna().astype(str).iloc[-1]) if recent_df[fase_col].dropna().size else "Ejecución"
+    cut_date = pd.Timestamp.today().strftime("%d-%m-%Y")
+    if "_axis_date" in evm_df.columns and evm_df["_axis_date"].notna().any():
+        cut_date = pd.Timestamp(evm_df["_axis_date"].max()).strftime("%d-%m-%Y")
+
+    st.markdown(
+        f"""
+        <style>
+        .evm-dashboard,.evm-dashboard *,.evm-panel,.evm-panel *,.evm-side-title,.evm-side-card,.evm-side-card *,.evm-notes{{box-sizing:border-box;max-width:100%;}}
+        .evm-dashboard{{width:100%;font-family:inherit;background:#F4F7FA;border:1px solid #D8E2EC;border-radius:18px;margin:22px 0 12px;overflow:hidden;box-shadow:0 18px 42px rgba(15,23,42,.08);}}
+        .evm-head{{width:100%;display:grid;grid-template-columns:minmax(150px,190px) minmax(0,1fr) minmax(190px,245px);background:linear-gradient(135deg,#0B1F3A,#07355C);color:#FFFFFF;align-items:stretch;min-height:86px;overflow:hidden;}}
+        .evm-brand{{min-width:0;display:flex;align-items:center;gap:10px;padding:15px 18px;border-right:1px solid rgba(255,255,255,.12);overflow:hidden;}}
+        .evm-mark{{flex:0 0 auto;width:38px;height:50px;border-radius:11px;background:linear-gradient(180deg,#E6FFFA,#548235);display:flex;align-items:center;justify-content:center;color:#0B1F3A;font-weight:950;}}
+        .evm-brand b{{display:block;font-size:clamp(20px,1.65vw,28px);line-height:.92;letter-spacing:.02em;white-space:nowrap;}}.evm-brand span{{display:block;color:#7BC950;font-size:clamp(14px,1.05vw,18px);font-weight:950;text-align:right;white-space:nowrap;}}
+        .evm-titlebox{{min-width:0;text-align:center;padding:13px 14px;overflow:hidden;}}.evm-titlebox h2{{margin:0;color:#FFFFFF;font-size:clamp(20px,1.55vw,31px);line-height:1.05;font-weight:950;letter-spacing:.01em;overflow-wrap:anywhere;}}.evm-titlebox p{{margin:8px 0 0;color:#FFFFFF;font-size:clamp(13px,1.05vw,20px);font-weight:900;overflow-wrap:anywhere;}}
+        .evm-meta{{min-width:0;height:100%;display:grid;align-content:center;gap:7px;background:rgba(255,255,255,.06);padding:13px 14px;font-size:11px;font-weight:900;overflow:hidden;}}.evm-meta div{{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1fr);gap:8px;min-width:0;}}.evm-meta span{{color:#D8E7F5;overflow-wrap:anywhere;}}.evm-meta b{{color:#FFFFFF;text-align:left;overflow-wrap:anywhere;line-height:1.25;}}
+        .evm-kpi-grid{{width:100%;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;padding:14px;overflow:hidden;}}
+        .evm-kpi{{min-width:0;position:relative;overflow:hidden;min-height:142px;border-radius:12px;background:linear-gradient(145deg,var(--accent),color-mix(in srgb,var(--accent) 72%,#000));color:#FFFFFF;padding:13px 12px 38px;box-shadow:0 13px 24px rgba(15,23,42,.12);}}
+        .evm-kpi-title{{font-size:clamp(10px,.78vw,13px);line-height:1.18;font-weight:950;text-align:center;text-transform:uppercase;min-height:31px;overflow-wrap:anywhere;}}
+        .evm-kpi-body{{display:grid;grid-template-columns:46px minmax(0,1fr);gap:10px;align-items:center;margin-top:12px;min-width:0;}}.evm-kpi-icon{{width:44px;height:44px;border:3px solid rgba(255,255,255,.85);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:clamp(15px,1vw,19px);font-weight:950;}}
+        .evm-kpi b{{display:block;font-size:clamp(18px,1.35vw,26px);line-height:1.05;font-weight:950;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}.evm-kpi span{{display:block;margin-top:8px;font-size:clamp(10px,.74vw,12px);font-weight:850;color:#F8FAFC;line-height:1.24;overflow-wrap:anywhere;}}
+        .evm-kpi-status{{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.18);padding:7px 10px;text-align:center;font-size:13px;font-weight:950;}}
+        .evm-main{{width:100%;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;padding:0 14px 14px;overflow:hidden;}}
+        .evm-center{{display:grid;gap:12px;min-width:0;}}.evm-row{{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.98fr);gap:12px;}}
+        .evm-panel{{width:100%;background:#FFFFFF;border:1px solid #D8E2EC;border-radius:12px;box-shadow:0 10px 22px rgba(15,23,42,.045);overflow:hidden;min-width:0;}}
+        .evm-panel.pad{{padding:12px;}}.evm-panel-title{{font-size:14px;font-weight:950;color:#0B1F3A;text-align:center;margin:0 0 8px;text-transform:uppercase;}}
+        .evm-gauge-grid{{display:grid;grid-template-columns:1fr 1fr;gap:0;}}.evm-gauge-grid>div:first-child{{border-right:1px solid #D8E2EC;}}
+        .evm-side{{display:grid;gap:10px;align-content:start;}}.evm-side-title{{background:#FFFFFF;border:1px solid #D8E2EC;border-radius:12px;padding:12px;text-align:center;color:#0B1F3A;font-weight:950;box-shadow:0 10px 22px rgba(15,23,42,.045);}}
+        .evm-side-card{{width:100%;overflow:hidden;background:#FFFFFF;border:1px solid #D8E2EC;border-left:5px solid var(--accent);border-radius:12px;padding:13px 14px;box-shadow:0 10px 22px rgba(15,23,42,.04);}}.evm-side-card span{{display:block;color:#0B1F3A;font-size:11px;line-height:1.22;font-weight:950;overflow-wrap:anywhere;}}.evm-side-card b{{display:block;color:var(--accent);font-size:clamp(17px,1.22vw,22px);line-height:1.05;margin:8px 0 5px;font-weight:950;overflow-wrap:anywhere;}}.evm-side-card small{{display:block;color:#334155;font-size:11px;line-height:1.25;font-weight:750;overflow-wrap:anywhere;}}
+        .evm-scale{{width:100%;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:14px;overflow:hidden;}}.evm-flow{{display:grid;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr) 32px minmax(0,1fr);align-items:center;gap:8px;text-align:center;}}.evm-flow-card{{border:1px solid #D8E2EC;border-radius:12px;padding:13px 10px;background:#F8FBFF;color:#0B1F3A;font-weight:950;overflow-wrap:anywhere;}}.evm-flow-arrow{{font-size:24px;color:#1F4E78;font-weight:950;}}
+        .evm-scale-kpis{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}}.evm-scale-kpis div{{min-width:0;border:1px solid #D8E2EC;border-radius:10px;background:#FFFFFF;padding:10px;text-align:center;overflow:hidden;}}.evm-scale-kpis span{{display:block;font-size:9px;color:#0B1F3A;font-weight:950;text-transform:uppercase;overflow-wrap:anywhere;}}.evm-scale-kpis b{{display:block;color:#548235;font-size:21px;font-weight:950;margin-top:5px;white-space:nowrap;}}
+        .evm-notes{{padding:10px 16px 14px;color:#0B1F3A;font-size:11px;font-weight:750;line-height:1.4;background:#FFFFFF;border-top:1px solid #D8E2EC;}}
+        @media(max-width:1450px){{.evm-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.evm-main{{grid-template-columns:1fr;}}.evm-side{{grid-template-columns:repeat(2,minmax(0,1fr));}}.evm-side-title{{grid-column:1/-1;}}}}
+        @media(max-width:1180px){{.evm-head{{grid-template-columns:minmax(0,1fr);}}.evm-brand{{justify-content:center;border-right:0;border-bottom:1px solid rgba(255,255,255,.12);}}.evm-meta{{grid-template-columns:repeat(3,minmax(0,1fr));}}.evm-meta div{{grid-template-columns:1fr;gap:3px;text-align:center;}}}}
+        @media(max-width:950px){{.evm-head,.evm-row,.evm-gauge-grid{{grid-template-columns:1fr;}}.evm-brand{{border-right:0;border-bottom:1px solid rgba(255,255,255,.12);}}.evm-kpi-grid,.evm-side,.evm-scale-kpis{{grid-template-columns:1fr;}}.evm-flow{{grid-template-columns:1fr;}}.evm-flow-arrow{{transform:rotate(90deg);}}}}
+        </style>
+        <div class="evm-dashboard">
+          <div class="evm-head">
+            <div class="evm-brand"><div class="evm-mark">FW</div><div><b>FLUXIAL</b><span>WIND</span></div></div>
+            <div class="evm-titlebox"><h2>CONTROL DE COSTOS Y DESEMPEÑO DEL PROYECTO</h2><p>PILOTO EÓLICO 10 kW → COMERCIAL 80 kW</p></div>
+            <div class="evm-meta"><div><span>FECHA DE CORTE:</span><b>{html.escape(cut_date)}</b></div><div><span>FASE ACTUAL:</span><b>{html.escape(current_phase[:36])}</b></div><div><span>MONEDA:</span><b>CLP</b></div></div>
+          </div>
+          <div class="evm-kpi-grid">{kpis_html}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    main_col, side_col = st.columns([4.1, 1.25], gap="small")
+    with main_col:
+        row_a, row_b = st.columns([1.12, 1.0], gap="small")
+        with row_a:
+            with st.container(border=False):
+                st.plotly_chart(curve_fig, use_container_width=True, key="evm_curve_s")
+        with row_b:
+            st.markdown('<div class="evm-panel-title">DESEMPEÑO DEL PROYECTO</div>', unsafe_allow_html=True)
+            g1, g2 = st.columns(2, gap="small")
+            with g1:
+                st.plotly_chart(gauge_fig("CPI – ÍNDICE COSTO", cpi, cpi_status, cpi_color), use_container_width=True, key="evm_gauge_cpi")
+            with g2:
+                st.plotly_chart(gauge_fig("SPI – ÍNDICE PLAZO", spi, spi_status, spi_color), use_container_width=True, key="evm_gauge_spi")
+        row_c, row_d = st.columns([0.9, 1.1], gap="small")
+        with row_c:
+            st.plotly_chart(variation_fig, use_container_width=True, key="evm_variaciones")
+        with row_d:
+            st.plotly_chart(donut_fig, use_container_width=True, key="evm_donut_tipo")
+    with side_col:
+        st.markdown('<div class="evm-side-title">RESUMEN FINANCIERO</div>', unsafe_allow_html=True)
+        for card_html in summary_cards_html:
+            st.markdown(card_html, unsafe_allow_html=True)
+
+    st.markdown(
+        """
+        <div class="evm-panel evm-scale">
+          <div class="evm-panel-title">RUTA DE ESCALAMIENTO Y OBJETIVO 80 kW</div>
+          <div class="evm-flow">
+            <div class="evm-flow-card">PILOTO<br>10 kW</div><div class="evm-flow-arrow">→</div>
+            <div class="evm-flow-card">ECONOMÍAS<br>DE ESCALA</div><div class="evm-flow-arrow">→</div>
+            <div class="evm-flow-card">COMERCIAL<br>80 kW</div>
+          </div>
+          <div class="evm-scale-kpis">
+            <div><span>Reducción esperada costo</span><b>-51,7%</b></div>
+            <div><span>Costo objetivo 80 kW</span><b>$27,3 MM</b></div>
+            <div><span>Supply replicable</span><b>76,5%</b></div>
+          </div>
+        </div>
+        <div class="evm-notes">
+          Indicadores calculados con metodología Valor Ganado (EVM): CPI = EV / AC · SPI = EV / PV · CV = EV - AC · SV = EV - PV · EAC = Forecast al cierre · VAC = BAC - EAC.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etapa seleccionada") -> None:
@@ -3598,6 +4204,9 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
 
     def fmt_mm(value: float) -> str:
         return f"{float(value) / 1_000_000:.1f}".replace(".", ",")
+
+    def fmt_mm_unit(value: float) -> str:
+        return f"{fmt_mm(value)} MM"
 
     def fmt_pct_local(value: float) -> str:
         return f"{float(value):.1f}%".replace(".", ",")
@@ -3628,11 +4237,11 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
         "Gestión PMO",
     ]
     scope_meta = {
-        "Suministro Turbina": {"note": "(Supply)", "color": "#087F75", "icon": "⚙"},
-        "Obras y Montaje": {"note": "(BOS)", "color": "#7EB356", "icon": "⚒"},
-        "Ingeniería y Validación": {"note": "", "color": "#F2AE00", "icon": "⚙"},
-        "Integración y Comisionamiento": {"note": "", "color": "#9B52C9", "icon": "✕"},
-        "Gestión PMO": {"note": "", "color": "#9AA3AD", "icon": "▤"},
+        "Suministro Turbina": {"note": "(Supply)", "color": "#164E63", "icon": "S"},
+        "Obras y Montaje": {"note": "(BOS)", "color": "#0F766E", "icon": "B"},
+        "Ingeniería y Validación": {"note": "", "color": "#B7791F", "icon": "I"},
+        "Integración y Comisionamiento": {"note": "", "color": "#1E3A8A", "icon": "C"},
+        "Gestión PMO": {"note": "", "color": "#64748B", "icon": "P"},
     }
 
     def normalize_scope(value: object) -> str:
@@ -3683,7 +4292,7 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
                 "pilot": float(row["pilot"]),
                 "commercial": float(row["commercial"]),
                 "tasks": int(row["tasks"]),
-                "color": "#9AA3AD",
+                "color": "#64748B",
                 "icon": "•",
             }
         )
@@ -3702,22 +4311,20 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
     max_axis_mm = max(math.ceil(max_axis_mm / 5) * 5, 40)
 
     kpi_cards = [
-        ("COSTO PILOTO", fmt_money(total_piloto), "100% del total", "#087F75"),
-        ("COSTO COMERCIAL", fmt_money(total_comercial), "100% del total", "#1D4ED8"),
-        ("BRECHA (PILOTO - COMERCIAL)", fmt_signed_money(reduction_value), "Reducción esperada", "#087F75"),
-        ("REDUCCIÓN ESPERADA", fmt_pct_local(reduction_pct), "Respecto al piloto", "#087F75"),
-        ("% CAPEX REPLICABLE (SUPPLY)", fmt_pct_local(replicable_pct), "Del costo comercial", "#087F75"),
-        ("% CAPEX SITIO DEPENDIENTE (BOS)", fmt_pct_local(site_dependent_pct), "Del costo comercial", "#087F75"),
+        ("COSTO PILOTO", fmt_money(total_piloto), "100% del total", "#164E63", "P"),
+        ("COSTO COMERCIAL", fmt_money(total_comercial), "100% del total", "#1E3A8A", "C"),
+        ("BRECHA (PILOTO - COMERCIAL)", fmt_signed_money(reduction_value), "Reducción esperada", "#0F766E", "Δ"),
+        ("REDUCCIÓN ESPERADA", fmt_pct_local(reduction_pct), "Respecto al piloto", "#0F766E", "%"),
+        ("% CAPEX REPLICABLE (SUPPLY)", fmt_pct_local(replicable_pct), "Del costo comercial", "#164E63", "S"),
+        ("% CAPEX SITIO DEPENDIENTE (BOS)", fmt_pct_local(site_dependent_pct), "Del costo comercial", "#0F766E", "B"),
     ]
     kpi_html = "".join(
-        f"""
-        <div class="epc-kpi">
-          <div class="epc-kpi-label" style="color:{color};">{html.escape(label)}</div>
-          <div class="epc-kpi-value">{html.escape(value)}</div>
-          <div class="epc-kpi-note">{html.escape(note)}</div>
-        </div>
-        """
-        for label, value, note, color in kpi_cards
+        f'<div class="epc-kpi" style="--accent:{color};">'
+        f'<div class="epc-kpi-top"><div class="epc-kpi-ico">{html.escape(icon)}</div>'
+        f'<div><div class="epc-kpi-label">{html.escape(label)}</div>'
+        f'<div class="epc-kpi-value">{html.escape(value)}</div></div></div>'
+        f'<div class="epc-kpi-note">{html.escape(note)}</div></div>'
+        for label, value, note, color, icon in kpi_cards
     )
 
     def fmt_scope_note(item: dict) -> str:
@@ -3736,19 +4343,19 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
           </div>
 
           <div class="epc-capex-pro-metric">
-            <b>{fmt_mm(item['pilot'])}</b>
+            <b>{fmt_mm_unit(item['pilot'])}</b>
             <span>{fmt_pct_local(item['pilot'] / total_piloto * 100 if total_piloto else 0)} del piloto</span>
             <i><em style="width:{min(100, item['pilot'] / max(total_piloto, 1) * 100):.4f}%;"></em></i>
           </div>
 
           <div class="epc-capex-pro-metric commercial">
-            <b>{fmt_mm(item['commercial'])}</b>
+            <b>{fmt_mm_unit(item['commercial'])}</b>
             <span>{fmt_pct_local(item['commercial'] / total_comercial * 100 if total_comercial else 0)} del comercial</span>
             <i><em style="width:{min(100, item['commercial'] / max(total_comercial, 1) * 100):.4f}%;"></em></i>
           </div>
 
           <div class="epc-capex-pro-gap">
-            <b>{fmt_signed_money(item['commercial'] - item['pilot'])}</b>
+            <b>{fmt_mm_unit(item['commercial'] - item['pilot'])}</b>
             <span>{fmt_pct_local(((item['commercial'] - item['pilot']) / item['pilot'] * 100) if item['pilot'] else 0)}</span>
           </div>
         </div>
@@ -3760,18 +4367,18 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
         <div class="epc-capex-pro-score">
           <div class="epc-capex-pro-score-card pilot">
             <span>Costo piloto</span>
-            <b>{fmt_money(total_piloto)}</b>
+            <b>{fmt_mm_unit(total_piloto)}</b>
             <small>Base experimental</small>
           </div>
           <div class="epc-capex-pro-arrow">→</div>
           <div class="epc-capex-pro-score-card commercial">
             <span>Costo comercial</span>
-            <b>{fmt_money(total_comercial)}</b>
+            <b>{fmt_mm_unit(total_comercial)}</b>
             <small>Referencia escalable</small>
           </div>
           <div class="epc-capex-pro-score-card reduction">
             <span>Brecha total</span>
-            <b>{fmt_signed_money(reduction_value)}</b>
+            <b>{fmt_mm_unit(reduction_value)}</b>
             <small>{fmt_pct_local(reduction_pct)} de reducción</small>
           </div>
         </div>
@@ -3791,25 +4398,23 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
         cursor += pct_value
         donut_legend.append(
             f"""
-            <div class="epc-donut-legend-item">
+            <div class="epc-donut-legend-item" style="--c:{item['color']};--share:{min(100, max(0, pct_value)):.4f}%;">
               <span class="epc-donut-dot" style="background:{item['color']};"></span>
-              <b>{html.escape(item['label'])}<small>{html.escape(item['note'])}</small></b>
-              <strong>{fmt_money(item['commercial'])}</strong>
+              <b>{html.escape(item['label'])}<small>{html.escape(item['note'] or f"{int(item.get('tasks', 0))} partidas")}</small></b>
+              <strong>{fmt_mm_unit(item['commercial'])}</strong>
               <em>{fmt_pct_local(pct_value)}</em>
+              <i><span></span></i>
             </div>
             """
         )
     donut_bg = ", ".join(donut_segments)
-    donut_labels = "".join(
-        f'<span class="epc-donut-pct epc-donut-pct-{idx}">{fmt_pct_local(item["commercial"] / total_comercial * 100 if total_comercial else 0)}</span>'
-        for idx, item in enumerate(report_breakdown[:4])
-    )
+    donut_labels = ""
 
     strategic_cards = [
-        ("CAPEX REPLICABLE (SUPPLY)", "Parte del costo que se fabrica en planta y es escalable.", fmt_money(supply["commercial"]), f"{fmt_pct_local(supply_pct)} del total comercial", "#087F75", "▦"),
-        ("CAPEX SITIO DEPENDIENTE (BOS)", "Parte del costo que depende del sitio y condiciones de montaje.", fmt_money(bos["commercial"]), f"{fmt_pct_local(bos_pct)} del total comercial", "#7EB356", "⌂"),
-        ("REDUCCIÓN INGENIERÍA Y PMO", "Efecto de estandarización y aprendizaje al escalar.", fmt_signed_money(eng_reduction), "Reducción esperada", "#F2AE00", "⌁"),
-        ("REDUCCIÓN TOTAL ESPERADA", "Brecha entre piloto y referencia comercial.", fmt_signed_money(reduction_value), f"{fmt_pct_local(reduction_pct)} de reducción", "#9B52C9", "%"),
+        ("CAPEX REPLICABLE (SUPPLY)", "Parte del costo que se fabrica en planta y es escalable.", fmt_mm_unit(supply["commercial"]), f"{fmt_pct_local(supply_pct)} del total comercial", "#164E63", "S"),
+        ("CAPEX SITIO DEPENDIENTE (BOS)", "Parte del costo que depende del sitio y condiciones de montaje.", fmt_mm_unit(bos["commercial"]), f"{fmt_pct_local(bos_pct)} del total comercial", "#0F766E", "B"),
+        ("REDUCCIÓN INGENIERÍA Y PMO", "Efecto de estandarización y aprendizaje al escalar.", fmt_mm_unit(eng_reduction), "Reducción esperada", "#B7791F", "I"),
+        ("REDUCCIÓN TOTAL ESPERADA", "Brecha entre piloto y referencia comercial.", fmt_mm_unit(reduction_value), f"{fmt_pct_local(reduction_pct)} de reducción", "#1E3A8A", "%"),
     ]
     strategic_html = "".join(
         f"""
@@ -3862,52 +4467,282 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
     ]
     insights_html = "".join(f"<li>{html.escape(item)}</li>" for item in insights)
 
+    savings_value = total_piloto - total_comercial
+    savings_pct = abs(reduction_pct)
+    pilot_share = 100.0
+    commercial_share = (total_comercial / total_piloto * 100) if total_piloto else 0.0
+    costpro_legend = "".join(
+        f"""
+        <div class="costpro-legend-row" style="--c:{item['color']};--share:{min(100, max(0, (item['commercial'] / total_comercial * 100) if total_comercial else 0)):.4f}%;">
+          <span></span>
+          <div><b>{html.escape(item['label'])}</b><small>{html.escape(item['note'] or f"{int(item.get('tasks', 0))} partidas")}</small></div>
+          <strong>{fmt_mm_unit(item['commercial'])}</strong>
+          <em>{fmt_pct_local((item['commercial'] / total_comercial * 100) if total_comercial else 0)}</em>
+          <i><u></u></i>
+        </div>
+        """
+        for item in report_breakdown
+    )
+    costpro_scope_rows = "".join(
+        f"""
+        <div class="costpro-scope-row" style="--c:{item['color']};">
+          <div class="costpro-scope-name">
+            <span>{html.escape(item['icon'])}</span>
+            <div><b>{html.escape(item['label'])}</b><small>{html.escape(fmt_scope_note(item))}</small></div>
+          </div>
+          <div class="costpro-bar-block">
+            <div class="costpro-bar-meta"><b>{fmt_mm_unit(item['pilot'])}</b><small>Piloto</small></div>
+            <i><u style="width:{min(100, item['pilot'] / max(total_piloto, 1) * 100):.4f}%;"></u></i>
+          </div>
+          <div class="costpro-bar-block commercial">
+            <div class="costpro-bar-meta"><b>{fmt_mm_unit(item['commercial'])}</b><small>Comercial</small></div>
+            <i><u style="width:{min(100, item['commercial'] / max(total_comercial, 1) * 100):.4f}%;"></u></i>
+          </div>
+          <div class="costpro-gap">
+            <b>{fmt_mm_unit(item['commercial'] - item['pilot'])}</b>
+            <small>{fmt_pct_local(((item['commercial'] - item['pilot']) / item['pilot'] * 100) if item['pilot'] else 0)}</small>
+          </div>
+        </div>
+        """
+        for item in report_breakdown
+    )
+    costpro_strategy_cards = "".join(
+        f"""
+        <div class="costpro-strategy-card" style="--c:{color};">
+          <span>{html.escape(icon)}</span>
+          <div><b>{html.escape(value)}</b><small>{html.escape(title)}</small></div>
+        </div>
+        """
+        for title, _desc, value, _note, color, icon in strategic_cards
+    )
+    costpro_insights = "".join(f"<li>{html.escape(item)}</li>" for item in insights[:4])
+
+    epc_pro_html = textwrap.dedent(f"""
+        <style>
+        .costpro-wrap{{font-family:inherit;color:#071427;margin:18px 0 10px;width:100%;max-width:100%;overflow:hidden;box-sizing:border-box;}}
+        .costpro-wrap *{{box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;}}
+        .costpro-shell{{position:relative;width:100%;max-width:100%;min-width:0;overflow:hidden;border-radius:28px;background:radial-gradient(circle at 96% 6%,rgba(20,184,166,.15),transparent 24%),linear-gradient(135deg,#FFFFFF 0%,#F8FAFC 56%,#ECFDF9 100%);box-shadow:0 22px 50px rgba(15,23,42,.09);padding:24px;}}
+        .costpro-head{{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:22px;}}
+        .costpro-kicker{{margin:0 0 7px 0;font-size:11px;font-weight:950;letter-spacing:.16em;text-transform:uppercase;color:#0F766E;}}
+        .costpro-title{{margin:0;font-size:clamp(27px,2.2vw,42px);line-height:.98;font-weight:950;letter-spacing:.005em;color:#071427;text-transform:uppercase;}}
+        .costpro-sub{{margin:9px 0 0 0;color:#64748B;font-size:13px;font-weight:800;line-height:1.36;max-width:790px;}}
+        .costpro-brand{{display:flex;align-items:center;gap:10px;min-width:0;border-radius:999px;background:#071427;color:#FFFFFF;padding:11px 15px;font-size:11px;font-weight:950;letter-spacing:.10em;text-transform:uppercase;white-space:normal;box-shadow:0 14px 34px rgba(7,20,39,.18);}}
+        .costpro-brand i{{width:9px;height:9px;border-radius:50%;background:#14B8A6;box-shadow:0 0 0 6px rgba(20,184,166,.16);}}
+        .costpro-hero{{display:grid;grid-template-columns:minmax(0,1.34fr) minmax(0,.86fr);gap:18px;align-items:stretch;width:100%;min-width:0;}}
+        .costpro-transform{{min-width:0;border-radius:24px;background:#071427;color:#FFFFFF;padding:22px;box-shadow:0 22px 46px rgba(7,20,39,.17);display:grid;grid-template-columns:minmax(0,1fr) 82px minmax(0,1fr);grid-template-rows:auto auto;gap:15px;align-items:center;overflow:hidden;}}
+        .costpro-big-cost{{min-width:0;border-radius:22px;background:rgba(255,255,255,.07);padding:18px 19px;min-height:148px;display:flex;flex-direction:column;justify-content:center;overflow:hidden;}}
+        .costpro-big-cost span{{display:block;font-size:11px;font-weight:950;letter-spacing:.11em;text-transform:uppercase;color:#94A3B8;margin-bottom:12px;}}
+        .costpro-big-cost b{{display:block;font-size:clamp(34px,3.5vw,64px);line-height:.92;font-weight:950;letter-spacing:-.045em;color:#FFFFFF;white-space:normal;}}
+        .costpro-big-cost small{{display:block;margin-top:13px;color:#CBD5E1;font-size:13px;font-weight:850;}}
+        .costpro-big-cost.commercial{{background:linear-gradient(145deg,rgba(20,184,166,.20),rgba(255,255,255,.08));outline:1px solid rgba(20,184,166,.26);}}
+        .costpro-big-cost.commercial b{{color:#7DD3C7;}}
+        .costpro-flow{{height:82px;width:82px;min-width:82px;border-radius:50%;background:#FFFFFF;color:#0F766E;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:950;box-shadow:0 18px 34px rgba(0,0,0,.16);}}
+        .costpro-save{{grid-column:1 / 4;min-width:0;border-radius:22px;background:linear-gradient(90deg,#0F766E 0%,#14B8A6 100%);display:grid;grid-template-columns:minmax(0,.58fr) minmax(0,1fr) minmax(0,.42fr);gap:15px;align-items:center;padding:16px 18px;overflow:hidden;}}
+        .costpro-save span{{font-size:11px;font-weight:950;letter-spacing:.12em;text-transform:uppercase;color:#D7FFFA;}}
+        .costpro-save b{{font-size:clamp(34px,3vw,56px);line-height:.94;font-weight:950;letter-spacing:-.045em;color:#FFFFFF;}}
+        .costpro-save p{{margin:0;color:#ECFEFF;font-size:13px;line-height:1.32;font-weight:850;min-width:0;}}
+        .costpro-save strong{{justify-self:end;font-size:clamp(22px,1.9vw,34px);font-weight:950;color:#FFFFFF;white-space:normal;text-align:right;}}
+        .costpro-donut-card{{min-width:0;border-radius:24px;background:rgba(255,255,255,.88);padding:20px;box-shadow:0 16px 38px rgba(15,23,42,.08);display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;overflow:hidden;}}
+        .costpro-panel-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-width:0;}}
+        .costpro-panel-head b{{display:block;color:#071427;font-size:18px;line-height:1.08;font-weight:950;}}
+        .costpro-panel-head small{{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:5px;}}
+        .costpro-chip{{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:8px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:normal;text-align:center;}}
+        .costpro-donut-grid{{display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1fr);gap:16px;align-items:center;width:100%;min-width:0;}}
+        .costpro-donut{{position:relative;width:clamp(210px,22vw,290px);max-width:100%;aspect-ratio:1/1;border-radius:50%;margin:auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.78),0 18px 34px rgba(15,23,42,.12);}}
+        .costpro-donut::after{{content:"";position:absolute;inset:29%;border-radius:50%;background:#FFFFFF;box-shadow:0 0 0 1px #E2E8F0;}}
+        .costpro-donut-center{{position:absolute;inset:34% 18%;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}}
+        .costpro-donut-center span{{font-size:10px;color:#64748B;font-weight:950;letter-spacing:.09em;text-transform:uppercase;}}
+        .costpro-donut-center b{{font-size:clamp(25px,2vw,34px);line-height:1;color:#071427;font-weight:950;margin:6px 0 3px;}}
+        .costpro-donut-center small{{font-size:11px;color:#0F766E;font-weight:950;}}
+        .costpro-legend{{display:grid;gap:7px;min-width:0;overflow:hidden;}}
+        .costpro-legend-row{{display:grid;grid-template-columns:12px minmax(0,1fr) minmax(58px,auto) 42px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(148,163,184,.20);min-width:0;}}
+        .costpro-legend-row>span{{width:11px;height:11px;border-radius:50%;background:var(--c);}}
+        .costpro-legend-row b{{display:block;color:#071427;font-size:12px;line-height:1.12;font-weight:950;}}
+        .costpro-legend-row small{{display:block;color:#64748B;font-size:9px;font-weight:850;margin-top:3px;}}
+        .costpro-legend-row strong{{color:#071427;font-size:11px;font-weight:950;text-align:right;white-space:normal;}}
+        .costpro-legend-row em{{font-style:normal;color:#0F766E;font-size:11px;font-weight:950;text-align:right;}}
+        .costpro-legend-row i{{grid-column:2 / 5;height:6px;border-radius:999px;background:#E2E8F0;overflow:hidden;}}
+        .costpro-legend-row i u{{display:block;height:100%;width:var(--share);border-radius:999px;background:var(--c);}}
+        .costpro-strategy{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0;min-width:0;}}
+        .costpro-strategy-card{{min-width:0;border-radius:20px;background:#FFFFFF;padding:15px;display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;align-items:center;box-shadow:0 14px 28px rgba(15,23,42,.065);overflow:hidden;}}
+        .costpro-strategy-card span{{width:44px;height:44px;border-radius:15px;background:var(--c);color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:950;box-shadow:0 14px 24px rgba(15,23,42,.10);}}
+        .costpro-strategy-card b{{display:block;color:#071427;font-size:clamp(18px,1.35vw,26px);line-height:1;font-weight:950;letter-spacing:-.03em;white-space:normal;}}
+        .costpro-strategy-card small{{display:block;margin-top:6px;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.05em;text-transform:uppercase;line-height:1.25;}}
+        .costpro-bottom{{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,.65fr);gap:16px;align-items:stretch;min-width:0;}}
+        .costpro-scope-panel,.costpro-insight-panel{{min-width:0;border-radius:24px;background:#FFFFFF;padding:18px;box-shadow:0 14px 32px rgba(15,23,42,.065);overflow:hidden;}}
+        .costpro-scope-head{{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,.6fr) minmax(0,.6fr) minmax(0,.42fr);gap:11px;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;margin:12px 0 6px;}}
+        .costpro-scope-head span:not(:first-child){{text-align:right;}}
+        .costpro-scope-row{{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,.6fr) minmax(0,.6fr) minmax(0,.42fr);gap:11px;align-items:center;padding:11px 0;border-top:1px solid rgba(148,163,184,.20);min-width:0;}}
+        .costpro-scope-name{{display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;align-items:center;min-width:0;}}
+        .costpro-scope-name span{{width:40px;height:40px;border-radius:14px;background:rgba(15,118,110,.10);color:var(--c);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:950;}}
+        .costpro-scope-name b{{display:block;color:#071427;font-size:13px;line-height:1.12;font-weight:950;}}
+        .costpro-scope-name small{{display:block;color:#64748B;font-size:10px;font-weight:850;margin-top:4px;}}
+        .costpro-bar-block{{min-width:0;text-align:right;}}
+        .costpro-bar-meta b{{display:block;color:#071427;font-size:14px;font-weight:950;}}
+        .costpro-bar-meta small{{display:block;color:#64748B;font-size:9px;font-weight:900;margin-top:3px;}}
+        .costpro-bar-block i{{display:block;height:7px;border-radius:999px;background:#E2E8F0;margin-top:7px;overflow:hidden;}}
+        .costpro-bar-block i u{{display:block;height:100%;border-radius:999px;background:#071427;}}
+        .costpro-bar-block.commercial i u{{background:#14B8A6;}}
+        .costpro-gap{{text-align:right;border-radius:16px;background:#ECFDF9;padding:10px 12px;}}
+        .costpro-gap b{{display:block;color:#0F766E;font-size:15px;line-height:1;font-weight:950;}}
+        .costpro-gap small{{display:block;margin-top:5px;color:#0F766E;font-size:10px;font-weight:950;}}
+        .costpro-insight-panel{{background:#071427;color:#FFFFFF;display:flex;flex-direction:column;justify-content:space-between;gap:18px;}}
+        .costpro-insight-panel .costpro-panel-head b{{color:#FFFFFF;}}
+        .costpro-insight-panel .costpro-panel-head small{{color:#94A3B8;}}
+        .costpro-insights{{list-style:none;padding:0;margin:4px 0 0 0;display:grid;gap:11px;min-width:0;}}
+        .costpro-insights li{{position:relative;padding-left:26px;color:#E2E8F0;font-size:12px;line-height:1.34;font-weight:800;}}
+        .costpro-insights li::before{{content:"";position:absolute;left:0;top:4px;width:14px;height:14px;border-radius:50%;background:#14B8A6;box-shadow:0 0 0 5px rgba(20,184,166,.13);}}
+        .costpro-table-wrap{{margin-top:16px;width:100%;max-width:100%;min-width:0;border-radius:22px;background:#FFFFFF;padding:14px;box-shadow:0 14px 32px rgba(15,23,42,.06);overflow:auto;max-height:460px;}}
+        .costpro-table-title{{font-size:12px;color:#071427;font-weight:950;letter-spacing:.08em;text-transform:uppercase;margin:0 0 11px;}}
+        .costpro-table{{width:100%;min-width:920px;border-collapse:separate;border-spacing:0;font-size:8.8px;text-align:center;}}
+        .costpro-table th{{background:#F1F5F9;color:#334155;padding:7px 6px;font-weight:950;line-height:1.1;border-bottom:1px solid #E2E8F0;}}
+        .costpro-table td{{padding:6px 6px;color:#334155;font-weight:750;border-bottom:1px solid #EEF2F7;}}
+        .costpro-table .epc-phase-name{{text-align:left;font-weight:900;color:#071427;min-width:210px;}}
+        .costpro-table tfoot td{{background:#ECFDF9;color:#0F766E;font-size:10px;font-weight:950;}}
+        .costpro-foot{{margin:12px 0 0;color:#64748B;font-size:10px;font-weight:800;}}
+        @media(max-width:1450px){{.costpro-hero,.costpro-bottom{{grid-template-columns:1fr;}}.costpro-donut-grid{{grid-template-columns:minmax(0,.72fr) minmax(0,1fr);}}}}
+        @media(max-width:1050px){{.costpro-head{{display:block;}}.costpro-brand{{display:inline-flex;margin-top:13px;}}.costpro-transform,.costpro-save,.costpro-scope-head,.costpro-scope-row{{grid-template-columns:1fr;}}.costpro-flow{{margin:auto;transform:rotate(90deg);}}.costpro-save strong{{justify-self:start;text-align:left;}}.costpro-strategy{{grid-template-columns:repeat(2,minmax(0,1fr));}}.costpro-scope-head{{display:none;}}.costpro-bar-block,.costpro-gap{{text-align:left;}}}}
+        @media(max-width:720px){{.costpro-shell{{padding:16px;border-radius:22px;}}.costpro-strategy,.costpro-donut-grid{{grid-template-columns:1fr;}}.costpro-big-cost b{{font-size:38px;}}.costpro-donut{{width:min(100%,250px);}}}}
+        </style>
+        <div class="costpro-wrap">
+          <div class="costpro-shell">
+            <div class="costpro-head">
+              <div>
+                <p class="costpro-kicker">Cost architecture · piloto vs comercial</p>
+                <h2 class="costpro-title">Análisis de Costos – Piloto vs Comercial</h2>
+                <p class="costpro-sub">Lectura ejecutiva por alcance EPC para visualizar la brecha de costo, el CAPEX replicable y la referencia comercial objetivo.</p>
+              </div>
+              <div class="costpro-brand"><i></i>{html.escape(scope_label)}</div>
+            </div>
+
+            <div class="costpro-hero">
+              <div class="costpro-transform">
+                <div class="costpro-big-cost">
+                  <span>Costo piloto</span>
+                  <b>{fmt_mm_unit(total_piloto)}</b>
+                  <small>Base experimental ejecutada</small>
+                </div>
+                <div class="costpro-flow">→</div>
+                <div class="costpro-big-cost commercial">
+                  <span>Costo comercial</span>
+                  <b>{fmt_mm_unit(total_comercial)}</b>
+                  <small>Referencia objetivo escalable</small>
+                </div>
+                <div class="costpro-save">
+                  <div><span>Reducción esperada</span><b>{fmt_pct_local(savings_pct)}</b></div>
+                  <p>La brecha convierte gasto piloto no recurrente en una arquitectura CAPEX más industrializable y repetible.</p>
+                  <strong>{fmt_mm_unit(savings_value)}</strong>
+                </div>
+              </div>
+
+              <div class="costpro-donut-card">
+                <div class="costpro-panel-head">
+                  <div><b>Composición CAPEX comercial</b><small>Distribución relativa por alcance EPC</small></div>
+                  <span class="costpro-chip">{fmt_pct_local(supply_pct + bos_pct)} concentración</span>
+                </div>
+                <div class="costpro-donut-grid">
+                  <div class="costpro-donut"><div class="costpro-donut-center"><span>Total comercial</span><b>{fmt_mm_unit(total_comercial)}</b><small>MM CLP</small></div></div>
+                  <div class="costpro-legend">{costpro_legend}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="costpro-strategy">{costpro_strategy_cards}</div>
+
+            <div class="costpro-bottom">
+              <div class="costpro-scope-panel">
+                <div class="costpro-panel-head">
+                  <div><b>CAPEX por alcance EPC</b><small>Comparativo visual: piloto vs referencia comercial</small></div>
+                  <span class="costpro-chip">{fmt_pct_local(commercial_share)} costo remanente</span>
+                </div>
+                <div class="costpro-scope-head"><span>Alcance</span><span>Piloto</span><span>Comercial</span><span>Brecha</span></div>
+                {costpro_scope_rows}
+              </div>
+
+              <div class="costpro-insight-panel">
+                <div class="costpro-panel-head">
+                  <div><b>Lectura para inversionistas</b><small>Lo que explica la reducción</small></div>
+                </div>
+                <ul class="costpro-insights">{costpro_insights}</ul>
+                <div class="costpro-save" style="grid-template-columns:1fr;padding:18px;margin-top:auto;">
+                  <div><span>Escalabilidad CAPEX</span><b>{fmt_pct_local(pilot_share - commercial_share)}</b></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="costpro-table-wrap">
+              <div class="costpro-table-title">Detalle técnico por fase y alcance EPC · MM CLP</div>
+              <table class="costpro-table">
+                <thead>
+                  <tr><th rowspan="2">FASE</th>{''.join(f'<th colspan="2">{html.escape(item["label"].upper())}<br>{html.escape(item["note"].upper())}</th>' for item in report_breakdown)}<th rowspan="2">TOTAL<br>PILOTO</th><th rowspan="2">TOTAL<br>COMERCIAL</th></tr>
+                  <tr>{''.join('<th>Piloto</th><th>Comercial</th>' for _ in report_breakdown)}</tr>
+                </thead>
+                <tbody>{table_html}</tbody>
+                <tfoot>{footer_html}</tfoot>
+              </table>
+            </div>
+
+            <div class="costpro-foot">Valores expresados en millones de CLP (MM CLP). Se mantienen los mismos cálculos y filtros del cronograma activo.</div>
+          </div>
+        </div>
+    """).strip()
+    epc_pro_html = "\n".join(line.lstrip() for line in epc_pro_html.splitlines())
+    if hasattr(st, "html"):
+        st.html(epc_pro_html)
+    else:
+        components.html(epc_pro_html, height=1180, scrolling=False)
+    return
+
     epc_html = textwrap.dedent(f"""
         <style>
-        .epc-report{{font-family:inherit;color:#102039;margin:18px 0 8px;width:100%;max-width:none;overflow:visible;}}
-        .epc-title{{font-family:inherit;font-size:24px;line-height:1.05;font-weight:950;letter-spacing:.02em;color:#0b1736;margin:0 0 7px;text-transform:uppercase;}}
-        .epc-subtitle{{font-family:inherit;font-size:13px;color:#52657f;font-weight:650;margin:0 0 15px;}}
-        .epc-kpi-grid{{display:grid;grid-template-columns:repeat(6,minmax(132px,1fr));gap:10px;margin-bottom:12px;}}
-        .epc-kpi,.epc-panel{{border:1px solid #dfe8f2;border-radius:10px;background:#fff;box-shadow:0 7px 17px rgba(15,23,42,.06);}}
-        .epc-kpi{{padding:12px 16px;min-height:82px;min-width:0;}}
-        .epc-kpi-label{{font-family:inherit;font-size:9px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;}}
-        .epc-kpi-value{{font-size:clamp(16px,1.26vw,22px);font-weight:950;color:#071a44;line-height:1;white-space:nowrap;}}
-        .epc-kpi-note{{font-size:10.5px;color:#52657f;font-weight:800;margin-top:8px;}}
-        .epc-main-grid{{display:grid;grid-template-columns:minmax(0,1.48fr) minmax(360px,.92fr);gap:14px;margin-bottom:14px;align-items:stretch;}}
-        .epc-panel{{border-radius:12px;box-shadow:0 7px 17px rgba(15,23,42,.04);padding:15px 18px;min-height:0;min-width:0;overflow:hidden;}}
+        .epc-report{{font-family:inherit;color:#111827;margin:22px 0 10px;width:100%;max-width:none;overflow:visible;}}
+        .epc-title{{font-family:inherit;font-size:25px;line-height:1.08;font-weight:950;letter-spacing:.02em;color:#0b1220;margin:0 0 8px;text-transform:uppercase;}}
+        .epc-subtitle{{font-family:inherit;font-size:13px;color:#334155;font-weight:700;margin:0 0 16px;}}
+        .epc-kpi-grid{{display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:10px;margin:4px 0 16px 0;}}
+        .epc-kpi,.epc-panel{{border:1px solid #d8e2ee;border-radius:10px;background:#fff;box-shadow:0 8px 18px rgba(15,23,42,.055);}}
+        .epc-kpi{{min-height:112px;padding:16px 15px 14px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);min-width:0;overflow:hidden;}}
+        .epc-kpi-top{{display:flex;gap:11px;align-items:flex-start;margin-bottom:9px;min-width:0;}}
+        .epc-kpi-ico{{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--accent) 13%,#ffffff);color:var(--accent);font-size:17px;font-weight:900;flex:0 0 auto;border:1px solid color-mix(in srgb,var(--accent) 24%,#ffffff);}}
+        .epc-kpi-label{{font-family:inherit;font-size:8.8px;font-weight:950;letter-spacing:.045em;text-transform:uppercase;color:#1f2937;margin-bottom:6px;line-height:1.18;}}
+        .epc-kpi-value{{font-size:clamp(16px,1.08vw,21px);font-weight:950;color:#0b1220;line-height:1.05;white-space:normal;overflow-wrap:anywhere;}}
+        .epc-kpi-note{{font-size:10.4px;line-height:1.35;color:#475569;font-weight:750;margin-top:8px;}}
+        .epc-main-grid{{display:grid;grid-template-columns:minmax(700px,1.58fr) minmax(390px,.88fr);gap:16px;margin-bottom:16px;align-items:stretch;}}
+        .epc-panel{{border-radius:12px;box-shadow:0 8px 19px rgba(15,23,42,.045);padding:18px 20px;min-height:0;min-width:0;overflow:hidden;}}
         .epc-panel + .epc-panel{{border-left:1px solid #dfe8f2;}}
-        .epc-panel-title{{font-family:inherit;font-size:14px;font-weight:950;color:#0b1b43;margin:0 0 7px;}}
-        .epc-panel-sub{{font-family:inherit;font-size:11px;font-weight:750;color:#657692;margin:0 0 11px;}}
-        .epc-capex-pro-panel{{padding:16px 18px;background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);}}
-        .epc-capex-pro-score{{display:grid;grid-template-columns:minmax(0,1fr) 22px minmax(0,1fr) minmax(0,1fr);gap:9px;align-items:stretch;margin:2px 0 12px;}}
-        .epc-capex-pro-score-card{{border:1px solid #d9e5f1;border-radius:12px;background:#ffffff;padding:11px 13px;box-shadow:0 8px 18px rgba(15,23,42,.04);min-width:0;}}
-        .epc-capex-pro-score-card span{{display:block;font-size:9px;font-weight:950;letter-spacing:.07em;text-transform:uppercase;color:#60728d;margin-bottom:7px;}}
-        .epc-capex-pro-score-card b{{display:block;font-size:clamp(16px,1.08vw,21px);font-weight:950;line-height:1;color:#071a44;white-space:nowrap;}}
-        .epc-capex-pro-score-card small{{display:block;margin-top:6px;font-size:9.5px;font-weight:850;color:#52657f;}}
-        .epc-capex-pro-score-card.pilot{{border-left:5px solid #087F75;background:linear-gradient(180deg,#f4fbfa 0%,#ffffff 100%);}}
-        .epc-capex-pro-score-card.commercial{{border-left:5px solid #1D4ED8;background:linear-gradient(180deg,#f5f8ff 0%,#ffffff 100%);}}
+        .epc-panel-title{{font-family:inherit;font-size:14px;font-weight:950;color:#0f172a;margin:0 0 7px;}}
+        .epc-panel-sub{{font-family:inherit;font-size:11.5px;font-weight:750;color:#475569;margin:0 0 12px;}}
+        .epc-capex-pro-panel{{padding:18px 20px;background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);}}
+        .epc-capex-pro-score{{display:grid;grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:stretch;margin:4px 0 14px;}}
+        .epc-capex-pro-score-card{{border:1px solid #d9e5f1;border-radius:12px;background:#ffffff;padding:13px 14px;box-shadow:0 8px 18px rgba(15,23,42,.04);min-width:0;overflow:hidden;}}
+        .epc-capex-pro-score-card span{{display:block;font-size:9px;font-weight:950;letter-spacing:.065em;text-transform:uppercase;color:#334155;margin-bottom:8px;}}
+        .epc-capex-pro-score-card b{{display:block;font-size:clamp(16px,1.02vw,21px);font-weight:950;line-height:1.05;color:#0f172a;white-space:normal;overflow-wrap:anywhere;}}
+        .epc-capex-pro-score-card small{{display:block;margin-top:7px;font-size:9.7px;font-weight:850;color:#475569;}}
+        .epc-capex-pro-score-card.pilot{{border-left:5px solid #164E63;background:linear-gradient(180deg,#f3f8fa 0%,#ffffff 100%);}}
+        .epc-capex-pro-score-card.commercial{{border-left:5px solid #1E3A8A;background:linear-gradient(180deg,#f4f7ff 0%,#ffffff 100%);}}
         .epc-capex-pro-score-card.reduction{{border-left:5px solid #0f766e;background:linear-gradient(180deg,#ecfdf8 0%,#ffffff 100%);}}
-        .epc-capex-pro-score-card.reduction b{{color:#087F75;}}
+        .epc-capex-pro-score-card.reduction b{{color:#0F766E;}}
         .epc-capex-pro-arrow{{display:flex;align-items:center;justify-content:center;color:#64748b;font-size:18px;font-weight:950;}}
-        .epc-capex-pro-head,.epc-capex-pro-row{{display:grid;grid-template-columns:minmax(190px,1.46fr) minmax(100px,.6fr) minmax(100px,.6fr) minmax(126px,.72fr);gap:11px;align-items:center;}}
-        .epc-capex-pro-head{{padding:8px 11px;border-radius:10px;background:linear-gradient(180deg,#f2f6fb 0%,#edf2f7 100%);color:#52657f;font-size:9px;font-weight:950;letter-spacing:.055em;text-transform:uppercase;margin:0 0 7px;}}
+        .epc-capex-pro-head,.epc-capex-pro-row{{display:grid;grid-template-columns:minmax(230px,1.48fr) minmax(112px,.62fr) minmax(112px,.62fr) minmax(118px,.58fr);gap:10px;align-items:center;}}
+        .epc-capex-pro-head{{padding:10px 14px;border-radius:10px;background:#eef4f8;color:#334155;font-size:9px;font-weight:950;letter-spacing:.055em;text-transform:uppercase;margin:0 0 9px;}}
         .epc-capex-pro-head span:not(:first-child){{text-align:right;}}
-        .epc-capex-pro-table{{display:grid;gap:7px;}}
-        .epc-capex-pro-row{{padding:9px 11px;border:1px solid #dfe8f2;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);box-shadow:0 6px 14px rgba(15,23,42,.03);}}
+        .epc-capex-pro-head span:last-child{{text-align:left;}}
+        .epc-capex-pro-table{{display:grid;gap:9px;}}
+        .epc-capex-pro-row{{padding:12px 14px;border:1px solid #dfe8f2;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);box-shadow:0 6px 14px rgba(15,23,42,.03);}}
         .epc-capex-pro-scope{{display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;align-items:center;min-width:0;}}
-        .epc-capex-pro-icon{{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--c) 14%,#ffffff);color:var(--c);font-size:16px;font-weight:950;}}
-        .epc-capex-pro-scope b{{display:block;font-size:12px;line-height:1.18;color:#0b1736;font-weight:950;}}
-        .epc-capex-pro-scope small{{display:block;margin-top:3px;font-size:9.5px;line-height:1.15;color:#657692;font-weight:800;}}
-        .epc-capex-pro-metric,.epc-capex-pro-gap{{text-align:right;min-width:0;}}
-        .epc-capex-pro-metric b,.epc-capex-pro-gap b{{display:block;font-size:15px;line-height:1;color:#071a44;font-weight:950;white-space:nowrap;}}
-        .epc-capex-pro-metric span,.epc-capex-pro-gap span{{display:block;margin-top:5px;font-size:9.5px;color:#52657f;font-weight:850;white-space:nowrap;}}
-        .epc-capex-pro-metric i{{display:block;width:100%;height:5px;border-radius:999px;background:#e3e9f1;margin-top:7px;overflow:hidden;}}
-        .epc-capex-pro-metric i em{{display:block;height:100%;border-radius:999px;background:#087F75;}}
-        .epc-capex-pro-metric.commercial i em{{background:#1D4ED8;}}
-        .epc-capex-pro-gap{{padding:8px 10px;border-radius:10px;background:#fbfdff;border-left:4px solid #9aa3ad;}}
-        .epc-capex-pro-gap b{{color:#087F75;}}
+        .epc-capex-pro-icon{{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--c) 13%,#ffffff);color:var(--c);font-size:13px;font-weight:950;border:1px solid color-mix(in srgb,var(--c) 24%,#ffffff);}}
+        .epc-capex-pro-scope b{{display:block;font-size:12.7px;line-height:1.2;color:#0f172a;font-weight:950;}}
+        .epc-capex-pro-scope small{{display:block;margin-top:4px;font-size:10px;line-height:1.2;color:#475569;font-weight:800;}}
+        .epc-capex-pro-metric{{text-align:right;min-width:0;}}
+        .epc-capex-pro-gap{{text-align:left;min-width:0;}}
+        .epc-capex-pro-metric b,.epc-capex-pro-gap b{{display:block;font-size:15.2px;line-height:1.05;color:#0f172a;font-weight:950;white-space:normal;overflow-wrap:anywhere;}}
+        .epc-capex-pro-metric span,.epc-capex-pro-gap span{{display:block;margin-top:6px;font-size:10px;color:#475569;font-weight:850;white-space:normal;}}
+        .epc-capex-pro-metric i{{display:block;width:100%;height:7px;border-radius:999px;background:#e3e9f1;margin-top:8px;overflow:hidden;}}
+        .epc-capex-pro-metric i em{{display:block;height:100%;border-radius:999px;background:#164E63;}}
+        .epc-capex-pro-metric.commercial i em{{background:#1E3A8A;}}
+        .epc-capex-pro-gap{{padding:10px 10px;border-radius:10px;background:#f8fafc;border-left:4px solid #0F766E;}}
+        .epc-capex-pro-gap b{{color:#0F766E;}}
         .epc-capex-pro-note{{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;align-items:center;margin-top:11px;padding:11px 13px;border:1px solid #cfe7e3;border-radius:12px;background:linear-gradient(180deg,#f0fbfa 0%,#ffffff 100%);font-size:11px;line-height:1.35;color:#24324c;font-weight:750;}}
-        .epc-capex-pro-note span{{font-size:10px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;color:#087F75;}}
+        .epc-capex-pro-note span{{font-size:10px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;color:#0F766E;}}
         .epc-chart-legend{{display:flex;gap:clamp(14px,3vw,34px);justify-content:center;align-items:center;margin:0 0 8px;font-size:12px;color:#102039;}}
         .epc-chart-legend span{{display:inline-flex;align-items:center;gap:8px;}}
         .epc-legend-box{{width:12px;height:12px;border-radius:1px;display:inline-block;}}
@@ -3917,66 +4752,65 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
         .epc-bar-label b{{font-size:12px;line-height:1.15;color:#0b1736;font-weight:950;}}
         .epc-bar-label small{{font-size:11px;color:#2f405e;font-weight:750;}}
         .epc-bars{{height:35px;position:relative;}}
-        .epc-bar{{position:absolute;left:0;height:12px;border-radius:0;background:#087F75;}}
-        .epc-pilot{{top:3px;background:#087F75;}}
-        .epc-commercial{{top:21px;background:#1D4ED8;}}
+        .epc-bar{{position:absolute;left:0;height:12px;border-radius:0;background:#164E63;}}
+        .epc-pilot{{top:3px;background:#164E63;}}
+        .epc-commercial{{top:21px;background:#1E3A8A;}}
         .epc-bar-value{{position:absolute;top:0;font-style:normal;font-size:12px;font-weight:800;color:#24324c;white-space:nowrap;}}
         .epc-bar-value.epc-blue{{top:18px;}}
         .epc-axis{{height:22px;position:relative;margin:1px 0 0 calc(28% + 12px);border-top:1px solid transparent;}}
         .epc-axis span{{position:absolute;transform:translateX(-50%);font-size:11px;color:#52657f;font-weight:700;}}
         .epc-axis-label{{text-align:center;font-size:12px;color:#52657f;font-weight:750;margin-top:2px;}}
         .epc-callout{{margin:10px 0 0 auto;width:min(42%,230px);border:1px solid #d6dee9;border-radius:7px;background:#fbfdff;padding:12px 13px;font-size:11px;line-height:1.35;color:#102039;font-weight:650;}}
-        .epc-distribution-panel{{padding:16px 16px 15px;}}
+        .epc-distribution-panel{{padding:18px 18px 16px;}}
         .epc-panel-head{{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px 0;}}
         .epc-info{{width:17px;height:17px;border-radius:50%;border:1px solid #94a3b8;color:#64748b;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:950;}}
-        .epc-donut-wrap{{display:grid;grid-template-columns:minmax(190px,1fr) minmax(180px,.88fr);gap:14px;align-items:center;margin-top:4px;}}
-        .epc-donut{{position:relative;width:min(100%,250px);aspect-ratio:1 / 1;border-radius:50%;margin:4px auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.72),0 14px 30px rgba(8,127,117,.10);}}
-        .epc-donut::after{{content:"";position:absolute;inset:29%;border-radius:50%;background:#fff;box-shadow:0 0 0 1px #e6edf6;}}
-        .epc-donut-center{{position:absolute;inset:34% 22%;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}}
-        .epc-donut-center small{{font-size:11px;color:#52657f;font-weight:900;text-transform:uppercase;}}
-        .epc-donut-center b{{font-size:clamp(14px,1vw,18px);color:#071a44;font-weight:950;margin:6px 0 3px;white-space:nowrap;}}
-        .epc-donut-center span{{font-size:10px;color:#102039;font-weight:950;}}
-        .epc-donut-pct{{position:absolute;z-index:3;color:#fff;font-size:13px;font-weight:950;text-shadow:0 1px 2px rgba(15,23,42,.22);}}
-        .epc-donut-pct-0{{right:8%;top:50%;}}.epc-donut-pct-1{{left:12%;top:27%;}}.epc-donut-pct-2{{left:46%;top:1%;color:#102039;text-shadow:none;}}.epc-donut-pct-3{{left:55%;top:0;color:#52657f;text-shadow:none;}}
+        .epc-donut-wrap{{display:grid;grid-template-columns:minmax(205px,.78fr) minmax(260px,1fr);gap:18px;align-items:center;margin-top:6px;}}
+        .epc-donut{{position:relative;width:min(100%,232px);aspect-ratio:1 / 1;border-radius:50%;margin:6px auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.72),0 14px 28px rgba(15,23,42,.10);}}
+        .epc-donut::after{{content:"";position:absolute;inset:31%;border-radius:50%;background:#fff;box-shadow:0 0 0 1px #e6edf6;}}
+        .epc-donut-center{{position:absolute;inset:35% 19%;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}}
+        .epc-donut-center small{{font-size:10.5px;color:#475569;font-weight:900;text-transform:uppercase;}}
+        .epc-donut-center b{{font-size:clamp(16px,1.05vw,21px);color:#0f172a;font-weight:950;margin:6px 0 3px;white-space:normal;}}
+        .epc-donut-center span{{font-size:10px;color:#334155;font-weight:950;}}
         .epc-donut-legend{{display:grid;gap:0;font-size:11px;color:#102039;min-width:0;border:1px solid #dfe8f2;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 8px 17px rgba(15,23,42,.04);}}
-        .epc-donut-legend-item{{display:grid;grid-template-columns:13px minmax(0,1fr) auto 42px;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid #e8eef6;}}
+        .epc-donut-legend-item{{display:grid;grid-template-columns:13px minmax(0,1fr) minmax(66px,auto) 44px;gap:9px;align-items:center;padding:10px 11px;border-bottom:1px solid #e8eef6;}}
         .epc-donut-legend-item:last-child{{border-bottom:0;}}
         .epc-donut-dot{{width:11px;height:11px;border-radius:50%;display:inline-block;}}
-        .epc-donut-legend-item b{{font-size:11px;line-height:1.2;font-weight:950;min-width:0;color:#102039;}}
-        .epc-donut-legend-item small{{display:block;font-weight:800;color:#52657f;font-size:9px;margin-top:2px;}}
-        .epc-donut-legend-item strong{{font-size:11px;color:#071a44;font-weight:950;white-space:nowrap;}}
-        .epc-donut-legend-item em{{font-style:normal;font-size:10px;color:#52657f;font-weight:950;text-align:right;}}
-        .epc-distribution-callout{{display:grid;grid-template-columns:38px minmax(0,1fr);gap:11px;align-items:center;border:1px solid #d9e5f5;border-radius:12px;background:#fbfdff;margin-top:11px;padding:11px 13px;}}
-        .epc-distribution-callout .epc-target{{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eef5ff;color:#1d4ed8;font-size:20px;line-height:1;}}
-        .epc-distribution-callout b{{display:block;font-size:12px;color:#1d4ed8;font-weight:950;margin-bottom:4px;}}
-        .epc-distribution-callout span:last-child{{font-size:11.5px;line-height:1.35;color:#274060;font-weight:750;}}
+        .epc-donut-legend-item b{{font-size:11px;line-height:1.22;font-weight:950;min-width:0;color:#0f172a;}}
+        .epc-donut-legend-item small{{display:block;font-weight:800;color:#475569;font-size:9.2px;margin-top:3px;}}
+        .epc-donut-legend-item strong{{font-size:11px;color:#0f172a;font-weight:950;white-space:normal;text-align:right;}}
+        .epc-donut-legend-item em{{font-style:normal;font-size:10px;color:#334155;font-weight:950;text-align:right;}}
+        .epc-donut-legend-item i{{grid-column:2 / 5;display:block;height:6px;border-radius:999px;background:#e2e8f0;overflow:hidden;}}
+        .epc-donut-legend-item i span{{display:block;height:100%;width:var(--share);border-radius:999px;background:var(--c);}}
+        .epc-distribution-callout{{display:grid;grid-template-columns:38px minmax(0,1fr);gap:12px;align-items:center;border:1px solid #d9e5f5;border-radius:12px;background:#fbfdff;margin-top:13px;padding:12px 14px;}}
+        .epc-distribution-callout .epc-target{{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eef5ff;color:#1E3A8A;font-size:20px;line-height:1;}}
+        .epc-distribution-callout b{{display:block;font-size:12px;color:#1E3A8A;font-weight:950;margin-bottom:4px;}}
+        .epc-distribution-callout span:last-child{{font-size:11.7px;line-height:1.38;color:#1f2937;font-weight:750;}}
         .epc-orange-note{{border:1px solid #ffe0a8;background:#fffaf0;border-radius:8px;padding:10px 13px;margin-top:9px;font-size:12px;font-weight:800;color:#102039;display:flex;gap:10px;align-items:center;}}
         .epc-target{{font-size:25px;color:#ff4040;line-height:1;}}
-        .epc-strategy-panel{{min-height:auto;margin:0 0 14px 0;}}
-        .epc-strategy-stack{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:10px;}}
-        .epc-strategy-card{{display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;align-items:start;border:1px solid #dfe8f2;border-radius:11px;background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);padding:12px 13px;min-height:104px;}}
+        .epc-strategy-panel{{min-height:auto;margin:0 0 16px 0;padding:18px 20px;}}
+        .epc-strategy-stack{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:12px;}}
+        .epc-strategy-card{{display:grid;grid-template-columns:38px minmax(0,1fr);gap:11px;align-items:start;border:1px solid #dfe8f2;border-radius:11px;background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);padding:14px 14px;min-height:116px;}}
         .epc-strategy-icon{{width:36px;height:36px;border-radius:50%;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:950;box-shadow:0 10px 18px color-mix(in srgb,var(--c) 18%,transparent);}}
-        .epc-strategy-text b{{display:block;font-size:12px;font-weight:950;color:#102039;letter-spacing:.02em;line-height:1.18;}}
-        .epc-strategy-text span{{display:block;margin-top:5px;font-size:10.5px;line-height:1.3;color:#24324c;font-weight:700;}}
-        .epc-strategy-value{{text-align:left;grid-column:2;margin-top:3px;}}
-        .epc-strategy-value b{{font-size:clamp(15px,1.12vw,20px);color:#087F75;font-weight:950;white-space:nowrap;}}
-        .epc-strategy-value span{{display:block;font-size:10px;color:#102039;font-weight:850;margin-top:5px;}}
-        .epc-bottom-grid{{display:grid;grid-template-columns:minmax(0,2.28fr) minmax(320px,.92fr);gap:0;align-items:stretch;}}
-        .epc-table-panel{{border-radius:0 0 0 10px;padding:10px 10px 11px;overflow:hidden;}}
-        .epc-insight-panel{{border-radius:0 0 10px 0;border-left:0;padding:13px 21px;}}
-        .epc-table{{width:100%;border-collapse:collapse;font-size:8.6px;text-align:center;}}
-        .epc-table th{{background:#0b1736;color:#fff;border:1px solid #33415f;padding:4px 4px;font-weight:950;line-height:1.05;}}
-        .epc-table td{{border:1px solid #dfe8f2;padding:3px 4px;color:#102039;font-weight:650;}}
+        .epc-strategy-text b{{display:block;font-size:12px;font-weight:950;color:#0f172a;letter-spacing:.02em;line-height:1.2;}}
+        .epc-strategy-text span{{display:block;margin-top:6px;font-size:10.7px;line-height:1.34;color:#334155;font-weight:700;}}
+        .epc-strategy-value{{text-align:left;grid-column:2;margin-top:5px;}}
+        .epc-strategy-value b{{font-size:clamp(15px,1.02vw,19px);color:#0F766E;font-weight:950;white-space:normal;overflow-wrap:anywhere;}}
+        .epc-strategy-value span{{display:block;font-size:10px;color:#334155;font-weight:850;margin-top:5px;}}
+        .epc-bottom-grid{{display:grid;grid-template-columns:minmax(0,2.18fr) minmax(340px,.92fr);gap:14px;align-items:stretch;}}
+        .epc-table-panel{{border-radius:12px;padding:12px 12px 13px;overflow:auto;}}
+        .epc-insight-panel{{border-radius:12px;border-left:1px solid #dfe8f2;padding:16px 20px;}}
+        .epc-table{{width:100%;min-width:1040px;border-collapse:collapse;font-size:8.8px;text-align:center;}}
+        .epc-table th{{background:#0f172a;color:#fff;border:1px solid #33415f;padding:5px 5px;font-weight:950;line-height:1.08;}}
+        .epc-table td{{border:1px solid #dfe8f2;padding:4px 5px;color:#1f2937;font-weight:700;}}
         .epc-table .epc-phase-name{{text-align:left;min-width:210px;font-weight:750;}}
-        .epc-table tfoot td{{background:#eefaf8;color:#087F75;font-weight:950;font-size:11px;}}
-        .epc-insights{{margin:15px 0 0;padding:0;list-style:none;display:grid;gap:14px;}}
-        .epc-insights li{{position:relative;padding-left:26px;font-size:12px;line-height:1.35;color:#24324c;font-weight:700;}}
+        .epc-table tfoot td{{background:#eefaf8;color:#0F766E;font-weight:950;font-size:11px;}}
+        .epc-insights{{margin:15px 0 0;padding:0;list-style:none;display:grid;gap:13px;}}
+        .epc-insights li{{position:relative;padding-left:27px;font-size:12.2px;line-height:1.42;color:#1f2937;font-weight:750;}}
         .epc-insights li::before{{content:"✓";position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#249A8D;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:950;}}
-        .epc-foot{{font-size:10px;color:#657692;font-weight:650;margin:12px 0 0 12px;}}
-        @media(max-width:1480px){{.epc-main-grid{{grid-template-columns:minmax(0,1.36fr) minmax(0,.98fr);}}.epc-strategy-stack{{grid-template-columns:repeat(4,minmax(0,1fr));}}.epc-donut-wrap{{grid-template-columns:1fr;}}.epc-donut{{width:min(100%,220px);}}}}
-        @media(max-width:1300px){{.epc-main-grid{{grid-template-columns:1fr;}}.epc-donut-wrap{{grid-template-columns:minmax(220px,.8fr) minmax(220px,1fr);}}}}
-        @media(max-width:1200px){{.epc-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.epc-main-grid,.epc-bottom-grid{{grid-template-columns:1fr;}}.epc-panel,.epc-panel+.epc-panel,.epc-table-panel,.epc-insight-panel{{border-radius:10px;border-left:1px solid #dfe8f2;margin-bottom:10px;}}.epc-strategy-stack{{grid-template-columns:repeat(2,minmax(0,1fr));}}.epc-callout{{width:min(60%,260px);}}}}
-        @media(max-width:760px){{.epc-capex-pro-score,.epc-capex-pro-head,.epc-capex-pro-row,.epc-capex-pro-note{{grid-template-columns:1fr;}}.epc-capex-pro-arrow{{display:none;}}.epc-capex-pro-head span:not(:first-child),.epc-capex-pro-metric,.epc-capex-pro-gap{{text-align:left;}}.epc-kpi-grid{{grid-template-columns:1fr;}}.epc-bar-row{{grid-template-columns:1fr;}}.epc-axis{{margin-left:0;}}.epc-callout{{width:100%;}}.epc-donut-wrap{{grid-template-columns:1fr;}}.epc-strategy-stack{{grid-template-columns:1fr;}}.epc-strategy-card{{grid-template-columns:44px 1fr;}}.epc-strategy-value{{grid-column:2;}}}}
+        .epc-foot{{font-size:10.5px;color:#475569;font-weight:700;margin:13px 0 0 12px;}}
+        @media(max-width:1500px){{.epc-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.epc-main-grid{{grid-template-columns:minmax(0,1.34fr) minmax(0,.98fr);}}.epc-strategy-stack{{grid-template-columns:repeat(2,minmax(0,1fr));}}.epc-donut-wrap{{grid-template-columns:1fr;}}.epc-donut{{width:min(100%,220px);}}}}
+        @media(max-width:1280px){{.epc-main-grid,.epc-bottom-grid{{grid-template-columns:1fr;}}.epc-donut-wrap{{grid-template-columns:minmax(220px,.8fr) minmax(240px,1fr);}}}}
+        @media(max-width:900px){{.epc-kpi-grid{{grid-template-columns:1fr;}}.epc-capex-pro-score,.epc-capex-pro-head,.epc-capex-pro-row,.epc-capex-pro-note{{grid-template-columns:1fr;}}.epc-capex-pro-arrow{{display:none;}}.epc-capex-pro-head span:not(:first-child),.epc-capex-pro-metric,.epc-capex-pro-gap{{text-align:left;}}.epc-donut-wrap{{grid-template-columns:1fr;}}.epc-strategy-stack{{grid-template-columns:1fr;}}.epc-strategy-card{{grid-template-columns:44px 1fr;}}.epc-strategy-value{{grid-column:2;}}}}
         </style>
         <div class="epc-report">
           <h2 class="epc-title">Análisis de Costos – Piloto vs Comercial</h2>
@@ -4019,10 +4853,10 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
                 <span class="epc-info">i</span>
               </div>
               <div class="epc-donut-wrap">
-                <div class="epc-donut">{donut_labels}<div class="epc-donut-center"><small>Total comercial</small><b>{fmt_money(total_comercial)}</b><span>MM CLP</span></div></div>
+                <div class="epc-donut">{donut_labels}<div class="epc-donut-center"><small>Total comercial</small><b>{fmt_mm_unit(total_comercial)}</b><span>MM CLP</span></div></div>
                 <div class="epc-donut-legend">{''.join(donut_legend)}</div>
               </div>
-              <div class="epc-distribution-callout"><span class="epc-target">♢</span><span><b>Información clave</b>Los dos principales alcances concentran el <b style="display:inline;color:#087f6f;">{fmt_pct_local(supply_pct + bos_pct)}</b> del costo comercial objetivo.</span></div>
+              <div class="epc-distribution-callout"><span class="epc-target">♢</span><span><b>Información clave</b>Los dos principales alcances concentran el <b style="display:inline;color:#0F766E;">{fmt_pct_local(supply_pct + bos_pct)}</b> del costo comercial objetivo.</span></div>
             </div>
           </div>
           <div class="epc-panel epc-strategy-panel">
@@ -4833,7 +5667,7 @@ def render_inputs_project_gantt():
             c0, c1, c2, c3, c4 = st.columns([2.1, 3.0, 2.7, 2.3, 1.6]) if has_etapa else st.columns([3.2, 3.0, 2.5, 1.8])
         else:
             c0, c1, c3, c4 = st.columns([2.1, 3.7, 2.4, 1.6]) if has_etapa else (None, *st.columns([4, 2.5, 1.8]))
-        etapa_sel = "Todas"
+        etapa_sel: list[str] = []
         if has_etapa:
             with c0:
                 raw_etapas = sorted(
@@ -4848,18 +5682,24 @@ def render_inputs_project_gantt():
                 if not etapa_options:
                     etapa_options = ["Todas"]
                 if "inputs_gantt_etapa" not in st.session_state:
-                    st.session_state["inputs_gantt_etapa"] = etapa_default
-                elif st.session_state["inputs_gantt_etapa"] not in etapa_options:
-                    st.session_state["inputs_gantt_etapa"] = etapa_default
-                etapa_sel = st.selectbox(
+                    st.session_state["inputs_gantt_etapa"] = [etapa_default] if etapa_default in etapa_options else []
+                elif isinstance(st.session_state["inputs_gantt_etapa"], str):
+                    etapa_value = st.session_state["inputs_gantt_etapa"]
+                    st.session_state["inputs_gantt_etapa"] = [] if etapa_value == "Todas" else [etapa_value]
+                st.session_state["inputs_gantt_etapa"] = [
+                    etapa for etapa in st.session_state["inputs_gantt_etapa"]
+                    if etapa in etapa_options and etapa != "Todas"
+                ]
+                etapa_sel = st.multiselect(
                     "Etapa",
                     etapa_options,
+                    placeholder="Todas las etapas",
                     key="inputs_gantt_etapa",
                 )
         with c1:
             phase_df = df_gantt.copy()
-            if etapa_sel != "Todas" and has_etapa:
-                phase_df = phase_df[phase_df["ETAPA"].astype(str).str.strip() == etapa_sel].copy()
+            if etapa_sel and has_etapa:
+                phase_df = phase_df[phase_df["ETAPA"].astype(str).str.strip().isin(etapa_sel)].copy()
             fases = sorted(
                 phase_df["Fase"].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
             ) if "Fase" in df_gantt.columns else []
@@ -4891,8 +5731,8 @@ def render_inputs_project_gantt():
         if has_linea:
             with c2:
                 lineas_df = df_gantt.copy()
-                if etapa_sel != "Todas" and has_etapa:
-                    lineas_df = lineas_df[lineas_df["ETAPA"].astype(str).str.strip() == etapa_sel].copy()
+                if etapa_sel and has_etapa:
+                    lineas_df = lineas_df[lineas_df["ETAPA"].astype(str).str.strip().isin(etapa_sel)].copy()
                 if fase_sel != "Todas" and "Fase" in lineas_df.columns:
                     lineas_df = lineas_df[lineas_df["Fase"].astype(str).str.strip() == fase_sel].copy()
                 lineas = sorted(
@@ -4915,8 +5755,8 @@ def render_inputs_project_gantt():
                 )
         with c3:
             estados_df = df_gantt.copy()
-            if etapa_sel != "Todas" and has_etapa:
-                estados_df = estados_df[estados_df["ETAPA"].astype(str).str.strip() == etapa_sel].copy()
+            if etapa_sel and has_etapa:
+                estados_df = estados_df[estados_df["ETAPA"].astype(str).str.strip().isin(etapa_sel)].copy()
             if fase_sel != "Todas" and "Fase" in estados_df.columns:
                 estados_df = estados_df[estados_df["Fase"].astype(str).str.strip() == fase_sel].copy()
             if linea_sel and "Línea" in estados_df.columns:
@@ -4953,8 +5793,8 @@ def render_inputs_project_gantt():
             )
 
     stage_df = df_gantt.copy()
-    if etapa_sel != "Todas" and has_etapa:
-        stage_df = stage_df[stage_df["ETAPA"].astype(str).str.strip() == etapa_sel].copy()
+    if etapa_sel and has_etapa:
+        stage_df = stage_df[stage_df["ETAPA"].astype(str).str.strip().isin(etapa_sel)].copy()
 
     plot_df = stage_df.copy()
     if fase_sel != "Todas" and "Fase" in plot_df.columns:
@@ -4969,15 +5809,29 @@ def render_inputs_project_gantt():
 
     render_inputs_gantt_kpis(plot_df, date_mode=date_mode)
 
+    due_soon_only = bool(st.session_state.get("inputs_gantt_due_soon_only", False))
+    if due_soon_only:
+        due_soon_mask = _gantt_due_soon_mask(plot_df, date_mode=date_mode, days=7)
+        due_soon_count = int(due_soon_mask.sum())
+        st.info(f"Vista filtrada: {due_soon_count} actividades vencen en menos de 7 días.")
+        plot_df = plot_df[due_soon_mask].copy()
+        if plot_df.empty:
+            st.info("No hay actividades con vencimiento en menos de 7 días para los filtros seleccionados.")
+            return
+
     gantt_title = "Cronograma" if fase_sel == "Todas" else f"Cronograma {fase_sel}"
-    time_range = render_inputs_gantt_chart_controls(plot_df)
+    if due_soon_only:
+        gantt_title = f"{gantt_title} · Vencen en menos de 7 días"
+    time_range = render_inputs_gantt_chart_controls(plot_df, date_mode=date_mode)
+    st.markdown('<span id="inputs-gantt-chart"></span>', unsafe_allow_html=True)
     render_inputs_gantt_custom_chart(
         plot_df,
         date_mode=date_mode,
         time_range=time_range,
         title=gantt_title,
     )
-    render_inputs_gantt_cost_analysis(df_gantt, scope_label="toda la hoja del cronograma")
+    render_inputs_gantt_executive_summary(plot_df, date_mode=date_mode)
+    render_dashboard_control_costos_evm(plot_df)
 
 
 @st.cache_resource(show_spinner=False)
@@ -5015,16 +5869,6 @@ def render_pilotos_ana_embedded_view() -> None:
         st.warning("No se encontró el módulo integrado del panel PILOTOS_ANA_CAPEX80KW.")
         return
 
-    st.markdown(
-        """
-        <div style="margin:30px 0 14px;padding:15px 18px;border:1px solid #DCE6EF;border-radius:12px;background:#FFFFFF;">
-          <div style="font-size:11px;font-weight:900;letter-spacing:.10em;text-transform:uppercase;color:#0F766E;">Vista integrada · Piloto 10 kW</div>
-          <div style="margin-top:5px;font-size:18px;font-weight:900;color:#23457A;">PILOTOS_ANA_CAPEX80KW</div>
-          <div style="margin-top:4px;font-size:12px;color:#64748B;">Lectura ejecutiva previa al detalle de inversión y al cronograma de validación.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     try:
         embedded_module = load_pilotos_ana_embedded_module(
             str(source_path),
@@ -5035,7 +5879,1179 @@ def render_pilotos_ana_embedded_view() -> None:
             raise ValueError("La aplicación original no expone una función main() ejecutable.")
         embedded_main()
     except Exception as exc:
-        st.error(f"No se pudo cargar la vista integrada PILOTOS_ANA_CAPEX80KW: {exc}")
+        st.error(f"No se pudo cargar la ruta de ejecución y validación 10 kW: {exc}")
+
+
+def render_capex10_available_funds_by_phase_line() -> None:
+    try:
+        df_gantt = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+    except Exception as exc:
+        st.warning(f"No se pudo cargar el detalle de fondos por fase y línea: {exc}")
+        return
+
+    required_cols = {"Fase", "Línea", "Costo piloto"}
+    if df_gantt.empty or not required_cols.issubset(df_gantt.columns):
+        return
+
+    funds_df = df_gantt.copy()
+    if "Piloto" in funds_df.columns:
+        piloto_mask = funds_df["Piloto"].astype(str).str.contains("10", case=False, na=False)
+        if piloto_mask.any():
+            funds_df = funds_df[piloto_mask].copy()
+
+    funds_df["Fase"] = funds_df["Fase"].astype(str).str.strip().replace({"": "Sin fase", "nan": "Sin fase", "None": "Sin fase"})
+    funds_df["Línea"] = funds_df["Línea"].astype(str).str.strip().replace({"": "Sin línea", "nan": "Sin línea", "None": "Sin línea"})
+    funds_df["Disponible_CLP"] = funds_df["Costo piloto"].apply(parse_money_clp_robusto)
+    funds_df = funds_df[funds_df["Disponible_CLP"] > 0].copy()
+    if funds_df.empty:
+        return
+
+    grouped = (
+        funds_df.groupby(["Fase", "Línea"], as_index=False)
+        .agg(
+            Disponible_CLP=("Disponible_CLP", "sum"),
+            Partidas=("Tarea / Entregable", "count"),
+        )
+        .sort_values("Disponible_CLP", ascending=False)
+    )
+    total_disponible = float(grouped["Disponible_CLP"].sum() or 0.0)
+    grouped["Monto_MM"] = grouped["Disponible_CLP"] / 1_000_000
+    grouped["Participación"] = np.where(total_disponible > 0, grouped["Disponible_CLP"] / total_disponible * 100.0, 0.0)
+    grouped["Disponible"] = grouped["Disponible_CLP"].apply(format_clp)
+    grouped["% total"] = grouped["Participación"].map(lambda value: f"{value:.1f}%")
+
+    phase_totals = (
+        grouped.groupby("Fase", as_index=False)["Disponible_CLP"]
+        .sum()
+        .sort_values("Disponible_CLP", ascending=True)
+    )
+    phase_order = phase_totals["Fase"].tolist()
+    max_phase = phase_totals.iloc[-1] if not phase_totals.empty else None
+    line_count = int(grouped["Línea"].nunique())
+    max_phase_label = html.escape(str(max_phase["Fase"])) if max_phase is not None else "-"
+    total_disponible_fmt = format_clp(total_disponible)
+
+    st.markdown(
+        f"""
+        <style>
+        .capex10-funds-head{{
+            position:relative;
+            overflow:hidden;
+            border:1px solid rgba(203,213,225,.82);
+            border-radius:24px;
+            background:#FFFFFF;
+            padding:0;
+            margin:8px 0 18px 0;
+            box-shadow:0 24px 52px rgba(15,23,42,.085);
+        }}
+        .capex10-funds-grid{{
+            display:grid;
+            grid-template-columns:minmax(0, 7fr) minmax(280px, 3fr);
+            min-height:284px;
+        }}
+        .capex10-funds-left{{
+            padding:28px 30px 26px 30px;
+            position:relative;
+            z-index:2;
+        }}
+        .capex10-funds-brand{{
+            display:flex;
+            align-items:center;
+            gap:14px;
+            margin:0 0 16px 0;
+        }}
+        .capex10-funds-logo{{
+            width:58px;
+            height:58px;
+            border-radius:18px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            background:linear-gradient(180deg,#ECFEFF 0%,#F8FAFC 100%);
+            border:1px solid rgba(20,184,166,.24);
+            box-shadow:0 12px 24px rgba(15,118,110,.10);
+            color:#0F766E;
+        }}
+        .capex10-funds-k{{
+            font-size:12px;
+            font-weight:950;
+            letter-spacing:.16em;
+            text-transform:uppercase;
+            color:#0F766E;
+            margin:0 0 7px 0;
+        }}
+        .capex10-funds-t{{
+            font-size:clamp(26px, 2.35vw, 38px);
+            font-weight:950;
+            color:#07142B;
+            line-height:1.06;
+            margin:0 0 10px 0;
+            max-width:920px;
+        }}
+        .capex10-funds-s{{
+            font-size:14px;
+            line-height:1.62;
+            color:#475569;
+            margin:0;
+            max-width:900px;
+        }}
+        .capex10-kpi-grid{{
+            display:grid;
+            grid-template-columns:1.45fr .72fr .72fr minmax(260px, 1.25fr);
+            gap:12px;
+            align-items:stretch;
+            margin-top:24px;
+        }}
+        .capex10-kpi-card{{
+            position:relative;
+            min-height:96px;
+            border:1px solid rgba(203,213,225,.82);
+            border-radius:18px;
+            background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);
+            padding:15px 16px;
+            box-shadow:0 14px 30px rgba(15,23,42,.07);
+            transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        }}
+        .capex10-kpi-card:hover{{
+            transform:translateY(-2px);
+            border-color:rgba(20,184,166,.54);
+            box-shadow:0 20px 38px rgba(15,23,42,.11);
+        }}
+        .capex10-kpi-main{{
+            min-height:124px;
+            padding:18px 20px;
+            background:
+                radial-gradient(circle at 92% 18%, rgba(20,184,166,.18), transparent 34%),
+                linear-gradient(135deg,#FFFFFF 0%,#ECFDF5 100%);
+            border-color:rgba(15,118,110,.28);
+        }}
+        .capex10-kpi-top{{
+            display:flex;
+            align-items:center;
+            gap:12px;
+            min-width:0;
+        }}
+        .capex10-kpi-ico{{
+            width:44px;
+            height:44px;
+            border-radius:14px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color:#0F766E;
+            background:rgba(20,184,166,.12);
+            border:1px solid rgba(20,184,166,.18);
+            flex:0 0 auto;
+        }}
+        .capex10-kpi-main .capex10-kpi-ico{{
+            width:56px;
+            height:56px;
+            border-radius:18px;
+            background:rgba(15,118,110,.12);
+        }}
+        .capex10-kpi-value{{
+            font-size:24px;
+            line-height:1;
+            font-weight:950;
+            color:#0F766E;
+            margin:0;
+            white-space:nowrap;
+        }}
+        .capex10-kpi-main .capex10-kpi-value{{
+            font-size:34px;
+            letter-spacing:-.01em;
+        }}
+        .capex10-kpi-label{{
+            font-size:12px;
+            line-height:1.25;
+            color:#334155;
+            font-weight:850;
+            margin:7px 0 0 0;
+        }}
+        .capex10-kpi-note{{
+            font-size:11px;
+            line-height:1.32;
+            color:#64748B;
+            margin:6px 0 0 0;
+        }}
+        .capex10-kpi-badge{{
+            display:inline-flex;
+            align-items:center;
+            width:max-content;
+            border-radius:999px;
+            padding:5px 9px;
+            margin:0 0 12px 0;
+            background:#0F766E;
+            color:#FFFFFF;
+            font-size:10px;
+            font-weight:950;
+            letter-spacing:.06em;
+            text-transform:uppercase;
+            box-shadow:0 8px 18px rgba(15,118,110,.22);
+        }}
+        .capex10-kpi-phase{{
+            border-left:5px solid #0F766E;
+            background:
+                linear-gradient(90deg,rgba(20,184,166,.11),rgba(255,255,255,.98) 42%),
+                #FFFFFF;
+        }}
+        .capex10-kpi-phase .capex10-kpi-value{{
+            color:#0F766E;
+            font-size:17px;
+            line-height:1.24;
+            white-space:normal;
+        }}
+        .capex10-funds-art{{
+            position:relative;
+            min-height:284px;
+            isolation:isolate;
+            background:
+                radial-gradient(circle at 80% 16%, rgba(255,255,255,.56), transparent 24%),
+                linear-gradient(135deg,#E6FFFB 0%,#BDEFE7 38%,#0F766E 100%);
+        }}
+        .capex10-funds-art::before{{
+            content:"";
+            position:absolute;
+            inset:0;
+            background:
+                linear-gradient(90deg,rgba(255,255,255,.82) 0%,rgba(255,255,255,.26) 22%,rgba(255,255,255,0) 54%),
+                radial-gradient(circle at 18% 86%, rgba(255,255,255,.42), transparent 36%);
+            z-index:1;
+        }}
+        .capex10-funds-art svg{{
+            position:absolute;
+            inset:0;
+            width:100%;
+            height:100%;
+            z-index:2;
+        }}
+        .capex10-art-caption{{
+            position:absolute;
+            right:22px;
+            bottom:20px;
+            z-index:3;
+            text-align:right;
+            color:rgba(255,255,255,.92);
+            font-weight:900;
+            font-size:11px;
+            letter-spacing:.12em;
+            text-transform:uppercase;
+        }}
+        @media (max-width: 1180px){{
+            .capex10-funds-grid{{grid-template-columns:1fr;}}
+            .capex10-funds-art{{min-height:220px;}}
+            .capex10-kpi-grid{{grid-template-columns:1fr 1fr;}}
+            .capex10-kpi-main{{grid-column:span 2;}}
+            .capex10-kpi-phase{{grid-column:span 2;}}
+        }}
+        @media (max-width: 720px){{
+            .capex10-funds-left{{padding:22px 18px;}}
+            .capex10-funds-brand{{align-items:flex-start;}}
+            .capex10-funds-logo{{width:48px;height:48px;border-radius:15px;}}
+            .capex10-kpi-grid{{grid-template-columns:1fr;}}
+            .capex10-kpi-main,.capex10-kpi-phase{{grid-column:auto;}}
+            .capex10-kpi-main .capex10-kpi-value{{font-size:28px;white-space:normal;}}
+        }}
+        </style>
+        <div class="capex10-funds-head">
+          <div class="capex10-funds-grid">
+            <div class="capex10-funds-left">
+              <div class="capex10-funds-brand">
+                <div class="capex10-funds-logo" aria-hidden="true">
+                  <svg width="34" height="34" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M32 27V55" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+                    <circle cx="32" cy="25" r="5" fill="currentColor"/>
+                    <path d="M29 22L15 14" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+                    <path d="M35 22L50 12" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+                    <path d="M34 29L49 40" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+                  </svg>
+                </div>
+                <div>
+                  <p class="capex10-funds-k">Cierre ejecutivo • fondos por ejecutar</p>
+                  <p class="capex10-funds-t">Fondos disponibles por gastar, desglosados por fase y línea</p>
+                  <p class="capex10-funds-s">Lectura de primer nivel para entender dónde queda concentrado el capital pendiente del piloto 10 kW y qué frentes explican el uso esperado de fondos.</p>
+                </div>
+              </div>
+              <div class="capex10-kpi-grid">
+                <div class="capex10-kpi-card capex10-kpi-main">
+                  <div class="capex10-kpi-badge">Capital pendiente</div>
+                  <div class="capex10-kpi-top">
+                    <div class="capex10-kpi-ico" aria-hidden="true">
+                      <svg width="31" height="31" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+                        <path d="M12 6v12M15.5 9.2c-.8-.8-2.2-1.2-3.4-1.2-1.8 0-3 .8-3 2.1 0 3.2 6.8 1.2 6.8 4.8 0 1.4-1.4 2.1-3.4 2.1-1.5 0-3-.5-4-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p class="capex10-kpi-value">{total_disponible_fmt}</p>
+                      <p class="capex10-kpi-label">Disponible total</p>
+                      <p class="capex10-kpi-note">Fondos pendientes por ejecutar</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="capex10-kpi-card">
+                  <div class="capex10-kpi-top">
+                    <div class="capex10-kpi-ico" aria-hidden="true">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/>
+                        <rect x="13" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/>
+                        <rect x="4" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/>
+                        <rect x="13" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p class="capex10-kpi-value">{len(phase_order)}</p>
+                      <p class="capex10-kpi-label">Fases</p>
+                      <p class="capex10-kpi-note">Frentes agregados</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="capex10-kpi-card">
+                  <div class="capex10-kpi-top">
+                    <div class="capex10-kpi-ico" aria-hidden="true">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M8 6h13M8 12h13M8 18h13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <circle cx="4" cy="6" r="1.6" fill="currentColor"/>
+                        <circle cx="4" cy="12" r="1.6" fill="currentColor"/>
+                        <circle cx="4" cy="18" r="1.6" fill="currentColor"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p class="capex10-kpi-value">{line_count}</p>
+                      <p class="capex10-kpi-label">Líneas</p>
+                      <p class="capex10-kpi-note">Partidas ejecutables</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="capex10-kpi-card capex10-kpi-phase">
+                  <div class="capex10-kpi-top">
+                    <div class="capex10-kpi-ico" aria-hidden="true">
+                      <svg width="27" height="27" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 3l7 3v5c0 4.8-2.9 8.2-7 10-4.1-1.8-7-5.2-7-10V6l7-3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                        <path d="M9 12l2 2 4-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p class="capex10-kpi-label">Mayor fase</p>
+                      <p class="capex10-kpi-value">{max_phase_label}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="capex10-funds-art" aria-hidden="true">
+              <svg viewBox="0 0 420 320" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="capex10HillA" x1="0" y1="198" x2="420" y2="320" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#DDF8F4" stop-opacity=".82"/>
+                    <stop offset="1" stop-color="#0F766E" stop-opacity=".68"/>
+                  </linearGradient>
+                  <linearGradient id="capex10HillB" x1="0" y1="216" x2="420" y2="320" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#B7EFE6" stop-opacity=".7"/>
+                    <stop offset="1" stop-color="#087F6F"/>
+                  </linearGradient>
+                  <linearGradient id="capex10Tower" x1="226" y1="78" x2="246" y2="276" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#F8FFFF"/>
+                    <stop offset=".34" stop-color="#60D4C9"/>
+                    <stop offset="1" stop-color="#0F766E"/>
+                  </linearGradient>
+                  <filter id="capex10SoftShadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#0B3D38" flood-opacity=".18"/>
+                  </filter>
+                </defs>
+                <path d="M15 92c18-24 50-24 68 0h-68z" fill="#FFFFFF" opacity=".36"/>
+                <path d="M300 62c22-29 62-29 84 0h-84z" fill="#FFFFFF" opacity=".42"/>
+                <path d="M0 224c56-28 88-12 128-32 54-26 84-56 138-36 46 17 69 51 154 32v132H0V224z" fill="url(#capex10HillA)"/>
+                <path d="M0 258c58-22 92-28 138-18 50 11 71-28 126-23 55 5 84 39 156 18v85H0v-62z" fill="url(#capex10HillB)" opacity=".92"/>
+                <path d="M0 286c92-2 135-37 202-28 68 9 114-23 218-21v83H0v-34z" fill="#075E57" opacity=".34"/>
+                <g filter="url(#capex10SoftShadow)">
+                  <path d="M232 102h14l9 178h-30l7-178z" fill="url(#capex10Tower)"/>
+                  <circle cx="239" cy="96" r="13" fill="#B8FFF5" stroke="#FFFFFF" stroke-width="4"/>
+                  <path d="M239 94L252 18c2-8 14-7 13 2l-21 77-5-3z" fill="#F7FFFE" opacity=".92"/>
+                  <path d="M243 101l76 44c8 5 1 16-7 11l-74-51 5-4z" fill="#E8FFFB" opacity=".92"/>
+                  <path d="M236 101l-70 56c-8 6-16-4-8-11l76-50 2 5z" fill="#F7FFFE" opacity=".92"/>
+                  <circle cx="239" cy="96" r="5" fill="#0F766E"/>
+                </g>
+                <path d="M54 258c10-19 20-19 30 0h-30z" fill="#0F766E" opacity=".26"/>
+                <path d="M96 249c9-16 18-16 27 0h-27z" fill="#0F766E" opacity=".18"/>
+              </svg>
+              <div class="capex10-art-caption">Fluxial Wind · 10 kW</div>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    funds_colors = ["#0F766E", "#164E63", "#7C3AED", "#1E3A8A", "#B7791F", "#64748B", "#0891B2", "#2C7A7B", "#334155", "#14B8A6"]
+    line_order = (
+        grouped.groupby("Línea", as_index=True)["Disponible_CLP"]
+        .sum()
+        .sort_values(ascending=False)
+        .index
+        .tolist()
+    )
+    line_color_map = {line: funds_colors[idx % len(funds_colors)] for idx, line in enumerate(line_order)}
+    legend_html = "".join(
+        f"""
+        <div class="capex10-dist-legend-item">
+          <span style="background:{line_color_map.get(line, '#64748B')};"></span>
+          <b>{html.escape(str(line))}</b>
+        </div>
+        """
+        for line in line_order
+    )
+    table_display = grouped.head(10).copy()
+    table_rows_html = "".join(
+        f"""
+        <tr>
+          <td>{html.escape(str(row["Fase"]))}</td>
+          <td>{html.escape(str(row["Línea"]))}</td>
+          <td class="num">{int(row["Partidas"])}</td>
+          <td class="money">{html.escape(str(row["Disponible"]))}</td>
+        </tr>
+        """
+        for _, row in table_display.iterrows()
+    )
+
+    fig_funds = px.bar(
+        grouped,
+        x="Monto_MM",
+        y="Fase",
+        color="Línea",
+        orientation="h",
+        category_orders={"Fase": phase_order},
+        color_discrete_map=line_color_map,
+        labels={"Monto_MM": "Disponible por gastar (MM CLP)", "Fase": "", "Línea": "Línea"},
+        custom_data=["Disponible_CLP", "Partidas", "Participación", "Línea"],
+    )
+    fig_funds.update_layout(
+        barmode="stack",
+        height=max(360, min(470, 54 * max(len(phase_order), 1))),
+        margin=dict(l=8, r=18, t=4, b=36),
+        showlegend=False,
+        plot_bgcolor="white",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#334155", size=11),
+        bargap=0.36,
+    )
+    fig_funds.update_traces(
+        marker=dict(line=dict(color="rgba(255,255,255,.92)", width=1.2)),
+        hovertemplate=(
+            "<b>%{y}</b><br>"
+            "Línea: %{customdata[3]}<br>"
+            "Disponible: %{customdata[0]:,.0f} CLP<br>"
+            "Monto: %{x:.1f} MM CLP<br>"
+            "Partidas: %{customdata[1]}<br>"
+            "Participación: %{customdata[2]:.1f}%<extra></extra>"
+        ),
+    )
+    fig_funds.update_xaxes(showgrid=True, gridcolor="rgba(148,163,184,.18)", zeroline=False, ticksuffix=" MM")
+    fig_funds.update_yaxes(showgrid=False, automargin=True)
+
+    st.markdown(
+        f"""
+        <style>
+        .capex10-lower-grid-head{{
+            margin:0 0 0 0;
+        }}
+        .capex10-lower-card-head{{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:14px;
+            margin:0 0 14px 0;
+        }}
+        .capex10-lower-title{{
+            font-size:16px;
+            line-height:1.2;
+            color:#111827;
+            font-weight:950;
+            margin:0;
+        }}
+        .capex10-lower-muted{{
+            color:#64748B;
+            font-weight:850;
+        }}
+        .capex10-info-dot{{
+            width:20px;
+            height:20px;
+            border-radius:999px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            border:1px solid #CBD5E1;
+            color:#64748B;
+            font-size:12px;
+            font-weight:950;
+            flex:0 0 auto;
+        }}
+        .capex10-dist-legend{{
+            display:grid;
+            grid-template-columns:repeat(4, minmax(128px, 1fr));
+            gap:7px 14px;
+            align-items:center;
+            margin:0 0 14px 0;
+            padding:0 4px 10px 4px;
+            border-bottom:1px solid rgba(226,232,240,.86);
+        }}
+        .capex10-dist-legend-item{{
+            display:flex;
+            align-items:center;
+            gap:8px;
+            min-width:0;
+            color:#334155;
+            font-size:11px;
+            line-height:1.18;
+            font-weight:750;
+        }}
+        .capex10-dist-legend-item span{{
+            width:11px;
+            height:11px;
+            border-radius:2px;
+            flex:0 0 auto;
+            box-shadow:0 0 0 1px rgba(255,255,255,.9),0 0 0 2px rgba(148,163,184,.10);
+        }}
+        .capex10-dist-legend-item b{{
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+        }}
+        .capex10-table-wrap{{
+            border:1px solid rgba(226,232,240,.95);
+            border-radius:14px;
+            overflow:hidden;
+            background:#FFFFFF;
+        }}
+        .capex10-funds-table{{
+            width:100%;
+            border-collapse:collapse;
+            table-layout:fixed;
+            font-size:12px;
+            color:#334155;
+        }}
+        .capex10-funds-table th{{
+            background:#F8FAFC;
+            color:#64748B;
+            font-size:11px;
+            line-height:1.1;
+            font-weight:900;
+            text-align:left;
+            padding:12px 12px;
+            border-bottom:1px solid #E2E8F0;
+            border-right:1px solid #E2E8F0;
+        }}
+        .capex10-funds-table th:nth-child(1){{width:48%;}}
+        .capex10-funds-table th:nth-child(2){{width:24%;}}
+        .capex10-funds-table th:nth-child(3){{width:10%;text-align:center;}}
+        .capex10-funds-table th:nth-child(4){{width:18%;text-align:right;border-right:0;}}
+        .capex10-funds-table td{{
+            padding:11px 12px;
+            border-bottom:1px solid #E8EEF5;
+            border-right:1px solid #E8EEF5;
+            vertical-align:middle;
+            line-height:1.25;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+        }}
+        .capex10-funds-table td:last-child{{border-right:0;}}
+        .capex10-funds-table tr:nth-child(even) td{{background:#FBFDFF;}}
+        .capex10-funds-table .num{{text-align:center;font-weight:850;color:#334155;}}
+        .capex10-funds-table .money{{text-align:right;font-weight:900;color:#1F2937;}}
+        .capex10-table-footer{{
+            display:grid;
+            grid-template-columns:1fr auto auto;
+            gap:18px;
+            align-items:center;
+            padding:13px 14px;
+            background:#FFFFFF;
+        }}
+        .capex10-table-link{{
+            display:flex;
+            align-items:center;
+            gap:8px;
+            color:#64748B;
+            font-size:11px;
+            font-weight:850;
+        }}
+        .capex10-table-total-label{{
+            color:#475569;
+            font-size:13px;
+            font-weight:950;
+        }}
+        .capex10-table-total-value{{
+            color:#0F766E;
+            font-size:18px;
+            line-height:1;
+            font-weight:950;
+            white-space:nowrap;
+        }}
+        @media (max-width: 1180px){{
+            .capex10-dist-legend{{grid-template-columns:repeat(2, minmax(0, 1fr));}}
+            .capex10-table-footer{{grid-template-columns:1fr;gap:8px;}}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    chart_col, table_col = st.columns([1.08, 1], gap="medium")
+    with chart_col:
+        with st.container(border=True):
+            st.markdown(
+                f"""
+                <div class="capex10-lower-card-head">
+                  <p class="capex10-lower-title">Distribución por fase <span class="capex10-lower-muted">(Top 10)</span></p>
+                  <span class="capex10-info-dot">i</span>
+                </div>
+                <div class="capex10-dist-legend">{legend_html}</div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.plotly_chart(fig_funds, use_container_width=True, config={"displaylogo": False})
+    with table_col:
+        with st.container(border=True):
+            st.markdown(
+                f"""
+                <div class="capex10-lower-card-head">
+                  <p class="capex10-lower-title">Detalle por fase y línea</p>
+                </div>
+                <div class="capex10-table-wrap">
+                  <table class="capex10-funds-table">
+                    <thead>
+                      <tr>
+                        <th>Fase</th>
+                        <th>Línea</th>
+                        <th>Partidas</th>
+                        <th>Disponible</th>
+                      </tr>
+                    </thead>
+                    <tbody>{table_rows_html}</tbody>
+                  </table>
+                  <div class="capex10-table-footer">
+                    <div class="capex10-table-link">
+                      <span class="capex10-info-dot">▦</span>
+                      <span>Ver todas las líneas</span>
+                    </div>
+                    <div class="capex10-table-total-label">Total disponible</div>
+                    <div class="capex10-table-total-value">{total_disponible_fmt}</div>
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+        )
+
+
+def render_capex10_executed_investment_scaling_80kw() -> None:
+    def find_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
+        if df.empty:
+            return None
+        normalized = {normalize_key(col): col for col in df.columns}
+        for candidate in candidates:
+            key = normalize_key(candidate)
+            if key in normalized:
+                return normalized[key]
+        for col in df.columns:
+            col_key = normalize_key(col)
+            if any(normalize_key(candidate) in col_key for candidate in candidates):
+                return col
+        return None
+
+    def fmt_mm_clp(value: float, decimals: int = 1) -> str:
+        number = float(value or 0.0) / 1_000_000
+        if decimals == 0:
+            return f"{number:,.0f}".replace(",", ".")
+        return f"{number:,.{decimals}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def normalize_epc(value: object) -> str:
+        label = str(value or "").strip()
+        key = normalize_key(label)
+        if "supply" in key or "suministro" in key:
+            return "Supply"
+        if "bos" in key or "sitio" in key or "obra" in key or "montaje" in key:
+            return "BOS"
+        if "ingenieria" in key or "pmo" in key or "gestion" in key:
+            return "Ingeniería + PMO"
+        if "integracion" in key or "comision" in key:
+            return "Integración y Comisionamiento"
+        if "fundacion" in key or "izaje" in key:
+            return "BOS"
+        return label or "Sin clasificación"
+
+    fallback_epc = {
+        "Supply": {"pilot": 38_400_000.0, "commercial": 20_900_000.0, "color": "#0F766E"},
+        "BOS": {"pilot": 13_500_000.0, "commercial": 6_100_000.0, "color": "#1E4D92"},
+        "Ingeniería + PMO": {"pilot": 4_600_000.0, "commercial": 200_000.0, "color": "#6B7280"},
+        "Integración y Comisionamiento": {"pilot": 2_800_000.0, "commercial": 100_000.0, "color": "#14B8A6"},
+    }
+    epc_order = list(fallback_epc.keys())
+
+    try:
+        df_gantt = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+    except Exception as exc:
+        st.warning(f"No se pudo cargar la sección de inversión ejecutada y escalamiento: {exc}")
+        return
+
+    if df_gantt.empty:
+        return
+
+    monto_col = find_col(df_gantt, ["Monto"])
+    pilot_col = find_col(df_gantt, ["Costo piloto"])
+    commercial_col = find_col(df_gantt, ["Costo comercial"])
+    epc_col = find_col(df_gantt, ["TIPO EPC", "ALCANCE CAPEX"])
+    progress_col = find_col(df_gantt, ["%", "Avance"])
+
+    total_executed = 589_000_000.0
+    if monto_col:
+        monto_values = df_gantt[monto_col].apply(parse_money_clp_robusto)
+        if float(monto_values.sum() or 0.0) > 0:
+            total_executed = float(monto_values.sum())
+
+    activities_executed = int((df_gantt[monto_col].apply(parse_money_clp_robusto) > 0).sum()) if monto_col else len(df_gantt)
+    phase_count = int(df_gantt["Fase"].astype(str).str.strip().replace({"": np.nan, "nan": np.nan}).dropna().nunique()) if "Fase" in df_gantt.columns else 0
+    progress_value = 0.0
+    if progress_col:
+        progress_series = df_gantt[progress_col].apply(parse_model_number)
+        if not progress_series.empty:
+            progress_value = float(progress_series.mean() or 0.0)
+            if progress_value <= 1:
+                progress_value *= 100
+
+    epc_summary = {key: fallback_epc[key].copy() for key in epc_order}
+    if pilot_col and commercial_col and epc_col:
+        cost_df = df_gantt.copy()
+        cost_df["_epc"] = cost_df[epc_col].apply(normalize_epc)
+        cost_df["_pilot"] = cost_df[pilot_col].apply(parse_money_clp_robusto)
+        cost_df["_commercial"] = cost_df[commercial_col].apply(parse_money_clp_robusto)
+        grouped_epc = cost_df.groupby("_epc", as_index=False).agg(pilot=("_pilot", "sum"), commercial=("_commercial", "sum"))
+        for _, row in grouped_epc.iterrows():
+            epc = normalize_epc(row["_epc"])
+            if epc in epc_summary and float(row["pilot"] or 0.0) > 0:
+                epc_summary[epc]["pilot"] = float(row["pilot"])
+                epc_summary[epc]["commercial"] = float(row["commercial"] or 0.0)
+
+    total_pilot = float(sum(epc_summary[key]["pilot"] for key in epc_order) or 56_500_000.0)
+    total_commercial = float(sum(epc_summary[key]["commercial"] for key in epc_order) or 27_300_000.0)
+    total_delta = total_commercial - total_pilot
+    total_delta_pct = (total_delta / total_pilot * 100.0) if total_pilot else 0.0
+
+    mix_supply = epc_summary["Supply"]["commercial"]
+    mix_bos = epc_summary["BOS"]["commercial"]
+
+    capability_cards = [
+        ("Investigación y desarrollo", "Microscopio"),
+        ("Simulación CFD / FEA", "Modelo"),
+        ("Diseño e ingeniería", "Engranaje"),
+        ("Patente PCT internacional", "Documento"),
+        ("Matriz y herramientas", "Utillaje"),
+        ("Banco de pruebas", "Banco"),
+        ("Prototipo 10 kW", "Turbina"),
+        ("Validación e instrumentación", "Señal"),
+    ]
+    capability_html = "".join(
+        f'<div class="scale-cap"><div class="scale-cap-ico">{idx + 1}</div><b>{html.escape(title)}</b><span>{html.escape(note)}</span></div>'
+        for idx, (title, note) in enumerate(capability_cards)
+    )
+    reasons = [
+        ("Industrialización y estandarización", "Diseños optimizados para fabricación en serie."),
+        ("Componentes replicables", "La mayoría del supply es reutilizable."),
+        ("Ingeniería ya desarrollada", "Se elimina ingeniería no recurrente en el escalamiento."),
+        ("Herramientas y moldes", "Matriz y utillajes ya diseñados y validados."),
+        ("Validación tecnológica", "Ensayos y pruebas realizadas en el piloto."),
+        ("Propiedad intelectual", "Patente PCT y know-how constituyen ventaja competitiva."),
+    ]
+    reasons_html = "".join(
+        f'<div class="scale-reason"><div class="scale-reason-ico">{idx + 1}</div><b>{html.escape(title)}</b><span>{html.escape(copy)}</span></div>'
+        for idx, (title, copy) in enumerate(reasons)
+    )
+    table_rows = ""
+    for key in epc_order:
+        pilot = epc_summary[key]["pilot"]
+        commercial = epc_summary[key]["commercial"]
+        delta = commercial - pilot
+        pct = (delta / pilot * 100.0) if pilot else 0.0
+        table_rows += f"""
+        <tr>
+          <td><span class="scale-dot" style="background:{epc_summary[key]['color']};"></span><b>{html.escape(key)}</b></td>
+          <td>{fmt_mm_clp(pilot)} MM</td>
+          <td>{fmt_mm_clp(commercial)} MM</td>
+          <td>{fmt_mm_clp(delta)} MM</td>
+          <td>{pct:.1f}%</td>
+        </tr>
+        """
+    table_rows += f"""
+        <tr class="total">
+          <td><b>TOTAL</b></td>
+          <td>{fmt_mm_clp(total_pilot)} MM</td>
+          <td>{fmt_mm_clp(total_commercial)} MM</td>
+          <td>{fmt_mm_clp(total_delta)} MM</td>
+          <td>{total_delta_pct:.1f}%</td>
+        </tr>
+    """
+    supply_pct = epc_summary["Supply"]["pilot"] / max(total_pilot, 1) * 100
+    bos_pct = epc_summary["BOS"]["pilot"] / max(total_pilot, 1) * 100
+    eng_pct = epc_summary["Ingeniería + PMO"]["pilot"] / max(total_pilot, 1) * 100
+    integration_pct = epc_summary["Integración y Comisionamiento"]["pilot"] / max(total_pilot, 1) * 100
+    supply_end = supply_pct
+    bos_end = supply_pct + bos_pct
+    eng_end = bos_end + eng_pct
+    mix_supply_pct = mix_supply / max(total_commercial, 1) * 100
+    mix_bos_pct = mix_bos / max(total_commercial, 1) * 100
+
+    institutional_html = textwrap.dedent(f"""
+        <style>
+        .invest80-wrap{{margin:34px 0 22px;color:#071427;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}}
+        .invest80-hero{{position:relative;overflow:hidden;border-radius:30px;background:radial-gradient(circle at 85% 12%,rgba(20,184,166,.18),transparent 28%),linear-gradient(135deg,#FFFFFF 0%,#F8FBFF 48%,#EEFDF9 100%);box-shadow:0 26px 70px rgba(15,23,42,.10);padding:32px 36px 30px;}}
+        .invest80-head{{display:grid;grid-template-columns:1fr auto;gap:24px;align-items:start;margin-bottom:28px;}}
+        .invest80-title{{font-size:clamp(34px,3.4vw,56px);line-height:.96;font-weight:950;letter-spacing:.01em;text-transform:uppercase;margin:0;color:#071427;}}
+        .invest80-sub{{font-size:18px;font-weight:850;color:#0F766E;margin:8px 0 0;}}
+        .invest80-brand{{display:flex;align-items:center;gap:16px;text-align:right;white-space:nowrap;color:#0F766E;}}
+        .invest80-brand b{{display:block;font-size:34px;line-height:.9;color:#071427;letter-spacing:.04em;}}
+        .invest80-brand span{{font-size:15px;font-weight:900;letter-spacing:.04em;}}
+        .invest80-top{{display:grid;grid-template-columns:minmax(360px,.95fr) minmax(430px,1.05fr) minmax(300px,.72fr);gap:22px;align-items:stretch;}}
+        .invest80-panel{{background:rgba(255,255,255,.78);backdrop-filter:blur(8px);border-radius:24px;box-shadow:0 18px 44px rgba(15,23,42,.08);padding:24px;min-width:0;}}
+        .invest80-panel.flat{{background:transparent;box-shadow:none;padding:6px 0;}}
+        .invest80-kicker{{display:inline-flex;align-items:center;gap:8px;color:#0F766E;font-size:12px;font-weight:950;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;}}
+        .invest80-kicker i{{width:24px;height:24px;border-radius:50%;background:#0F766E;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-style:normal;}}
+        .invest80-main-kpi{{display:flex;align-items:center;gap:22px;margin:12px 0 18px;}}
+        .invest80-money-icon{{width:116px;height:116px;border-radius:36px;background:linear-gradient(135deg,#E6FFFA,#FFFFFF);display:flex;align-items:center;justify-content:center;color:#0F766E;font-size:62px;font-weight:950;box-shadow:inset 0 0 0 1px rgba(15,118,110,.13),0 18px 36px rgba(15,118,110,.14);}}
+        .invest80-money{{font-size:clamp(88px,8vw,128px);line-height:.82;color:#0F766E;font-weight:950;letter-spacing:-.055em;margin:0;}}
+        .invest80-money span{{font-size:.44em;letter-spacing:-.02em;margin-left:8px;}}
+        .invest80-label{{font-size:25px;font-weight:950;color:#071427;margin:6px 0 0;}}
+        .invest80-metrics{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;}}
+        .invest80-metric{{border-radius:18px;background:#F8FAFC;padding:15px 14px;text-align:center;}}
+        .invest80-metric b{{display:block;color:#071427;font-size:28px;line-height:1;font-weight:950;}}
+        .invest80-metric span{{display:block;color:#64748B;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;margin-top:6px;}}
+        .invest80-donut-panel{{display:grid;grid-template-columns:1fr 160px;gap:20px;align-items:center;}}
+        .invest80-donut{{width:min(430px,100%);aspect-ratio:1;border-radius:50%;position:relative;margin:auto;background:conic-gradient(#0F766E 0 {supply_pct:.4f}%,#174A8B {supply_pct:.4f}% {bos_end:.4f}%,#CBD5E1 {bos_end:.4f}% 100%);box-shadow:0 26px 52px rgba(15,23,42,.16);}}
+        .invest80-donut::after{{content:"";position:absolute;inset:26%;border-radius:50%;background:#FFFFFF;box-shadow:inset 0 0 0 1px rgba(15,23,42,.06);}}
+        .invest80-donut-center{{position:absolute;inset:30%;z-index:2;display:flex;align-items:center;justify-content:center;text-align:center;flex-direction:column;color:#071427;font-weight:950;font-size:15px;line-height:1.12;}}
+        .invest80-donut-center b{{font-size:28px;color:#0F766E;margin-top:7px;}}
+        .invest80-donut-legend{{display:grid;gap:14px;}}
+        .invest80-leg{{border-radius:20px;background:#FFFFFF;padding:16px 18px;box-shadow:0 12px 26px rgba(15,23,42,.07);}}
+        .invest80-leg i{{width:13px;height:13px;border-radius:50%;display:inline-block;margin-right:8px;}}
+        .invest80-leg b{{display:block;font-size:30px;line-height:1;color:#071427;margin-top:7px;}}
+        .invest80-leg span{{font-size:12px;font-weight:950;color:#64748B;text-transform:uppercase;letter-spacing:.06em;}}
+        .invest80-turbine{{height:100%;min-height:430px;border-radius:28px;background:linear-gradient(180deg,#E8FFFB 0%,#BCEFE7 42%,#0F766E 100%);position:relative;overflow:hidden;box-shadow:0 24px 54px rgba(15,118,110,.20);}}
+        .invest80-turbine svg{{position:absolute;inset:0;width:100%;height:100%;}}
+        .invest80-turbine-caption{{position:absolute;right:24px;bottom:22px;color:#FFFFFF;font-size:13px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;text-align:right;}}
+        .invest80-transform{{margin:26px 0 22px;border-radius:28px;background:#071427;color:#FFFFFF;box-shadow:0 26px 60px rgba(7,20,39,.18);padding:28px 34px;}}
+        .invest80-transform h3{{font-size:17px;text-transform:uppercase;letter-spacing:.08em;color:#7DD3C7;margin:0 0 18px;}}
+        .invest80-transform-row{{display:grid;grid-template-columns:1fr 90px 1fr 90px 1fr;align-items:center;text-align:center;gap:10px;}}
+        .invest80-transform-card b{{display:block;font-size:clamp(44px,5vw,76px);line-height:.9;font-weight:950;letter-spacing:-.04em;}}
+        .invest80-transform-card span{{display:block;margin-top:9px;font-size:13px;color:#CBD5E1;font-weight:900;text-transform:uppercase;letter-spacing:.08em;}}
+        .invest80-transform-arrow{{font-size:58px;color:#14B8A6;font-weight:950;}}
+        .invest80-transform-card.reduction b{{color:#14B8A6;}}
+        .invest80-mid{{display:grid;grid-template-columns:1fr 1.05fr;gap:22px;margin-bottom:22px;}}
+        .invest80-icon-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px;}}
+        .invest80-icon-card{{border-radius:24px;background:#FFFFFF;padding:24px 16px;min-height:150px;text-align:center;box-shadow:0 14px 34px rgba(15,23,42,.07);}}
+        .invest80-icon{{width:66px;height:66px;border-radius:22px;margin:0 auto 14px;background:#E6FFFA;color:#0F766E;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:950;}}
+        .invest80-icon-card b{{display:block;color:#071427;font-size:15px;line-height:1.18;font-weight:950;}}
+        .invest80-platform{{display:grid;grid-template-columns:1.25fr .8fr;gap:20px;align-items:stretch;}}
+        .invest80-vawt{{min-height:430px;border-radius:28px;background:linear-gradient(180deg,#F8FAFC,#D8EEF4);position:relative;overflow:hidden;box-shadow:0 18px 44px rgba(15,23,42,.08);}}
+        .invest80-vawt svg{{position:absolute;inset:0;width:100%;height:100%;}}
+        .invest80-target{{border-radius:28px;background:#FFFFFF;padding:28px 24px;text-align:center;box-shadow:0 18px 44px rgba(15,23,42,.08);display:flex;flex-direction:column;justify-content:center;}}
+        .invest80-target small{{font-size:13px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;color:#071427;}}
+        .invest80-target b{{display:block;color:#0F766E;font-size:54px;line-height:.95;margin:14px 0 18px;letter-spacing:-.04em;}}
+        .invest80-mini-donut{{width:176px;height:176px;border-radius:50%;margin:0 auto;position:relative;background:conic-gradient(#0F766E 0 {mix_supply_pct:.4f}%,#174A8B {mix_supply_pct:.4f}% 100%);}}
+        .invest80-mini-donut::after{{content:"";position:absolute;inset:46px;border-radius:50%;background:#FFFFFF;}}
+        .invest80-mini-donut span{{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;color:#0F766E;font-size:22px;font-weight:950;}}
+        .invest80-roadmap{{border-radius:30px;background:#FFFFFF;box-shadow:0 24px 58px rgba(15,23,42,.09);padding:26px 30px;}}
+        .invest80-roadmap h3{{font-size:17px;text-transform:uppercase;letter-spacing:.08em;color:#071427;margin:0 0 22px;}}
+        .invest80-road{{display:grid;grid-template-columns:1fr 44px 1fr 44px 1fr 44px 1fr 44px 1fr;gap:8px;align-items:center;}}
+        .invest80-step{{border-radius:24px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:18px 16px;min-height:124px;box-shadow:inset 0 0 0 1px rgba(203,213,225,.52);}}
+        .invest80-step-icon{{width:48px;height:48px;border-radius:18px;background:#E6FFFA;color:#0F766E;display:flex;align-items:center;justify-content:center;font-weight:950;font-size:20px;margin-bottom:12px;}}
+        .invest80-step b{{display:block;color:#0F766E;font-size:13px;text-transform:uppercase;line-height:1.15;}}
+        .invest80-step span{{display:block;color:#64748B;font-size:11px;font-weight:800;margin-top:6px;line-height:1.25;}}
+        .invest80-road-arrow{{font-size:34px;color:#0F766E;text-align:center;font-weight:950;}}
+        .invest80-footnote{{margin-top:18px;border-radius:22px;background:#F1F5F9;padding:18px 22px;color:#071427;font-size:15px;line-height:1.45;font-weight:750;}}
+        @media(max-width:1200px){{.invest80-top,.invest80-mid,.invest80-platform,.invest80-road{{grid-template-columns:1fr;}}.invest80-transform-row{{grid-template-columns:1fr;}}.invest80-transform-arrow,.invest80-road-arrow{{transform:rotate(90deg);margin:auto;}}.invest80-icon-grid{{grid-template-columns:repeat(2,1fr);}}.invest80-brand{{display:none;}}}}
+        </style>
+        <div class="invest80-wrap">
+          <section class="invest80-hero">
+            <div class="invest80-head">
+              <div><h2 class="invest80-title">Inversión Ejecutada y Escalamiento hacia 80 kW</h2><p class="invest80-sub">Capital tecnológico convertido en plataforma comercial escalable</p></div>
+              <div class="invest80-brand"><div><b>FLUXIAL</b><span>WIND</span></div><div style="font-size:38px;font-weight:950;">80 kW</div></div>
+            </div>
+            <div class="invest80-top">
+              <div class="invest80-panel">
+                <div class="invest80-kicker"><i>1</i>Capital ejecutado</div>
+                <div class="invest80-main-kpi"><div class="invest80-money-icon">$</div><div><p class="invest80-money">${fmt_mm_clp(total_executed, 0)}<span>MM</span></p><p class="invest80-label">Capital ejecutado total</p></div></div>
+                <div class="invest80-metrics"><div class="invest80-metric"><b>{activities_executed}</b><span>Actividades</span></div><div class="invest80-metric"><b>{progress_value:.0f}%</b><span>Avance</span></div><div class="invest80-metric"><b>{phase_count}</b><span>Fases</span></div></div>
+              </div>
+              <div class="invest80-panel">
+                <div class="invest80-kicker"><i>2</i>Supply vs BOS</div>
+                <div class="invest80-donut-panel">
+                  <div class="invest80-donut"><div class="invest80-donut-center">Piloto 10 kW<b>{fmt_mm_clp(total_pilot)} MM</b></div></div>
+                  <div class="invest80-donut-legend">
+                    <div class="invest80-leg"><span><i style="background:#0F766E;"></i>Supply</span><b>{fmt_mm_clp(epc_summary["Supply"]["pilot"])} MM</b></div>
+                    <div class="invest80-leg"><span><i style="background:#174A8B;"></i>BOS</span><b>{fmt_mm_clp(epc_summary["BOS"]["pilot"])} MM</b></div>
+                  </div>
+                </div>
+              </div>
+              <div class="invest80-turbine">
+                <svg viewBox="0 0 360 520" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M0 355c70-30 116-22 176-60 64-41 99-66 184-40v265H0z" fill="#B8EFE7" opacity=".82"/>
+                  <path d="M0 416c91-35 137-8 203-35 64-27 102-52 157-38v177H0z" fill="#0F766E" opacity=".48"/>
+                  <path d="M178 112h24l18 362h-58l16-362z" fill="#D9FFFA"/>
+                  <circle cx="190" cy="104" r="21" fill="#FFFFFF"/>
+                  <path d="M190 101l20-96c3-13 22-10 20 4l-30 101zM199 112l119 70c13 8 2 25-11 17L190 121zM182 113L65 199c-13 10-26-6-13-17l134-91z" fill="#FFFFFF" opacity=".94"/>
+                </svg>
+                <div class="invest80-turbine-caption">Fluxial Wind<br>Industrial Platform</div>
+              </div>
+            </div>
+          </section>
+          <section class="invest80-transform">
+            <h3>Economías de escala · transformación de costo</h3>
+            <div class="invest80-transform-row">
+              <div class="invest80-transform-card"><b>{fmt_mm_clp(total_pilot)} MM</b><span>Costo piloto ejecutado</span></div>
+              <div class="invest80-transform-arrow">↓</div>
+              <div class="invest80-transform-card reduction"><b>{total_delta_pct:.1f}%</b><span>Reducción esperada</span></div>
+              <div class="invest80-transform-arrow">↓</div>
+              <div class="invest80-transform-card"><b>{fmt_mm_clp(total_commercial)} MM</b><span>Costo objetivo 80 kW</span></div>
+            </div>
+          </section>
+          <section class="invest80-mid">
+            <div class="invest80-panel flat">
+              <div class="invest80-kicker"><i>3</i>Palancas de reducción</div>
+              <div class="invest80-icon-grid">
+                <div class="invest80-icon-card"><div class="invest80-icon">I</div><b>Industrialización</b></div>
+                <div class="invest80-icon-card"><div class="invest80-icon">R</div><b>Componentes replicables</b></div>
+                <div class="invest80-icon-card"><div class="invest80-icon">E</div><b>Ingeniería desarrollada</b></div>
+                <div class="invest80-icon-card"><div class="invest80-icon">M</div><b>Moldes y herramientas</b></div>
+                <div class="invest80-icon-card"><div class="invest80-icon">V</div><b>Validación tecnológica</b></div>
+                <div class="invest80-icon-card"><div class="invest80-icon">P</div><b>Propiedad intelectual</b></div>
+              </div>
+            </div>
+            <div class="invest80-platform">
+              <div class="invest80-vawt">
+                <svg viewBox="0 0 520 430" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M0 330c95-45 161-35 242-75 83-42 148-54 278-16v191H0z" fill="#E2EFF6"/>
+                  <path d="M0 374c110-30 190-7 280-34 75-22 122-23 240-10v100H0z" fill="#BFD9E2"/>
+                  <path d="M194 72h34v310h-34zM305 72h34v310h-34z" fill="#F8FAFC" stroke="#64748B" stroke-width="3"/>
+                  <path d="M156 74c46 66 46 240 0 304M378 74c-46 66-46 240 0 304" fill="none" stroke="#071427" stroke-width="8"/>
+                  <path d="M214 135h120M214 260h120" stroke="#64748B" stroke-width="5"/>
+                </svg>
+              </div>
+              <div class="invest80-target"><small>Costo objetivo turbina comercial</small><b>{fmt_mm_clp(total_commercial)} MM CLP</b><div class="invest80-mini-donut"><span>{mix_supply_pct:.1f}%</span></div></div>
+            </div>
+          </section>
+          <section class="invest80-roadmap">
+            <h3>Roadmap de transformación de capital en valor</h3>
+            <div class="invest80-road">
+              <div class="invest80-step"><div class="invest80-step-icon">$</div><b>{fmt_mm_clp(total_executed, 0)} MM ejecutados</b><span>I+D y desarrollo</span></div>
+              <div class="invest80-road-arrow">→</div>
+              <div class="invest80-step"><div class="invest80-step-icon">K</div><b>Know-how</b><span>Ingeniería validada</span></div>
+              <div class="invest80-road-arrow">→</div>
+              <div class="invest80-step"><div class="invest80-step-icon">IP</div><b>Activos tecnológicos</b><span>PCT, moldes, prototipo</span></div>
+              <div class="invest80-road-arrow">→</div>
+              <div class="invest80-step"><div class="invest80-step-icon">P</div><b>Plataforma escalable</b><span>Supply replicable</span></div>
+              <div class="invest80-road-arrow">→</div>
+              <div class="invest80-step"><div class="invest80-step-icon">80</div><b>Turbina comercial</b><span>Producto industrializable</span></div>
+            </div>
+            <div class="invest80-footnote">La inversión ejecutada deja de leerse como gasto de prototipo y pasa a ser una plataforma tecnológica con ventaja industrial, costo objetivo competitivo y ruta clara hacia 80 kW.</div>
+          </section>
+        </div>
+        """)
+    institutional_html = "\n".join(line.lstrip() for line in institutional_html.strip().splitlines())
+    st.markdown(institutional_html, unsafe_allow_html=True)
+    return
+
+    scale80_html = textwrap.dedent(f"""
+        <style>
+        .scale80-wrap{{margin:28px 0 18px 0;color:#0B1730;font-family:inherit;}}
+        .scale80-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin:0 0 12px 0;}}
+        .scale80-title{{font-size:34px;line-height:1.02;font-weight:950;letter-spacing:.02em;margin:0;color:#0B1730;text-transform:uppercase;}}
+        .scale80-sub{{font-size:16px;line-height:1.32;font-weight:850;color:#0F766E;margin:4px 0 0 0;}}
+        .scale80-brand{{display:flex;align-items:center;gap:12px;color:#0F766E;font-weight:950;text-align:right;white-space:nowrap;}}
+        .scale80-brand b{{display:block;font-size:32px;line-height:1;color:#0B1730;letter-spacing:.03em;}}
+        .scale80-brand span{{display:block;font-size:15px;line-height:1;color:#0F766E;}}
+        .scale80-grid{{display:grid;grid-template-columns:1.02fr .92fr 1.45fr;gap:10px;margin-bottom:10px;}}
+        .scale80-grid-2{{display:grid;grid-template-columns:1.04fr 1.56fr;gap:10px;margin-bottom:10px;}}
+        .scale-card{{border:1px solid #CBDCEB;border-radius:13px;background:linear-gradient(180deg,#FFFFFF,#FBFDFF);box-shadow:0 12px 26px rgba(15,23,42,.045);padding:12px 14px;min-width:0;}}
+        .scale-card-head{{display:flex;align-items:center;gap:9px;margin:0 0 8px 0;}}
+        .scale-num{{width:24px;height:24px;border-radius:999px;background:#0F766E;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:950;}}
+        .scale-card h3{{font-size:15px;line-height:1.12;color:#0F766E;font-weight:950;margin:0;text-transform:uppercase;}}
+        .scale-card small{{display:block;font-size:11px;color:#0B1730;font-weight:750;margin-left:33px;margin-top:-4px;}}
+        .scale-kpi-main{{display:grid;grid-template-columns:88px 1fr;gap:12px;align-items:center;margin:12px 0;}}
+        .scale-kpi-ico{{width:82px;height:82px;border-radius:50%;background:#ECFDF5;color:#0F766E;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:950;}}
+        .scale-kpi-value{{font-size:52px;line-height:.92;color:#0F766E;font-weight:950;margin:0;letter-spacing:-.02em;}}
+        .scale-kpi-label{{font-size:17px;font-weight:900;margin:2px 0 0 0;color:#0B1730;}}
+        .scale-mini-stats{{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #DDE8F2;border-radius:10px;overflow:hidden;margin:8px 0 10px;}}
+        .scale-mini-stats div{{padding:9px;text-align:center;border-right:1px solid #DDE8F2;}}
+        .scale-mini-stats div:last-child{{border-right:0;}}
+        .scale-mini-stats b{{display:block;color:#0F766E;font-size:16px;}}
+        .scale-mini-stats span{{font-size:10px;color:#0B1730;font-weight:850;}}
+        .scale-cap-grid{{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #DDE8F2;border-radius:10px;overflow:hidden;}}
+        .scale-cap{{min-height:82px;padding:9px;text-align:center;border-right:1px solid #DDE8F2;border-bottom:1px solid #DDE8F2;}}
+        .scale-cap:nth-child(4n){{border-right:0;}}
+        .scale-cap:nth-child(n+5){{border-bottom:0;}}
+        .scale-cap-ico,.scale-reason-ico{{width:28px;height:28px;border-radius:9px;margin:0 auto 5px;background:#ECFDF5;color:#0F766E;display:flex;align-items:center;justify-content:center;font-weight:950;}}
+        .scale-cap b,.scale-reason b{{display:block;font-size:11px;line-height:1.25;color:#0B1730;font-weight:900;}}
+        .scale-cap span,.scale-reason span{{display:block;font-size:9px;color:#475569;margin-top:3px;line-height:1.25;}}
+        .scale-note{{border:1px solid #C9E5E1;border-radius:10px;background:#F0FDFA;color:#0F766E;font-size:12px;font-weight:900;padding:10px 12px;display:flex;gap:9px;align-items:center;}}
+        .scale-epc-layout{{display:grid;grid-template-columns:1fr 210px 1fr;gap:8px;align-items:center;}}
+        .scale-epc-side b{{display:block;color:#0F766E;font-size:20px;line-height:1.1;}}
+        .scale-epc-side span{{display:block;font-size:12px;color:#0B1730;font-weight:800;margin-bottom:8px;}}
+        .scale-epc-side ul{{margin:6px 0 0 13px;padding:0;font-size:10px;color:#0B1730;line-height:1.45;}}
+        .scale-epc-layout{{display:grid;grid-template-columns:1fr 220px 1fr;gap:10px;align-items:center;margin:12px 0 4px;}}
+        .scale-donut{{width:210px;height:210px;border-radius:50%;position:relative;margin:auto;box-shadow:inset 0 0 0 1px rgba(15,23,42,.05);}}
+        .scale-donut::after{{content:"";position:absolute;inset:54px;border-radius:50%;background:#FFFFFF;box-shadow:0 0 0 1px #DDE8F2;}}
+        .scale-donut-center{{position:absolute;inset:61px;z-index:2;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;line-height:1.25;font-weight:950;color:#0B1730;}}
+        .scale-donut-center b{{display:block;color:#0F766E;font-size:13px;margin-top:4px;}}
+        .scale-epc-bottom{{text-align:center;font-weight:950;color:#6B7280;font-size:13px;margin-top:4px;}}
+        .scale-mini-donut{{width:150px;height:150px;border-radius:50%;position:relative;margin:8px auto 2px;background:conic-gradient(#0F766E 0 {mix_supply_pct:.4f}%, #1E4D92 {mix_supply_pct:.4f}% 100%);}}
+        .scale-mini-donut::after{{content:"";position:absolute;inset:42px;border-radius:50%;background:#FFFFFF;box-shadow:0 0 0 1px #DDE8F2;}}
+        .scale-mini-donut b{{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;color:#0F766E;font-size:17px;}}
+        .scale-mini-legend{{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;font-size:10px;color:#0B1730;font-weight:850;}}
+        .scale-mini-legend span{{display:inline-flex;align-items:center;gap:5px;}}
+        .scale-mini-legend i{{width:9px;height:9px;border-radius:50%;display:inline-block;}}
+        .scale-econ{{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed;}}
+        .scale-econ th{{background:#F3F8F7;color:#0B1730;padding:8px 7px;border:1px solid #DDE8F2;text-align:center;font-size:10px;}}
+        .scale-econ td{{padding:9px 7px;border:1px solid #DDE8F2;text-align:center;font-weight:850;}}
+        .scale-econ td:first-child{{text-align:left;font-size:10.5px;}}
+        .scale-econ .total td{{background:#EAF8F5;color:#0F766E;font-weight:950;}}
+        .scale-dot{{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:7px;vertical-align:middle;}}
+        .scale-econ-side{{display:grid;grid-template-rows:auto 46px auto;gap:8px;text-align:center;align-items:center;}}
+        .scale-cost-box{{border-radius:8px;background:#0B2B4C;color:#fff;padding:14px 8px;font-weight:950;}}
+        .scale-cost-box.target{{background:#0F766E;}}
+        .scale-cost-box b{{display:block;font-size:21px;}}
+        .scale-arrow{{font-size:36px;color:#0B2B4C;font-weight:950;line-height:1;}}
+        .scale-reduction{{border:1px solid #C9D8E7;border-radius:10px;padding:10px 12px;margin-top:10px;color:#0F766E;font-size:15px;font-weight:950;}}
+        .scale-reason-grid{{display:grid;grid-template-columns:repeat(6,1fr);gap:0;border:1px solid #DDE8F2;border-radius:10px;overflow:hidden;margin-top:16px;}}
+        .scale-reason{{min-height:118px;text-align:center;padding:12px 10px;border-right:1px solid #DDE8F2;}}
+        .scale-reason:last-child{{border-right:0;}}
+        .scale-platform{{display:grid;grid-template-columns:270px 1fr 250px;gap:14px;align-items:center;}}
+        .scale-vawt{{height:225px;border-radius:12px;background:linear-gradient(180deg,#F8FAFC,#DCEEF4);position:relative;overflow:hidden;border:1px solid #DDE8F2;}}
+        .scale-vawt svg{{position:absolute;inset:0;width:100%;height:100%;}}
+        .scale-check{{display:grid;gap:10px;}}
+        .scale-check div{{display:grid;grid-template-columns:34px 1fr;gap:9px;align-items:start;}}
+        .scale-check i{{width:28px;height:28px;border-radius:9px;background:#ECFDF5;color:#0F766E;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:950;}}
+        .scale-check b{{display:block;font-size:12px;color:#0F766E;}}
+        .scale-check span{{font-size:10px;color:#0B1730;line-height:1.25;}}
+        .scale-target{{border:1px solid #C9D8E7;border-radius:13px;padding:18px 14px;text-align:center;background:#FFFFFF;}}
+        .scale-target h4{{font-size:15px;color:#0B1730;margin:0 0 12px 0;text-transform:uppercase;}}
+        .scale-target b{{display:block;font-size:33px;color:#0F766E;margin-bottom:8px;}}
+        .scale-flow{{display:grid;grid-template-columns:1fr 30px 1fr 30px 1fr 30px 1fr 30px 1fr;gap:8px;align-items:center;margin-top:12px;}}
+        .scale-flow-card{{display:grid;grid-template-columns:44px 1fr;gap:9px;align-items:center;}}
+        .scale-flow-ico{{width:42px;height:42px;border-radius:50%;background:#ECFDF5;color:#0F766E;display:flex;align-items:center;justify-content:center;font-weight:950;}}
+        .scale-flow-card b{{display:block;font-size:12px;color:#0F766E;}}
+        .scale-flow-card span{{font-size:10px;color:#0B1730;line-height:1.25;}}
+        .scale-flow-arrow{{font-size:25px;color:#0B2B4C;text-align:center;font-weight:950;}}
+        .scale-quote{{display:grid;grid-template-columns:1fr 190px;gap:0;border:1px solid #DDE8F2;border-radius:10px;overflow:hidden;margin-top:12px;}}
+        .scale-quote p{{margin:0;padding:18px 22px;font-size:12px;line-height:1.6;color:#0B1730;font-weight:750;}}
+        .scale-quote strong{{display:flex;align-items:center;justify-content:center;background:#F8FAFC;color:#0B2B4C;font-size:13px;line-height:1.4;text-align:center;padding:14px;font-weight:950;}}
+        .scale-foot{{display:flex;gap:34px;color:#0B1730;font-size:11px;margin:10px 0 0 8px;}}
+        @media(max-width:1200px){{.scale80-grid,.scale80-grid-2,.scale-platform,.scale-flow,.scale-quote{{grid-template-columns:1fr;}}.scale-flow-arrow{{display:none}}.scale-reason-grid{{grid-template-columns:repeat(2,1fr)}}.scale-cap-grid{{grid-template-columns:repeat(2,1fr)}}}}
+        </style>
+        <div class="scale80-wrap">
+          <div class="scale80-head">
+            <div>
+              <h2 class="scale80-title">Inversión Ejecutada y Escalamiento hacia 80 kW</h2>
+              <p class="scale80-sub">Cómo la inversión en el piloto habilita una arquitectura comercial escalable y competitiva</p>
+            </div>
+            <div class="scale80-brand"><div><b>FLUXIAL</b><span>WIND</span></div><div style="font-size:34px;color:#0F766E;">80 kW</div></div>
+          </div>
+          <div class="scale80-grid">
+            <div class="scale-card">
+              <div class="scale-card-head"><span class="scale-num">1</span><h3>Capital ejecutado (Monto)</h3></div>
+              <small>Inversión histórica destinada a I+D, ingeniería, pruebas y desarrollo tecnológico.</small>
+              <div class="scale-kpi-main"><div class="scale-kpi-ico">$</div><div><p class="scale-kpi-value">${fmt_mm_clp(total_executed, 0)} MM</p><p class="scale-kpi-label">Capital ejecutado total</p></div></div>
+              <div class="scale-mini-stats"><div><b>{activities_executed}</b><span>Actividades ejecutadas</span></div><div><b>{progress_value:.0f}%</b><span>Avance global</span></div><div><b>{phase_count}</b><span>Fases abarcadas</span></div></div>
+              <div class="scale-cap-grid">{capability_html}</div>
+              <div style="height:10px"></div><div class="scale-note">Esta inversión construye la base tecnológica que permite escalar exitosamente a turbinas comerciales de mayor potencia.</div>
+            </div>
+            <div class="scale-card">
+              <div class="scale-card-head"><span class="scale-num">2</span><h3>Descomposición EPC del piloto 10 kW</h3></div>
+              <small>Costo ejecutado del piloto desagregado por estructura EPC.</small>
+              <div class="scale-epc-layout">
+                <div class="scale-epc-side">
+                  <b>SUPPLY<br>{fmt_mm_clp(epc_summary["Supply"]["pilot"])} MM</b>
+                  <span>{supply_pct:.1f}%</span>
+                  <ul><li>Aspas FRP/extrusión</li><li>Generador axial</li><li>Mástil y estructura</li><li>Freno mecánico</li><li>Componentes eléctricos</li></ul>
+                </div>
+                <div>
+                  <div class="scale-donut" style="background:conic-gradient(#0F766E 0 {supply_end:.4f}%, #1E4D92 {supply_end:.4f}% {bos_end:.4f}%, #6B7280 {bos_end:.4f}% {eng_end:.4f}%, #14B8A6 {eng_end:.4f}% 100%);">
+                    <div class="scale-donut-center">COSTO PILOTO<br>EJECUTADO<b>{fmt_mm_clp(total_pilot)} MM CLP</b></div>
+                  </div>
+                  <div class="scale-epc-bottom">INGENIERÍA + PMO<br>{fmt_mm_clp(epc_summary["Ingeniería + PMO"]["pilot"])} MM ({eng_pct:.1f}%)</div>
+                </div>
+                <div class="scale-epc-side">
+                  <b style="color:#1E4D92;">BOS<br>{fmt_mm_clp(epc_summary["BOS"]["pilot"])} MM</b>
+                  <span>{bos_pct:.1f}%</span>
+                  <ul><li>Fundación y anclajes</li><li>Izaje y maniobras</li><li>Montaje mecánico</li><li>Obras civiles</li><li>Comisionamiento</li></ul>
+                </div>
+              </div>
+            </div>
+            <div class="scale-card">
+              <div class="scale-card-head"><span class="scale-num">3</span><h3>Economías de escala: piloto vs 80 kW (proyectado)</h3></div>
+              <small>Gracias a ingeniería desarrollada, estandarización e industrialización.</small>
+              <div style="display:grid;grid-template-columns:1fr 126px;gap:12px;align-items:center;">
+                <table class="scale-econ"><thead><tr><th>Concepto EPC</th><th>Piloto 10 kW</th><th>80 kW escalable</th><th>Δ monto</th><th>Δ %</th></tr></thead><tbody>{table_rows}</tbody></table>
+                <div class="scale-econ-side"><div class="scale-cost-box">Costo piloto ejecutado<b>{fmt_mm_clp(total_pilot)} MM</b></div><div class="scale-arrow">↓<br><span style="font-size:14px;color:#0F766E;">{total_delta_pct:.1f}%</span></div><div class="scale-cost-box target">Costo objetivo 80 kW<b>{fmt_mm_clp(total_commercial)} MM</b></div></div>
+              </div>
+              <div class="scale-reduction">Reducción total esperada del costo: {abs(total_delta_pct):.1f}%<br><span style="font-size:12px;color:#0B1730;">De {fmt_mm_clp(total_pilot)} MM en el piloto a {fmt_mm_clp(total_commercial)} MM en la turbina comercial de 80 kW.</span></div>
+            </div>
+          </div>
+          <div class="scale80-grid-2">
+            <div class="scale-card">
+              <div class="scale-card-head"><span class="scale-num">4</span><h3>¿Por qué disminuye el costo en 80 kW?</h3></div>
+              <small>Palancas clave que generan economías de escala.</small>
+              <div class="scale-reason-grid">{reasons_html}</div>
+              <div style="height:12px"></div><div class="scale-note" style="justify-content:center;">Menor riesgo técnico, menor incertidumbre y mayor repetibilidad = menor costo unitario.</div>
+            </div>
+            <div class="scale-card">
+              <div class="scale-card-head"><span class="scale-num">5</span><h3>Plataforma tecnológica lista para 80 kW</h3></div>
+              <small>De piloto validado a producto comercial industrializable.</small>
+              <div class="scale-platform">
+                <div class="scale-vawt">
+                  <svg viewBox="0 0 260 230" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M0 188c44-22 72-17 102-35 39-24 78-9 114-26 25-12 38-24 64-14v117H0z" fill="#DCEEF4"/>
+                    <path d="M0 205c56-14 91-30 144-22 50 8 76-15 116-12v59H0z" fill="#B9D8E2"/>
+                    <path d="M102 44h18v142h-18zM155 44h18v142h-18z" fill="#E8EEF5" stroke="#64748B"/>
+                    <path d="M82 44c21 25 21 110 0 136M190 44c-21 25-21 110 0 136" fill="none" stroke="#0B2B4C" stroke-width="4"/>
+                    <path d="M110 72h62M110 134h62" stroke="#64748B" stroke-width="3"/>
+                  </svg>
+                </div>
+                <div class="scale-check">
+                  <div><i>✓</i><p><b>Arquitectura validada en 10 kW</b><span>Base probada y optimizada.</span></p></div>
+                  <div><i>▣</i><p><b>Tecnología patentada (PCT)</b><span>Protección de propiedad intelectual.</span></p></div>
+                  <div><i>↗</i><p><b>TRL 7 – Piloto operativo</b><span>Tecnología validada en ambiente real.</span></p></div>
+                  <div><i>⚙</i><p><b>Supply replicable</b><span>{mix_supply / max(total_commercial, 1) * 100:.1f}% del costo comercial es replicable y escalable.</span></p></div>
+                  <div><i>⌂</i><p><b>BOS optimizado</b><span>{mix_bos / max(total_commercial, 1) * 100:.1f}% depende del sitio y montaje.</span></p></div>
+                </div>
+                <div class="scale-target"><h4>Costo objetivo<br>turbina comercial 80 kW</h4><b>{fmt_mm_clp(total_commercial)} MM CLP</b>
+                  <div class="scale-mini-donut"><b>{mix_supply_pct:.1f}%</b></div>
+                  <div class="scale-mini-legend"><span><i style="background:#0F766E;"></i>Supply replicable</span><span><i style="background:#1E4D92;"></i>BOS sitio dependiente</span></div>
+                </div>
+              </div>
+              <div style="height:10px"></div><div class="scale-note" style="justify-content:center;">Una plataforma tecnológica escalable, industrializable y lista para comercializar.</div>
+            </div>
+          </div>
+          <div class="scale-card">
+            <div class="scale-card-head"><span class="scale-num">6</span><h3>Resumen ejecutivo: transformación de capital en valor</h3></div>
+            <div class="scale-flow">
+              <div class="scale-flow-card"><div class="scale-flow-ico">$</div><div><b>${fmt_mm_clp(total_executed, 0)} MM ejecutados</b><span>Inversión histórica en I+D y desarrollo</span></div></div>
+              <div class="scale-flow-arrow">→</div>
+              <div class="scale-flow-card"><div class="scale-flow-ico">C</div><div><b>Conocimiento generado</b><span>Ingeniería, simulaciones, ensayos y aprendizaje</span></div></div>
+              <div class="scale-flow-arrow">→</div>
+              <div class="scale-flow-card"><div class="scale-flow-ico">A</div><div><b>Activos tecnológicos</b><span>Propiedad intelectual, herramientas y prototipo</span></div></div>
+              <div class="scale-flow-arrow">→</div>
+              <div class="scale-flow-card"><div class="scale-flow-ico">P</div><div><b>Plataforma escalable</b><span>Componentes replicables y arquitectura validada</span></div></div>
+              <div class="scale-flow-arrow">→</div>
+              <div class="scale-flow-card"><div class="scale-flow-ico">80</div><div><b>Turbina comercial 80 kW</b><span>Producto industrializable y competitivo</span></div></div>
+            </div>
+            <div class="scale-quote"><p>La inversión ejecutada no se destinó únicamente a la construcción de un prototipo, sino a la generación de una plataforma tecnológica completa que permite escalar con éxito hacia turbinas comerciales de 80 kW, con un costo objetivo competitivo y una ventaja tecnológica sostenible.</p><strong>Inversión que genera valor y ventaja competitiva</strong></div>
+          </div>
+          <div class="scale-foot"><span>Fecha de corte: 13 de mayo de 2025</span><span>Valores expresados en millones de CLP (MM CLP)</span><span>Fuente: datos cargados del modelo de inversión</span></div>
+        </div>
+        """).strip()
+    scale80_html = "\n".join(line.lstrip() for line in scale80_html.splitlines())
+    st.markdown(
+        scale80_html,
+        unsafe_allow_html=True,
+    )
 
 
 def render_inputs_contexto_block():
@@ -5328,17 +7344,17 @@ def render_inputs_capex_10kw_detail():
     st.markdown(
         """
         <style>
-        .capex10-shell{border:1px solid #d9e2ee;border-radius:13px;background:#fff;padding:12px 18px 10px 18px;box-shadow:0 13px 30px rgba(15,23,42,.05);margin:0 0 22px 0;}
-        .capex10-title{font-size:24px;line-height:1.02;font-weight:900;color:#08122a;margin:0 0 5px 0;}
-        .capex10-sub{font-size:13px;line-height:1.32;color:#274060;margin:0 0 10px 0;max-width:680px;}
-        .capex10-kpis{display:grid;grid-template-columns:1.04fr 1.02fr .92fr .9fr .92fr;gap:10px;margin:0;}
-        .capex10-kpi{border:1px solid var(--bd);background:linear-gradient(135deg,var(--bg1),#fff 72%);border-radius:8px;padding:8px 12px;display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:center;min-height:64px;}
-        .capex10-ico{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--ico-bg);color:var(--accent);font-size:24px;font-weight:900;}
-        .capex10-k{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);font-weight:900;margin:0 0 4px 0;}
-        .capex10-v{font-size:22px;line-height:.95;font-weight:900;color:#08122a;margin:0 0 4px 0;}
-        .capex10-s{font-size:11px;line-height:1.12;color:#14284a;margin:0;}
+        .capex10-shell{border:1px solid #DCE6EF;border-radius:18px;background:linear-gradient(135deg,#FFFFFF 0%,#F8FBFF 58%,#EEFDF9 100%);padding:22px 24px 20px;box-shadow:0 18px 40px rgba(15,23,42,.075);margin:0 0 22px 0;overflow:hidden;}
+        .capex10-title{font-size:28px;line-height:1.02;font-weight:950;color:#071427;margin:0 0 7px 0;letter-spacing:-.02em;}
+        .capex10-sub{font-size:13px;line-height:1.36;color:#64748B;font-weight:750;margin:0 0 16px 0;max-width:760px;}
+        .capex10-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:0;}
+        .capex10-kpi{border:1px solid rgba(220,230,239,.9);background:#FFFFFF;border-radius:16px;padding:14px 15px;display:grid;grid-template-columns:44px minmax(0,1fr);gap:11px;align-items:center;min-height:86px;box-shadow:0 12px 26px rgba(15,23,42,.055);overflow:hidden;}
+        .capex10-ico{width:42px;height:42px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:var(--ico-bg);color:var(--accent);font-size:22px;font-weight:950;}
+        .capex10-k{font-size:9.5px;letter-spacing:.065em;text-transform:uppercase;color:var(--accent);font-weight:950;margin:0 0 6px 0;line-height:1.12;}
+        .capex10-v{font-size:clamp(18px,1.28vw,25px);line-height:.98;font-weight:950;color:#071427;margin:0 0 5px 0;overflow-wrap:anywhere;}
+        .capex10-s{font-size:10.5px;line-height:1.18;color:#475569;font-weight:750;margin:0;overflow-wrap:anywhere;}
         .capex10-main{display:grid;grid-template-columns:1.05fr 1fr;gap:16px;margin:0 0 22px 0;}
-        .capex10-panel{border:1px solid #d9e2ee;border-radius:14px;background:#fff;padding:18px 18px 16px 18px;height:520px;box-sizing:border-box;overflow:hidden;}
+        .capex10-panel{border:1px solid #DCE6EF;border-radius:18px;background:#FFFFFF;padding:18px 18px 16px 18px;height:520px;box-sizing:border-box;overflow:hidden;box-shadow:0 14px 30px rgba(15,23,42,.055);}
         .capex10-panel-body{height:calc(100% - 38px);display:flex;flex-direction:column;}
         .capex10-panel-head{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px 0;}
         .capex10-panel-title{font-size:15px;font-weight:900;color:#0b1730;margin:0;}
@@ -5363,7 +7379,7 @@ def render_inputs_capex_10kw_detail():
         .capex10-name{display:flex;align-items:center;gap:9px;}
         .capex10-row-dot{width:8px;height:8px;border-radius:50%;background:#94a3b8;display:inline-block;flex:0 0 auto;}
         .capex10-table-scroll{flex:1;min-height:0;overflow:auto;border-radius:10px;}
-        .capex10-footer{display:grid;grid-template-columns:1.1fr 1fr 1.2fr 1.25fr 1fr;gap:0;border:1px solid #d9e2ee;border-radius:14px;background:#fbfdff;padding:14px 18px;margin:0 0 28px 0;}
+        .capex10-footer{display:grid;grid-template-columns:1.1fr 1fr 1.2fr 1.25fr 1fr;gap:0;border:1px solid #DCE6EF;border-radius:18px;background:#FFFFFF;padding:14px 18px;margin:0 0 28px 0;box-shadow:0 14px 30px rgba(15,23,42,.055);}
         .capex10-foot-item{display:grid;grid-template-columns:42px 1fr;gap:10px;align-items:center;border-right:1px solid #d8e2ee;padding:0 18px;}
         .capex10-foot-item:first-child{padding-left:0;}
         .capex10-foot-item:last-child{border-right:0;padding-right:0;}
@@ -5376,7 +7392,9 @@ def render_inputs_capex_10kw_detail():
         .capex10-sub-k{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:0 0 7px 0;}
         .capex10-sub-t{font-size:15px;font-weight:950;color:#0b1730;line-height:1.15;margin:0 0 6px 0;}
         .capex10-sub-s{font-size:11.5px;line-height:1.35;color:#475569;margin:0;}
-        @media (max-width: 1100px){.capex10-kpis,.capex10-main,.capex10-footer{grid-template-columns:1fr}.capex10-foot-item{border-right:0;border-bottom:1px solid #d8e2ee;padding:10px 0}.capex10-foot-item:last-child{border-bottom:0}.capex10-panel{height:auto;overflow:visible}.capex10-panel-body,.capex10-table-scroll{height:auto;overflow:visible}}
+        @media (max-width: 1300px){.capex10-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        @media (max-width: 1100px){.capex10-main,.capex10-footer{grid-template-columns:1fr}.capex10-foot-item{border-right:0;border-bottom:1px solid #d8e2ee;padding:10px 0}.capex10-foot-item:last-child{border-bottom:0}.capex10-panel{height:auto;overflow:visible}.capex10-panel-body,.capex10-table-scroll{height:auto;overflow:visible}}
+        @media (max-width: 720px){.capex10-kpis{grid-template-columns:1fr}.capex10-shell{padding:18px}.capex10-title{font-size:24px}}
         </style>
         """,
         unsafe_allow_html=True,
@@ -5404,13 +7422,13 @@ def render_inputs_capex_10kw_detail():
     capex10_subblocks = [
         (
             "control_cost",
-            "Control cost",
-            "Vista integrada, control ejecutivo y brecha de inversión del piloto 10 kW.",
+            "Control de Fondos y Costos de Liberación",
+            "Fondos requeridos, costos pendientes y composición de la brecha para completar la liberación del piloto 10 kW.",
         ),
         (
             "vista_integrada",
-            "VISTA INTEGRADA · PILOTO 10 KW",
-            "PILOTOS_ANA_CAPEX80KW, Control ejecutivo de integración y continuidad operacional, Etapas de Liberación de Capital y Brecha de Inversión – Piloto 10 kW.",
+            "Cronograma",
+            "Vista Gantt y filtros de avance.",
         ),
     ]
     sub_cols = st.columns(2)
@@ -5449,7 +7467,25 @@ def render_inputs_capex_10kw_detail():
             render_inputs_project_gantt()
         return
 
-    render_pilotos_ana_embedded_view()
+    st.markdown(
+        """
+        <div style="margin:16px 0 12px;padding:18px 20px;border:1px solid #DCE6EF;border-radius:18px;background:linear-gradient(135deg,#FFFFFF 0%,#F8FBFF 62%,#EEFDF9 100%);box-shadow:0 14px 32px rgba(15,23,42,.06);">
+          <div style="font-size:12px;font-weight:950;letter-spacing:.10em;text-transform:uppercase;color:#0F766E;margin-bottom:6px;">Etapas de Liberación de Capital</div>
+          <div style="font-size:18px;font-weight:950;color:#071427;line-height:1.16;">Panel de liberación cargado bajo demanda</div>
+          <div style="font-size:12px;color:#64748B;font-weight:750;line-height:1.35;margin-top:6px;">Este panel contiene vistas interactivas pesadas. Cargarlo solo cuando se necesite mejora la velocidad inicial del sub bloque.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button(
+        "Cargar Etapas de Liberación de Capital",
+        key="inputs_capex10_load_release_panel",
+        use_container_width=True,
+        type="secondary",
+    ):
+        st.session_state["inputs_capex10_release_panel_loaded"] = True
+    if st.session_state.get("inputs_capex10_release_panel_loaded", False):
+        render_pilotos_ana_embedded_view()
 
     st.markdown(
         f"""
@@ -5594,6 +7630,28 @@ def render_inputs_capex_10kw_detail():
         """,
         unsafe_allow_html=True,
     )
+    render_capex10_available_funds_by_phase_line()
+    try:
+        df_gantt_costs = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+    except Exception as exc:
+        st.warning(f"No se pudo cargar el análisis de costos piloto vs comercial: {exc}")
+    else:
+        st.markdown(
+            """
+            <div style="clear:both;height:18px;"></div>
+            <div style="height:1px;background:rgba(226,232,240,.9);margin:0 0 14px 0;"></div>
+            """,
+            unsafe_allow_html=True,
+        )
+        render_inputs_gantt_cost_analysis(df_gantt_costs, scope_label="toda la hoja del cronograma")
+    st.markdown(
+        """
+        <div style="clear:both;height:26px;"></div>
+        <div style="height:1px;background:rgba(226,232,240,.9);margin:0 0 18px 0;"></div>
+        """,
+        unsafe_allow_html=True,
+    )
+    render_capex10_executed_investment_scaling_80kw()
 
 def render_inputs_estado_actual_dashboard():
     estado_subblock_key = "inputs_estado_actual_subbloque_sel"
