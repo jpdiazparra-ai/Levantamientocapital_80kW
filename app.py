@@ -3499,7 +3499,7 @@ def render_inputs_gantt_header(df: pd.DataFrame, date_mode: str = "Real") -> Non
               </svg>
             </div>
             <div>
-              <h2 class="gantt-title">Cronograma de Ejecución y Validación</h2>
+              <h2 class="gantt-title">Cronograma</h2>
               <p class="gantt-subtitle">Ruta de ejecución, hitos y validación del piloto 10 kW para seguimiento de liberación de capital.</p>
             </div>
           </div>
@@ -3808,9 +3808,13 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         "eac": find_col(["Forecast EAC (CLP)", "Forecast EAC", "EAC"]),
         "etc": find_col(["ETC por Ejecutar (CLP)", "ETC por Ejecutar", "ETC"]),
         "vac": find_col(["VAC Variación al Cierre (CLP)", "VAC Variacion al Cierre", "VAC"]),
-        "tipo": find_col(["Tipo Costo Control", "Tipo Costo", "TIPO EPC", "Línea"]),
+        "tipo": find_col(["Tipo EC", "TIPO EC", "Tipo EPC", "TIPO EPC", "Tipo Costo Control", "Tipo Costo"]),
         "fecha": find_col(["Fin real", "Fin plan (AAAA-MM-DD)", "Inicio (AAAA-MM-DD)", "Fecha"]),
+        "inicio": find_col(["Inicio (AAAA-MM-DD)", "Inicio", "Fecha inicio"]),
+        "fin_plan": find_col(["Fin plan (AAAA-MM-DD)", "Fin plan", "Fecha fin plan"]),
+        "fin_real": find_col(["Fin real", "Fecha fin real"]),
         "fase": find_col(["Fase", "Hito Ejecutivo", "ETAPA"]),
+        "estado": find_col(["Estado", "Estado.1"]),
         "id": find_col(["ID"]),
     }
     required_any = [col_map["bac"], col_map["ac"], col_map["ev"], col_map["pv"]]
@@ -3872,10 +3876,35 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
     if evm_df["_vac"].abs().sum() <= 0:
         evm_df["_vac"] = evm_df["_bac"] - evm_df["_eac"]
 
+    cutoff_ts = pd.Timestamp.today().normalize()
+    evm_df["_start_date"] = pd.to_datetime(evm_df[col_map["inicio"]], errors="coerce") if col_map.get("inicio") else pd.NaT
+    evm_df["_end_plan_date"] = pd.to_datetime(evm_df[col_map["fin_plan"]], errors="coerce") if col_map.get("fin_plan") else pd.NaT
+    evm_df["_end_real_date"] = pd.to_datetime(evm_df[col_map["fin_real"]], errors="coerce") if col_map.get("fin_real") else pd.NaT
+    estado_series = (
+        evm_df[col_map["estado"]].astype(str)
+        if col_map.get("estado")
+        else pd.Series("", index=evm_df.index)
+    )
+    evidence_mask = (
+        (evm_df["_ac"] > 0)
+        | (evm_df["_ev"] > 0)
+        | (evm_df["_avance_real"] > 0)
+        | estado_series.str.contains("curso|complet|ejecuci|inici", case=False, na=False)
+    )
+    planned_to_cutoff_mask = (
+        evm_df["_start_date"].le(cutoff_ts)
+        | evm_df["_end_plan_date"].le(cutoff_ts)
+    ).fillna(False)
+    evm_df["_evm_perf_scope"] = evidence_mask | planned_to_cutoff_mask
+    evm_perf_df = evm_df[evm_df["_evm_perf_scope"]].copy()
+    if evm_perf_df.empty:
+        evm_df["_evm_perf_scope"] = True
+        evm_perf_df = evm_df.copy()
+
     total_bac = float(evm_df["_bac"].sum())
-    total_ac = float(evm_df["_ac"].sum())
-    total_ev = float(evm_df["_ev"].sum())
-    total_pv = float(evm_df["_pv"].sum())
+    total_ac = float(evm_perf_df["_ac"].sum())
+    total_ev = float(evm_perf_df["_ev"].sum())
+    total_pv = float(evm_perf_df["_pv"].sum())
     total_eac = float(evm_df["_eac"].sum())
     total_etc = float(evm_df["_etc"].sum())
     total_cv = float(total_ev - total_ac)
@@ -3913,6 +3942,15 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
 
     cpi_color, cpi_status, cpi_note = traffic(cpi)
     spi_color, spi_status, spi_note = traffic(spi)
+    evm_chart_sig = str(abs(hash((
+        len(evm_perf_df),
+        round(total_bac, 0),
+        round(total_ac, 0),
+        round(total_ev, 0),
+        round(total_pv, 0),
+        round(total_eac, 0),
+        str(col_map.get("tipo") or ""),
+    ))))
 
     date_col = col_map.get("fecha")
     if date_col:
@@ -3929,7 +3967,10 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         evm_df["_axis"] = evm_df[fallback_col].fillna("").astype(str) if fallback_col else [str(i + 1) for i in range(len(evm_df))]
         evm_df = evm_df.reset_index(drop=True)
 
-    curve_df = evm_df[["_axis", "_pv", "_ev", "_ac", "_eac"]].copy()
+    curve_source_df = evm_df[evm_df["_evm_perf_scope"]].copy()
+    if curve_source_df.empty:
+        curve_source_df = evm_df.copy()
+    curve_df = curve_source_df[["_axis", "_pv", "_ev", "_ac", "_eac"]].copy()
     curve_df = curve_df.groupby("_axis", sort=False, as_index=False).sum()
     for metric in ["_pv", "_ev", "_ac", "_eac"]:
         curve_df[metric] = curve_df[metric].cumsum()
@@ -3939,10 +3980,10 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
 
     curve_fig = go.Figure()
     curve_series = [
-        ("PV Valor Planificado (CLP)", "_pv", "#1F4E78", "dash"),
-        ("EV Valor Ganado (CLP)", "_ev", "#548235", "solid"),
-        ("AC Costo Real (CLP)", "_ac", "#C00000", "solid"),
-        ("EAC Forecast (CLP)", "_eac", "#6F42C1", "dash"),
+        ("PV Planificado", "_pv", "#64748B", "dash"),
+        ("EV Valor ganado", "_ev", "#0F766E", "solid"),
+        ("AC Costo real", "_ac", "#9F3A2D", "solid"),
+        ("EAC Forecast", "_eac", "#1F4E78", "dot"),
     ]
     for label, metric, color, dash in curve_series:
         curve_fig.add_trace(
@@ -3951,20 +3992,21 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
                 y=curve_df[metric] / 1_000_000,
                 mode="lines+markers",
                 name=label,
-                line=dict(color=color, width=3, dash=dash),
-                marker=dict(size=5),
+                line=dict(color=color, width=3.4 if metric in {"_ev", "_ac"} else 2.7, dash=dash, shape="spline", smoothing=0.45),
+                marker=dict(size=5.5, color=color, line=dict(color="#FFFFFF", width=1.2)),
                 hovertemplate=f"<b>{label}</b><br>%{{x}}<br>%{{y:.1f}} MM CLP<extra></extra>",
             )
         )
     curve_fig.update_layout(
-        height=360,
-        margin=dict(l=18, r=18, t=42, b=42),
-        title=dict(text="CURVA S – PRESUPUESTO VS VALOR GANADO VS COSTO REAL", font=dict(size=15, color="#0B1F3A")),
-        plot_bgcolor="#FFFFFF",
+        height=260,
+        margin=dict(l=18, r=18, t=42, b=34),
+        title=dict(text="Curva S · Valor ganado, costo real y forecast", font=dict(size=15, color="#071427", family="Inter, sans-serif"), x=0.01, xanchor="left"),
+        plot_bgcolor="#FBFCFE",
         paper_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", y=1.08, x=0, font=dict(size=10)),
-        xaxis=dict(title="", showgrid=False, tickfont=dict(size=9)),
-        yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.22)", tickfont=dict(size=10)),
+        hovermode="x unified",
+        legend=dict(orientation="h", y=1.12, x=0.01, font=dict(size=10, color="#334155"), bgcolor="rgba(255,255,255,.72)"),
+        xaxis=dict(title="", showgrid=False, tickfont=dict(size=9, color="#64748B"), zeroline=False),
+        yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", tickfont=dict(size=10, color="#64748B"), zeroline=False),
     )
 
     def gauge_fig(title: str, value: float, status: str, color: str) -> go.Figure:
@@ -3972,8 +4014,8 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
             go.Indicator(
                 mode="gauge+number",
                 value=max(0.7, min(1.3, value if value else 0.7)),
-                number={"valueformat": ".2f", "font": {"size": 36, "color": "#111827"}},
-                title={"text": f"<b>{title}</b><br><span style='font-size:13px;color:{color}'>{status}</span>", "font": {"size": 15}},
+                number={"valueformat": ".2f", "font": {"size": 26, "color": "#111827"}},
+                title={"text": f"<b>{title}</b><br><span style='font-size:11px;color:{color}'>{status}</span>", "font": {"size": 12}},
                 gauge={
                     "axis": {"range": [0.7, 1.3], "tickwidth": 1, "tickcolor": "#0B1F3A"},
                     "bar": {"color": "#333333", "thickness": 0.13},
@@ -3989,7 +4031,7 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
                 },
             )
         )
-        fig.update_layout(height=270, margin=dict(l=18, r=18, t=36, b=12), paper_bgcolor="rgba(0,0,0,0)")
+        fig.update_layout(height=178, margin=dict(l=6, r=6, t=28, b=4), paper_bgcolor="rgba(0,0,0,0)")
         return fig
 
     max_var = max(abs(total_cv), abs(total_sv), 1.0)
@@ -4018,8 +4060,9 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
     )
 
     type_col = col_map.get("tipo")
+    type_source_df = evm_perf_df.copy()
     type_df = (
-        evm_df.assign(_tipo=evm_df[type_col].fillna("Otros").astype(str).str.strip().replace("", "Otros") if type_col else "Otros")
+        type_source_df.assign(_tipo=type_source_df[type_col].fillna("Otros").astype(str).str.strip().replace("", "Otros") if type_col else "Otros")
         .groupby("_tipo", as_index=False)["_ac"]
         .sum()
         .sort_values("_ac", ascending=False)
@@ -4028,16 +4071,21 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         type_df,
         values="_ac",
         names="_tipo",
-        hole=0.58,
-        color_discrete_sequence=["#1F77D0", "#548235", "#FFC000", "#6F42C1", "#94A3B8", "#C00000"],
+        hole=0.64,
+        color_discrete_sequence=["#315D7C", "#5F7F55", "#C9A84A", "#7A6A92", "#9AA6B2", "#B66A61"],
     )
     donut_fig.update_traces(
         textinfo="percent",
-        textfont=dict(size=12, color="#FFFFFF"),
+        textfont=dict(size=11, color="#FFFFFF"),
         marker=dict(line=dict(color="#FFFFFF", width=2)),
         hovertemplate="<b>%{label}</b><br>%{value:,.0f} CLP<br>%{percent}<extra></extra>",
     )
-    donut_fig.update_layout(height=280, margin=dict(l=0, r=0, t=36, b=0), title=dict(text="TIPO COSTO CONTROL", font=dict(size=14, color="#0B1F3A")), showlegend=True)
+    donut_fig.update_layout(
+        height=188,
+        margin=dict(l=0, r=0, t=10, b=0),
+        showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
 
     def kpi_card(title: str, value: str, note: str, color: str, icon: str, status: str = "") -> str:
         return f"""
@@ -4050,18 +4098,18 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
 
     kpis_html = "".join(
         [
-            kpi_card("PRESUPUESTO BASE (CLP)", money_display(total_bac), "Línea base aprobada", "#0B1F3A", "$"),
-            kpi_card("COSTO REAL AC (CLP)", money_display(total_ac), "Capital ejecutado", "#548235", "$"),
-            kpi_card("EV VALOR GANADO (CLP)", money_display(total_ev), "Valor generado", "#1F4E78", "EV"),
+            kpi_card("PRESUPUESTO BASE (CLP)", money_display(total_bac), "Línea base aprobada", "#071427", "$"),
+            kpi_card("COSTO REAL AC (CLP)", money_display(total_ac), "Incurrido a la fecha", "#3F6F4A", "$"),
+            kpi_card("EV VALOR GANADO (CLP)", money_display(total_ev), "Valor ganado a la fecha", "#315D7C", "EV"),
             kpi_card("CPI ÍNDICE COSTO", idx_fmt(cpi), cpi_note, cpi_color, "CPI", cpi_status),
             kpi_card("SPI ÍNDICE PLAZO", idx_fmt(spi), spi_note, spi_color, "SPI", spi_status),
-            kpi_card("FORECAST EAC (CLP)", money_display(total_eac), "Estimación al cierre", "#0B1F3A", "↗"),
+            kpi_card("FORECAST EAC (CLP)", money_display(total_eac), "Estimación al cierre", "#18324A", "↗"),
         ]
     )
 
+    ac_bac_ratio = total_ac / total_bac if total_bac else 0.0
     summary_items = [
-        ("CV Variación Costo (CLP)", total_cv, "Por debajo del valor ganado" if total_cv < 0 else "Favorable frente al valor ganado", "variance"),
-        ("SV Variación Cronograma (CLP)", total_sv, "Proyecto adelantado" if total_sv >= 0 else "Proyecto atrasado", "variance"),
+        ("Ejecución AC / BAC", ac_bac_ratio, "Costo real sobre presupuesto base del filtro", "percent_neutral"),
         ("Desviación Presupuesto", deviation_pct, "Sobre el presupuesto base" if deviation_pct > 0 else "Bajo presupuesto base", "percent"),
         ("ETC por Ejecutar (CLP)", total_etc, "Monto por ejecutar", "neutral"),
         ("VAC Variación al Cierre (CLP)", total_vac, "Sobre estimación final" if total_vac < 0 else "Holgura al cierre", "variance"),
@@ -4071,12 +4119,15 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         if mode == "percent":
             color = "#C00000" if value > 0.05 else "#FFC000" if value > 0 else "#548235"
             display = pct_fmt(value)
+        elif mode == "percent_neutral":
+            color = "#315D7C"
+            display = pct_fmt(value)
         elif mode == "neutral":
             color = "#0B1F3A"
-            display = money_clp(value)
+            display = money_display(value)
         else:
             color, _, _ = traffic(value, "variance")
-            display = money_clp(value)
+            display = money_display(value)
         summary_cards_html.append(textwrap.dedent(f"""
         <div class="evm-side-card" style="--accent:{color};">
           <span>{html.escape(label)}</span>
@@ -4085,50 +4136,129 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         </div>
         """).strip())
 
+    variation_cards_html = "".join(
+        [
+            textwrap.dedent(f"""
+            <div class="evm-var-card" style="--accent:{'#C00000' if total_cv < 0 else '#548235'};">
+              <span>CV · Variación costo</span>
+              <b>{html.escape(money_display(total_cv))}</b>
+              <small>{html.escape('Costo real supera valor ganado' if total_cv < 0 else 'Costo bajo valor ganado')}</small>
+            </div>
+            """).strip(),
+            textwrap.dedent(f"""
+            <div class="evm-var-card" style="--accent:{'#548235' if total_sv >= 0 else '#C00000'};">
+              <span>SV · Variación plazo</span>
+              <b>{html.escape(money_display(total_sv))}</b>
+              <small>{html.escape('Avance superior al plan' if total_sv >= 0 else 'Avance bajo plan')}</small>
+            </div>
+            """).strip(),
+        ]
+    )
+
+    dominant_types = type_df[type_df["_ac"] > 0]["_tipo"].head(2).astype(str).tolist()
+    if len(dominant_types) >= 2:
+        cost_type_read = f"{dominant_types[0]} y {dominant_types[1]} concentran el mayor costo real AC."
+    elif dominant_types:
+        cost_type_read = f"{dominant_types[0]} concentra el mayor costo real AC."
+    else:
+        cost_type_read = "Sin distribución de costo real AC disponible."
+    type_total_ac = float(type_df["_ac"].sum() or 0.0)
+    type_rows_html = "".join(
+        f"""
+        <div class="evm-type-row">
+          <span>{html.escape(str(row['_tipo']))}</span>
+          <b>{html.escape(money_display(float(row['_ac'])))}</b>
+          <i>{(float(row['_ac']) / type_total_ac * 100.0 if type_total_ac else 0):.0f}%</i>
+        </div>
+        """
+        for _, row in type_df.head(4).iterrows()
+    )
+
+    eac_color = "#C00000" if total_eac > total_bac else "#548235"
+    eac_status = "presión" if total_eac > total_bac else "en control"
+    insight_scope = f"{len(evm_perf_df)} partidas activas en el filtro"
+    insights = [
+        (f"CPI {cpi_status.lower()}", f"{idx_fmt(cpi)} · {cpi_note}. {'Costo real supera valor ganado.' if cpi < 1 else 'Valor ganado cubre el costo real.'}", cpi_color),
+        (f"SPI {spi_status.lower()}", f"{idx_fmt(spi)} · {spi_note}. {'Avance físico superior al plan.' if spi >= 1 else 'Avance bajo el plan del filtro activo.'}", spi_color),
+        (f"EAC {eac_status}", f"{money_display(total_eac)} vs {money_display(total_bac)} de presupuesto base.", eac_color),
+        ("Filtro activo", f"Lectura recalculada sobre {insight_scope}.", "#315D7C"),
+    ]
+    insights_html = "".join(
+        f"""
+        <div class="evm-insight" style="--insight-color:{color};">
+          <b>{html.escape(title)}</b>
+          <span>{html.escape(copy)}</span>
+        </div>
+        """
+        for title, copy, color in insights
+    )
+
     fase_col = col_map.get("fase")
     current_phase = "Ejecución"
     if fase_col and not evm_df.empty:
         recent_df = evm_df.sort_values("_axis_date") if "_axis_date" in evm_df.columns and evm_df["_axis_date"].notna().any() else evm_df
         current_phase = str(recent_df[fase_col].dropna().astype(str).iloc[-1]) if recent_df[fase_col].dropna().size else "Ejecución"
-    cut_date = pd.Timestamp.today().strftime("%d-%m-%Y")
-    if "_axis_date" in evm_df.columns and evm_df["_axis_date"].notna().any():
-        cut_date = pd.Timestamp(evm_df["_axis_date"].max()).strftime("%d-%m-%Y")
+    cut_date = cutoff_ts.strftime("%d-%m-%Y")
 
     st.markdown(
         f"""
         <style>
         .evm-dashboard,.evm-dashboard *,.evm-panel,.evm-panel *,.evm-side-title,.evm-side-card,.evm-side-card *,.evm-notes{{box-sizing:border-box;max-width:100%;}}
-        .evm-dashboard{{width:100%;font-family:inherit;background:#F4F7FA;border:1px solid #D8E2EC;border-radius:18px;margin:22px 0 12px;overflow:hidden;box-shadow:0 18px 42px rgba(15,23,42,.08);}}
-        .evm-head{{width:100%;display:grid;grid-template-columns:minmax(150px,190px) minmax(0,1fr) minmax(190px,245px);background:linear-gradient(135deg,#0B1F3A,#07355C);color:#FFFFFF;align-items:stretch;min-height:86px;overflow:hidden;}}
-        .evm-brand{{min-width:0;display:flex;align-items:center;gap:10px;padding:15px 18px;border-right:1px solid rgba(255,255,255,.12);overflow:hidden;}}
-        .evm-mark{{flex:0 0 auto;width:38px;height:50px;border-radius:11px;background:linear-gradient(180deg,#E6FFFA,#548235);display:flex;align-items:center;justify-content:center;color:#0B1F3A;font-weight:950;}}
-        .evm-brand b{{display:block;font-size:clamp(20px,1.65vw,28px);line-height:.92;letter-spacing:.02em;white-space:nowrap;}}.evm-brand span{{display:block;color:#7BC950;font-size:clamp(14px,1.05vw,18px);font-weight:950;text-align:right;white-space:nowrap;}}
-        .evm-titlebox{{min-width:0;text-align:center;padding:13px 14px;overflow:hidden;}}.evm-titlebox h2{{margin:0;color:#FFFFFF;font-size:clamp(20px,1.55vw,31px);line-height:1.05;font-weight:950;letter-spacing:.01em;overflow-wrap:anywhere;}}.evm-titlebox p{{margin:8px 0 0;color:#FFFFFF;font-size:clamp(13px,1.05vw,20px);font-weight:900;overflow-wrap:anywhere;}}
-        .evm-meta{{min-width:0;height:100%;display:grid;align-content:center;gap:7px;background:rgba(255,255,255,.06);padding:13px 14px;font-size:11px;font-weight:900;overflow:hidden;}}.evm-meta div{{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1fr);gap:8px;min-width:0;}}.evm-meta span{{color:#D8E7F5;overflow-wrap:anywhere;}}.evm-meta b{{color:#FFFFFF;text-align:left;overflow-wrap:anywhere;line-height:1.25;}}
+        .evm-dashboard{{width:100%;font-family:inherit;color:#071427;position:relative;overflow:hidden;border-radius:26px;background:radial-gradient(circle at 92% 8%,rgba(20,184,166,.13),transparent 27%),linear-gradient(135deg,#FFFFFF 0%,#F8FAFC 55%,#EEFDF9 100%);box-shadow:0 24px 58px rgba(15,23,42,.10);padding:22px 24px 18px;margin:22px 0 14px;border:1px solid rgba(203,213,225,.82);}}
+        .evm-head{{width:100%;display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:15px;overflow:hidden;}}
+        .evm-titlebox{{min-width:0;overflow:hidden;flex:1;}}.evm-titlebox .evm-kicker{{font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#0F766E;margin:0 0 6px;}}.evm-titlebox h2{{margin:0;color:#071427;font-size:clamp(24px,1.95vw,32px);line-height:1.04;font-weight:950;letter-spacing:.01em;overflow-wrap:anywhere;}}.evm-titlebox p{{margin:8px 0 0;color:#64748B;font-size:13px;line-height:1.38;font-weight:760;overflow-wrap:anywhere;}}
+        .evm-meta{{flex:0 0 250px;min-width:0;display:grid;gap:8px;background:rgba(255,255,255,.72);border:1px solid rgba(203,213,225,.75);border-radius:18px;padding:12px 14px;font-size:11px;font-weight:900;overflow:hidden;box-shadow:0 12px 28px rgba(15,23,42,.055);}}.evm-meta div{{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1fr);gap:8px;min-width:0;}}.evm-meta span{{color:#64748B;overflow-wrap:anywhere;}}.evm-meta b{{color:#071427;text-align:left;overflow-wrap:anywhere;line-height:1.25;}}
         .evm-kpi-grid{{width:100%;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;padding:14px;overflow:hidden;}}
-        .evm-kpi{{min-width:0;position:relative;overflow:hidden;min-height:142px;border-radius:12px;background:linear-gradient(145deg,var(--accent),color-mix(in srgb,var(--accent) 72%,#000));color:#FFFFFF;padding:13px 12px 38px;box-shadow:0 13px 24px rgba(15,23,42,.12);}}
+        .evm-kpi{{min-width:0;position:relative;overflow:hidden;min-height:126px;border-radius:16px;background:linear-gradient(145deg,var(--accent),color-mix(in srgb,var(--accent) 78%,#111827));color:#FFFFFF;padding:12px 11px 34px;box-shadow:0 13px 24px rgba(15,23,42,.10);}}
         .evm-kpi-title{{font-size:clamp(10px,.78vw,13px);line-height:1.18;font-weight:950;text-align:center;text-transform:uppercase;min-height:31px;overflow-wrap:anywhere;}}
-        .evm-kpi-body{{display:grid;grid-template-columns:46px minmax(0,1fr);gap:10px;align-items:center;margin-top:12px;min-width:0;}}.evm-kpi-icon{{width:44px;height:44px;border:3px solid rgba(255,255,255,.85);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:clamp(15px,1vw,19px);font-weight:950;}}
+        .evm-kpi-body{{display:grid;grid-template-columns:42px minmax(0,1fr);gap:9px;align-items:center;margin-top:8px;min-width:0;}}.evm-kpi-icon{{width:40px;height:40px;border:3px solid rgba(255,255,255,.85);border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:clamp(14px,.95vw,18px);font-weight:950;}}
         .evm-kpi b{{display:block;font-size:clamp(18px,1.35vw,26px);line-height:1.05;font-weight:950;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}.evm-kpi span{{display:block;margin-top:8px;font-size:clamp(10px,.74vw,12px);font-weight:850;color:#F8FAFC;line-height:1.24;overflow-wrap:anywhere;}}
         .evm-kpi-status{{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.18);padding:7px 10px;text-align:center;font-size:13px;font-weight:950;}}
         .evm-main{{width:100%;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;padding:0 14px 14px;overflow:hidden;}}
         .evm-center{{display:grid;gap:12px;min-width:0;}}.evm-row{{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.98fr);gap:12px;}}
-        .evm-panel{{width:100%;background:#FFFFFF;border:1px solid #D8E2EC;border-radius:12px;box-shadow:0 10px 22px rgba(15,23,42,.045);overflow:hidden;min-width:0;}}
-        .evm-panel.pad{{padding:12px;}}.evm-panel-title{{font-size:14px;font-weight:950;color:#0B1F3A;text-align:center;margin:0 0 8px;text-transform:uppercase;}}
+        .evm-panel{{width:100%;background:rgba(255,255,255,.82);border:1px solid rgba(203,213,225,.75);border-radius:18px;box-shadow:0 12px 28px rgba(15,23,42,.055);overflow:hidden;min-width:0;}}
+        .evm-panel.pad{{padding:12px;}}.evm-panel-title{{font-size:12px;font-weight:950;color:#071427;text-align:left;margin:0 0 8px;text-transform:uppercase;letter-spacing:.08em;}}
         .evm-gauge-grid{{display:grid;grid-template-columns:1fr 1fr;gap:0;}}.evm-gauge-grid>div:first-child{{border-right:1px solid #D8E2EC;}}
-        .evm-side{{display:grid;gap:10px;align-content:start;}}.evm-side-title{{background:#FFFFFF;border:1px solid #D8E2EC;border-radius:12px;padding:12px;text-align:center;color:#0B1F3A;font-weight:950;box-shadow:0 10px 22px rgba(15,23,42,.045);}}
-        .evm-side-card{{width:100%;overflow:hidden;background:#FFFFFF;border:1px solid #D8E2EC;border-left:5px solid var(--accent);border-radius:12px;padding:13px 14px;box-shadow:0 10px 22px rgba(15,23,42,.04);}}.evm-side-card span{{display:block;color:#0B1F3A;font-size:11px;line-height:1.22;font-weight:950;overflow-wrap:anywhere;}}.evm-side-card b{{display:block;color:var(--accent);font-size:clamp(17px,1.22vw,22px);line-height:1.05;margin:8px 0 5px;font-weight:950;overflow-wrap:anywhere;}}.evm-side-card small{{display:block;color:#334155;font-size:11px;line-height:1.25;font-weight:750;overflow-wrap:anywhere;}}
-        .evm-scale{{width:100%;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:14px;overflow:hidden;}}.evm-flow{{display:grid;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr) 32px minmax(0,1fr);align-items:center;gap:8px;text-align:center;}}.evm-flow-card{{border:1px solid #D8E2EC;border-radius:12px;padding:13px 10px;background:#F8FBFF;color:#0B1F3A;font-weight:950;overflow-wrap:anywhere;}}.evm-flow-arrow{{font-size:24px;color:#1F4E78;font-weight:950;}}
-        .evm-scale-kpis{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}}.evm-scale-kpis div{{min-width:0;border:1px solid #D8E2EC;border-radius:10px;background:#FFFFFF;padding:10px;text-align:center;overflow:hidden;}}.evm-scale-kpis span{{display:block;font-size:9px;color:#0B1F3A;font-weight:950;text-transform:uppercase;overflow-wrap:anywhere;}}.evm-scale-kpis b{{display:block;color:#548235;font-size:21px;font-weight:950;margin-top:5px;white-space:nowrap;}}
+        .evm-side{{display:grid;gap:10px;align-content:start;}}.evm-side-title{{background:rgba(255,255,255,.82);border:1px solid rgba(203,213,225,.75);border-radius:16px;padding:11px 12px;text-align:left;color:#071427;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:950;box-shadow:0 10px 22px rgba(15,23,42,.045);}}
+        .evm-side-card{{width:100%;overflow:hidden;background:rgba(255,255,255,.84);border:1px solid rgba(203,213,225,.76);border-left:5px solid var(--accent);border-radius:14px;padding:13px 14px;box-shadow:0 10px 22px rgba(15,23,42,.04);}}.evm-side-card span{{display:block;color:#071427;font-size:11px;line-height:1.22;font-weight:950;overflow-wrap:anywhere;}}.evm-side-card b{{display:block;color:var(--accent);font-size:clamp(17px,1.22vw,22px);line-height:1.05;margin:8px 0 5px;font-weight:950;overflow-wrap:anywhere;}}.evm-side-card small{{display:block;color:#475569;font-size:11px;line-height:1.25;font-weight:750;overflow-wrap:anywhere;}}
+        .evm-summary-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}}
+        .evm-summary-grid .evm-side-card{{padding:10px 11px;border-radius:11px;min-height:77px;box-shadow:none;}}
+        .evm-summary-grid .evm-side-card b{{font-size:clamp(15px,1.05vw,19px);margin:6px 0 4px;}}
+        .evm-var-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}}
+        .evm-var-card{{min-width:0;overflow:hidden;border-radius:18px;border:1px solid color-mix(in srgb,var(--accent) 26%,#D8E2EC);background:linear-gradient(135deg,rgba(255,255,255,.88),color-mix(in srgb,var(--accent) 6%,#FFFFFF));border-left:6px solid var(--accent);padding:18px 15px;box-shadow:0 12px 24px rgba(15,23,42,.055);}}
+        .evm-var-card span{{display:block;color:#0B1F3A;font-size:12px;font-weight:950;text-transform:uppercase;overflow-wrap:anywhere;}}
+        .evm-var-card b{{display:block;color:var(--accent);font-size:clamp(24px,2vw,34px);line-height:1;margin:10px 0 7px;font-weight:950;overflow-wrap:anywhere;}}
+        .evm-var-card small{{display:block;color:#475569;font-size:12px;font-weight:800;line-height:1.25;overflow-wrap:anywhere;}}
+        .evm-type-shell{{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1fr);gap:10px;align-items:center;overflow:hidden;}}
+        .evm-type-read{{border-radius:15px;background:linear-gradient(135deg,#F8FAFC,#EEFDF9);border:1px solid rgba(203,213,225,.86);color:#071427;padding:11px 12px;font-size:12px;font-weight:850;line-height:1.28;overflow-wrap:anywhere;}}
+        .evm-type-list{{display:grid;gap:6px;}}
+        .evm-type-row{{display:grid;grid-template-columns:minmax(0,1fr) auto 38px;gap:8px;align-items:center;border-radius:10px;background:#FFFFFF;border:1px solid rgba(203,213,225,.78);padding:8px 9px;overflow:hidden;}}
+        .evm-type-row span{{font-size:11px;color:#071427;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}}
+        .evm-type-row b{{font-size:11px;color:#315D7C;font-weight:950;white-space:nowrap;}}
+        .evm-type-row i{{font-style:normal;font-size:10px;color:#64748B;font-weight:950;text-align:right;}}
+        .evm-scale{{width:100%;display:grid;grid-template-columns:minmax(0,1fr);gap:13px;padding:15px;overflow:hidden;background:radial-gradient(circle at 95% 0%,rgba(20,184,166,.12),transparent 32%),linear-gradient(135deg,rgba(255,255,255,.92),#F8FAFC);}}
+        .evm-flow{{display:grid;grid-template-columns:minmax(0,1fr) 30px minmax(0,1fr) 30px minmax(0,1fr);align-items:stretch;gap:8px;text-align:center;}}
+        .evm-flow-card{{position:relative;border:1px solid rgba(203,213,225,.82);border-radius:16px;padding:15px 11px;background:#FFFFFF;color:#071427;font-weight:950;overflow:hidden;box-shadow:0 10px 20px rgba(15,23,42,.035);}}
+        .evm-flow-card small{{display:block;color:#64748B;font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.05em;margin-top:4px;}}
+        .evm-flow-card::before{{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#0F766E;opacity:.72;}}
+        .evm-flow-arrow{{display:flex;align-items:center;justify-content:center;font-size:23px;color:#315D7C;font-weight:950;}}
+        .evm-scale-kpis{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}}
+        .evm-scale-kpis div{{min-width:0;border:1px solid rgba(203,213,225,.82);border-radius:13px;background:#FFFFFF;padding:12px 10px;text-align:center;overflow:hidden;box-shadow:0 10px 18px rgba(15,23,42,.035);}}
+        .evm-scale-kpis span{{display:block;font-size:9px;color:#64748B;font-weight:950;text-transform:uppercase;overflow-wrap:anywhere;}}
+        .evm-scale-kpis b{{display:block;color:#0F766E;font-size:clamp(18px,1.35vw,24px);font-weight:950;margin-top:5px;white-space:nowrap;}}
+        .evm-insights{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}}
+        .evm-insight{{position:relative;border-radius:16px;background:#FFFFFF;border:1px solid rgba(203,213,225,.80);padding:14px 14px 14px 42px;box-shadow:0 10px 22px rgba(15,23,42,.045);min-height:86px;overflow:hidden;}}
+        .evm-insight::before{{content:"";position:absolute;left:14px;top:16px;width:15px;height:15px;border-radius:999px;background:var(--insight-color,#0F766E);box-shadow:0 0 0 6px color-mix(in srgb,var(--insight-color,#0F766E) 14%,#FFFFFF);}}
+        .evm-insight b{{display:block;color:#0B1F3A;font-size:13px;font-weight:950;margin-bottom:6px;overflow-wrap:anywhere;}}
+        .evm-insight span{{display:block;color:#475569;font-size:12px;line-height:1.32;font-weight:780;overflow-wrap:anywhere;}}
         .evm-notes{{padding:10px 16px 14px;color:#0B1F3A;font-size:11px;font-weight:750;line-height:1.4;background:#FFFFFF;border-top:1px solid #D8E2EC;}}
         @media(max-width:1450px){{.evm-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.evm-main{{grid-template-columns:1fr;}}.evm-side{{grid-template-columns:repeat(2,minmax(0,1fr));}}.evm-side-title{{grid-column:1/-1;}}}}
-        @media(max-width:1180px){{.evm-head{{grid-template-columns:minmax(0,1fr);}}.evm-brand{{justify-content:center;border-right:0;border-bottom:1px solid rgba(255,255,255,.12);}}.evm-meta{{grid-template-columns:repeat(3,minmax(0,1fr));}}.evm-meta div{{grid-template-columns:1fr;gap:3px;text-align:center;}}}}
-        @media(max-width:950px){{.evm-head,.evm-row,.evm-gauge-grid{{grid-template-columns:1fr;}}.evm-brand{{border-right:0;border-bottom:1px solid rgba(255,255,255,.12);}}.evm-kpi-grid,.evm-side,.evm-scale-kpis{{grid-template-columns:1fr;}}.evm-flow{{grid-template-columns:1fr;}}.evm-flow-arrow{{transform:rotate(90deg);}}}}
+        @media(max-width:1180px){{.evm-head{{display:grid;grid-template-columns:minmax(0,1fr);}}.evm-meta{{grid-template-columns:repeat(3,minmax(0,1fr));flex-basis:auto;}}.evm-meta div{{grid-template-columns:1fr;gap:3px;text-align:left;}}}}
+        @media(max-width:950px){{.evm-row,.evm-gauge-grid,.evm-type-shell{{grid-template-columns:1fr;}}.evm-dashboard{{padding:18px;}}.evm-kpi-grid,.evm-side,.evm-scale-kpis{{grid-template-columns:1fr;}}.evm-flow{{grid-template-columns:1fr;}}.evm-flow-arrow{{transform:rotate(90deg);}}}}
         </style>
         <div class="evm-dashboard">
           <div class="evm-head">
-            <div class="evm-brand"><div class="evm-mark">FW</div><div><b>FLUXIAL</b><span>WIND</span></div></div>
-            <div class="evm-titlebox"><h2>CONTROL DE COSTOS Y DESEMPEÑO DEL PROYECTO</h2><p>PILOTO EÓLICO 10 kW → COMERCIAL 80 kW</p></div>
+            <div class="evm-titlebox"><p class="evm-kicker">Control ejecutivo · valor ganado</p><h2>Control de costos y desempeño del proyecto</h2><p>Piloto eólico 10 kW → Comercial 80 kW · Lectura PMO a fecha de corte sobre el filtro activo.</p></div>
             <div class="evm-meta"><div><span>FECHA DE CORTE:</span><b>{html.escape(cut_date)}</b></div><div><span>FASE ACTUAL:</span><b>{html.escape(current_phase[:36])}</b></div><div><span>MONEDA:</span><b>CLP</b></div></div>
           </div>
           <div class="evm-kpi-grid">{kpis_html}</div>
@@ -4137,46 +4267,83 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         unsafe_allow_html=True,
     )
 
-    main_col, side_col = st.columns([4.1, 1.25], gap="small")
-    with main_col:
-        row_a, row_b = st.columns([1.12, 1.0], gap="small")
-        with row_a:
-            with st.container(border=False):
-                st.plotly_chart(curve_fig, use_container_width=True, key="evm_curve_s")
-        with row_b:
-            st.markdown('<div class="evm-panel-title">DESEMPEÑO DEL PROYECTO</div>', unsafe_allow_html=True)
-            g1, g2 = st.columns(2, gap="small")
-            with g1:
-                st.plotly_chart(gauge_fig("CPI – ÍNDICE COSTO", cpi, cpi_status, cpi_color), use_container_width=True, key="evm_gauge_cpi")
-            with g2:
-                st.plotly_chart(gauge_fig("SPI – ÍNDICE PLAZO", spi, spi_status, spi_color), use_container_width=True, key="evm_gauge_spi")
-        row_c, row_d = st.columns([0.9, 1.1], gap="small")
-        with row_c:
-            st.plotly_chart(variation_fig, use_container_width=True, key="evm_variaciones")
-        with row_d:
-            st.plotly_chart(donut_fig, use_container_width=True, key="evm_donut_tipo")
-    with side_col:
-        st.markdown('<div class="evm-side-title">RESUMEN FINANCIERO</div>', unsafe_allow_html=True)
-        for card_html in summary_cards_html:
-            st.markdown(card_html, unsafe_allow_html=True)
+    curve_col, summary_col = st.columns([2.35, 1.0], gap="small")
+    with curve_col:
+        st.plotly_chart(curve_fig, use_container_width=True, key=f"evm_curve_s_{evm_chart_sig}")
+    with summary_col:
+        st.markdown(
+            f"""
+            <div class="evm-side-title">RESUMEN FINANCIERO</div>
+            <div class="evm-summary-grid">{''.join(summary_cards_html)}</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    gauge_col, variation_col, donut_col = st.columns([1.05, 0.95, 1.0], gap="small")
+    with gauge_col:
+        st.markdown('<div class="evm-panel-title">DESEMPEÑO DEL PROYECTO</div>', unsafe_allow_html=True)
+        g1, g2 = st.columns(2, gap="small")
+        with g1:
+            st.plotly_chart(gauge_fig("CPI", cpi, cpi_status, cpi_color), use_container_width=True, key=f"evm_gauge_cpi_{evm_chart_sig}")
+        with g2:
+            st.plotly_chart(gauge_fig("SPI", spi, spi_status, spi_color), use_container_width=True, key=f"evm_gauge_spi_{evm_chart_sig}")
+    with variation_col:
+        st.markdown(
+            f"""
+            <div class="evm-panel-title">VARIACIONES</div>
+            <div class="evm-var-grid">{variation_cards_html}</div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with donut_col:
+        st.markdown('<div class="evm-panel-title">TIPO EC · COSTO REAL AC</div>', unsafe_allow_html=True)
+        d_chart, d_read = st.columns([0.9, 1.1], gap="small")
+        with d_chart:
+            st.plotly_chart(donut_fig, use_container_width=True, key=f"evm_donut_tipo_{evm_chart_sig}")
+        with d_read:
+            st.markdown(
+                f"""
+                <div class="evm-type-shell">
+                  <div class="evm-type-read">{html.escape(cost_type_read)}</div>
+                  <div class="evm-type-list">{type_rows_html}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    route_col, insights_col = st.columns([1.15, 1.0], gap="small")
+    with route_col:
+        st.markdown(
+            """
+            <div class="evm-panel evm-scale">
+              <div class="evm-panel-title">RUTA DE ESCALAMIENTO Y OBJETIVO 80 kW</div>
+              <div class="evm-flow">
+                <div class="evm-flow-card">Piloto 10 kW<small>validación técnica</small></div><div class="evm-flow-arrow">→</div>
+                <div class="evm-flow-card">Economías de escala<small>replicabilidad supply</small></div><div class="evm-flow-arrow">→</div>
+                <div class="evm-flow-card">Comercial 80 kW<small>objetivo industrial</small></div>
+              </div>
+              <div class="evm-scale-kpis">
+                <div><span>Reducción esperada costo</span><b>-51,7%</b></div>
+                <div><span>Costo objetivo 80 kW</span><b>$27,3 MM</b></div>
+                <div><span>Supply replicable</span><b>76,5%</b></div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with insights_col:
+        st.markdown(
+            f"""
+            <div class="evm-panel-title">INSIGHTS EJECUTIVOS</div>
+            <div class="evm-insights">{insights_html}</div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     st.markdown(
         """
-        <div class="evm-panel evm-scale">
-          <div class="evm-panel-title">RUTA DE ESCALAMIENTO Y OBJETIVO 80 kW</div>
-          <div class="evm-flow">
-            <div class="evm-flow-card">PILOTO<br>10 kW</div><div class="evm-flow-arrow">→</div>
-            <div class="evm-flow-card">ECONOMÍAS<br>DE ESCALA</div><div class="evm-flow-arrow">→</div>
-            <div class="evm-flow-card">COMERCIAL<br>80 kW</div>
-          </div>
-          <div class="evm-scale-kpis">
-            <div><span>Reducción esperada costo</span><b>-51,7%</b></div>
-            <div><span>Costo objetivo 80 kW</span><b>$27,3 MM</b></div>
-            <div><span>Supply replicable</span><b>76,5%</b></div>
-          </div>
-        </div>
         <div class="evm-notes">
-          Indicadores calculados con metodología Valor Ganado (EVM): CPI = EV / AC · SPI = EV / PV · CV = EV - AC · SV = EV - PV · EAC = Forecast al cierre · VAC = BAC - EAC.
+          Indicadores EVM: CPI = EV / AC · SPI = EV / PV · CV = EV - AC · SV = EV - PV · EAC = Forecast al cierre · VAC = BAC - EAC.
         </div>
         """,
         unsafe_allow_html=True,
@@ -5681,7 +5848,13 @@ def render_inputs_project_gantt():
                 etapa_default = next((etapa for etapa in etapa_options if "segunda" in str(etapa).casefold()), etapa_options[0] if etapa_options else "Todas")
                 if not etapa_options:
                     etapa_options = ["Todas"]
-                if "inputs_gantt_etapa" not in st.session_state:
+                etapa_saved = st.session_state.pop("inputs_gantt_etapa__sticky", None)
+                if isinstance(etapa_saved, str):
+                    etapa_saved = [] if etapa_saved == "Todas" else [etapa_saved]
+                if isinstance(etapa_saved, list):
+                    restored_etapas = [etapa for etapa in etapa_saved if etapa in etapa_options and etapa != "Todas"]
+                    st.session_state["inputs_gantt_etapa"] = restored_etapas
+                elif "inputs_gantt_etapa" not in st.session_state:
                     st.session_state["inputs_gantt_etapa"] = [etapa_default] if etapa_default in etapa_options else []
                 elif isinstance(st.session_state["inputs_gantt_etapa"], str):
                     etapa_value = st.session_state["inputs_gantt_etapa"]
@@ -5874,10 +6047,28 @@ def render_pilotos_ana_embedded_view() -> None:
             str(source_path),
             source_path.stat().st_mtime_ns,
         )
-        embedded_main = embedded_module.get("main")
-        if not callable(embedded_main):
-            raise ValueError("La aplicación original no expone una función main() ejecutable.")
-        embedded_main()
+        load_csv_fn = embedded_module.get("load_csv")
+        clean_schedule_fn = embedded_module.get("clean_schedule")
+        build_execution_fn = embedded_module.get("build_execution_validation_schedule")
+        render_board_fn = embedded_module.get("render_board_kpis")
+        render_release_fn = embedded_module.get("render_release_cutoff_intelligence")
+        csv_url = embedded_module.get("CSV_URL")
+        execution_url = embedded_module.get("EXECUTION_VALIDATION_URL")
+        if not all(callable(fn) for fn in (load_csv_fn, clean_schedule_fn, build_execution_fn, render_board_fn, render_release_fn)):
+            raise ValueError("El módulo integrado no expone las funciones necesarias de resumen y liberación.")
+
+        raw_df = load_csv_fn(csv_url)
+        df, _weekly_df = clean_schedule_fn(raw_df)
+        try:
+            raw_execution_validation = load_csv_fn(execution_url)
+            execution_schedule = build_execution_fn(raw_execution_validation, df)
+        except Exception:
+            execution_schedule = df.copy()
+        if execution_schedule.empty:
+            execution_schedule = df.copy()
+
+        render_board_fn(execution_schedule)
+        render_release_fn(execution_schedule)
     except Exception as exc:
         st.error(f"No se pudo cargar la ruta de ejecución y validación 10 kW: {exc}")
 
@@ -5889,19 +6080,49 @@ def render_capex10_available_funds_by_phase_line() -> None:
         st.warning(f"No se pudo cargar el detalle de fondos por fase y línea: {exc}")
         return
 
-    required_cols = {"Fase", "Línea", "Costo piloto"}
+    required_cols = {"Fase", "Línea", "Presupuesto Base (CLP)", "ETAPA", "Estado.1"}
     if df_gantt.empty or not required_cols.issubset(df_gantt.columns):
         return
 
+    etapa_values = (
+        df_gantt["ETAPA"]
+        .astype(str)
+        .str.strip()
+        .replace({"": np.nan, "nan": np.nan, "None": np.nan})
+        .dropna()
+        .drop_duplicates()
+        .tolist()
+    )
+    etapa_options = sorted(
+        etapa_values,
+        key=lambda value: (0 if "segunda" in str(value).casefold() else 1, str(value).casefold()),
+    )
+    if not etapa_options:
+        return
+    default_etapa_idx = next(
+        (idx for idx, value in enumerate(etapa_options) if "segunda" in str(value).casefold()),
+        0,
+    )
+    etapa_saved = st.session_state.pop("capex10_funds_etapa_selector__sticky", None)
+    if etapa_saved in etapa_options:
+        st.session_state["capex10_funds_etapa_selector"] = etapa_saved
+        default_etapa_idx = etapa_options.index(etapa_saved)
+    selected_etapa = st.selectbox(
+        "Etapa para fondos por ejecutar",
+        etapa_options,
+        index=default_etapa_idx,
+        key="capex10_funds_etapa_selector",
+        help="Filtra el cierre ejecutivo por la columna ETAPA y solo considera partidas No pagado.",
+    )
+
     funds_df = df_gantt.copy()
-    if "Piloto" in funds_df.columns:
-        piloto_mask = funds_df["Piloto"].astype(str).str.contains("10", case=False, na=False)
-        if piloto_mask.any():
-            funds_df = funds_df[piloto_mask].copy()
+    etapa_mask = funds_df["ETAPA"].astype(str).str.strip().eq(str(selected_etapa).strip())
+    unpaid_mask = funds_df["Estado.1"].astype(str).str.strip().str.casefold().eq("no pagado")
+    funds_df = funds_df[etapa_mask & unpaid_mask].copy()
 
     funds_df["Fase"] = funds_df["Fase"].astype(str).str.strip().replace({"": "Sin fase", "nan": "Sin fase", "None": "Sin fase"})
     funds_df["Línea"] = funds_df["Línea"].astype(str).str.strip().replace({"": "Sin línea", "nan": "Sin línea", "None": "Sin línea"})
-    funds_df["Disponible_CLP"] = funds_df["Costo piloto"].apply(parse_money_clp_robusto)
+    funds_df["Disponible_CLP"] = funds_df["Presupuesto Base (CLP)"].apply(parse_money_clp_robusto)
     funds_df = funds_df[funds_df["Disponible_CLP"] > 0].copy()
     if funds_df.empty:
         return
@@ -5934,9 +6155,17 @@ def render_capex10_available_funds_by_phase_line() -> None:
     st.markdown(
         f"""
         <style>
+        .capex10-funds-head,.capex10-funds-head *,
+        .capex10-table-wrap,.capex10-table-wrap *,
+        .capex10-lower-card-head,.capex10-lower-card-head *{{
+            box-sizing:border-box;
+            max-width:100%;
+        }}
         .capex10-funds-head{{
             position:relative;
             overflow:hidden;
+            width:100%;
+            max-width:100%;
             border:1px solid rgba(203,213,225,.82);
             border-radius:24px;
             background:#FFFFFF;
@@ -5946,13 +6175,18 @@ def render_capex10_available_funds_by_phase_line() -> None:
         }}
         .capex10-funds-grid{{
             display:grid;
-            grid-template-columns:minmax(0, 7fr) minmax(280px, 3fr);
+            grid-template-columns:minmax(0, 7fr) minmax(0, 3fr);
             min-height:284px;
+            width:100%;
+            max-width:100%;
+            overflow:hidden;
         }}
         .capex10-funds-left{{
             padding:28px 30px 26px 30px;
             position:relative;
             z-index:2;
+            min-width:0;
+            overflow:hidden;
         }}
         .capex10-funds-brand{{
             display:flex;
@@ -5997,13 +6231,16 @@ def render_capex10_available_funds_by_phase_line() -> None:
         }}
         .capex10-kpi-grid{{
             display:grid;
-            grid-template-columns:1.45fr .72fr .72fr minmax(260px, 1.25fr);
+            grid-template-columns:minmax(0,1.45fr) minmax(0,.72fr) minmax(0,.72fr) minmax(0,1.25fr);
             gap:12px;
             align-items:stretch;
             margin-top:24px;
+            width:100%;
+            max-width:100%;
         }}
         .capex10-kpi-card{{
             position:relative;
+            min-width:0;
             min-height:96px;
             border:1px solid rgba(203,213,225,.82);
             border-radius:18px;
@@ -6011,6 +6248,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
             padding:15px 16px;
             box-shadow:0 14px 30px rgba(15,23,42,.07);
             transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+            overflow:hidden;
         }}
         .capex10-kpi-card:hover{{
             transform:translateY(-2px);
@@ -6030,6 +6268,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
             align-items:center;
             gap:12px;
             min-width:0;
+            max-width:100%;
         }}
         .capex10-kpi-ico{{
             width:44px;
@@ -6056,6 +6295,8 @@ def render_capex10_available_funds_by_phase_line() -> None:
             color:#0F766E;
             margin:0;
             white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
         }}
         .capex10-kpi-main .capex10-kpi-value{{
             font-size:34px;
@@ -6067,12 +6308,14 @@ def render_capex10_available_funds_by_phase_line() -> None:
             color:#334155;
             font-weight:850;
             margin:7px 0 0 0;
+            overflow-wrap:anywhere;
         }}
         .capex10-kpi-note{{
             font-size:11px;
             line-height:1.32;
             color:#64748B;
             margin:6px 0 0 0;
+            overflow-wrap:anywhere;
         }}
         .capex10-kpi-badge{{
             display:inline-flex;
@@ -6100,11 +6343,14 @@ def render_capex10_available_funds_by_phase_line() -> None:
             font-size:17px;
             line-height:1.24;
             white-space:normal;
+            overflow-wrap:anywhere;
         }}
         .capex10-funds-art{{
             position:relative;
             min-height:284px;
             isolation:isolate;
+            min-width:0;
+            overflow:hidden;
             background:
                 radial-gradient(circle at 80% 16%, rgba(255,255,255,.56), transparent 24%),
                 linear-gradient(135deg,#E6FFFB 0%,#BDEFE7 38%,#0F766E 100%);
@@ -6388,7 +6634,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
         }}
         .capex10-dist-legend{{
             display:grid;
-            grid-template-columns:repeat(4, minmax(128px, 1fr));
+            grid-template-columns:repeat(4, minmax(0, 1fr));
             gap:7px 14px;
             align-items:center;
             margin:0 0 14px 0;
@@ -6404,6 +6650,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
             font-size:11px;
             line-height:1.18;
             font-weight:750;
+            overflow:hidden;
         }}
         .capex10-dist-legend-item span{{
             width:11px;
@@ -6420,11 +6667,14 @@ def render_capex10_available_funds_by_phase_line() -> None:
         .capex10-table-wrap{{
             border:1px solid rgba(226,232,240,.95);
             border-radius:14px;
-            overflow:hidden;
+            overflow:auto;
             background:#FFFFFF;
+            width:100%;
+            max-width:100%;
         }}
         .capex10-funds-table{{
             width:100%;
+            max-width:100%;
             border-collapse:collapse;
             table-layout:fixed;
             font-size:12px;
@@ -6453,7 +6703,8 @@ def render_capex10_available_funds_by_phase_line() -> None:
             line-height:1.25;
             overflow:hidden;
             text-overflow:ellipsis;
-            white-space:nowrap;
+            white-space:normal;
+            overflow-wrap:anywhere;
         }}
         .capex10-funds-table td:last-child{{border-right:0;}}
         .capex10-funds-table tr:nth-child(even) td{{background:#FBFDFF;}}
@@ -6540,7 +6791,184 @@ def render_capex10_available_funds_by_phase_line() -> None:
                 </div>
                 """,
                 unsafe_allow_html=True,
+            )
+
+
+def render_capex10_stage_line_detail_table() -> None:
+    try:
+        df_gantt = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+    except Exception as exc:
+        st.warning(f"No se pudo cargar el detalle completo por etapa y línea: {exc}")
+        return
+
+    required_cols = {
+        "ETAPA",
+        "Línea",
+        "Monto",
+        "Costo piloto",
+        "Costo comercial",
+        "Presupuesto Base (CLP)",
+        "Costo Real AC (CLP)",
+    }
+    if df_gantt.empty or not required_cols.issubset(df_gantt.columns):
+        return
+
+    detail_df = df_gantt.copy()
+    detail_df["Etapa"] = detail_df["ETAPA"].astype(str).str.strip().replace({"": "Sin etapa", "nan": "Sin etapa", "None": "Sin etapa"})
+    detail_df["Línea"] = detail_df["Línea"].astype(str).str.strip().replace({"": "Sin línea", "nan": "Sin línea", "None": "Sin línea"})
+    etapa_options = sorted(
+        detail_df["Etapa"].replace({"Sin etapa": np.nan}).dropna().drop_duplicates().tolist(),
+        key=lambda value: (0 if "primera" in str(value).casefold() else 1 if "segunda" in str(value).casefold() else 2, str(value).casefold()),
+    )
+    if etapa_options:
+        detail_etapa_saved = st.session_state.pop("capex10_stage_detail_etapa_selector__sticky", None)
+        if detail_etapa_saved in etapa_options:
+            st.session_state["capex10_stage_detail_etapa_selector"] = detail_etapa_saved
+        selected_detail_etapa = st.selectbox(
+            "Etapa para detalle completo",
+            etapa_options,
+            index=0,
+            key="capex10_stage_detail_etapa_selector",
+            help="Filtra la tabla ejecutiva por la columna ETAPA.",
         )
+        detail_df = detail_df[detail_df["Etapa"].eq(str(selected_detail_etapa).strip())].copy()
+        if detail_df.empty:
+            st.info("No hay registros para la etapa seleccionada.")
+            return
+
+    money_cols = {
+        "Monto_CLP": "Monto",
+        "Costo_piloto_CLP": "Costo piloto",
+        "Costo_eco_escala_CLP": "Costo comercial",
+        "Presupuesto_base_CLP": "Presupuesto Base (CLP)",
+        "Costo_real_CLP": "Costo Real AC (CLP)",
+    }
+    for new_col, source_col in money_cols.items():
+        detail_df[new_col] = detail_df[source_col].apply(parse_money_clp_robusto)
+
+    grouped = (
+        detail_df.groupby(["Etapa", "Línea"], as_index=False)
+        .agg(
+            Partidas=("Línea", "count"),
+            Monto_CLP=("Monto_CLP", "sum"),
+            Costo_piloto_CLP=("Costo_piloto_CLP", "sum"),
+            Costo_eco_escala_CLP=("Costo_eco_escala_CLP", "sum"),
+            Presupuesto_base_CLP=("Presupuesto_base_CLP", "sum"),
+            Costo_real_CLP=("Costo_real_CLP", "sum"),
+        )
+        .sort_values(["Etapa", "Presupuesto_base_CLP"], ascending=[True, False])
+    )
+    grouped = grouped[
+        (grouped["Monto_CLP"].abs() > 0)
+        | (grouped["Costo_piloto_CLP"].abs() > 0)
+        | (grouped["Costo_eco_escala_CLP"].abs() > 0)
+        | (grouped["Presupuesto_base_CLP"].abs() > 0)
+        | (grouped["Costo_real_CLP"].abs() > 0)
+    ].copy()
+    if grouped.empty:
+        return
+
+    total_monto = float(grouped["Monto_CLP"].sum())
+    total_piloto = float(grouped["Costo_piloto_CLP"].sum())
+    total_eco = float(grouped["Costo_eco_escala_CLP"].sum())
+    total_base = float(grouped["Presupuesto_base_CLP"].sum())
+    total_real = float(grouped["Costo_real_CLP"].sum())
+
+    rows_html = "".join(
+        textwrap.dedent(
+            f"""
+            <tr>
+              <td><span class="stage-chip">{html.escape(str(row["Etapa"]))}</span></td>
+              <td class="line-cell">{html.escape(str(row["Línea"]))}</td>
+              <td>{int(row["Partidas"])}</td>
+              <td>{format_clp(float(row["Monto_CLP"]))}</td>
+              <td>{format_clp(float(row["Costo_piloto_CLP"]))}</td>
+              <td>{format_clp(float(row["Costo_eco_escala_CLP"]))}</td>
+              <td>{format_clp(float(row["Presupuesto_base_CLP"]))}</td>
+              <td>{format_clp(float(row["Costo_real_CLP"]))}</td>
+            </tr>
+            """
+        ).strip()
+        for _, row in grouped.iterrows()
+    )
+    detail_html = textwrap.dedent(f"""
+        <style>
+        .capex10-stage-detail,.capex10-stage-detail *{{
+            box-sizing:border-box;
+            max-width:100%;
+        }}
+        .capex10-stage-detail{{
+            margin:22px 0 8px;
+            width:100%;
+            max-width:100%;
+            border:1px solid rgba(203,213,225,.82);
+            border-radius:24px;
+            background:radial-gradient(circle at 92% 8%,rgba(20,184,166,.12),transparent 26%),linear-gradient(135deg,#FFFFFF 0%,#F8FAFC 62%,#EEFDF9 100%);
+            box-shadow:0 22px 52px rgba(15,23,42,.085);
+            padding:22px 24px;
+            overflow:hidden;
+        }}
+        .capex10-stage-head{{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:16px;min-width:0;}}
+        .capex10-stage-k{{font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#0F766E;margin:0 0 6px;}}
+        .capex10-stage-title{{font-size:26px;line-height:1.05;font-weight:950;color:#071427;margin:0;}}
+        .capex10-stage-sub{{font-size:12px;line-height:1.35;color:#64748B;font-weight:760;margin:7px 0 0;max-width:780px;}}
+        .capex10-stage-total{{border-radius:18px;background:#071427;color:#FFFFFF;padding:13px 16px;min-width:0;width:min(260px,100%);text-align:right;box-shadow:0 16px 32px rgba(7,20,39,.14);}}
+        .capex10-stage-total span{{display:block;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;}}
+        .capex10-stage-total b{{display:block;font-size:24px;line-height:1;color:#7DD3C7;margin-top:6px;}}
+        .capex10-stage-scroll{{overflow:auto;border:1px solid #DDE8F2;border-radius:16px;background:#FFFFFF;max-height:520px;width:100%;max-width:100%;}}
+        .capex10-stage-table{{width:100%;min-width:980px;border-collapse:separate;border-spacing:0;font-size:11px;color:#071427;table-layout:fixed;}}
+        .capex10-stage-table th{{position:sticky;top:0;z-index:2;background:#F8FAFC;color:#334155;border-bottom:1px solid #DDE8F2;padding:12px 11px;text-align:right;font-size:10px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;}}
+        .capex10-stage-table th:first-child,.capex10-stage-table th:nth-child(2){{text-align:left;}}
+        .capex10-stage-table td{{padding:10px;border-bottom:1px solid #EEF2F7;text-align:right;font-weight:850;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;}}
+        .capex10-stage-table td:first-child,.capex10-stage-table td:nth-child(2){{text-align:left;}}
+        .capex10-stage-table tr:hover td{{background:#F8FAFC;}}
+        .stage-chip{{display:inline-flex;border-radius:999px;background:#E6FFFA;color:#0F766E;padding:5px 9px;font-size:10px;font-weight:950;white-space:normal;overflow-wrap:anywhere;}}
+        .line-cell{{font-weight:950;color:#0B1730;white-space:normal;min-width:0;}}
+        .capex10-stage-table tfoot td{{position:sticky;bottom:0;background:#071427;color:#FFFFFF;border-bottom:0;font-size:12px;font-weight:950;}}
+        .capex10-stage-table tfoot td.total-accent{{color:#7DD3C7;font-size:14px;}}
+        @media(max-width:900px){{.capex10-stage-head{{display:block;}}.capex10-stage-total{{text-align:left;margin-top:12px;}}}}
+        </style>
+        <div class="capex10-stage-detail">
+          <div class="capex10-stage-head">
+            <div>
+              <p class="capex10-stage-k">Detalle completo · etapa y línea</p>
+              <h3 class="capex10-stage-title">Composición financiera del cronograma</h3>
+              <p class="capex10-stage-sub">Resumen agrupado por etapa y línea con monto, costo piloto, costo eco escala, presupuesto base y costo real.</p>
+            </div>
+            <div class="capex10-stage-total"><span>Presupuesto base total</span><b>{format_clp(total_base)}</b></div>
+          </div>
+          <div class="capex10-stage-scroll">
+            <table class="capex10-stage-table">
+              <thead>
+                <tr>
+                  <th>Etapa</th>
+                  <th>Línea</th>
+                  <th>Partidas</th>
+                  <th>Monto</th>
+                  <th>Costo piloto</th>
+                  <th>Costo eco escala</th>
+                  <th>Presupuesto base</th>
+                  <th>Costo real AC</th>
+                </tr>
+              </thead>
+              <tbody>{rows_html}</tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="2">TOTAL</td>
+                  <td>{int(grouped["Partidas"].sum())}</td>
+                  <td>{format_clp(total_monto)}</td>
+                  <td>{format_clp(total_piloto)}</td>
+                  <td>{format_clp(total_eco)}</td>
+                  <td class="total-accent">{format_clp(total_base)}</td>
+                  <td>{format_clp(total_real)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+        """).strip()
+    detail_html = "\n".join(line.lstrip() for line in detail_html.splitlines())
+    st.markdown(detail_html, unsafe_allow_html=True)
 
 
 def render_capex10_executed_investment_scaling_80kw() -> None:
@@ -7467,25 +7895,23 @@ def render_inputs_capex_10kw_detail():
             render_inputs_project_gantt()
         return
 
-    st.markdown(
-        """
-        <div style="margin:16px 0 12px;padding:18px 20px;border:1px solid #DCE6EF;border-radius:18px;background:linear-gradient(135deg,#FFFFFF 0%,#F8FBFF 62%,#EEFDF9 100%);box-shadow:0 14px 32px rgba(15,23,42,.06);">
-          <div style="font-size:12px;font-weight:950;letter-spacing:.10em;text-transform:uppercase;color:#0F766E;margin-bottom:6px;">Etapas de Liberación de Capital</div>
-          <div style="font-size:18px;font-weight:950;color:#071427;line-height:1.16;">Panel de liberación cargado bajo demanda</div>
-          <div style="font-size:12px;color:#64748B;font-weight:750;line-height:1.35;margin-top:6px;">Este panel contiene vistas interactivas pesadas. Cargarlo solo cuando se necesite mejora la velocidad inicial del sub bloque.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    if st.button(
-        "Cargar Etapas de Liberación de Capital",
-        key="inputs_capex10_load_release_panel",
-        use_container_width=True,
-        type="secondary",
-    ):
-        st.session_state["inputs_capex10_release_panel_loaded"] = True
-    if st.session_state.get("inputs_capex10_release_panel_loaded", False):
-        render_pilotos_ana_embedded_view()
+    render_pilotos_ana_embedded_view()
+    render_capex10_available_funds_by_phase_line()
+    try:
+        df_gantt_costs = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+    except Exception as exc:
+        st.warning(f"No se pudo cargar el análisis de costos piloto vs comercial: {exc}")
+    else:
+        st.markdown(
+            """
+            <div style="clear:both;height:18px;"></div>
+            <div style="height:1px;background:rgba(226,232,240,.9);margin:0 0 14px 0;"></div>
+            """,
+            unsafe_allow_html=True,
+        )
+        render_inputs_gantt_cost_analysis(df_gantt_costs, scope_label="toda la hoja del cronograma")
+    render_capex10_stage_line_detail_table()
+    return
 
     st.markdown(
         f"""
@@ -8902,10 +9328,14 @@ if st.session_state.get("gantt_project_source_version") != GANTT_PROJECT_SOURCE_
     st.session_state["gantt_project_source_version"] = GANTT_PROJECT_SOURCE_VERSION
 if st.sidebar.button("🔁 Actualizar datos desde URL"):
     for key in (
+        "inputs_gantt_etapa",
         "inputs_gantt_fase",
         "inputs_gantt_linea",
         "inputs_gantt_estado",
         "inputs_gantt_mode",
+        "inputs_gantt_time_range",
+        "capex10_funds_etapa_selector",
+        "capex10_stage_detail_etapa_selector",
     ):
         if key in st.session_state:
             st.session_state[f"{key}__sticky"] = st.session_state[key]

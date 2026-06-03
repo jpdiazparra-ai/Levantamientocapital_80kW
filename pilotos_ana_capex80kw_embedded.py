@@ -2625,7 +2625,7 @@ def render_release_cutoff_intelligence(df: pd.DataFrame) -> None:
 
     detail_panels = "".join(
         f"""
-        <div class="release-panel {'active' if idx == 0 else ''}" data-panel="{idx}" style="--panel-color:{html.escape(str(panel['color']))};">
+        <div class="release-panel {'active expanded' if idx == 0 else ''}" data-panel="{idx}" style="--panel-color:{html.escape(str(panel['color']))};">
           <button class="panel-head" type="button">
             <div><b>Control operacional por área</b><small>{html.escape(str(panel["date"]))} · {html.escape(str(panel["thesis"]))}</small></div>
             <span>{money_mm(float(panel["total"]))} · {int(panel["partidas"])} partidas <i>⌄</i></span>
@@ -2682,7 +2682,7 @@ border-top:1px solid rgba(15,23,42,.10);border-radius:18px;padding:24px 28px 22p
     .release-panel.expanded .panel-head{{border-bottom:1px solid color-mix(in srgb,var(--panel-color) 34%,#C9D8E6);}}
     .release-panel.expanded .panel-head i{{transform:rotate(180deg);}}
     .release-list{{padding:12px;display:none;gap:8px;align-content:start;height:560px;overflow-y:scroll;overflow-x:auto;background:#FAFCFE;border-top:1px solid color-mix(in srgb,var(--panel-color) 34%,#C9D8E6);cursor:grab;user-select:none;scrollbar-color:color-mix(in srgb,var(--panel-color) 48%,#94A3B8) #E8EEF5;scrollbar-width:thin;}}
-    .release-panel.expanded .release-list{{display:grid;}}
+    .release-panel.active .release-list,.release-panel.expanded .release-list{{display:grid;}}
     .release-list.is-dragging{{cursor:grabbing;}}
     .release-list::-webkit-scrollbar{{width:10px;height:10px;}}
     .release-list::-webkit-scrollbar-track{{background:#E8EEF5;border-radius:999px;}}
@@ -2759,7 +2759,7 @@ border-top:1px solid rgba(15,23,42,.10);border-radius:18px;padding:24px 28px 22p
       root.querySelectorAll(".panel-head").forEach((head) => {{
         head.addEventListener("click", () => {{
           const panel = head.closest(".release-panel");
-          if (panel) panel.classList.toggle("expanded");
+          if (panel) panel.classList.add("expanded");
         }});
       }});
       root.querySelectorAll(".release-row").forEach((row) => {{
