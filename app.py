@@ -3909,7 +3909,7 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
     total_etc = float(evm_df["_etc"].sum())
     total_cv = float(total_ev - total_ac)
     total_sv = float(total_ev - total_pv)
-    total_vac = float(total_bac - total_eac)
+    total_vac = float(evm_df["_vac"].sum())
     cpi = total_ev / total_ac if total_ac else 0.0
     spi = total_ev / total_pv if total_pv else 0.0
     deviation_pct = (total_eac - total_bac) / total_bac if total_bac else 0.0
@@ -3922,6 +3922,9 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
 
     def money_display(value: float) -> str:
         return money_mm(value) if abs(float(value)) >= 1_000_000 else money_clp(value)
+
+    def money_kpi_display(value: float) -> str:
+        return f"${float(value) / 1_000_000:.1f} MM".replace(".", ",") if abs(float(value)) >= 1_000_000 else money_clp(value)
 
     def pct_fmt(value: float) -> str:
         return f"{float(value) * 100:.1f}%".replace(".", ",")
@@ -3980,10 +3983,10 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
 
     curve_fig = go.Figure()
     curve_series = [
-        ("PV Planificado", "_pv", "#64748B", "dash"),
-        ("EV Valor ganado", "_ev", "#0F766E", "solid"),
-        ("AC Costo real", "_ac", "#9F3A2D", "solid"),
-        ("EAC Forecast", "_eac", "#1F4E78", "dot"),
+        ("PV Planificado", "_pv", "#2D74B8", "dash"),
+        ("EV Valor ganado", "_ev", "#006B4A", "solid"),
+        ("AC Costo real", "_ac", "#D00000", "solid"),
+        ("EAC Forecast", "_eac", "#003B78", "dot"),
     ]
     for label, metric, color, dash in curve_series:
         curve_fig.add_trace(
@@ -3998,40 +4001,40 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
             )
         )
     curve_fig.update_layout(
-        height=260,
-        margin=dict(l=18, r=18, t=42, b=34),
-        title=dict(text="Curva S · Valor ganado, costo real y forecast", font=dict(size=15, color="#071427", family="Inter, sans-serif"), x=0.01, xanchor="left"),
-        plot_bgcolor="#FBFCFE",
+        height=310,
+        margin=dict(l=24, r=24, t=56, b=52),
+        title=dict(text="Curva S · Valor ganado, costo real y forecast", font=dict(size=20, color="#071427", family="Source Sans Pro, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"), x=0.01, xanchor="left"),
+        plot_bgcolor="#FFFFFF",
         paper_bgcolor="rgba(0,0,0,0)",
         hovermode="x unified",
-        legend=dict(orientation="h", y=1.12, x=0.01, font=dict(size=10, color="#334155"), bgcolor="rgba(255,255,255,.72)"),
-        xaxis=dict(title="", showgrid=False, tickfont=dict(size=9, color="#64748B"), zeroline=False),
-        yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", tickfont=dict(size=10, color="#64748B"), zeroline=False),
+        legend=dict(orientation="h", y=1.08, x=0.06, font=dict(size=11, color="#334155"), bgcolor="rgba(255,255,255,.86)"),
+        xaxis=dict(title="", showgrid=False, tickangle=-38, tickfont=dict(size=9, color="#475569"), zeroline=False),
+        yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.20)", tickfont=dict(size=11, color="#475569"), title_font=dict(size=13, color="#071427"), zeroline=False),
     )
 
     def gauge_fig(title: str, value: float, status: str, color: str) -> go.Figure:
         fig = go.Figure(
             go.Indicator(
                 mode="gauge+number",
-                value=max(0.7, min(1.3, value if value else 0.7)),
-                number={"valueformat": ".2f", "font": {"size": 26, "color": "#111827"}},
-                title={"text": f"<b>{title}</b><br><span style='font-size:11px;color:{color}'>{status}</span>", "font": {"size": 12}},
+                value=max(0, min(1.8, value if value else 0)),
+                number={"valueformat": ".2f", "font": {"size": 28, "color": "#071427"}},
+                title={"text": f"<b>{title} – ÍNDICE</b><br><span style='font-size:12px;color:{color}'>{status}</span>", "font": {"size": 12, "color": "#071427"}},
                 gauge={
-                    "axis": {"range": [0.7, 1.3], "tickwidth": 1, "tickcolor": "#0B1F3A"},
-                    "bar": {"color": "#333333", "thickness": 0.13},
+                    "axis": {"range": [0, 1.8], "tickwidth": 1, "tickcolor": "#071427", "tickfont": {"size": 10}},
+                    "bar": {"color": "#071427", "thickness": 0.12},
                     "bgcolor": "white",
                     "borderwidth": 1,
                     "bordercolor": "#D9E2EC",
                     "steps": [
-                        {"range": [0.7, 0.9], "color": "#F8D7DA"},
-                        {"range": [0.9, 1.0], "color": "#FFF2CC"},
-                        {"range": [1.0, 1.3], "color": "#DDEFD7"},
+                        {"range": [0, 0.8], "color": "#F8C7C7"},
+                        {"range": [0.8, 1.0], "color": "#FFF0B8"},
+                        {"range": [1.0, 1.8], "color": "#DDEFD7"},
                     ],
-                    "threshold": {"line": {"color": "#0B1F3A", "width": 3}, "thickness": 0.75, "value": 1.0},
+                    "threshold": {"line": {"color": "#071427", "width": 3}, "thickness": 0.75, "value": 1.0},
                 },
             )
         )
-        fig.update_layout(height=178, margin=dict(l=6, r=6, t=28, b=4), paper_bgcolor="rgba(0,0,0,0)")
+        fig.update_layout(height=198, margin=dict(l=8, r=8, t=38, b=8), paper_bgcolor="rgba(0,0,0,0)")
         return fig
 
     max_var = max(abs(total_cv), abs(total_sv), 1.0)
@@ -4067,24 +4070,65 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         .sum()
         .sort_values("_ac", ascending=False)
     )
-    donut_fig = px.pie(
-        type_df,
-        values="_ac",
-        names="_tipo",
-        hole=0.64,
-        color_discrete_sequence=["#315D7C", "#5F7F55", "#C9A84A", "#7A6A92", "#9AA6B2", "#B66A61"],
+    type_palette = ["#315D7C", "#5F7F55", "#C9A84A", "#7A6A92", "#9AA6B2", "#B66A61"]
+    type_total_ac = float(type_df["_ac"].sum() or 0.0)
+    type_df["_share"] = np.where(type_total_ac > 0, type_df["_ac"] / type_total_ac * 100.0, 0.0)
+    type_df["_color"] = [type_palette[idx % len(type_palette)] for idx in range(len(type_df))]
+    type_bar_df = type_df.sort_values("_ac", ascending=True).copy()
+    type_bar_df["_label"] = type_bar_df["_tipo"].apply(
+        lambda value: "<br>".join(textwrap.wrap(str(value), width=28, break_long_words=False))
     )
-    donut_fig.update_traces(
-        textinfo="percent",
-        textfont=dict(size=11, color="#FFFFFF"),
-        marker=dict(line=dict(color="#FFFFFF", width=2)),
-        hovertemplate="<b>%{label}</b><br>%{value:,.0f} CLP<br>%{percent}<extra></extra>",
+    type_bar_df["_amount_mm"] = type_bar_df["_ac"] / 1_000_000
+    type_bar_df["_bar_text"] = type_bar_df.apply(
+        lambda row: f"{money_display(float(row['_ac']))} · {float(row['_share']):.0f}%",
+        axis=1,
     )
-    donut_fig.update_layout(
-        height=188,
-        margin=dict(l=0, r=0, t=10, b=0),
-        showlegend=False,
+    type_bar_fig = go.Figure()
+    type_bar_fig.add_trace(
+        go.Bar(
+            x=type_bar_df["_amount_mm"],
+            y=type_bar_df["_label"],
+            orientation="h",
+            marker=dict(
+                color=type_bar_df["_color"],
+                line=dict(color="rgba(255,255,255,.92)", width=1.2),
+            ),
+            text=type_bar_df["_bar_text"],
+            textposition="auto",
+            insidetextanchor="middle",
+            textfont=dict(size=12, color="#071427"),
+            customdata=np.stack([type_bar_df["_tipo"], type_bar_df["_ac"], type_bar_df["_share"]], axis=-1),
+            hovertemplate="<b>%{customdata[0]}</b><br>Costo real AC: $%{customdata[1]:,.0f}<br>Participación: %{customdata[2]:.1f}%<extra></extra>",
+        )
+    )
+    type_bar_fig.update_layout(
+        height=max(310, min(430, 120 + len(type_bar_df) * 62)),
+        margin=dict(l=18, r=28, t=64, b=40),
+        title=dict(
+            text="Costo real AC por tipo EC",
+            font=dict(size=21, color="#071427", family="Source Sans Pro, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"),
+            x=0.01,
+            xanchor="left",
+        ),
+        font=dict(color="#4B5563", size=12),
+        plot_bgcolor="#FFFFFF",
         paper_bgcolor="rgba(0,0,0,0)",
+        showlegend=False,
+        xaxis=dict(
+            title="MM CLP",
+            ticksuffix=" MM",
+            gridcolor="rgba(148,163,184,.18)",
+            zeroline=False,
+            tickfont=dict(size=10, color="#64748B"),
+            title_font=dict(size=11, color="#64748B"),
+        ),
+        yaxis=dict(
+            title="",
+            showgrid=False,
+            tickfont=dict(size=11, color="#071427"),
+            automargin=True,
+        ),
+        bargap=0.32,
     )
 
     def kpi_card(title: str, value: str, note: str, color: str, icon: str, status: str = "") -> str:
@@ -4098,12 +4142,12 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
 
     kpis_html = "".join(
         [
-            kpi_card("PRESUPUESTO BASE (CLP)", money_display(total_bac), "Línea base aprobada", "#071427", "$"),
-            kpi_card("COSTO REAL AC (CLP)", money_display(total_ac), "Incurrido a la fecha", "#3F6F4A", "$"),
-            kpi_card("EV VALOR GANADO (CLP)", money_display(total_ev), "Valor ganado a la fecha", "#315D7C", "EV"),
+            kpi_card("PRESUPUESTO BASE (CLP)", money_kpi_display(total_bac), "Línea base aprobada", "#071427", "$"),
+            kpi_card("COSTO REAL AC (CLP)", money_kpi_display(total_ac), "Incurrido a la fecha", "#3F6F4A", "$"),
+            kpi_card("EV VALOR GANADO (CLP)", money_kpi_display(total_ev), "Valor ganado a la fecha", "#315D7C", "EV"),
             kpi_card("CPI ÍNDICE COSTO", idx_fmt(cpi), cpi_note, cpi_color, "CPI", cpi_status),
             kpi_card("SPI ÍNDICE PLAZO", idx_fmt(spi), spi_note, spi_color, "SPI", spi_status),
-            kpi_card("FORECAST EAC (CLP)", money_display(total_eac), "Estimación al cierre", "#18324A", "↗"),
+            kpi_card("FORECAST EAC (CLP)", money_kpi_display(total_eac), "Estimación al cierre", "#18324A", "↗"),
         ]
     )
 
@@ -4162,16 +4206,71 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         cost_type_read = f"{dominant_types[0]} concentra el mayor costo real AC."
     else:
         cost_type_read = "Sin distribución de costo real AC disponible."
-    type_total_ac = float(type_df["_ac"].sum() or 0.0)
     type_rows_html = "".join(
         f"""
-        <div class="evm-type-row">
-          <span>{html.escape(str(row['_tipo']))}</span>
-          <b>{html.escape(money_display(float(row['_ac'])))}</b>
-          <i>{(float(row['_ac']) / type_total_ac * 100.0 if type_total_ac else 0):.0f}%</i>
+        <div class="evm-type-row" style="--type-color:{row['_color']};--type-share:{min(100.0, max(0.0, float(row['_share']))):.4f}%;">
+          <span class="evm-type-dot"></span>
+          <div class="evm-type-copy">
+            <b>{html.escape(str(row['_tipo']))}</b>
+            <small>{html.escape(money_display(float(row['_ac'])))}</small>
+          </div>
+          <strong>{float(row['_share']):.0f}%</strong>
+          <i><em></em></i>
         </div>
         """
-        for _, row in type_df.head(4).iterrows()
+        for _, row in type_df.head(5).iterrows()
+    )
+    type_top = type_df.iloc[0] if not type_df.empty else None
+    type_second = type_df.iloc[1] if len(type_df) > 1 else None
+    top_share = float(type_top["_share"]) if type_top is not None else 0.0
+    score_color = "#E87513" if top_share >= 70 else "#B7791F" if top_share >= 45 else "#0F766E"
+    score_label = "Concentración alta" if top_share >= 70 else "Concentración media" if top_share >= 45 else "Distribución balanceada"
+    type_quick_cards = [
+        (
+            "Mayor costo",
+            str(type_top["_tipo"]) if type_top is not None else "-",
+            money_display(float(type_top["_ac"])) if type_top is not None else "$0",
+            "↗",
+            "#DCFCE7",
+            "#166534",
+        ),
+        (
+            "Segundo costo",
+            str(type_second["_tipo"]) if type_second is not None else "-",
+            money_display(float(type_second["_ac"])) if type_second is not None else "$0",
+            "↘",
+            "#E0E7FF",
+            "#315D7C",
+        ),
+        (
+            "AC total",
+            "Filtro activo",
+            money_display(type_total_ac),
+            "=",
+            "#FEF3C7",
+            "#B7791F",
+        ),
+        (
+            "Categorías",
+            "Tipos EC visibles",
+            str(int(len(type_df))),
+            "%",
+            "#FEE2E2" if top_share >= 70 else "#E6FFFA",
+            "#C00000" if top_share >= 70 else "#0F766E",
+        ),
+    ]
+    type_quick_cards_html = "".join(
+        f"""
+        <div class="evm-type-quick-card">
+          <div class="evm-type-quick-icon" style="background:{icon_bg};color:{icon_color};">{html.escape(icon)}</div>
+          <div>
+            <span>{html.escape(kicker)}</span>
+            <b>{html.escape(title)}</b>
+            <strong>{html.escape(value)}</strong>
+          </div>
+        </div>
+        """
+        for kicker, title, value, icon, icon_bg, icon_color in type_quick_cards
     )
 
     eac_color = "#C00000" if total_eac > total_bac else "#548235"
@@ -4199,146 +4298,190 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         recent_df = evm_df.sort_values("_axis_date") if "_axis_date" in evm_df.columns and evm_df["_axis_date"].notna().any() else evm_df
         current_phase = str(recent_df[fase_col].dropna().astype(str).iloc[-1]) if recent_df[fase_col].dropna().size else "Ejecución"
     cut_date = cutoff_ts.strftime("%d-%m-%Y")
+    scope_parts = []
+    for label, col in [
+        ("etapa", find_col(["ETAPA", "Etapa"])),
+        ("fase", find_col(["Fase"])),
+        ("línea", find_col(["Línea"])),
+        ("estado", col_map.get("estado")),
+    ]:
+        if not col or col not in evm_df.columns:
+            continue
+        values = [
+            str(val).strip()
+            for val in evm_df[col].dropna().astype(str).tolist()
+            if str(val).strip() and str(val).strip().lower() not in {"nan", "none", "-", "—"}
+        ]
+        unique_values = list(dict.fromkeys(values))
+        if len(unique_values) == 1:
+            scope_parts.append(f"{label}: {unique_values[0]}")
+        elif 1 < len(unique_values) <= 2:
+            scope_parts.append(f"{label}: {' + '.join(unique_values)}")
+        elif len(unique_values) > 2:
+            scope_parts.append(f"{label}: {len(unique_values)} selecciones")
+    scope_text = "; ".join(scope_parts[:4]) if scope_parts else "la selección activa de los filtros"
+    evaluation_subtitle = (
+        f"Evaluación de {scope_text}. Indicadores PMO recalculados según los selectores activos y la fecha de corte."
+    )
 
     st.markdown(
         f"""
         <style>
-        .evm-dashboard,.evm-dashboard *,.evm-panel,.evm-panel *,.evm-side-title,.evm-side-card,.evm-side-card *,.evm-notes{{box-sizing:border-box;max-width:100%;}}
-        .evm-dashboard{{width:100%;font-family:inherit;color:#071427;position:relative;overflow:hidden;border-radius:26px;background:radial-gradient(circle at 92% 8%,rgba(20,184,166,.13),transparent 27%),linear-gradient(135deg,#FFFFFF 0%,#F8FAFC 55%,#EEFDF9 100%);box-shadow:0 24px 58px rgba(15,23,42,.10);padding:22px 24px 18px;margin:22px 0 14px;border:1px solid rgba(203,213,225,.82);}}
-        .evm-head{{width:100%;display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:15px;overflow:hidden;}}
-        .evm-titlebox{{min-width:0;overflow:hidden;flex:1;}}.evm-titlebox .evm-kicker{{font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#0F766E;margin:0 0 6px;}}.evm-titlebox h2{{margin:0;color:#071427;font-size:clamp(24px,1.95vw,32px);line-height:1.04;font-weight:950;letter-spacing:.01em;overflow-wrap:anywhere;}}.evm-titlebox p{{margin:8px 0 0;color:#64748B;font-size:13px;line-height:1.38;font-weight:760;overflow-wrap:anywhere;}}
-        .evm-meta{{flex:0 0 250px;min-width:0;display:grid;gap:8px;background:rgba(255,255,255,.72);border:1px solid rgba(203,213,225,.75);border-radius:18px;padding:12px 14px;font-size:11px;font-weight:900;overflow:hidden;box-shadow:0 12px 28px rgba(15,23,42,.055);}}.evm-meta div{{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1fr);gap:8px;min-width:0;}}.evm-meta span{{color:#64748B;overflow-wrap:anywhere;}}.evm-meta b{{color:#071427;text-align:left;overflow-wrap:anywhere;line-height:1.25;}}
-        .evm-kpi-grid{{width:100%;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;padding:14px;overflow:hidden;}}
-        .evm-kpi{{min-width:0;position:relative;overflow:hidden;min-height:126px;border-radius:16px;background:linear-gradient(145deg,var(--accent),color-mix(in srgb,var(--accent) 78%,#111827));color:#FFFFFF;padding:12px 11px 34px;box-shadow:0 13px 24px rgba(15,23,42,.10);}}
-        .evm-kpi-title{{font-size:clamp(10px,.78vw,13px);line-height:1.18;font-weight:950;text-align:center;text-transform:uppercase;min-height:31px;overflow-wrap:anywhere;}}
-        .evm-kpi-body{{display:grid;grid-template-columns:42px minmax(0,1fr);gap:9px;align-items:center;margin-top:8px;min-width:0;}}.evm-kpi-icon{{width:40px;height:40px;border:3px solid rgba(255,255,255,.85);border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:clamp(14px,.95vw,18px);font-weight:950;}}
-        .evm-kpi b{{display:block;font-size:clamp(18px,1.35vw,26px);line-height:1.05;font-weight:950;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}.evm-kpi span{{display:block;margin-top:8px;font-size:clamp(10px,.74vw,12px);font-weight:850;color:#F8FAFC;line-height:1.24;overflow-wrap:anywhere;}}
-        .evm-kpi-status{{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.18);padding:7px 10px;text-align:center;font-size:13px;font-weight:950;}}
+        .evm-dashboard,.evm-dashboard *,.evm-panel,.evm-panel *,.evm-side-title,.evm-side-card,.evm-side-card *,.evm-type-shell,.evm-type-shell *,.evm-notes{{box-sizing:border-box;max-width:100%;}}
+        .evm-dashboard{{width:100%;font-family:inherit;color:#071427;position:relative;overflow:hidden;border-radius:0;background:#FFFFFF;padding:22px 20px 8px;margin:8px 0 8px;border:0;box-shadow:none;}}
+        .evm-head{{width:100%;display:grid;grid-template-columns:70px minmax(520px,1fr) minmax(270px,330px) minmax(190px,240px);align-items:start;gap:16px;margin-bottom:18px;overflow:hidden;}}
+        .evm-hero-icon{{width:60px;height:60px;border-radius:13px;background:linear-gradient(145deg,#007F9E 0%,#00315E 100%);display:flex;align-items:center;justify-content:center;color:#FFFFFF;box-shadow:0 14px 30px rgba(0,49,94,.18);}}
+        .evm-hero-icon svg{{width:42px;height:42px;}}
+        .evm-titlebox{{min-width:0;overflow:hidden;flex:1;}}.evm-titlebox .evm-kicker{{display:none;}}.evm-titlebox h2{{margin:0;color:#071427;font-size:clamp(26px,2.05vw,34px);line-height:1.04;font-weight:950;letter-spacing:0;overflow-wrap:anywhere;}}.evm-titlebox p{{margin:10px 0 0;color:#334155;font-size:13px;line-height:1.42;font-weight:760;overflow-wrap:anywhere;max-width:980px;}}
+        .evm-meta{{min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:0;background:#FFFFFF;border:1px solid rgba(226,232,240,.96);border-radius:14px;padding:13px 15px;font-size:12px;font-weight:900;overflow:hidden;box-shadow:0 16px 34px rgba(15,23,42,.08);}}
+        .evm-meta div{{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:start;min-width:0;}}
+        .evm-meta div:not(:first-child){{display:none;}}
+        .evm-meta span{{color:#071427;font-size:11px;font-weight:950;text-transform:uppercase;overflow-wrap:anywhere;}}.evm-meta b{{color:#071427;text-align:left;overflow-wrap:anywhere;line-height:1.25;font-size:12px;}}
+        .evm-meta div::before{{content:"";width:28px;height:28px;border-radius:8px;border:2px solid #071427;display:block;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);}}
+        .evm-update{{min-width:0;display:grid;gap:14px;justify-items:end;align-content:start;color:#334155;font-size:11px;font-weight:800;}}
+        .evm-update-card{{width:100%;border:1px solid rgba(226,232,240,.96);border-radius:14px;background:#FFFFFF;box-shadow:0 16px 34px rgba(15,23,42,.08);padding:15px 16px;display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;align-items:center;}}
+        .evm-update-card i{{width:31px;height:31px;border:2px solid #071427;border-radius:999px;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:950;font-size:20px;}}
+        .evm-update-card span{{display:block;color:#071427;font-size:11px;font-weight:950;text-transform:uppercase;}}
+        .evm-update-card b{{display:block;color:#071427;font-size:13px;font-weight:850;}}
+        .evm-update-date{{font-size:11px;color:#475569;font-weight:800;}}
+        .evm-divider{{height:1px;background:#DDE6EF;margin:0 0 22px;}}
+        .evm-kpi-grid{{width:100%;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;padding:0;overflow:hidden;}}
+        .evm-kpi{{min-width:0;position:relative;overflow:hidden;min-height:118px;border-radius:13px;background:linear-gradient(145deg,var(--accent),color-mix(in srgb,var(--accent) 70%,#031B33));color:#FFFFFF;padding:14px 13px 32px;box-shadow:0 12px 22px rgba(15,23,42,.14);border:1px solid rgba(255,255,255,.30);}}
+        .evm-kpi-title{{font-size:10.5px;line-height:1.16;font-weight:950;text-align:center;text-transform:uppercase;min-height:25px;overflow-wrap:anywhere;}}
+        .evm-kpi-body{{display:grid;grid-template-columns:42px minmax(0,1fr);gap:10px;align-items:center;margin-top:10px;min-width:0;}}.evm-kpi-icon{{width:40px;height:40px;border:2.5px solid rgba(255,255,255,.92);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:950;}}
+        .evm-kpi b{{display:block;font-size:clamp(17px,1.22vw,22px);line-height:1.02;font-weight:950;white-space:nowrap;overflow:visible;text-overflow:clip;letter-spacing:0;}}.evm-kpi span{{display:block;margin-top:6px;font-size:10.5px;font-weight:850;color:#FFFFFF;line-height:1.18;overflow-wrap:anywhere;}}
+        .evm-kpi-status{{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.22);padding:6px 9px;text-align:center;font-size:12px;font-weight:950;}}
         .evm-main{{width:100%;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;padding:0 14px 14px;overflow:hidden;}}
         .evm-center{{display:grid;gap:12px;min-width:0;}}.evm-row{{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.98fr);gap:12px;}}
         .evm-panel{{width:100%;background:rgba(255,255,255,.82);border:1px solid rgba(203,213,225,.75);border-radius:18px;box-shadow:0 12px 28px rgba(15,23,42,.055);overflow:hidden;min-width:0;}}
-        .evm-panel.pad{{padding:12px;}}.evm-panel-title{{font-size:12px;font-weight:950;color:#071427;text-align:left;margin:0 0 8px;text-transform:uppercase;letter-spacing:.08em;}}
+        .evm-panel.pad{{padding:12px;}}.evm-panel-title{{width:100%;max-width:100%;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:950;color:#071427;text-align:left;margin:0 0 6px;text-transform:uppercase;letter-spacing:.08em;overflow-wrap:anywhere;}}
         .evm-gauge-grid{{display:grid;grid-template-columns:1fr 1fr;gap:0;}}.evm-gauge-grid>div:first-child{{border-right:1px solid #D8E2EC;}}
         .evm-side{{display:grid;gap:10px;align-content:start;}}.evm-side-title{{background:rgba(255,255,255,.82);border:1px solid rgba(203,213,225,.75);border-radius:16px;padding:11px 12px;text-align:left;color:#071427;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:950;box-shadow:0 10px 22px rgba(15,23,42,.045);}}
         .evm-side-card{{width:100%;overflow:hidden;background:rgba(255,255,255,.84);border:1px solid rgba(203,213,225,.76);border-left:5px solid var(--accent);border-radius:14px;padding:13px 14px;box-shadow:0 10px 22px rgba(15,23,42,.04);}}.evm-side-card span{{display:block;color:#071427;font-size:11px;line-height:1.22;font-weight:950;overflow-wrap:anywhere;}}.evm-side-card b{{display:block;color:var(--accent);font-size:clamp(17px,1.22vw,22px);line-height:1.05;margin:8px 0 5px;font-weight:950;overflow-wrap:anywhere;}}.evm-side-card small{{display:block;color:#475569;font-size:11px;line-height:1.25;font-weight:750;overflow-wrap:anywhere;}}
         .evm-summary-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}}
         .evm-summary-grid .evm-side-card{{padding:10px 11px;border-radius:11px;min-height:77px;box-shadow:none;}}
         .evm-summary-grid .evm-side-card b{{font-size:clamp(15px,1.05vw,19px);margin:6px 0 4px;}}
-        .evm-var-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}}
-        .evm-var-card{{min-width:0;overflow:hidden;border-radius:18px;border:1px solid color-mix(in srgb,var(--accent) 26%,#D8E2EC);background:linear-gradient(135deg,rgba(255,255,255,.88),color-mix(in srgb,var(--accent) 6%,#FFFFFF));border-left:6px solid var(--accent);padding:18px 15px;box-shadow:0 12px 24px rgba(15,23,42,.055);}}
-        .evm-var-card span{{display:block;color:#0B1F3A;font-size:12px;font-weight:950;text-transform:uppercase;overflow-wrap:anywhere;}}
-        .evm-var-card b{{display:block;color:var(--accent);font-size:clamp(24px,2vw,34px);line-height:1;margin:10px 0 7px;font-weight:950;overflow-wrap:anywhere;}}
-        .evm-var-card small{{display:block;color:#475569;font-size:12px;font-weight:800;line-height:1.25;overflow-wrap:anywhere;}}
-        .evm-type-shell{{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1fr);gap:10px;align-items:center;overflow:hidden;}}
-        .evm-type-read{{border-radius:15px;background:linear-gradient(135deg,#F8FAFC,#EEFDF9);border:1px solid rgba(203,213,225,.86);color:#071427;padding:11px 12px;font-size:12px;font-weight:850;line-height:1.28;overflow-wrap:anywhere;}}
-        .evm-type-list{{display:grid;gap:6px;}}
-        .evm-type-row{{display:grid;grid-template-columns:minmax(0,1fr) auto 38px;gap:8px;align-items:center;border-radius:10px;background:#FFFFFF;border:1px solid rgba(203,213,225,.78);padding:8px 9px;overflow:hidden;}}
-        .evm-type-row span{{font-size:11px;color:#071427;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}}
-        .evm-type-row b{{font-size:11px;color:#315D7C;font-weight:950;white-space:nowrap;}}
-        .evm-type-row i{{font-style:normal;font-size:10px;color:#64748B;font-weight:950;text-align:right;}}
-        .evm-scale{{width:100%;display:grid;grid-template-columns:minmax(0,1fr);gap:13px;padding:15px;overflow:hidden;background:radial-gradient(circle at 95% 0%,rgba(20,184,166,.12),transparent 32%),linear-gradient(135deg,rgba(255,255,255,.92),#F8FAFC);}}
+        .evm-var-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;overflow:hidden;}}
+        .evm-var-card{{min-width:0;width:100%;overflow:hidden;border-radius:16px;border:1px solid color-mix(in srgb,var(--accent) 26%,#D8E2EC);background:linear-gradient(135deg,rgba(255,255,255,.88),color-mix(in srgb,var(--accent) 6%,#FFFFFF));border-left:6px solid var(--accent);padding:15px 13px;box-shadow:0 10px 20px rgba(15,23,42,.05);}}
+        .evm-var-card span{{display:block;color:#0B1F3A;font-size:11px;line-height:1.14;font-weight:950;text-transform:uppercase;overflow-wrap:anywhere;}}
+        .evm-var-card b{{display:block;color:var(--accent);font-size:clamp(21px,1.75vw,29px);line-height:1;margin:8px 0 6px;font-weight:950;overflow-wrap:anywhere;}}
+        .evm-var-card small{{display:block;color:#475569;font-size:11px;font-weight:800;line-height:1.22;overflow-wrap:anywhere;}}
+        .evm-type-shell{{width:100%;display:grid;grid-template-columns:minmax(0,1fr);gap:7px;overflow:hidden;border:1px solid rgba(203,213,225,.78);border-radius:15px;background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);padding:8px;box-shadow:0 8px 18px rgba(15,23,42,.035);}}
+        .evm-type-read{{border-radius:12px;background:linear-gradient(135deg,#F8FAFC,#EEFDF9);border:1px solid rgba(203,213,225,.86);color:#071427;padding:8px 10px;font-size:11px;font-weight:900;line-height:1.22;overflow-wrap:anywhere;}}
+        .evm-type-list{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;overflow:hidden;padding:0;}}
+        .evm-type-row{{display:grid;grid-template-columns:12px minmax(0,1fr) 44px;grid-template-rows:auto 4px;gap:4px 8px;align-items:center;border-radius:11px;background:#FFFFFF;border:1px solid rgba(203,213,225,.78);padding:8px 9px 7px;overflow:hidden;}}
+        .evm-type-dot{{width:11px;height:11px;border-radius:999px;background:var(--type-color);box-shadow:0 0 0 4px color-mix(in srgb,var(--type-color) 14%,#FFFFFF);}}
+        .evm-type-copy{{min-width:0;display:grid;gap:2px;}}
+        .evm-type-copy b{{display:block;font-size:10.5px;line-height:1.12;color:#071427;font-weight:950;overflow-wrap:anywhere;}}
+        .evm-type-copy small{{display:block;font-size:9.5px;line-height:1.08;color:#315D7C;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
+        .evm-type-row strong{{font-size:11.5px;color:#64748B;font-weight:950;text-align:right;white-space:nowrap;}}
+        .evm-type-row i{{grid-column:2 / 4;position:relative;display:block;height:4px;border-radius:999px;background:#E7EDF3;overflow:hidden;}}
+        .evm-type-row i em{{display:block;height:100%;width:var(--type-share);border-radius:999px;background:var(--type-color);}}
+        .evm-type-board{{width:100%;overflow:hidden;border:1px solid rgba(203,213,225,.82);border-radius:18px;background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);padding:10px 12px 12px;box-shadow:0 10px 22px rgba(15,23,42,.04);}}
+        .evm-type-pro-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin:0 0 8px 0;}}
+        .evm-type-pro-head h3{{margin:0;color:#071427;font-size:19px;line-height:1.08;font-weight:950;overflow-wrap:anywhere;}}
+        .evm-type-pro-head p{{margin:5px 0 0;color:#64748B;font-size:12px;line-height:1.32;font-weight:800;overflow-wrap:anywhere;}}
+        .evm-type-pro-pill{{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:#F3F6FA;border:1px solid rgba(203,213,225,.86);color:#315D7C;padding:8px 11px;font-size:11px;font-weight:950;white-space:nowrap;}}
+        .evm-type-quick{{width:100%;height:100%;display:grid;gap:10px;border:1px solid rgba(203,213,225,.82);border-radius:22px;background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);padding:14px;box-shadow:0 18px 38px rgba(15,23,42,.06);overflow:hidden;}}
+        .evm-type-quick-title{{color:#071427;font-size:16px;font-weight:950;line-height:1.08;margin:0 0 2px 0;overflow-wrap:anywhere;}}
+        .evm-type-score{{border:1px solid rgba(203,213,225,.82);border-radius:17px;background:#FFFFFF;padding:13px 12px;text-align:center;overflow:hidden;}}
+        .evm-type-score span{{display:block;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;}}
+        .evm-type-score-main{{display:grid;grid-template-columns:80px minmax(0,1fr);align-items:center;gap:12px;margin-top:8px;text-align:left;}}
+        .evm-type-score-gauge{{width:76px;height:76px;border-radius:999px;background:conic-gradient(var(--score-color) var(--score),#E8EDF5 0);position:relative;}}
+        .evm-type-score-gauge::after{{content:"";position:absolute;inset:10px;border-radius:999px;background:#FFFFFF;}}
+        .evm-type-score-main b{{display:block;color:#071427;font-size:28px;line-height:1;font-weight:950;white-space:nowrap;}}
+        .evm-type-score-main small{{display:inline-flex;margin-top:8px;border-radius:999px;background:#FFF4E5;color:#E87513;padding:6px 10px;font-size:11px;font-weight:950;overflow-wrap:anywhere;}}
+        .evm-type-quick-card{{display:grid;grid-template-columns:42px minmax(0,1fr);gap:11px;align-items:center;border:1px solid rgba(203,213,225,.82);border-radius:17px;background:#FFFFFF;padding:12px;overflow:hidden;}}
+        .evm-type-quick-icon{{width:36px;height:36px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:950;}}
+        .evm-type-quick-card span{{display:block;color:#64748B;font-size:11px;font-weight:950;line-height:1.1;overflow-wrap:anywhere;}}
+        .evm-type-quick-card b{{display:block;color:#071427;font-size:13px;font-weight:950;line-height:1.15;margin:3px 0;overflow-wrap:anywhere;}}
+        .evm-type-quick-card strong{{display:block;color:#071427;font-size:15px;font-weight:950;line-height:1.1;overflow-wrap:anywhere;}}
+        .evm-scale{{width:100%;display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding:12px;overflow:hidden;background:radial-gradient(circle at 95% 0%,rgba(20,184,166,.12),transparent 32%),linear-gradient(135deg,rgba(255,255,255,.92),#F8FAFC);}}
         .evm-flow{{display:grid;grid-template-columns:minmax(0,1fr) 30px minmax(0,1fr) 30px minmax(0,1fr);align-items:stretch;gap:8px;text-align:center;}}
-        .evm-flow-card{{position:relative;border:1px solid rgba(203,213,225,.82);border-radius:16px;padding:15px 11px;background:#FFFFFF;color:#071427;font-weight:950;overflow:hidden;box-shadow:0 10px 20px rgba(15,23,42,.035);}}
+        .evm-flow-card{{position:relative;border:1px solid rgba(203,213,225,.82);border-radius:14px;padding:12px 10px;background:#FFFFFF;color:#071427;font-weight:950;overflow:hidden;box-shadow:0 8px 16px rgba(15,23,42,.03);overflow-wrap:anywhere;}}
         .evm-flow-card small{{display:block;color:#64748B;font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.05em;margin-top:4px;}}
         .evm-flow-card::before{{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#0F766E;opacity:.72;}}
         .evm-flow-arrow{{display:flex;align-items:center;justify-content:center;font-size:23px;color:#315D7C;font-weight:950;}}
         .evm-scale-kpis{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}}
-        .evm-scale-kpis div{{min-width:0;border:1px solid rgba(203,213,225,.82);border-radius:13px;background:#FFFFFF;padding:12px 10px;text-align:center;overflow:hidden;box-shadow:0 10px 18px rgba(15,23,42,.035);}}
+        .evm-scale-kpis div{{min-width:0;border:1px solid rgba(203,213,225,.82);border-radius:12px;background:#FFFFFF;padding:10px 8px;text-align:center;overflow:hidden;box-shadow:0 8px 16px rgba(15,23,42,.03);}}
         .evm-scale-kpis span{{display:block;font-size:9px;color:#64748B;font-weight:950;text-transform:uppercase;overflow-wrap:anywhere;}}
         .evm-scale-kpis b{{display:block;color:#0F766E;font-size:clamp(18px,1.35vw,24px);font-weight:950;margin-top:5px;white-space:nowrap;}}
         .evm-insights{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}}
-        .evm-insight{{position:relative;border-radius:16px;background:#FFFFFF;border:1px solid rgba(203,213,225,.80);padding:14px 14px 14px 42px;box-shadow:0 10px 22px rgba(15,23,42,.045);min-height:86px;overflow:hidden;}}
-        .evm-insight::before{{content:"";position:absolute;left:14px;top:16px;width:15px;height:15px;border-radius:999px;background:var(--insight-color,#0F766E);box-shadow:0 0 0 6px color-mix(in srgb,var(--insight-color,#0F766E) 14%,#FFFFFF);}}
+        .evm-insight{{position:relative;border-radius:15px;background:#FFFFFF;border:1px solid rgba(203,213,225,.80);padding:12px 12px 12px 38px;box-shadow:0 8px 18px rgba(15,23,42,.04);min-height:78px;overflow:hidden;}}
+        .evm-insight::before{{content:"";position:absolute;left:13px;top:15px;width:13px;height:13px;border-radius:999px;background:var(--insight-color,#0F766E);box-shadow:0 0 0 6px color-mix(in srgb,var(--insight-color,#0F766E) 14%,#FFFFFF);}}
         .evm-insight b{{display:block;color:#0B1F3A;font-size:13px;font-weight:950;margin-bottom:6px;overflow-wrap:anywhere;}}
         .evm-insight span{{display:block;color:#475569;font-size:12px;line-height:1.32;font-weight:780;overflow-wrap:anywhere;}}
         .evm-notes{{padding:10px 16px 14px;color:#0B1F3A;font-size:11px;font-weight:750;line-height:1.4;background:#FFFFFF;border-top:1px solid #D8E2EC;}}
+        .evm-chart-marker,.evm-panel-marker{{display:none;}}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.evm-chart-marker){{
+            border:1px solid rgba(226,232,240,.96)!important;border-radius:18px!important;background:#FFFFFF!important;
+            box-shadow:0 12px 30px rgba(15,23,42,.07)!important;padding:16px 18px 8px!important;margin:14px 0 16px!important;
+            overflow:hidden!important;max-width:100%!important;
+        }}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.evm-panel-marker){{
+            border:1px solid rgba(226,232,240,.96)!important;border-radius:16px!important;background:#FFFFFF!important;
+            box-shadow:0 10px 24px rgba(15,23,42,.06)!important;padding:13px 14px!important;overflow:hidden!important;max-width:100%!important;
+        }}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.evm-panel-marker) div[data-testid="stVerticalBlock"]{{gap:.45rem!important;}}
         @media(max-width:1450px){{.evm-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.evm-main{{grid-template-columns:1fr;}}.evm-side{{grid-template-columns:repeat(2,minmax(0,1fr));}}.evm-side-title{{grid-column:1/-1;}}}}
-        @media(max-width:1180px){{.evm-head{{display:grid;grid-template-columns:minmax(0,1fr);}}.evm-meta{{grid-template-columns:repeat(3,minmax(0,1fr));flex-basis:auto;}}.evm-meta div{{grid-template-columns:1fr;gap:3px;text-align:left;}}}}
+        @media(max-width:1180px){{.evm-head{{display:grid;grid-template-columns:64px minmax(0,1fr);}}.evm-meta,.evm-update{{grid-column:1/-1;}}.evm-update{{justify-items:stretch;}}}}
         @media(max-width:950px){{.evm-row,.evm-gauge-grid,.evm-type-shell{{grid-template-columns:1fr;}}.evm-dashboard{{padding:18px;}}.evm-kpi-grid,.evm-side,.evm-scale-kpis{{grid-template-columns:1fr;}}.evm-flow{{grid-template-columns:1fr;}}.evm-flow-arrow{{transform:rotate(90deg);}}}}
         </style>
         <div class="evm-dashboard">
           <div class="evm-head">
-            <div class="evm-titlebox"><p class="evm-kicker">Control ejecutivo · valor ganado</p><h2>Control de costos y desempeño del proyecto</h2><p>Piloto eólico 10 kW → Comercial 80 kW · Lectura PMO a fecha de corte sobre el filtro activo.</p></div>
-            <div class="evm-meta"><div><span>FECHA DE CORTE:</span><b>{html.escape(cut_date)}</b></div><div><span>FASE ACTUAL:</span><b>{html.escape(current_phase[:36])}</b></div><div><span>MONEDA:</span><b>CLP</b></div></div>
+            <div class="evm-hero-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="2.2"/><path d="M12 2.5v6.8"/><path d="M5 20l5.6-8"/><path d="M19 20l-5.6-8"/>
+              </svg>
+            </div>
+            <div class="evm-titlebox"><p class="evm-kicker">Control ejecutivo · valor ganado</p><h2>Control de costos y desempeño del proyecto</h2><p>{html.escape(evaluation_subtitle)}</p></div>
+            <div class="evm-meta"><div><span>FASE ACTUAL:</span><b>{html.escape(current_phase[:48])}</b></div></div>
+            <div class="evm-update">
+              <div class="evm-update-card"><i>$</i><div><span>MONEDA:</span><b>CLP</b></div></div>
+              <div class="evm-update-date">Última actualización: {html.escape(cut_date)}</div>
+            </div>
           </div>
+          <div class="evm-divider"></div>
           <div class="evm-kpi-grid">{kpis_html}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    curve_col, summary_col = st.columns([2.35, 1.0], gap="small")
-    with curve_col:
+    with st.container(border=True):
+        st.markdown('<span class="evm-chart-marker"></span>', unsafe_allow_html=True)
         st.plotly_chart(curve_fig, use_container_width=True, key=f"evm_curve_s_{evm_chart_sig}")
-    with summary_col:
-        st.markdown(
-            f"""
-            <div class="evm-side-title">RESUMEN FINANCIERO</div>
-            <div class="evm-summary-grid">{''.join(summary_cards_html)}</div>
-            """,
-            unsafe_allow_html=True,
-        )
 
-    gauge_col, variation_col, donut_col = st.columns([1.05, 0.95, 1.0], gap="small")
-    with gauge_col:
-        st.markdown('<div class="evm-panel-title">DESEMPEÑO DEL PROYECTO</div>', unsafe_allow_html=True)
-        g1, g2 = st.columns(2, gap="small")
-        with g1:
-            st.plotly_chart(gauge_fig("CPI", cpi, cpi_status, cpi_color), use_container_width=True, key=f"evm_gauge_cpi_{evm_chart_sig}")
-        with g2:
-            st.plotly_chart(gauge_fig("SPI", spi, spi_status, spi_color), use_container_width=True, key=f"evm_gauge_spi_{evm_chart_sig}")
-    with variation_col:
-        st.markdown(
-            f"""
-            <div class="evm-panel-title">VARIACIONES</div>
-            <div class="evm-var-grid">{variation_cards_html}</div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with donut_col:
-        st.markdown('<div class="evm-panel-title">TIPO EC · COSTO REAL AC</div>', unsafe_allow_html=True)
-        d_chart, d_read = st.columns([0.9, 1.1], gap="small")
-        with d_chart:
-            st.plotly_chart(donut_fig, use_container_width=True, key=f"evm_donut_tipo_{evm_chart_sig}")
-        with d_read:
+    summary_col, gauge_col, variation_col = st.columns([1.05, 1.15, 0.95], gap="small")
+    with summary_col:
+        with st.container(border=True):
+            st.markdown('<span class="evm-panel-marker"></span>', unsafe_allow_html=True)
             st.markdown(
                 f"""
-                <div class="evm-type-shell">
-                  <div class="evm-type-read">{html.escape(cost_type_read)}</div>
-                  <div class="evm-type-list">{type_rows_html}</div>
-                </div>
+                <div class="evm-side-title">RESUMEN FINANCIERO</div>
+                <div class="evm-summary-grid">{''.join(summary_cards_html)}</div>
                 """,
                 unsafe_allow_html=True,
             )
-
-    route_col, insights_col = st.columns([1.15, 1.0], gap="small")
-    with route_col:
-        st.markdown(
-            """
-            <div class="evm-panel evm-scale">
-              <div class="evm-panel-title">RUTA DE ESCALAMIENTO Y OBJETIVO 80 kW</div>
-              <div class="evm-flow">
-                <div class="evm-flow-card">Piloto 10 kW<small>validación técnica</small></div><div class="evm-flow-arrow">→</div>
-                <div class="evm-flow-card">Economías de escala<small>replicabilidad supply</small></div><div class="evm-flow-arrow">→</div>
-                <div class="evm-flow-card">Comercial 80 kW<small>objetivo industrial</small></div>
-              </div>
-              <div class="evm-scale-kpis">
-                <div><span>Reducción esperada costo</span><b>-51,7%</b></div>
-                <div><span>Costo objetivo 80 kW</span><b>$27,3 MM</b></div>
-                <div><span>Supply replicable</span><b>76,5%</b></div>
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with insights_col:
-        st.markdown(
-            f"""
-            <div class="evm-panel-title">INSIGHTS EJECUTIVOS</div>
-            <div class="evm-insights">{insights_html}</div>
-            """,
-            unsafe_allow_html=True,
-        )
+    with gauge_col:
+        with st.container(border=True):
+            st.markdown('<span class="evm-panel-marker"></span>', unsafe_allow_html=True)
+            st.markdown('<div class="evm-panel-title">DESEMPEÑO DEL PROYECTO</div>', unsafe_allow_html=True)
+            g1, g2 = st.columns(2, gap="small")
+            with g1:
+                st.plotly_chart(gauge_fig("CPI", cpi, cpi_status, cpi_color), use_container_width=True, key=f"evm_gauge_cpi_{evm_chart_sig}")
+            with g2:
+                st.plotly_chart(gauge_fig("SPI", spi, spi_status, spi_color), use_container_width=True, key=f"evm_gauge_spi_{evm_chart_sig}")
+    with variation_col:
+        with st.container(border=True):
+            st.markdown('<span class="evm-panel-marker"></span>', unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div class="evm-panel-title">VARIACIONES</div>
+                <div class="evm-var-grid">{variation_cards_html}</div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     st.markdown(
         """
