@@ -292,6 +292,71 @@ GANTT_COLUMN_ALIASES = {
 REMOTE_FETCH_TTL_SECONDS = 3600
 REMOTE_CONNECT_TIMEOUT_SECONDS = 5
 REMOTE_READ_TIMEOUT_SECONDS = 20
+CONTROL_CUT_HISTORY_PATH = Path(__file__).parent / "data" / "historial_cortes.csv"
+CONTROL_CUT_HISTORY_COLUMNS = [
+    "ID Corte",
+    "Fecha Corte",
+    "Mes",
+    "Numero Corte Mes",
+    "Comentario Corte",
+    "ID Tarea",
+    "Tarea",
+    "Etapa",
+    "Fase",
+    "Línea",
+    "Disciplina",
+    "Tipo EPC",
+    "BAC",
+    "AC",
+    "Avance Real %",
+    "Avance Planificado %",
+    "EV",
+    "PV",
+    "CPI",
+    "SPI",
+    "Forecast EAC",
+    "ETC",
+    "VAC",
+]
+CONTROL_CUT_COLUMN_CANDIDATES = {
+    "ID Tarea": ["ID", "ID Tarea", "Id tarea"],
+    "Tarea": ["Tarea / Entregable", "Tarea", "Entregable"],
+    "Etapa": ["ETAPA", "Etapa"],
+    "Fase": ["Fase"],
+    "Línea": ["Línea", "Linea"],
+    "Disciplina": ["Disciplina", "Área", "Area"],
+    "Tipo EPC": ["TIPO EPC", "Tipo EPC", "Tipo EC", "TIPO EC"],
+    "BAC": ["Presupuesto Base (CLP)", "Presupuesto Base", "BAC", "Budget At Completion"],
+    "AC": ["Costo Real AC (CLP)", "Costo Real AC", "AC Costo Real", "Actual Cost"],
+    "Avance Real %": ["Avance Real %", "%", "Avance"],
+    "Avance Planificado %": ["Avance Planificado %", "Avance Plan %", "Planificado %"],
+    "EV": ["EV Valor Ganado (CLP)", "EV Valor Ganado", "EV", "Earned Value"],
+    "PV": ["PV Valor Planificado (CLP)", "PV Valor Planificado", "PV", "Planned Value"],
+    "CPI": ["CPI Índice Costo", "CPI Indice Costo", "CPI"],
+    "SPI": ["SPI Índice Plazo", "SPI Indice Plazo", "SPI"],
+    "Forecast EAC": ["Forecast EAC (CLP)", "Forecast EAC", "EAC"],
+    "ETC": ["ETC por Ejecutar (CLP)", "ETC por Ejecutar", "ETC"],
+    "VAC": ["VAC Variación al Cierre (CLP)", "VAC Variacion al Cierre", "VAC"],
+}
+CONTROL_CUT_REQUIRED_FIELDS = [
+    "ID Tarea",
+    "Tarea",
+    "Etapa",
+    "Fase",
+    "Línea",
+    "Tipo EPC",
+    "BAC",
+    "AC",
+    "Avance Real %",
+    "Avance Planificado %",
+    "EV",
+    "PV",
+    "CPI",
+    "SPI",
+    "Forecast EAC",
+    "ETC",
+    "VAC",
+]
 
 # =========================
 # FUNCIONES
@@ -3028,6 +3093,740 @@ def load_project_gantt_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
     return gantt_process_df(df)
 
 
+def _control_find_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
+    normalized_cols = {normalize_key(col): col for col in df.columns}
+    for candidate in candidates:
+        key = normalize_key(candidate)
+        if key in normalized_cols:
+            return normalized_cols[key]
+    for candidate in candidates:
+        key = normalize_key(candidate)
+        for norm_col, original_col in normalized_cols.items():
+            if key and (key in norm_col or norm_col in key):
+                return original_col
+    return None
+
+
+def load_control_resumen(df: pd.DataFrame) -> pd.DataFrame:
+    return pd.DataFrame() if df is None else df.copy()
+
+
+def validate_control_data(df: pd.DataFrame) -> list[str]:
+    errors: list[str] = []
+    if df is None or df.empty:
+        return ["La hoja/control actual está vacío."]
+    for field in CONTROL_CUT_REQUIRED_FIELDS:
+        candidates = CONTROL_CUT_COLUMN_CANDIDATES.get(field, [field])
+        if _control_find_col(df, candidates) is None:
+            errors.append(f"Falta columna obligatoria para snapshot: {field}")
+    return errors
+
+
+def _parse_cut_percent(value: object) -> float:
+    if pd.isna(value):
+        return 0.0
+    text = str(value).strip()
+    if not text:
+        return 0.0
+    has_pct = "%" in text
+    number = parse_model_number(text)
+    if has_pct or number > 5:
+        return number / 100.0
+    return number
+
+
+def _parse_cut_index(value: object) -> float:
+    if pd.isna(value):
+        return 0.0
+    text = str(value).strip()
+    if not text:
+        return 0.0
+    has_pct = "%" in text
+    number = parse_model_number(text)
+    return number / 100.0 if has_pct else number
+
+
+def _next_control_cut_id(history_df: pd.DataFrame, fecha_corte: pd.Timestamp) -> tuple[str, int]:
+    month_key = fecha_corte.strftime("%Y-%m")
+    if history_df.empty or "Mes" not in history_df.columns:
+        cut_number = 1
+    else:
+        month_rows = history_df[history_df["Mes"].astype(str) == month_key]
+        existing_numbers = pd.to_numeric(month_rows["Numero Corte Mes"], errors="coerce")
+        max_existing = existing_numbers.max()
+        cut_number = int(max_existing) + 1 if pd.notna(max_existing) else 1
+    return f"{month_key}-C{cut_number:02d}", cut_number
+
+
+def load_history(history_path: Path = CONTROL_CUT_HISTORY_PATH) -> pd.DataFrame:
+    if not history_path.exists():
+        return pd.DataFrame(columns=CONTROL_CUT_HISTORY_COLUMNS)
+    df = pd.read_csv(history_path, dtype=str, encoding="utf-8-sig")
+    for col in CONTROL_CUT_HISTORY_COLUMNS:
+        if col not in df.columns:
+            df[col] = np.nan
+    return df[CONTROL_CUT_HISTORY_COLUMNS].copy()
+
+
+def create_snapshot(
+    df: pd.DataFrame,
+    fecha_corte: object,
+    comentario: str,
+    history_df: pd.DataFrame,
+) -> pd.DataFrame:
+    control_df = load_control_resumen(df)
+    errors = validate_control_data(control_df)
+    if errors:
+        raise ValueError(" | ".join(errors))
+    if fecha_corte is None:
+        raise ValueError("La fecha de corte es obligatoria.")
+
+    fecha_ts = pd.Timestamp(fecha_corte).normalize()
+    cut_id, cut_number = _next_control_cut_id(history_df, fecha_ts)
+    month_key = fecha_ts.strftime("%Y-%m")
+
+    col_lookup = {
+        field: _control_find_col(control_df, candidates)
+        for field, candidates in CONTROL_CUT_COLUMN_CANDIDATES.items()
+    }
+
+    snapshot = pd.DataFrame(index=control_df.index)
+    snapshot["ID Corte"] = cut_id
+    snapshot["Fecha Corte"] = fecha_ts.strftime("%Y-%m-%d")
+    snapshot["Mes"] = month_key
+    snapshot["Numero Corte Mes"] = cut_number
+    snapshot["Comentario Corte"] = str(comentario or "").strip()
+
+    for field in ["ID Tarea", "Tarea", "Etapa", "Fase", "Línea", "Disciplina", "Tipo EPC"]:
+        col = col_lookup.get(field)
+        snapshot[field] = control_df[col].astype(str).str.strip() if col else ""
+
+    for field in ["BAC", "AC", "EV", "PV", "Forecast EAC", "ETC", "VAC"]:
+        col = col_lookup.get(field)
+        snapshot[field] = control_df[col].apply(parse_money_clp_robusto) if col else 0.0
+
+    for field in ["Avance Real %", "Avance Planificado %"]:
+        col = col_lookup.get(field)
+        snapshot[field] = control_df[col].apply(_parse_cut_percent) if col else 0.0
+
+    for field in ["CPI", "SPI"]:
+        col = col_lookup.get(field)
+        snapshot[field] = control_df[col].apply(_parse_cut_index) if col else 0.0
+
+    snapshot = snapshot[CONTROL_CUT_HISTORY_COLUMNS].copy()
+    snapshot = snapshot[snapshot["ID Tarea"].astype(str).str.strip().ne("")]
+    if snapshot.empty:
+        raise ValueError("El snapshot no contiene tareas válidas.")
+    return snapshot.reset_index(drop=True)
+
+
+def save_snapshot_to_history(snapshot_df: pd.DataFrame, history_path: Path = CONTROL_CUT_HISTORY_PATH) -> None:
+    if snapshot_df is None or snapshot_df.empty:
+        raise ValueError("No hay snapshot para guardar.")
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history_df = load_history(history_path)
+    cut_id = str(snapshot_df["ID Corte"].iloc[0])
+    cut_date = str(snapshot_df["Fecha Corte"].iloc[0])
+    if cut_id in set(history_df["ID Corte"].astype(str)):
+        raise ValueError(f"El corte {cut_id} ya existe. No se sobrescribe historial.")
+    if cut_date in set(history_df["Fecha Corte"].astype(str)):
+        raise ValueError(f"Ya existe un corte guardado para la fecha {cut_date}.")
+    combined = pd.concat([history_df, snapshot_df], ignore_index=True)
+    combined.to_csv(history_path, index=False, encoding="utf-8-sig")
+
+
+def _filter_history_for_traceability(history_df: pd.DataFrame) -> pd.DataFrame:
+    df = history_df.copy()
+    filter_cols = ["Etapa", "Fase", "Línea", "Disciplina", "Tipo EPC"]
+    cols = st.columns(len(filter_cols))
+    for col_widget, field in zip(cols, filter_cols):
+        values = sorted(
+            df[field].dropna().astype(str).str.strip().replace({"": np.nan, "nan": np.nan, "None": np.nan}).dropna().unique().tolist()
+        ) if field in df.columns else []
+        with col_widget:
+            selected = st.multiselect(field, values, key=f"cut_trace_filter_{normalize_key(field)}")
+        if selected:
+            df = df[df[field].astype(str).str.strip().isin(selected)].copy()
+    return df
+
+
+def _aggregate_cut(history_df: pd.DataFrame, cut_id: str) -> dict[str, float]:
+    df = history_df[history_df["ID Corte"].astype(str) == str(cut_id)].copy()
+    for col in ["BAC", "AC", "EV", "PV", "Forecast EAC", "ETC", "VAC"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+    total_ac = float(df["AC"].sum())
+    total_ev = float(df["EV"].sum())
+    total_pv = float(df["PV"].sum())
+    return {
+        "BAC": float(df["BAC"].sum()),
+        "AC": total_ac,
+        "EV": total_ev,
+        "PV": total_pv,
+        "CPI": total_ev / total_ac if total_ac else 0.0,
+        "SPI": total_ev / total_pv if total_pv else 0.0,
+        "EAC": float(df["Forecast EAC"].sum()),
+        "ETC": float(df["ETC"].sum()),
+        "VAC": float(df["VAC"].sum()),
+    }
+
+
+def _history_aggregate_df(history_df: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for cut_id in sorted(history_df["ID Corte"].dropna().astype(str).unique().tolist()):
+        cut_df = history_df[history_df["ID Corte"].astype(str) == cut_id]
+        row = _aggregate_cut(history_df, cut_id)
+        row["ID Corte"] = cut_id
+        row["Fecha Corte"] = str(cut_df["Fecha Corte"].iloc[0]) if not cut_df.empty else ""
+        rows.append(row)
+    result = pd.DataFrame(rows)
+    if not result.empty:
+        result["Fecha Corte Dt"] = pd.to_datetime(result["Fecha Corte"], errors="coerce")
+        result = result.sort_values(["Fecha Corte Dt", "ID Corte"]).reset_index(drop=True)
+    return result
+
+
+def compare_snapshots(history_df: pd.DataFrame, cut_base: str, cut_actual: str) -> pd.DataFrame:
+    base = _aggregate_cut(history_df, cut_base)
+    actual = _aggregate_cut(history_df, cut_actual)
+    rows = []
+    for metric in ["BAC", "AC", "EV", "PV", "CPI", "SPI", "EAC", "VAC"]:
+        old = float(base.get(metric, 0.0))
+        new = float(actual.get(metric, 0.0))
+        diff = new - old
+        pct = diff / old if old else np.nan
+        rows.append(
+            {
+                "Indicador": metric,
+                "Corte base": old,
+                "Corte actual": new,
+                "Diferencia absoluta": diff,
+                "Diferencia porcentual": pct,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _format_cut_metric(metric: str, value: float) -> str:
+    if metric in {"CPI", "SPI"}:
+        return f"{float(value):.2f}".replace(".", ",")
+    if metric == "Diferencia porcentual":
+        return "" if pd.isna(value) else f"{float(value) * 100:.1f}%".replace(".", ",")
+    return format_clp(float(value))
+
+
+def render_cut_kpis(compare_df: pd.DataFrame) -> None:
+    if compare_df.empty:
+        return
+    metric_map = compare_df.set_index("Indicador").to_dict("index")
+    cards = [
+        ("CPI actual", metric_map.get("CPI", {}).get("Corte actual", 0), metric_map.get("CPI", {}).get("Diferencia absoluta", 0), "#315D7C"),
+        ("SPI actual", metric_map.get("SPI", {}).get("Corte actual", 0), metric_map.get("SPI", {}).get("Diferencia absoluta", 0), "#B7791F"),
+        ("EAC actual", metric_map.get("EAC", {}).get("Corte actual", 0), metric_map.get("EAC", {}).get("Diferencia absoluta", 0), "#071427"),
+        ("VAC actual", metric_map.get("VAC", {}).get("Corte actual", 0), metric_map.get("VAC", {}).get("Diferencia absoluta", 0), "#0F766E"),
+        ("AC acumulado", metric_map.get("AC", {}).get("Corte actual", 0), metric_map.get("AC", {}).get("Diferencia absoluta", 0), "#3F6F4A"),
+        ("EV acumulado", metric_map.get("EV", {}).get("Corte actual", 0), metric_map.get("EV", {}).get("Diferencia absoluta", 0), "#1F4E78"),
+    ]
+    html_cards = []
+    for title, value, delta, color in cards:
+        is_index = "CPI" in title or "SPI" in title
+        display = f"{float(value):.2f}".replace(".", ",") if is_index else format_clp(float(value))
+        delta_display = f"{float(delta):+.2f}".replace(".", ",") if is_index else f"{format_clp(float(delta))}"
+        html_cards.append(
+            f'<div class="cut-kpi" style="--accent:{color};">'
+            f'<span>{html.escape(title)}</span>'
+            f'<b>{html.escape(display)}</b>'
+            f'<small>Δ vs base: {html.escape(delta_display)}</small>'
+            f'</div>'
+        )
+    kpi_html = (
+        "<style>"
+        ".cut-kpi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0 16px;}"
+        ".cut-kpi{border:1px solid rgba(203,213,225,.82);border-left:6px solid var(--accent);border-radius:14px;background:#fff;padding:12px 13px;box-shadow:0 10px 22px rgba(15,23,42,.045);overflow:hidden;}"
+        ".cut-kpi span{display:block;color:#64748B;font-size:10px;font-weight:950;text-transform:uppercase;letter-spacing:.04em;}"
+        ".cut-kpi b{display:block;color:var(--accent);font-size:22px;line-height:1;margin:8px 0 6px;font-weight:950;overflow-wrap:anywhere;}"
+        ".cut-kpi small{display:block;color:#334155;font-size:11px;font-weight:800;overflow-wrap:anywhere;}"
+        "@media(max-width:900px){.cut-kpi-grid{grid-template-columns:1fr;}}"
+        "</style>"
+        f'<div class="cut-kpi-grid">{"".join(html_cards)}</div>'
+    )
+    st.markdown(kpi_html, unsafe_allow_html=True)
+
+
+def render_cut_charts(history_df: pd.DataFrame) -> None:
+    agg = _history_aggregate_df(history_df)
+    if agg.empty:
+        return
+    agg = agg.copy()
+    for col in ["AC", "EV", "PV", "EAC", "ETC", "VAC"]:
+        if col in agg.columns:
+            agg[f"{col}_MM"] = pd.to_numeric(agg[col], errors="coerce").fillna(0.0) / 1_000_000
+
+    st.markdown(
+        """
+        <style>
+        .trace-chart-marker{display:none;}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.trace-chart-marker){
+            border:1px solid rgba(226,232,240,.96)!important;
+            border-radius:20px!important;
+            background:linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%)!important;
+            box-shadow:0 14px 34px rgba(15,23,42,.07)!important;
+            padding:14px 16px 8px!important;
+            overflow:hidden!important;
+            max-width:100%!important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    def style_trace_fig(fig: go.Figure, title: str, height: int = 330) -> go.Figure:
+        fig.update_layout(
+            height=height,
+            margin=dict(l=18, r=18, t=54, b=36),
+            title=dict(text=title, x=0.01, xanchor="left", font=dict(size=18, color="#071427")),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="#FFFFFF",
+            font=dict(color="#334155", size=12),
+            hovermode="x unified",
+            hoverlabel=dict(bgcolor="rgba(255,255,255,.90)", bordercolor="rgba(148,163,184,.28)", font=dict(color="#071427", size=11)),
+            legend=dict(orientation="h", y=1.10, x=0.01, bgcolor="rgba(255,255,255,.82)", font=dict(size=11, color="#334155")),
+        )
+        fig.update_xaxes(showgrid=False, zeroline=False, tickfont=dict(size=10, color="#64748B"))
+        fig.update_yaxes(gridcolor="rgba(148,163,184,.18)", zeroline=False, tickfont=dict(size=10, color="#64748B"))
+        return fig
+
+    c1, c2 = st.columns(2)
+    with c1:
+        with st.container(border=True):
+            st.markdown('<span class="trace-chart-marker"></span>', unsafe_allow_html=True)
+            fig_idx = go.Figure()
+            fig_idx.add_trace(go.Scatter(
+                x=agg["ID Corte"], y=agg["CPI"], mode="lines+markers", name="CPI",
+                line=dict(color="#315D7C", width=3.2, shape="spline", smoothing=.45),
+                marker=dict(size=7, color="#315D7C", line=dict(color="#FFFFFF", width=1.5)),
+                hovertemplate="CPI: %{y:.2f}<extra></extra>",
+            ))
+            fig_idx.add_trace(go.Scatter(
+                x=agg["ID Corte"], y=agg["SPI"], mode="lines+markers", name="SPI",
+                line=dict(color="#B7791F", width=3.2, shape="spline", smoothing=.45),
+                marker=dict(size=7, color="#B7791F", line=dict(color="#FFFFFF", width=1.5)),
+                hovertemplate="SPI: %{y:.2f}<extra></extra>",
+            ))
+            fig_idx.add_hline(y=1, line_dash="dot", line_color="#0B1F3A", opacity=.55)
+            fig_idx.update_yaxes(title="Índice", range=[0, max(1.25, float(agg[["CPI", "SPI"]].max().max() or 1) * 1.12)])
+            st.plotly_chart(style_trace_fig(fig_idx, "Evolución CPI / SPI por corte"), use_container_width=True, key="cut_trace_cpi_spi")
+    with c2:
+        with st.container(border=True):
+            st.markdown('<span class="trace-chart-marker"></span>', unsafe_allow_html=True)
+            fig_eac = go.Figure()
+            fig_eac.add_trace(go.Scatter(
+                x=agg["ID Corte"], y=agg["EAC_MM"], mode="lines+markers", name="Forecast EAC",
+                fill="tozeroy", fillcolor="rgba(7,20,39,.08)",
+                line=dict(color="#071427", width=3.4, shape="spline", smoothing=.45),
+                marker=dict(size=7, color="#071427", line=dict(color="#FFFFFF", width=1.5)),
+                hovertemplate="EAC: %{y:.1f} MM CLP<extra></extra>",
+            ))
+            fig_eac.update_yaxes(title="MM CLP")
+            st.plotly_chart(style_trace_fig(fig_eac, "Evolución Forecast EAC"), use_container_width=True, key="cut_trace_eac")
+
+    with st.container(border=True):
+        st.markdown('<span class="trace-chart-marker"></span>', unsafe_allow_html=True)
+        fig_s = go.Figure()
+        for label, metric, color, dash in [
+            ("AC costo real", "AC_MM", "#9F3A2D", "solid"),
+            ("EV valor ganado", "EV_MM", "#0F766E", "solid"),
+            ("PV planificado", "PV_MM", "#315D7C", "dash"),
+        ]:
+            fig_s.add_trace(go.Scatter(
+                x=agg["ID Corte"], y=agg[metric], mode="lines+markers", name=label,
+                line=dict(color=color, width=3, dash=dash, shape="spline", smoothing=.45),
+                marker=dict(size=6.5, color=color, line=dict(color="#FFFFFF", width=1.2)),
+                hovertemplate=f"{label}: %{{y:.1f}} MM CLP<extra></extra>",
+            ))
+        fig_s.update_yaxes(title="MM CLP")
+        st.plotly_chart(style_trace_fig(fig_s, "Curva S histórica AC / EV / PV", height=370), use_container_width=True, key="cut_trace_curve_s")
+
+    agg["Variación EAC"] = pd.to_numeric(agg["EAC"], errors="coerce").fillna(0.0).diff().fillna(0.0)
+    agg["Variación EAC MM"] = agg["Variación EAC"] / 1_000_000
+    c3, c4 = st.columns(2)
+    with c3:
+        with st.container(border=True):
+            st.markdown('<span class="trace-chart-marker"></span>', unsafe_allow_html=True)
+            colors_delta = ["#C00000" if value > 0 else "#548235" if value < 0 else "#94A3B8" for value in agg["Variación EAC"]]
+            fig_delta = go.Figure(go.Bar(
+                x=agg["ID Corte"], y=agg["Variación EAC MM"], marker_color=colors_delta,
+                text=[f"{value:.1f} MM" for value in agg["Variación EAC MM"]],
+                textposition="outside",
+                hovertemplate="Δ EAC: %{y:.1f} MM CLP<extra></extra>",
+            ))
+            fig_delta.add_hline(y=0, line_color="#0B1F3A", line_width=1)
+            fig_delta.update_yaxes(title="MM CLP")
+            st.plotly_chart(style_trace_fig(fig_delta, "Variación EAC entre cortes"), use_container_width=True, key="cut_trace_delta_eac")
+    with c4:
+        with st.container(border=True):
+            st.markdown('<span class="trace-chart-marker"></span>', unsafe_allow_html=True)
+            latest_cut = str(agg["ID Corte"].iloc[-1])
+            latest_df = history_df[history_df["ID Corte"].astype(str) == latest_cut].copy()
+            latest_df["VAC"] = pd.to_numeric(latest_df["VAC"], errors="coerce").fillna(0.0)
+            rank = latest_df.sort_values("VAC", ascending=True).head(10).copy()
+            rank["VAC_MM"] = rank["VAC"] / 1_000_000
+            rank["Tarea corta"] = rank["Tarea"].astype(str).map(lambda value: textwrap.shorten(value, width=42, placeholder="..."))
+            fig_rank = go.Figure(go.Bar(
+                x=rank["VAC_MM"], y=rank["Tarea corta"], orientation="h",
+                marker_color="#C00000",
+                text=[f"{value:.1f} MM" for value in rank["VAC_MM"]],
+                textposition="outside",
+                hovertemplate="<b>%{y}</b><br>VAC: %{x:.1f} MM CLP<extra></extra>",
+            ))
+            fig_rank.update_yaxes(autorange="reversed", title="")
+            fig_rank.update_xaxes(title="MM CLP")
+            st.plotly_chart(style_trace_fig(fig_rank, "Top tareas con mayor desviación VAC"), use_container_width=True, key="cut_trace_vac_rank")
+
+
+def render_cut_compare_table(compare_df: pd.DataFrame) -> None:
+    if compare_df.empty:
+        return
+    max_abs_delta = float(compare_df["Diferencia absoluta"].abs().max() or 1.0)
+    rows_html = []
+    for _, row in compare_df.iterrows():
+        metric = str(row["Indicador"])
+        base_value = float(row["Corte base"] or 0.0)
+        current_value = float(row["Corte actual"] or 0.0)
+        diff_value = float(row["Diferencia absoluta"] or 0.0)
+        pct_value = row["Diferencia porcentual"]
+        diff_color = "#548235" if diff_value >= 0 else "#C00000"
+        bar_width = min(100, abs(diff_value) / max_abs_delta * 100)
+        rows_html.append(
+            f"""
+            <tr style="--delta-color:{diff_color};--delta-width:{bar_width:.4f}%;">
+              <td><span class="cut-table-metric">{html.escape(metric)}</span></td>
+              <td>{html.escape(_format_cut_metric(metric, base_value))}</td>
+              <td>{html.escape(_format_cut_metric(metric, current_value))}</td>
+              <td><b>{html.escape(_format_cut_metric(metric, diff_value))}</b><i><em></em></i></td>
+              <td>{'' if pd.isna(pct_value) else html.escape(f'{float(pct_value) * 100:.1f}%'.replace('.', ','))}</td>
+            </tr>
+            """
+        )
+    st.markdown(
+        f"""
+        <style>
+        .cut-compare-shell{{
+            width:100%;max-width:100%;overflow:hidden;border:1px solid rgba(226,232,240,.96);
+            border-radius:20px;background:linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%);
+            box-shadow:0 14px 34px rgba(15,23,42,.07);margin:14px 0 18px;
+        }}
+        .cut-compare-head{{
+            display:flex;align-items:center;justify-content:space-between;gap:14px;
+            padding:15px 18px;border-bottom:1px solid rgba(226,232,240,.96);
+        }}
+        .cut-compare-head h4{{margin:0;color:#071427;font-size:17px;font-weight:950;letter-spacing:.01em;}}
+        .cut-compare-head span{{color:#64748B;font-size:11px;font-weight:850;}}
+        .cut-table-wrap{{width:100%;overflow:auto;}}
+        .cut-compare-table{{width:100%;border-collapse:separate;border-spacing:0;min-width:780px;}}
+        .cut-compare-table th{{
+            color:#64748B;background:#F8FAFC;font-size:10px;font-weight:950;letter-spacing:.08em;
+            text-transform:uppercase;text-align:left;padding:11px 14px;border-bottom:1px solid rgba(226,232,240,.96);
+        }}
+        .cut-compare-table td{{
+            color:#071427;font-size:12.5px;font-weight:850;padding:12px 14px;border-bottom:1px solid rgba(226,232,240,.72);
+            vertical-align:middle;white-space:nowrap;
+        }}
+        .cut-compare-table tr:last-child td{{border-bottom:none;}}
+        .cut-table-metric{{
+            display:inline-flex;border-radius:999px;background:#EEF5F9;color:#315D7C;
+            padding:6px 9px;font-size:11px;font-weight:950;
+        }}
+        .cut-compare-table td b{{display:block;color:var(--delta-color);font-size:13px;font-weight:950;margin-bottom:5px;}}
+        .cut-compare-table td i{{display:block;width:100%;height:5px;border-radius:999px;background:#E7EDF3;overflow:hidden;}}
+        .cut-compare-table td i em{{display:block;width:var(--delta-width);height:100%;border-radius:999px;background:var(--delta-color);}}
+        </style>
+        <div class="cut-compare-shell">
+          <div class="cut-compare-head">
+            <h4>Comparativo entre cortes</h4>
+            <span>Valores agregados del filtro activo</span>
+          </div>
+          <div class="cut-table-wrap">
+            <table class="cut-compare-table">
+              <thead>
+                <tr>
+                  <th>Indicador</th>
+                  <th>Corte base</th>
+                  <th>Corte actual</th>
+                  <th>Diferencia absoluta</th>
+                  <th>Diferencia porcentual</th>
+                </tr>
+              </thead>
+              <tbody>{''.join(rows_html)}</tbody>
+            </table>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_cut_management(df_actual: pd.DataFrame) -> None:
+    st.markdown("### Gestión de Cortes")
+    st.caption("Guarda snapshots históricos del control EVM actual. En Streamlit Cloud el CSV debe versionarse en GitHub para trazabilidad permanente.")
+    errors = validate_control_data(df_actual)
+    if errors:
+        st.error("No se puede guardar un corte porque faltan datos obligatorios.")
+        for error in errors:
+            st.caption(f"• {error}")
+        return
+
+    history_df = load_history()
+    c1, c2 = st.columns([0.35, 0.65])
+    with c1:
+        fecha_corte = st.date_input("Fecha de corte", value=pd.Timestamp.today().date(), key="cut_mgmt_fecha")
+    with c2:
+        comentario = st.text_input("Comentario del corte", placeholder="Ej: Corte semanal PMO validado con terreno", key="cut_mgmt_comment")
+
+    if st.button("Guardar nuevo corte", type="primary", use_container_width=True, key="cut_mgmt_save"):
+        try:
+            snapshot = create_snapshot(df_actual, fecha_corte, comentario, history_df)
+            save_snapshot_to_history(snapshot)
+            st.success(f"Corte guardado correctamente: {snapshot['ID Corte'].iloc[0]} · {len(snapshot)} tareas")
+        except Exception as exc:
+            st.error(f"No se pudo guardar el corte: {exc}")
+
+
+def render_cut_traceability(history_df: pd.DataFrame) -> None:
+    st.markdown("### Trazabilidad de Cortes")
+    if history_df.empty:
+        st.info("Aún no existen cortes históricos guardados.")
+        return
+
+    filtered_history = _filter_history_for_traceability(history_df)
+    if filtered_history.empty:
+        st.info("No hay cortes para los filtros seleccionados.")
+        return
+
+    agg_cuts = _history_aggregate_df(filtered_history)
+    cuts = agg_cuts["ID Corte"].astype(str).tolist()
+    if not cuts:
+        st.info("No hay cortes disponibles.")
+        return
+    c1, c2, c3 = st.columns([1, 1, 1])
+    with c1:
+        cut_actual = st.selectbox("Corte actual", cuts, index=len(cuts) - 1, key="cut_trace_actual")
+    with c2:
+        comparison_mode = st.selectbox(
+            "Comparar contra",
+            ["Corte anterior", "Primer corte del mes", "Baseline", "Selector manual"],
+            key="cut_trace_mode",
+        )
+    with c3:
+        manual_default = max(0, cuts.index(cut_actual) - 1) if cut_actual in cuts else 0
+        manual_base = st.selectbox(
+            "Corte base manual",
+            cuts,
+            index=manual_default,
+            key="cut_trace_base_manual",
+            disabled=comparison_mode != "Selector manual",
+        )
+
+    actual_idx = cuts.index(cut_actual) if cut_actual in cuts else len(cuts) - 1
+    if comparison_mode == "Corte anterior":
+        cut_base = cuts[max(0, actual_idx - 1)]
+    elif comparison_mode == "Primer corte del mes":
+        actual_date = pd.to_datetime(
+            agg_cuts.loc[agg_cuts["ID Corte"].astype(str) == str(cut_actual), "Fecha Corte"].iloc[0],
+            errors="coerce",
+        )
+        if pd.notna(actual_date):
+            same_month = agg_cuts[agg_cuts["Fecha Corte Dt"].dt.strftime("%Y-%m") == actual_date.strftime("%Y-%m")]
+            cut_base = str(same_month["ID Corte"].iloc[0]) if not same_month.empty else cuts[0]
+        else:
+            cut_base = cuts[0]
+    elif comparison_mode == "Baseline":
+        cut_base = cuts[0]
+    else:
+        cut_base = manual_base
+
+    st.caption(f"Comparativo activo: {cut_base} → {cut_actual}")
+
+    compare_df = compare_snapshots(filtered_history, cut_base, cut_actual)
+    render_cut_kpis(compare_df)
+    render_cut_charts(filtered_history)
+    render_cut_compare_table(compare_df)
+
+
+def render_control_cost_detail_filters(df_actual: pd.DataFrame) -> pd.DataFrame:
+    filtered_df = df_actual.copy()
+
+    etapa_col = _control_find_col(filtered_df, ["ETAPA", "Etapa"])
+    fase_col = _control_find_col(filtered_df, ["Fase"])
+    linea_col = _control_find_col(filtered_df, ["Línea", "Linea"])
+    estado_col = _control_find_col(filtered_df, ["Estado"])
+
+    st.markdown("### Filtros de Control de Costos")
+    c1, c2, c3, c4 = st.columns(4)
+
+    def _clean_options(col_name: str | None, source_df: pd.DataFrame) -> list[str]:
+        if not col_name or col_name not in source_df.columns:
+            return []
+        return sorted(
+            source_df[col_name]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .replace({"": np.nan, "nan": np.nan, "None": np.nan})
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+    with c1:
+        etapa_sel = st.multiselect(
+            "Etapa",
+            _clean_options(etapa_col, filtered_df),
+            placeholder="Todas las etapas",
+            key="control_cost_detail_etapa",
+        )
+    if etapa_sel and etapa_col:
+        filtered_df = filtered_df[filtered_df[etapa_col].astype(str).str.strip().isin(etapa_sel)].copy()
+
+    with c2:
+        fase_sel = st.multiselect(
+            "Fase",
+            _clean_options(fase_col, filtered_df),
+            placeholder="Todas las fases",
+            key="control_cost_detail_fase",
+        )
+    if fase_sel and fase_col:
+        filtered_df = filtered_df[filtered_df[fase_col].astype(str).str.strip().isin(fase_sel)].copy()
+
+    with c3:
+        linea_sel = st.multiselect(
+            "Línea",
+            _clean_options(linea_col, filtered_df),
+            placeholder="Todas las líneas",
+            key="control_cost_detail_linea",
+        )
+    if linea_sel and linea_col:
+        filtered_df = filtered_df[filtered_df[linea_col].astype(str).str.strip().isin(linea_sel)].copy()
+
+    with c4:
+        estado_sel = st.multiselect(
+            "Estado",
+            _clean_options(estado_col, filtered_df),
+            placeholder="Todos los estados",
+            key="control_cost_detail_estado",
+        )
+    if estado_sel and estado_col:
+        filtered_df = filtered_df[filtered_df[estado_col].astype(str).str.strip().isin(estado_sel)].copy()
+
+    st.caption(f"Control de costos recalculado sobre {len(filtered_df):,} partidas visibles.".replace(",", "."))
+    return filtered_df
+
+
+def render_control_cost_block(df_actual: pd.DataFrame) -> None:
+
+    inner_key = "control_cost_inner_block"
+    if inner_key not in st.session_state:
+        st.session_state[inner_key] = "detalle_control_costo"
+
+    inner_blocks = [
+        (
+            "detalle_control_costo",
+            "Detalle Control Costo",
+            "Control de costos y desempeño del proyecto calculado con la información vigente de los selectores.",
+        ),
+        (
+            "gestion_corte",
+            "Gestión de Corte",
+            "Guardar snapshots, revisar trazabilidad histórica y comparar cortes del control PMO.",
+        ),
+    ]
+
+    st.markdown(
+        """
+        <style>
+        .controlcost-inner-card{
+            border:1px solid #DCE6EF;
+            border-radius:14px;
+            background:linear-gradient(180deg,#FFFFFF 0%,#F8FBFF 100%);
+            padding:14px 15px;
+            min-height:94px;
+            box-shadow:0 10px 24px rgba(15,23,42,.045);
+            overflow:hidden;
+            box-sizing:border-box;
+        }
+        .controlcost-inner-card.active{
+            border-color:#0F766E;
+            box-shadow:0 0 0 2px rgba(15,118,110,.10),0 12px 28px rgba(15,23,42,.06);
+            background:linear-gradient(135deg,#FFFFFF 0%,#EEFDF9 100%);
+        }
+        .controlcost-inner-k{
+            margin:0 0 7px 0;
+            color:#64748B;
+            font-size:10px;
+            font-weight:950;
+            letter-spacing:.08em;
+            text-transform:uppercase;
+        }
+        .controlcost-inner-t{
+            margin:0 0 6px 0;
+            color:#071427;
+            font-size:16px;
+            line-height:1.1;
+            font-weight:950;
+            overflow-wrap:anywhere;
+        }
+        .controlcost-inner-s{
+            margin:0;
+            color:#475569;
+            font-size:11.5px;
+            line-height:1.35;
+            font-weight:750;
+            overflow-wrap:anywhere;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    inner_cols = st.columns(2)
+    for idx, (value, title, copy) in enumerate(inner_blocks):
+        is_active = st.session_state.get(inner_key) == value
+        with inner_cols[idx]:
+            st.markdown(
+                f"""
+                <div class="controlcost-inner-card {'active' if is_active else ''}">
+                  <p class="controlcost-inner-k">Bloque {idx + 1}</p>
+                  <p class="controlcost-inner-t">{html.escape(title)}</p>
+                  <p class="controlcost-inner-s">{html.escape(copy)}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.button(
+                selector_button_label(title, is_active),
+                key=f"controlcost_inner_button_{idx}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+                on_click=lambda selected=value: st.session_state.__setitem__(inner_key, selected),
+            )
+
+    st.markdown(
+        '<div style="height:1px;background:rgba(226,232,240,.9);margin:16px 0 18px 0;"></div>',
+        unsafe_allow_html=True,
+    )
+
+    if st.session_state.get(inner_key) == "gestion_corte":
+        render_cut_management(df_actual)
+        history_df = load_history()
+        render_cut_traceability(history_df)
+        return
+
+    filtered_df = render_control_cost_detail_filters(df_actual)
+    if filtered_df.empty:
+        st.info("No hay partidas para los filtros seleccionados.")
+        return
+    render_dashboard_control_costos_evm(filtered_df)
+
+
 def build_gantt_phase_color_map(df: pd.DataFrame) -> dict[str, str]:
     if "Fase" not in df.columns:
         return {}
@@ -3769,6 +4568,81 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
     summary_html = "\n".join(line.lstrip() for line in summary_html.splitlines())
     st.markdown(summary_html, unsafe_allow_html=True)
 
+    if delayed_df.empty:
+        return
+
+    top_delay_df = delayed_df.sort_values(
+        ["_observed_delay", "_end_real"],
+        ascending=[False, False],
+    ).head(10).copy()
+    max_top_delay = float(top_delay_df["_observed_delay"].max() or 1.0)
+
+    def _fmt_delay_date(value: object) -> str:
+        ts = pd.to_datetime(value, errors="coerce")
+        return ts.strftime("%d-%m-%Y") if pd.notna(ts) else "-"
+
+    delay_rows = []
+    for rank, (_, row) in enumerate(top_delay_df.iterrows(), start=1):
+        delay_days = int(row.get("_observed_delay", 0) or 0)
+        bar_width = min(100.0, max(0.0, delay_days / max_top_delay * 100.0))
+        task = str(row.get("Tarea / Entregable", "")).strip() or "Actividad sin nombre"
+        task_id = str(row.get("ID", "")).strip()
+        etapa = str(row.get("ETAPA", row.get("Etapa", ""))).strip() or "Sin etapa"
+        fase = str(row.get("Fase", "")).strip() or "Sin fase"
+        linea = str(row.get("Línea", "")).strip() or "Sin línea"
+        estado_val = str(row.get("Estado", "")).strip() or "Sin estado"
+        delay_rows.append(
+            f'<tr>'
+            f'<td><span class="gantt-delay-rank">#{rank}</span></td>'
+            f'<td><div class="gantt-delay-task"><b>{html.escape(task)}</b><small>{html.escape(task_id or "Sin ID")} · {html.escape(etapa)}</small></div></td>'
+            f'<td>{html.escape(fase)}</td>'
+            f'<td>{html.escape(linea)}</td>'
+            f'<td><span class="gantt-delay-status">{html.escape(estado_val)}</span></td>'
+            f'<td>{html.escape(_fmt_delay_date(row.get("_end_plan")))}</td>'
+            f'<td>{html.escape(_fmt_delay_date(row.get("_end_real")))}</td>'
+            f'<td><div class="gantt-delay-days"><b>{delay_days}</b><span><i style="width:{bar_width:.2f}%;"></i></span></div></td>'
+            f'</tr>'
+        )
+
+    delay_table_html = (
+        "<style>"
+        ".gantt-delay-wrap{margin:14px 0 12px;border:1px solid rgba(226,232,240,.96);border-radius:22px;background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);box-shadow:0 18px 38px rgba(15,23,42,.065);overflow:hidden;}"
+        ".gantt-delay-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 20px 14px;border-bottom:1px solid rgba(226,232,240,.92);}"
+        ".gantt-delay-head h4{margin:0;color:#071427;font-size:19px;line-height:1.08;font-weight:950;}"
+        ".gantt-delay-head p{margin:5px 0 0;color:#64748B;font-size:12px;line-height:1.35;font-weight:750;}"
+        ".gantt-delay-pill{flex:0 0 auto;border-radius:999px;background:#EEFDF9;border:1px solid rgba(15,118,110,.18);color:#0F766E;padding:8px 12px;font-size:11px;font-weight:950;white-space:nowrap;}"
+        ".gantt-delay-scroll{overflow:auto;max-width:100%;}"
+        ".gantt-delay-table{width:100%;border-collapse:separate;border-spacing:0;min-width:1080px;color:#071427;}"
+        ".gantt-delay-table th{position:sticky;top:0;background:#F8FAFC;color:#64748B;font-size:10px;letter-spacing:.075em;text-transform:uppercase;font-weight:950;text-align:left;padding:11px 12px;border-bottom:1px solid rgba(226,232,240,.96);}"
+        ".gantt-delay-table td{padding:12px;border-bottom:1px solid rgba(226,232,240,.78);vertical-align:middle;font-size:12px;font-weight:800;}"
+        ".gantt-delay-table tr:last-child td{border-bottom:0;}"
+        ".gantt-delay-table tr:hover td{background:#FBFDFC;}"
+        ".gantt-delay-rank{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;border-radius:999px;background:#071427;color:#FFFFFF;font-size:12px;font-weight:950;}"
+        ".gantt-delay-task{display:grid;gap:3px;min-width:0;}"
+        ".gantt-delay-task b{display:block;font-size:13px;line-height:1.16;color:#071427;font-weight:950;overflow-wrap:anywhere;}"
+        ".gantt-delay-task small{display:block;color:#64748B;font-size:11px;line-height:1.2;font-weight:850;overflow-wrap:anywhere;}"
+        ".gantt-delay-status{display:inline-flex;align-items:center;max-width:170px;border-radius:999px;background:#F1F5F9;color:#334155;padding:5px 9px;font-size:10.5px;font-weight:950;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}"
+        ".gantt-delay-days{display:grid;grid-template-columns:54px minmax(110px,1fr);gap:10px;align-items:center;}"
+        ".gantt-delay-days b{color:#991B1B;font-size:17px;font-weight:950;line-height:1;}"
+        ".gantt-delay-days span{display:block;height:7px;border-radius:999px;background:#E7EDF3;overflow:hidden;}"
+        ".gantt-delay-days i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#C2410C,#991B1B);}"
+        "@media(max-width:900px){.gantt-delay-head{display:block}.gantt-delay-pill{display:inline-flex;margin-top:10px}.gantt-delay-table{min-width:960px;}}"
+        "</style>"
+        '<div class="gantt-delay-wrap">'
+        '<div class="gantt-delay-head">'
+        '<div><h4>Top 10 tareas por días de atraso</h4><p>Ranking recalculado sobre el filtro activo. Mide días-tarea observados entre fin plan y fin real.</p></div>'
+        f'<div class="gantt-delay-pill">{len(delayed_df)} tareas atrasadas · {task_delay_days} días-tarea</div>'
+        '</div>'
+        '<div class="gantt-delay-scroll">'
+        '<table class="gantt-delay-table">'
+        '<thead><tr><th>Rank</th><th>Tarea</th><th>Fase</th><th>Línea</th><th>Estado</th><th>Fin plan</th><th>Fin real</th><th>Días atraso</th></tr></thead>'
+        f'<tbody>{"".join(delay_rows)}</tbody>'
+        '</table>'
+        '</div>'
+        '</div>'
+    )
+    st.markdown(delay_table_html, unsafe_allow_html=True)
+
 
 def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
     if df.empty:
@@ -4153,30 +5027,35 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
 
     ac_bac_ratio = total_ac / total_bac if total_bac else 0.0
     summary_items = [
-        ("Ejecución AC / BAC", ac_bac_ratio, "Costo real sobre presupuesto base del filtro", "percent_neutral"),
-        ("Desviación Presupuesto", deviation_pct, "Sobre el presupuesto base" if deviation_pct > 0 else "Bajo presupuesto base", "percent"),
-        ("ETC por Ejecutar (CLP)", total_etc, "Monto por ejecutar", "neutral"),
-        ("VAC Variación al Cierre (CLP)", total_vac, "Sobre estimación final" if total_vac < 0 else "Holgura al cierre", "variance"),
+        ("Ejecución AC / BAC", ac_bac_ratio, "Costo real sobre presupuesto base del filtro", "percent_neutral", "◔"),
+        ("Desviación Presupuesto", deviation_pct, "Sobre el presupuesto base" if deviation_pct > 0 else "Bajo presupuesto base", "percent", "↓" if deviation_pct <= 0 else "↑"),
+        ("ETC por Ejecutar (CLP)", total_etc, "Monto por ejecutar", "neutral", "▣"),
+        ("VAC Variación al Cierre (CLP)", total_vac, "Sobre estimación final" if total_vac < 0 else "Holgura al cierre", "variance", "◎"),
     ]
     summary_cards_html = []
-    for label, value, note, mode in summary_items:
+    for label, value, note, mode, icon in summary_items:
         if mode == "percent":
             color = "#C00000" if value > 0.05 else "#FFC000" if value > 0 else "#548235"
             display = pct_fmt(value)
+            bar_pct = min(100, abs(float(value)) * 100)
         elif mode == "percent_neutral":
             color = "#315D7C"
             display = pct_fmt(value)
+            bar_pct = min(100, abs(float(value)) * 100)
         elif mode == "neutral":
             color = "#0B1F3A"
             display = money_display(value)
+            bar_pct = min(100, float(value) / max(total_bac, 1) * 100)
         else:
             color, _, _ = traffic(value, "variance")
             display = money_display(value)
+            bar_pct = min(100, abs(float(value)) / max(abs(total_bac), 1) * 100)
         summary_cards_html.append(textwrap.dedent(f"""
-        <div class="evm-side-card" style="--accent:{color};">
-          <span>{html.escape(label)}</span>
+        <div class="evm-side-card" style="--accent:{color};--bar:{bar_pct:.4f}%;">
+          <div class="evm-side-card-top"><i>{html.escape(icon)}</i><span>{html.escape(label)}</span></div>
           <b>{html.escape(display)}</b>
           <small>{html.escape(note)}</small>
+          <em><strong></strong></em>
         </div>
         """).strip())
 
@@ -4184,16 +5063,18 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         [
             textwrap.dedent(f"""
             <div class="evm-var-card" style="--accent:{'#C00000' if total_cv < 0 else '#548235'};">
-              <span>CV · Variación costo</span>
+              <div class="evm-var-head"><i>CV</i><span>Variación costo</span></div>
               <b>{html.escape(money_display(total_cv))}</b>
               <small>{html.escape('Costo real supera valor ganado' if total_cv < 0 else 'Costo bajo valor ganado')}</small>
+              <em>{html.escape('Desfavorable' if total_cv < 0 else 'Favorable')}</em>
             </div>
             """).strip(),
             textwrap.dedent(f"""
             <div class="evm-var-card" style="--accent:{'#548235' if total_sv >= 0 else '#C00000'};">
-              <span>SV · Variación plazo</span>
+              <div class="evm-var-head"><i>SV</i><span>Variación plazo</span></div>
               <b>{html.escape(money_display(total_sv))}</b>
               <small>{html.escape('Avance superior al plan' if total_sv >= 0 else 'Avance bajo plan')}</small>
+              <em>{html.escape('En control' if total_sv >= 0 else 'Crítico')}</em>
             </div>
             """).strip(),
         ]
@@ -4329,15 +5210,10 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         <style>
         .evm-dashboard,.evm-dashboard *,.evm-panel,.evm-panel *,.evm-side-title,.evm-side-card,.evm-side-card *,.evm-type-shell,.evm-type-shell *,.evm-notes{{box-sizing:border-box;max-width:100%;}}
         .evm-dashboard{{width:100%;font-family:inherit;color:#071427;position:relative;overflow:hidden;border-radius:0;background:#FFFFFF;padding:22px 20px 8px;margin:8px 0 8px;border:0;box-shadow:none;}}
-        .evm-head{{width:100%;display:grid;grid-template-columns:70px minmax(520px,1fr) minmax(270px,330px) minmax(190px,240px);align-items:start;gap:16px;margin-bottom:18px;overflow:hidden;}}
+        .evm-head{{width:100%;display:grid;grid-template-columns:70px minmax(0,1fr) minmax(190px,240px);align-items:start;gap:16px;margin-bottom:18px;overflow:hidden;}}
         .evm-hero-icon{{width:60px;height:60px;border-radius:13px;background:linear-gradient(145deg,#007F9E 0%,#00315E 100%);display:flex;align-items:center;justify-content:center;color:#FFFFFF;box-shadow:0 14px 30px rgba(0,49,94,.18);}}
         .evm-hero-icon svg{{width:42px;height:42px;}}
         .evm-titlebox{{min-width:0;overflow:hidden;flex:1;}}.evm-titlebox .evm-kicker{{display:none;}}.evm-titlebox h2{{margin:0;color:#071427;font-size:clamp(26px,2.05vw,34px);line-height:1.04;font-weight:950;letter-spacing:0;overflow-wrap:anywhere;}}.evm-titlebox p{{margin:10px 0 0;color:#334155;font-size:13px;line-height:1.42;font-weight:760;overflow-wrap:anywhere;max-width:980px;}}
-        .evm-meta{{min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:0;background:#FFFFFF;border:1px solid rgba(226,232,240,.96);border-radius:14px;padding:13px 15px;font-size:12px;font-weight:900;overflow:hidden;box-shadow:0 16px 34px rgba(15,23,42,.08);}}
-        .evm-meta div{{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:start;min-width:0;}}
-        .evm-meta div:not(:first-child){{display:none;}}
-        .evm-meta span{{color:#071427;font-size:11px;font-weight:950;text-transform:uppercase;overflow-wrap:anywhere;}}.evm-meta b{{color:#071427;text-align:left;overflow-wrap:anywhere;line-height:1.25;font-size:12px;}}
-        .evm-meta div::before{{content:"";width:28px;height:28px;border-radius:8px;border:2px solid #071427;display:block;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);}}
         .evm-update{{min-width:0;display:grid;gap:14px;justify-items:end;align-content:start;color:#334155;font-size:11px;font-weight:800;}}
         .evm-update-card{{width:100%;border:1px solid rgba(226,232,240,.96);border-radius:14px;background:#FFFFFF;box-shadow:0 16px 34px rgba(15,23,42,.08);padding:15px 16px;display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;align-items:center;}}
         .evm-update-card i{{width:31px;height:31px;border:2px solid #071427;border-radius:999px;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:950;font-size:20px;}}
@@ -4356,16 +5232,25 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         .evm-panel{{width:100%;background:rgba(255,255,255,.82);border:1px solid rgba(203,213,225,.75);border-radius:18px;box-shadow:0 12px 28px rgba(15,23,42,.055);overflow:hidden;min-width:0;}}
         .evm-panel.pad{{padding:12px;}}.evm-panel-title{{width:100%;max-width:100%;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:950;color:#071427;text-align:left;margin:0 0 6px;text-transform:uppercase;letter-spacing:.08em;overflow-wrap:anywhere;}}
         .evm-gauge-grid{{display:grid;grid-template-columns:1fr 1fr;gap:0;}}.evm-gauge-grid>div:first-child{{border-right:1px solid #D8E2EC;}}
-        .evm-side{{display:grid;gap:10px;align-content:start;}}.evm-side-title{{background:rgba(255,255,255,.82);border:1px solid rgba(203,213,225,.75);border-radius:16px;padding:11px 12px;text-align:left;color:#071427;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:950;box-shadow:0 10px 22px rgba(15,23,42,.045);}}
-        .evm-side-card{{width:100%;overflow:hidden;background:rgba(255,255,255,.84);border:1px solid rgba(203,213,225,.76);border-left:5px solid var(--accent);border-radius:14px;padding:13px 14px;box-shadow:0 10px 22px rgba(15,23,42,.04);}}.evm-side-card span{{display:block;color:#071427;font-size:11px;line-height:1.22;font-weight:950;overflow-wrap:anywhere;}}.evm-side-card b{{display:block;color:var(--accent);font-size:clamp(17px,1.22vw,22px);line-height:1.05;margin:8px 0 5px;font-weight:950;overflow-wrap:anywhere;}}.evm-side-card small{{display:block;color:#475569;font-size:11px;line-height:1.25;font-weight:750;overflow-wrap:anywhere;}}
-        .evm-summary-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}}
-        .evm-summary-grid .evm-side-card{{padding:10px 11px;border-radius:11px;min-height:77px;box-shadow:none;}}
-        .evm-summary-grid .evm-side-card b{{font-size:clamp(15px,1.05vw,19px);margin:6px 0 4px;}}
-        .evm-var-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;overflow:hidden;}}
-        .evm-var-card{{min-width:0;width:100%;overflow:hidden;border-radius:16px;border:1px solid color-mix(in srgb,var(--accent) 26%,#D8E2EC);background:linear-gradient(135deg,rgba(255,255,255,.88),color-mix(in srgb,var(--accent) 6%,#FFFFFF));border-left:6px solid var(--accent);padding:15px 13px;box-shadow:0 10px 20px rgba(15,23,42,.05);}}
+        .evm-side{{display:grid;gap:10px;align-content:start;}}.evm-side-title{{background:linear-gradient(180deg,#FFFFFF,#F8FAFC);border:1px solid rgba(203,213,225,.82);border-radius:16px;padding:12px 14px;text-align:left;color:#071427;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:950;box-shadow:0 10px 22px rgba(15,23,42,.045);}}
+        .evm-side-card{{width:100%;overflow:hidden;position:relative;background:linear-gradient(135deg,#FFFFFF 0%,color-mix(in srgb,var(--accent) 5%,#FFFFFF) 100%);border:1px solid rgba(203,213,225,.86);border-left:7px solid var(--accent);border-radius:15px;padding:12px 13px 11px;box-shadow:0 10px 22px rgba(15,23,42,.04);}}
+        .evm-side-card-top{{display:grid;grid-template-columns:28px minmax(0,1fr);gap:9px;align-items:center;min-width:0;}}
+        .evm-side-card-top i{{width:26px;height:26px;border-radius:999px;background:color-mix(in srgb,var(--accent) 14%,#FFFFFF);color:var(--accent);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:15px;font-weight:950;}}
+        .evm-side-card span{{display:block;color:#071427;font-size:10.5px;line-height:1.14;font-weight:950;overflow-wrap:anywhere;text-transform:uppercase;letter-spacing:.02em;}}
+        .evm-side-card b{{display:block;color:var(--accent);font-size:clamp(17px,1.10vw,20px);line-height:1.02;margin:8px 0 4px;font-weight:950;overflow-wrap:anywhere;}}
+        .evm-side-card small{{display:block;color:#475569;font-size:10.5px;line-height:1.20;font-weight:800;overflow-wrap:anywhere;min-height:24px;}}
+        .evm-side-card>em{{display:block;width:100%;height:5px;border-radius:999px;background:#E8EDF5;margin-top:8px;overflow:hidden;}}
+        .evm-side-card>em strong{{display:block;width:var(--bar);height:100%;border-radius:999px;background:var(--accent);}}
+        .evm-summary-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}}
+        .evm-summary-grid .evm-side-card{{min-height:106px;}}
+        .evm-var-grid{{display:grid;grid-template-columns:1fr;gap:10px;width:100%;overflow:hidden;}}
+        .evm-var-card{{min-width:0;width:100%;overflow:hidden;position:relative;border-radius:17px;border:1px solid color-mix(in srgb,var(--accent) 28%,#D8E2EC);background:radial-gradient(circle at 92% 72%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 32%),linear-gradient(135deg,rgba(255,255,255,.94),color-mix(in srgb,var(--accent) 7%,#FFFFFF));border-left:8px solid var(--accent);padding:14px 15px 13px;box-shadow:0 10px 20px rgba(15,23,42,.05);min-height:106px;}}
+        .evm-var-head{{display:grid;grid-template-columns:35px minmax(0,1fr);gap:9px;align-items:center;}}
+        .evm-var-head i{{width:32px;height:32px;border-radius:11px;border:2px solid var(--accent);color:var(--accent);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:14px;font-weight:950;background:#FFFFFF;}}
         .evm-var-card span{{display:block;color:#0B1F3A;font-size:11px;line-height:1.14;font-weight:950;text-transform:uppercase;overflow-wrap:anywhere;}}
-        .evm-var-card b{{display:block;color:var(--accent);font-size:clamp(21px,1.75vw,29px);line-height:1;margin:8px 0 6px;font-weight:950;overflow-wrap:anywhere;}}
-        .evm-var-card small{{display:block;color:#475569;font-size:11px;font-weight:800;line-height:1.22;overflow-wrap:anywhere;}}
+        .evm-var-card b{{display:block;color:var(--accent);font-size:clamp(22px,1.70vw,28px);line-height:1;margin:9px 0 6px;font-weight:950;overflow-wrap:anywhere;}}
+        .evm-var-card small{{display:block;color:#475569;font-size:11px;font-weight:850;line-height:1.22;overflow-wrap:anywhere;max-width:78%;}}
+        .evm-var-card>em{{position:absolute;right:13px;bottom:13px;border-radius:999px;background:color-mix(in srgb,var(--accent) 10%,#FFFFFF);color:var(--accent);padding:5px 8px;font-size:10px;font-style:normal;font-weight:950;}}
         .evm-type-shell{{width:100%;display:grid;grid-template-columns:minmax(0,1fr);gap:7px;overflow:hidden;border:1px solid rgba(203,213,225,.78);border-radius:15px;background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);padding:8px;box-shadow:0 8px 18px rgba(15,23,42,.035);}}
         .evm-type-read{{border-radius:12px;background:linear-gradient(135deg,#F8FAFC,#EEFDF9);border:1px solid rgba(203,213,225,.86);color:#071427;padding:8px 10px;font-size:11px;font-weight:900;line-height:1.22;overflow-wrap:anywhere;}}
         .evm-type-list{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;overflow:hidden;padding:0;}}
@@ -4420,11 +5305,12 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         }}
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.evm-panel-marker){{
             border:1px solid rgba(226,232,240,.96)!important;border-radius:16px!important;background:#FFFFFF!important;
-            box-shadow:0 10px 24px rgba(15,23,42,.06)!important;padding:13px 14px!important;overflow:hidden!important;max-width:100%!important;
+            box-shadow:0 10px 24px rgba(15,23,42,.06)!important;padding:14px 15px!important;overflow:hidden!important;max-width:100%!important;
+            min-height:314px!important;height:100%!important;
         }}
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.evm-panel-marker) div[data-testid="stVerticalBlock"]{{gap:.45rem!important;}}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.evm-panel-marker) div[data-testid="stVerticalBlock"]{{gap:.45rem!important;min-height:284px!important;}}
         @media(max-width:1450px){{.evm-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.evm-main{{grid-template-columns:1fr;}}.evm-side{{grid-template-columns:repeat(2,minmax(0,1fr));}}.evm-side-title{{grid-column:1/-1;}}}}
-        @media(max-width:1180px){{.evm-head{{display:grid;grid-template-columns:64px minmax(0,1fr);}}.evm-meta,.evm-update{{grid-column:1/-1;}}.evm-update{{justify-items:stretch;}}}}
+        @media(max-width:1180px){{.evm-head{{display:grid;grid-template-columns:64px minmax(0,1fr);}}.evm-update{{grid-column:1/-1;justify-items:stretch;}}}}
         @media(max-width:950px){{.evm-row,.evm-gauge-grid,.evm-type-shell{{grid-template-columns:1fr;}}.evm-dashboard{{padding:18px;}}.evm-kpi-grid,.evm-side,.evm-scale-kpis{{grid-template-columns:1fr;}}.evm-flow{{grid-template-columns:1fr;}}.evm-flow-arrow{{transform:rotate(90deg);}}}}
         </style>
         <div class="evm-dashboard">
@@ -4435,7 +5321,6 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
               </svg>
             </div>
             <div class="evm-titlebox"><p class="evm-kicker">Control ejecutivo · valor ganado</p><h2>Control de costos y desempeño del proyecto</h2><p>{html.escape(evaluation_subtitle)}</p></div>
-            <div class="evm-meta"><div><span>FASE ACTUAL:</span><b>{html.escape(current_phase[:48])}</b></div></div>
             <div class="evm-update">
               <div class="evm-update-card"><i>$</i><div><span>MONEDA:</span><b>CLP</b></div></div>
               <div class="evm-update-date">Última actualización: {html.escape(cut_date)}</div>
@@ -4482,6 +5367,241 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
                 """,
                 unsafe_allow_html=True,
             )
+
+    def _analysis_tone(value: float, metric: str) -> tuple[str, str]:
+        if metric in {"CPI", "SPI"}:
+            if value >= 1:
+                return "#548235", "En control"
+            if value >= 0.90:
+                return "#B7791F", "Atención"
+            return "#C00000", "Crítico"
+        if metric in {"CV", "SV", "VAC"}:
+            return ("#548235", "Favorable") if value >= 0 else ("#C00000", "Desfavorable")
+        if metric == "EAC":
+            return ("#C00000", "Presión") if total_eac > total_bac else ("#548235", "En control")
+        return "#315D7C", "Lectura"
+
+    curve_last = curve_df.iloc[-1] if not curve_df.empty else pd.Series(dtype=float)
+    curve_pv = float(curve_last.get("_pv", 0.0) or 0.0)
+    curve_ev = float(curve_last.get("_ev", 0.0) or 0.0)
+    curve_ac = float(curve_last.get("_ac", 0.0) or 0.0)
+    curve_eac = float(curve_last.get("_eac", 0.0) or 0.0)
+    curve_gap_ev_ac = curve_ev - curve_ac
+    curve_gap_ev_pv = curve_ev - curve_pv
+    curve_read = (
+        "La curva muestra valor ganado por sobre costo real."
+        if curve_gap_ev_ac >= 0
+        else "La curva muestra costo real por sobre valor ganado."
+    )
+    curve_read += (
+        " El avance está sobre el plan."
+        if curve_gap_ev_pv >= 0
+        else " El avance está bajo el plan."
+    )
+
+    analysis_items = [
+        (
+            "CPI",
+            idx_fmt(cpi),
+            f"Por cada peso gastado, el filtro genera {idx_fmt(cpi)} pesos de valor ganado.",
+            "Mantener control de costo." if cpi >= 1 else "Revisar partidas con AC mayor que EV.",
+            *_analysis_tone(cpi, "CPI"),
+        ),
+        (
+            "SPI",
+            idx_fmt(spi),
+            f"El avance ganado equivale a {idx_fmt(spi)} veces el avance planificado.",
+            "Ritmo de ejecución sano." if spi >= 1 else "Revisar actividades que empujan atraso de plazo.",
+            *_analysis_tone(spi, "SPI"),
+        ),
+        (
+            "EAC",
+            money_display(total_eac),
+            f"Forecast al cierre comparado contra BAC de {money_display(total_bac)}.",
+            "Presupuesto proyectado presiona la línea base." if total_eac > total_bac else "Forecast se mantiene bajo la línea base.",
+            *_analysis_tone(total_eac, "EAC"),
+        ),
+        (
+            "VAC",
+            money_display(total_vac),
+            "Diferencia acumulada reportada para cierre del filtro activo.",
+            "Holgura al cierre." if total_vac >= 0 else "Riesgo de sobrecosto al cierre.",
+            *_analysis_tone(total_vac, "VAC"),
+        ),
+        (
+            "AC / BAC",
+            pct_fmt(ac_bac_ratio),
+            f"Costo real ejecutado sobre presupuesto base visible: {money_display(total_ac)} / {money_display(total_bac)}.",
+            "Mide consumo presupuestario del alcance filtrado.",
+            "#315D7C",
+            "Ejecución",
+        ),
+        (
+            "CV",
+            money_display(total_cv),
+            f"Valor ganado menos costo real: {money_display(total_ev)} - {money_display(total_ac)}.",
+            "Costo bajo valor ganado." if total_cv >= 0 else "Costo real supera el valor ganado.",
+            *_analysis_tone(total_cv, "CV"),
+        ),
+        (
+            "SV",
+            money_display(total_sv),
+            f"Valor ganado menos valor planificado: {money_display(total_ev)} - {money_display(total_pv)}.",
+            "Avance superior al plan." if total_sv >= 0 else "Avance bajo plan.",
+            *_analysis_tone(total_sv, "SV"),
+        ),
+        (
+            "Curva S",
+            money_display(curve_eac),
+            curve_read,
+            "Comparar separación entre PV, EV, AC y EAC para priorizar correcciones.",
+            "#003B78",
+            "Gráfico",
+        ),
+        (
+            "Tipo EC",
+            money_display(type_total_ac),
+            cost_type_read,
+            "Usar concentración por tipo para focalizar revisión de costos.",
+            "#315D7C",
+            "Distribución",
+        ),
+    ]
+    analysis_rows = "".join(
+        f"""
+        <tr>
+          <td><span class="evm-analysis-pill" style="--analysis-color:{color};">{html.escape(status)}</span></td>
+          <td><b>{html.escape(label)}</b><small>{html.escape(value)}</small></td>
+          <td>{html.escape(reading)}</td>
+          <td>{html.escape(action)}</td>
+        </tr>
+        """
+        for label, value, reading, action, color, status in analysis_items
+    )
+    st.markdown(
+        f"""
+        <style>
+        .evm-analysis-wrap{{
+            margin:14px 0 14px;
+            border:1px solid rgba(226,232,240,.96);
+            border-radius:20px;
+            background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);
+            box-shadow:0 14px 30px rgba(15,23,42,.055);
+            overflow:hidden;
+        }}
+        .evm-analysis-head{{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:16px;
+            padding:16px 18px 13px;
+            border-bottom:1px solid rgba(226,232,240,.92);
+        }}
+        .evm-analysis-head h3{{
+            margin:0;
+            color:#071427;
+            font-size:18px;
+            line-height:1.1;
+            font-weight:950;
+        }}
+        .evm-analysis-head p{{
+            margin:5px 0 0;
+            color:#64748B;
+            font-size:12px;
+            line-height:1.35;
+            font-weight:750;
+        }}
+        .evm-analysis-scope{{
+            flex:0 0 auto;
+            border-radius:999px;
+            background:#EEFDF9;
+            border:1px solid rgba(15,118,110,.18);
+            color:#0F766E;
+            padding:8px 12px;
+            font-size:11px;
+            font-weight:950;
+            white-space:nowrap;
+        }}
+        .evm-analysis-scroll{{overflow:auto;max-width:100%;}}
+        .evm-analysis-table{{
+            width:100%;
+            min-width:1040px;
+            border-collapse:separate;
+            border-spacing:0;
+            color:#071427;
+        }}
+        .evm-analysis-table th{{
+            background:#F8FAFC;
+            color:#64748B;
+            font-size:10px;
+            letter-spacing:.075em;
+            text-transform:uppercase;
+            font-weight:950;
+            text-align:left;
+            padding:11px 12px;
+            border-bottom:1px solid rgba(226,232,240,.96);
+        }}
+        .evm-analysis-table td{{
+            padding:12px;
+            border-bottom:1px solid rgba(226,232,240,.78);
+            vertical-align:middle;
+            font-size:12px;
+            line-height:1.35;
+            font-weight:800;
+        }}
+        .evm-analysis-table tr:last-child td{{border-bottom:0;}}
+        .evm-analysis-table tr:hover td{{background:#FBFDFC;}}
+        .evm-analysis-table td:nth-child(2) b{{
+            display:block;
+            color:#071427;
+            font-size:13px;
+            font-weight:950;
+        }}
+        .evm-analysis-table td:nth-child(2) small{{
+            display:block;
+            color:#315D7C;
+            font-size:12px;
+            font-weight:950;
+            margin-top:2px;
+        }}
+        .evm-analysis-pill{{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            min-width:86px;
+            border-radius:999px;
+            background:color-mix(in srgb,var(--analysis-color) 10%,#FFFFFF);
+            border:1px solid color-mix(in srgb,var(--analysis-color) 24%,#FFFFFF);
+            color:var(--analysis-color);
+            padding:6px 9px;
+            font-size:10.5px;
+            font-weight:950;
+            white-space:nowrap;
+        }}
+        @media(max-width:900px){{
+            .evm-analysis-head{{display:block;}}
+            .evm-analysis-scope{{display:inline-flex;margin-top:10px;}}
+            .evm-analysis-table{{min-width:920px;}}
+        }}
+        </style>
+        <div class="evm-analysis-wrap">
+          <div class="evm-analysis-head">
+            <div>
+              <h3>Lectura ejecutiva de indicadores y gráficos</h3>
+              <p>Bullets recalculados automáticamente sobre los selectores activos y la información vigente del proyecto.</p>
+            </div>
+            <div class="evm-analysis-scope">{len(evm_perf_df)} partidas visibles</div>
+          </div>
+          <div class="evm-analysis-scroll">
+            <table class="evm-analysis-table">
+              <thead><tr><th>Estado</th><th>Indicador / gráfico</th><th>Lectura del análisis</th><th>Implicancia PMO</th></tr></thead>
+              <tbody>{analysis_rows}</tbody>
+            </table>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.markdown(
         """
@@ -6147,7 +7267,6 @@ def render_inputs_project_gantt():
         title=gantt_title,
     )
     render_inputs_gantt_executive_summary(plot_df, date_mode=date_mode)
-    render_dashboard_control_costos_evm(plot_df)
 
 
 @st.cache_resource(show_spinner=False)
@@ -7957,7 +9076,7 @@ def render_inputs_capex_10kw_detail():
         .capex10-foot-ico{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eef4ff;color:#315d9b;font-size:20px;}
         .capex10-foot-k{font-size:11px;color:#587093;margin:0 0 4px 0;}
         .capex10-foot-v{font-size:12px;color:#18345c;margin:0;font-weight:600;}
-        .capex10-subnav{display:grid;grid-template-columns:1fr 1.2fr;gap:12px;margin:0 0 16px 0;}
+        .capex10-subnav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 16px 0;}
         .capex10-subcard{border:1px solid #d9e2ee;border-radius:13px;background:linear-gradient(180deg,#fff,#f8fbff);padding:15px 16px;min-height:98px;box-shadow:0 10px 24px rgba(15,23,42,.045);}
         .capex10-subcard.active{border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.10),0 12px 28px rgba(15,23,42,.06);}
         .capex10-sub-k{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:0 0 7px 0;}
@@ -7987,12 +9106,15 @@ def render_inputs_capex_10kw_detail():
             ):
                 st.session_state.pop(gantt_key, None)
 
+    valid_capex10_subblocks = {"control_fondos", "vista_integrada", "control_cost"}
     if capex10_subblock_key not in st.session_state:
-        st.session_state[capex10_subblock_key] = "control_cost"
+        st.session_state[capex10_subblock_key] = "control_fondos"
+    elif st.session_state[capex10_subblock_key] not in valid_capex10_subblocks:
+        st.session_state[capex10_subblock_key] = "control_fondos"
 
     capex10_subblocks = [
         (
-            "control_cost",
+            "control_fondos",
             "Control de Fondos y Costos de Liberación",
             "Fondos requeridos, costos pendientes y composición de la brecha para completar la liberación del piloto 10 kW.",
         ),
@@ -8001,8 +9123,13 @@ def render_inputs_capex_10kw_detail():
             "Cronograma",
             "Vista Gantt y filtros de avance.",
         ),
+        (
+            "control_cost",
+            "Control Cost",
+            "Gestión de cortes históricos, snapshots EVM y comparación mensual de control PMO.",
+        ),
     ]
-    sub_cols = st.columns(2)
+    sub_cols = st.columns(3)
     for idx, (sub_value, sub_title, sub_copy) in enumerate(capex10_subblocks):
         is_active = st.session_state.get(capex10_subblock_key) == sub_value
         with sub_cols[idx]:
@@ -8036,6 +9163,15 @@ def render_inputs_capex_10kw_detail():
         )
         with st.container(border=True):
             render_inputs_project_gantt()
+        return
+
+    if selected_capex10_subblock == "control_cost":
+        try:
+            df_control_cost = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+        except Exception as exc:
+            st.warning(f"No se pudo cargar Control Cost: {exc}")
+        else:
+            render_control_cost_block(df_control_cost)
         return
 
     render_pilotos_ana_embedded_view()
