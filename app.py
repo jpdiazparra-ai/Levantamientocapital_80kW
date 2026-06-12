@@ -253,6 +253,11 @@ INGENIERIA_PILOTO_10KW_CSV_URL_DEFAULT = (
     "2PACX-1vQOu_diukhhZWDV7kIcU9Ewto4lo_xQdSEZ0FMi2oto-Jb4r2e7aRNCBKF3qoVVk_4XsimMFx7eASkt/"
     "pub?gid=1868833924&single=true&output=csv"
 )
+SENSIBILIDAD_CLIENTES_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vRBfp2xkolGQ-6lbjUN60ST71pSD6fjR7rjQol3NqOJGpHRYYoEZmrPFVw20aP3VlfeitYqDr0L25c2/"
+    "pub?gid=1789037315&single=true&output=csv"
+)
 INGENIERIA_PILOTO_10KW_CACHE_VERSION = 3
 INGENIERIA_PILOTO_10KW_ALLOWED_MONTHS = {"dic", "abr", "may"}
 BULLET_CONTEXTO_10KW_CSV_URL_DEFAULT = (
@@ -3496,19 +3501,19 @@ def render_cut_compare_table(compare_df: pd.DataFrame) -> None:
         pct_value = row["Diferencia porcentual"]
         diff_color = "#548235" if diff_value >= 0 else "#C00000"
         bar_width = min(100, abs(diff_value) / max_abs_delta * 100)
+        pct_display = "" if pd.isna(pct_value) else html.escape(f"{float(pct_value) * 100:.1f}%".replace(".", ","))
         rows_html.append(
-            f"""
-            <tr style="--delta-color:{diff_color};--delta-width:{bar_width:.4f}%;">
-              <td><span class="cut-table-metric">{html.escape(metric)}</span></td>
-              <td>{html.escape(_format_cut_metric(metric, base_value))}</td>
-              <td>{html.escape(_format_cut_metric(metric, current_value))}</td>
-              <td><b>{html.escape(_format_cut_metric(metric, diff_value))}</b><i><em></em></i></td>
-              <td>{'' if pd.isna(pct_value) else html.escape(f'{float(pct_value) * 100:.1f}%'.replace('.', ','))}</td>
-            </tr>
-            """
+            (
+                f'<div class="cut-compare-row" style="--delta-color:{diff_color};--delta-width:{bar_width:.4f}%;">'
+                f'<div><span class="cut-table-metric">{html.escape(metric)}</span></div>'
+                f'<div>{html.escape(_format_cut_metric(metric, base_value))}</div>'
+                f'<div>{html.escape(_format_cut_metric(metric, current_value))}</div>'
+                f'<div><b>{html.escape(_format_cut_metric(metric, diff_value))}</b><i><em></em></i></div>'
+                f"<div>{pct_display}</div>"
+                "</div>"
+            )
         )
-    st.markdown(
-        f"""
+    compare_html = f"""
         <style>
         .cut-compare-shell{{
             width:100%;max-width:100%;overflow:hidden;border:1px solid rgba(226,232,240,.96);
@@ -3522,23 +3527,29 @@ def render_cut_compare_table(compare_df: pd.DataFrame) -> None:
         .cut-compare-head h4{{margin:0;color:#071427;font-size:17px;font-weight:950;letter-spacing:.01em;}}
         .cut-compare-head span{{color:#64748B;font-size:11px;font-weight:850;}}
         .cut-table-wrap{{width:100%;overflow:auto;}}
-        .cut-compare-table{{width:100%;border-collapse:separate;border-spacing:0;min-width:780px;}}
-        .cut-compare-table th{{
+        .cut-compare-grid{{width:100%;min-width:780px;}}
+        .cut-compare-grid-head,
+        .cut-compare-row{{
+            display:grid;
+            grid-template-columns:minmax(105px,.7fr) repeat(4,minmax(135px,1fr));
+            align-items:center;
+        }}
+        .cut-compare-grid-head>div{{
             color:#64748B;background:#F8FAFC;font-size:10px;font-weight:950;letter-spacing:.08em;
             text-transform:uppercase;text-align:left;padding:11px 14px;border-bottom:1px solid rgba(226,232,240,.96);
         }}
-        .cut-compare-table td{{
+        .cut-compare-row>div{{
             color:#071427;font-size:12.5px;font-weight:850;padding:12px 14px;border-bottom:1px solid rgba(226,232,240,.72);
             vertical-align:middle;white-space:nowrap;
         }}
-        .cut-compare-table tr:last-child td{{border-bottom:none;}}
+        .cut-compare-row:last-child>div{{border-bottom:none;}}
         .cut-table-metric{{
             display:inline-flex;border-radius:999px;background:#EEF5F9;color:#315D7C;
             padding:6px 9px;font-size:11px;font-weight:950;
         }}
-        .cut-compare-table td b{{display:block;color:var(--delta-color);font-size:13px;font-weight:950;margin-bottom:5px;}}
-        .cut-compare-table td i{{display:block;width:100%;height:5px;border-radius:999px;background:#E7EDF3;overflow:hidden;}}
-        .cut-compare-table td i em{{display:block;width:var(--delta-width);height:100%;border-radius:999px;background:var(--delta-color);}}
+        .cut-compare-row>div b{{display:block;color:var(--delta-color);font-size:13px;font-weight:950;margin-bottom:5px;}}
+        .cut-compare-row>div i{{display:block;width:100%;height:5px;border-radius:999px;background:#E7EDF3;overflow:hidden;}}
+        .cut-compare-row>div i em{{display:block;width:var(--delta-width);height:100%;border-radius:999px;background:var(--delta-color);}}
         </style>
         <div class="cut-compare-shell">
           <div class="cut-compare-head">
@@ -3546,23 +3557,20 @@ def render_cut_compare_table(compare_df: pd.DataFrame) -> None:
             <span>Valores agregados del filtro activo</span>
           </div>
           <div class="cut-table-wrap">
-            <table class="cut-compare-table">
-              <thead>
-                <tr>
-                  <th>Indicador</th>
-                  <th>Corte base</th>
-                  <th>Corte actual</th>
-                  <th>Diferencia absoluta</th>
-                  <th>Diferencia porcentual</th>
-                </tr>
-              </thead>
-              <tbody>{''.join(rows_html)}</tbody>
-            </table>
+            <div class="cut-compare-grid">
+              <div class="cut-compare-grid-head">
+                <div>Indicador</div>
+                <div>Corte base</div>
+                <div>Corte actual</div>
+                <div>Diferencia absoluta</div>
+                <div>Diferencia porcentual</div>
+              </div>
+              {''.join(rows_html)}
+            </div>
           </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """
+    st.markdown(textwrap.dedent(compare_html).strip(), unsafe_allow_html=True)
 
 
 def render_cut_management(df_actual: pd.DataFrame) -> None:
@@ -8994,6 +9002,1598 @@ def get_valor_activo_tecnologico_construido(refresh_nonce: int = 0) -> tuple[flo
     return monto_total + capacidades_externo + know_how_fw, monto_total, capacidades_externo, know_how_fw
 
 
+def parse_percent_local(value, default: float = 0.0) -> float:
+    if pd.isna(value):
+        return default
+    text = str(value).strip()
+    if not text:
+        return default
+    has_percent_symbol = "%" in text
+    text = text.replace("%", "").replace(" ", "").replace("\u00a0", "")
+    text = text.replace(".", "").replace(",", ".") if "," in text else text
+    text = re.sub(r"[^0-9.\-]", "", text)
+    try:
+        number = float(text)
+    except ValueError:
+        return default
+    if has_percent_symbol:
+        return number / 100.0
+    return number / 100.0 if abs(number) > 1 else number
+
+
+def parse_float_local(value, default: float = 0.0) -> float:
+    if pd.isna(value):
+        return default
+    text = str(value).strip()
+    if not text:
+        return default
+    text = text.replace(" ", "").replace("\u00a0", "")
+    if "," in text and "." in text:
+        text = text.replace(".", "").replace(",", ".")
+    elif "," in text:
+        text = text.replace(".", "").replace(",", ".")
+    elif "." in text:
+        parts = text.split(".")
+        if len(parts) == 2 and len(parts[1]) == 3 and parts[0].replace("-", "").isdigit():
+            text = "".join(parts)
+        elif len(parts) > 2:
+            text = "".join(parts)
+    text = re.sub(r"[^0-9.\-]", "", text)
+    try:
+        return float(text)
+    except ValueError:
+        return default
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_sensibilidad_clientes_model(url: str, refresh_nonce: int = 0) -> dict:
+    raw = read_remote_csv(url, refresh_nonce=refresh_nonce, header=None, dtype=str).fillna("")
+
+    def cell(row: int, col: int) -> str:
+        try:
+            return str(raw.iat[row - 1, col - 1]).strip()
+        except Exception:
+            return ""
+
+    inputs = {
+        "consumo_mensual": parse_float_local(cell(4, 2), 2160.0),
+        "cobertura_objetivo": parse_percent_local(cell(5, 2), 1.0),
+        "factor_planta": parse_percent_local(cell(6, 2), 0.35),
+        "precio_red": parse_money_clp_robusto(cell(7, 2)) or 220.0,
+        "precio_electrogeno": parse_money_clp_robusto(cell(8, 2)) or 800.0,
+        "precio_fv_bess": parse_money_clp_robusto(cell(9, 2)) or 95.0,
+        "tipo_cambio": parse_money_clp_robusto(cell(10, 2)) or 950.0,
+        "vida_util": parse_float_local(cell(11, 2), 15.0),
+        "om_anual_pct": parse_percent_local(cell(12, 2), 0.01),
+        "bos_pct": parse_percent_local(cell(13, 2), 0.25),
+        "tasa_descuento": parse_percent_local(cell(14, 2), 0.10),
+    }
+    mix = {
+        "Red eléctrica": parse_percent_local(cell(5, 8), 0.30),
+        "Electrógeno": parse_percent_local(cell(6, 8), 0.60),
+        "FV/BESS existente": parse_percent_local(cell(7, 8), 0.10),
+    }
+
+    scenario_rows = []
+    for row in range(19, 24):
+        name = cell(row, 1)
+        if not name:
+            continue
+        scenario_rows.append(
+            {
+                "Escenario": name,
+                "Potencia kW": parse_float_local(cell(row, 2)),
+                "Costo unitario CLP": parse_money_clp_robusto(cell(row, 3)),
+                "Factor planta": parse_float_local(cell(row, 4), inputs["factor_planta"]),
+                "m2 unidad": parse_float_local(cell(row, 5)),
+            }
+        )
+
+    sensitivity_rows = []
+    turbine_names = [cell(28, col) for col in range(2, 7)]
+    for row in range(29, 34):
+        coverage = parse_percent_local(cell(row, 1), np.nan)
+        if not np.isfinite(coverage):
+            continue
+        record = {"Cobertura": coverage}
+        for idx, turbine in enumerate(turbine_names, start=2):
+            if turbine:
+                record[turbine] = parse_float_local(cell(row, idx), np.nan)
+        sensitivity_rows.append(record)
+
+    checklist_rows = []
+    for row in range(19, 27):
+        item = cell(row, 25)
+        if not item:
+            continue
+        checklist_rows.append(
+            {
+                "Ítem a validar": item,
+                "Estado": cell(row, 26),
+                "Responsable": cell(row, 27),
+                "Dato requerido": cell(row, 28),
+                "Impacto en decisión": cell(row, 29),
+            }
+        )
+
+    return {
+        "inputs": inputs,
+        "mix": mix,
+        "scenarios": pd.DataFrame(scenario_rows),
+        "sensitivity": pd.DataFrame(sensitivity_rows),
+        "checklist": pd.DataFrame(checklist_rows),
+    }
+
+
+def build_client_sensitivity_scenarios(
+    scenarios_df: pd.DataFrame,
+    consumo_mensual: float,
+    cobertura_objetivo: float,
+    margen_seguridad: float,
+    factor_planta: float,
+    bos_pct: float,
+    om_anual_pct: float,
+    vida_util: float,
+    costo_red: float,
+    costo_electrogeno: float,
+    costo_fv_bess: float,
+    valor_monetizacion_excedente: float,
+    mix_red: float,
+    mix_electrogeno: float,
+    mix_fv_bess: float,
+) -> pd.DataFrame:
+    if scenarios_df.empty:
+        return pd.DataFrame()
+
+    mix_total = mix_red + mix_electrogeno + mix_fv_bess
+    if mix_total <= 0:
+        mix_red, mix_electrogeno, mix_fv_bess = 0.30, 0.60, 0.10
+        mix_total = 1.0
+    mix_red, mix_electrogeno, mix_fv_bess = mix_red / mix_total, mix_electrogeno / mix_total, mix_fv_bess / mix_total
+    costo_ponderado = (mix_red * costo_red) + (mix_electrogeno * costo_electrogeno) + (mix_fv_bess * costo_fv_bess)
+    base_target_kwh = max(consumo_mensual * cobertura_objetivo, 0.0)
+    safety_kwh = base_target_kwh * max(margen_seguridad, 0.0)
+    target_kwh = base_target_kwh + safety_kwh
+    vida_util = max(vida_util, 1.0)
+
+    rows = []
+    for _, row in scenarios_df.iterrows():
+        power_kw = float(row.get("Potencia kW") or 0.0)
+        unit_cost = float(row.get("Costo unitario CLP") or 0.0)
+        fp = factor_planta if factor_planta > 0 else float(row.get("Factor planta") or 0.35)
+        gen_unit = power_kw * 24 * 30 * fp
+        turbines = int(math.ceil(target_kwh / gen_unit)) if gen_unit > 0 and target_kwh > 0 else 0
+        turbines = max(turbines, 1) if power_kw > 0 else turbines
+        gen_month = turbines * gen_unit
+        useful_kwh = min(gen_month, target_kwh) if target_kwh > 0 else 0.0
+        surplus_kwh = max(gen_month - useful_kwh, 0.0)
+        installed_kw = turbines * power_kw
+        turbine_capex = turbines * unit_cost
+        bos_capex = turbine_capex * bos_pct
+        total_capex = turbine_capex + bos_capex
+        om_annual = total_capex * om_anual_pct
+        annual_red = useful_kwh * 12 * costo_red
+        annual_elect = useful_kwh * 12 * costo_electrogeno
+        annual_surplus = surplus_kwh * 12 * max(valor_monetizacion_excedente, 0.0)
+        annual_hybrid_without_surplus = useful_kwh * 12 * costo_ponderado
+        annual_hybrid = annual_hybrid_without_surplus + annual_surplus
+        lcoe = ((total_capex + (om_annual * vida_util)) / (useful_kwh * 12 * vida_util)) if useful_kwh > 0 else np.nan
+
+        def payback(saving: float) -> float:
+            net = saving - om_annual
+            return total_capex / net if net > 0 else np.nan
+
+        rows.append(
+            {
+                "Escenario": row.get("Escenario"),
+                "Potencia kW": power_kw,
+                "N° turbinas": turbines,
+                "Potencia instalada kW": installed_kw,
+                "Demanda objetivo base kWh/mes": base_target_kwh,
+                "Margen seguridad kWh/mes": safety_kwh,
+                "Demanda objetivo ajustada kWh/mes": target_kwh,
+                "Generación kWh/mes": gen_month,
+                "Energía útil kWh/mes": useful_kwh,
+                "Excedente kWh/mes": surplus_kwh,
+                "Cobertura real": gen_month / consumo_mensual if consumo_mensual > 0 else np.nan,
+                "CAPEX turbinas CLP": turbine_capex,
+                "BOS/instalación CLP": bos_capex,
+                "CAPEX total CLP": total_capex,
+                "O&M anual CLP": om_annual,
+                "Ahorro anual red CLP": annual_red,
+                "Ahorro anual electrógeno CLP": annual_elect,
+                "Monetización excedente anual CLP": annual_surplus,
+                "Ahorro anual híbrido sin excedente CLP": annual_hybrid_without_surplus,
+                "Ahorro anual híbrido CLP": annual_hybrid,
+                "LCOE simple CLP/kWh": lcoe,
+                "Payback neto red años": payback(annual_red),
+                "Payback neto electrógeno años": payback(annual_elect),
+                "Payback neto híbrido sin excedente años": payback(annual_hybrid_without_surplus),
+                "Payback neto híbrido años": payback(annual_hybrid),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def render_client_sensitivity_analysis():
+    try:
+        model = load_sensibilidad_clientes_model(SENSIBILIDAD_CLIENTES_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+    except Exception as exc:
+        st.error(f"No se pudo cargar el modelo de sensibilidad para clientes: {exc}")
+        return
+
+    defaults = model["inputs"]
+    mix_defaults = model["mix"]
+    source_scenarios = model["scenarios"]
+    checklist_df = model["checklist"]
+
+    st.markdown(
+        """
+        <style>
+        .client-sens-hero{border:1px solid rgba(15,23,42,.12);border-radius:18px;background:linear-gradient(135deg,#0b1220 0%,#14313a 55%,#0f766e 100%);padding:24px 26px;margin:18px 0 16px 0;box-shadow:0 18px 42px rgba(15,23,42,.18);}
+        .client-sens-k{font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#99f6e4;margin:0 0 8px 0;}
+        .client-sens-t{font-size:30px;line-height:1.05;font-weight:950;color:#ffffff;margin:0 0 8px 0;}
+        .client-sens-s{font-size:13.5px;line-height:1.48;color:#d6f3ed;font-weight:760;margin:0;max-width:1050px;}
+        .client-note{border:1px solid #bae6df;border-left:5px solid #0f766e;background:#f0fdfa;border-radius:10px;padding:13px 15px;color:#164e63;font-size:12.5px;font-weight:790;line-height:1.42;margin:8px 0 16px;}
+        .client-panel-title{font-size:16px;font-weight:950;color:#0f172a;margin:0 0 4px;}
+        .client-panel-sub{font-size:12px;font-weight:760;color:#64748b;margin:0 0 10px;}
+        .client-input-head{border:1px solid #d7e1eb;border-radius:14px;background:#ffffff;padding:16px 18px;margin:0 0 14px;box-shadow:0 10px 24px rgba(15,23,42,.045);}
+        .client-input-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#0f766e;font-weight:950;margin:0 0 6px;}
+        .client-input-t{font-size:20px;line-height:1.1;color:#0f172a;font-weight:950;margin:0 0 6px;}
+        .client-input-s{font-size:12.5px;line-height:1.38;color:#64748b;font-weight:760;margin:0;max-width:980px;}
+        .client-input-section{font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:#334155;font-weight:950;margin:2px 0 8px;padding:0 0 7px;border-bottom:1px solid #e2e8f0;}
+        .client-impact-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:14px 0 18px;}
+        .client-impact-card{border:1px solid #d7e1eb;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);padding:15px 16px;box-shadow:0 10px 24px rgba(15,23,42,.055);min-height:112px;}
+        .client-impact-k{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#0f766e;font-weight:950;margin:0 0 8px;}
+        .client-impact-v{font-size:22px;line-height:1.02;font-weight:950;color:#0b1730;margin:0 0 7px;overflow-wrap:anywhere;}
+        .client-impact-s{font-size:11.5px;line-height:1.28;color:#475569;font-weight:740;margin:0;}
+        .client-section-marker{margin:22px 0 12px;padding:12px 14px;border-left:5px solid #0f766e;background:#f8fafc;border-radius:10px;border-top:1px solid #e2e8f0;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;}
+        .client-section-k{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#0f766e;font-weight:950;margin:0 0 4px;}
+        .client-section-t{font-size:15px;line-height:1.15;color:#0f172a;font-weight:950;margin:0;}
+        .client-section-s{font-size:12px;line-height:1.35;color:#64748b;font-weight:740;margin:4px 0 0;}
+        .client-reading-card{border:1px solid #d7e1eb;border-radius:14px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);box-shadow:0 10px 24px rgba(15,23,42,.05);padding:16px 18px;margin-top:30px;min-height:300px;}
+        .client-reading-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#0f766e;font-weight:950;margin:0 0 8px;}
+        .client-reading-t{font-size:18px;line-height:1.12;color:#0f172a;font-weight:950;margin:0 0 10px;}
+        .client-reading-line{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #e2e8f0;font-size:12px;color:#475569;font-weight:760;}
+        .client-reading-line b{color:#0f172a;font-weight:950;text-align:right;}
+        .client-table-shell{border:1px solid #d7e1eb;border-radius:14px;background:#ffffff;box-shadow:0 12px 28px rgba(15,23,42,.055);overflow:hidden;margin:8px 0 14px;}
+        .client-table-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;background:#0b1220;color:#fff;padding:16px 18px;}
+        .client-table-head h3{font-size:17px;font-weight:950;margin:0 0 4px;}
+        .client-table-head p{font-size:12px;line-height:1.35;color:#cbd5e1;font-weight:760;margin:0;}
+        .client-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;color:#0f172a;}
+        .client-table th{background:#f8fafc;color:#475569;text-transform:uppercase;letter-spacing:.07em;font-size:10px;font-weight:950;text-align:right;padding:11px 12px;border-bottom:1px solid #e2e8f0;}
+        .client-table th:first-child,.client-table td:first-child{text-align:left;}
+        .client-table td{padding:12px;border-bottom:1px solid #edf2f7;text-align:right;font-weight:780;vertical-align:middle;}
+        .client-table tr:last-child td{border-bottom:none;}
+        .client-table tr.recommended td{background:#ecfdf5;}
+        .client-badge{display:inline-flex;align-items:center;border-radius:999px;background:#d1fae5;color:#065f46;padding:5px 8px;font-size:10px;font-weight:950;letter-spacing:.04em;text-transform:uppercase;}
+        .client-muted{color:#64748b;font-weight:740;}
+        .client-download-wrap{display:flex;justify-content:flex-end;margin:10px 0 18px;}
+        @media (max-width:1300px){.client-impact-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        @media (max-width:720px){.client-impact-grid{grid-template-columns:1fr;}}
+        @media (max-width:720px){.client-sens-t{font-size:24px;}}
+        </style>
+        <div class="client-sens-hero">
+          <p class="client-sens-k">Sub bloque 4 · Modelo comercial interactivo</p>
+          <h2 class="client-sens-t">Análisis de sensibilidad para clientes</h2>
+          <p class="client-sens-s">Modelo dinámico para evaluar cobertura eólica, configuración de turbinas, CAPEX, LCOE y payback neto según el mix energético real del sitio.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div class="client-input-head">
+              <p class="client-input-k">Inputs principales</p>
+              <h3 class="client-input-t">Supuestos activos del caso cliente</h3>
+              <p class="client-input-s">Controla demanda, cobertura, recurso eólico, estructura de costos y mix energético. Cada cambio recalcula automáticamente CAPEX, LCOE, payback y matriz de sensibilidad.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.markdown('<div class="client-input-section">Demanda y cobertura</div>', unsafe_allow_html=True)
+            consumo_mensual = st.number_input(
+                "Consumo mensual torre (kWh/mes)",
+                min_value=100.0,
+                max_value=100000.0,
+                value=float(defaults["consumo_mensual"]),
+                step=100.0,
+                key="client_sens_consumo",
+            )
+            cobertura_objetivo_pct = st.slider(
+                "Cobertura objetivo eólica",
+                min_value=10,
+                max_value=100,
+                value=int(round(defaults["cobertura_objetivo"] * 100)),
+                step=5,
+                key="client_sens_cobertura",
+            )
+            margen_seguridad_pct = st.slider(
+                "Seguridad adicional para cobertura",
+                min_value=0,
+                max_value=50,
+                value=0,
+                step=5,
+                key="client_sens_security_margin",
+            )
+        with c2:
+            st.markdown('<div class="client-input-section">Recurso y horizonte</div>', unsafe_allow_html=True)
+            factor_planta_pct = st.slider(
+                "Factor planta base",
+                min_value=15,
+                max_value=55,
+                value=int(round(defaults["factor_planta"] * 100)),
+                step=1,
+                key="client_sens_factor",
+            )
+            vida_util = st.number_input(
+                "Vida útil análisis (años)",
+                min_value=1.0,
+                max_value=30.0,
+                value=float(defaults["vida_util"]),
+                step=1.0,
+                key="client_sens_vida",
+            )
+        with c3:
+            st.markdown('<div class="client-input-section">Costos evitados</div>', unsafe_allow_html=True)
+            costo_red = st.number_input("Costo energía red (CLP/kWh)", min_value=0.0, value=float(defaults["precio_red"]), step=10.0, key="client_sens_red")
+            costo_electrogeno = st.number_input("Costo energía electrógeno (CLP/kWh)", min_value=0.0, value=float(defaults["precio_electrogeno"]), step=25.0, key="client_sens_elect")
+            valor_monetizacion_excedente = st.number_input("Monetización excedente (CLP/kWh)", min_value=0.0, value=0.0, step=10.0, key="client_sens_surplus_price")
+        with c4:
+            st.markdown('<div class="client-input-section">CAPEX y operación</div>', unsafe_allow_html=True)
+            costo_fv_bess = st.number_input("Costo referencia FV/BESS (CLP/kWh)", min_value=0.0, value=float(defaults["precio_fv_bess"]), step=5.0, key="client_sens_fv")
+            bos_pct = st.slider("Instalación/BOS", min_value=0, max_value=60, value=int(round(defaults["bos_pct"] * 100)), step=1, key="client_sens_bos")
+
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.markdown('<div class="client-input-section">Mix energético</div>', unsafe_allow_html=True)
+            mix_red_pct = st.slider("Mix red eléctrica", 0, 100, int(round(mix_defaults.get("Red eléctrica", 0.30) * 100)), 5, key="client_sens_mix_red")
+        with m2:
+            st.markdown('<div class="client-input-section">&nbsp;</div>', unsafe_allow_html=True)
+            mix_elect_pct = st.slider("Mix electrógeno", 0, 100, int(round(mix_defaults.get("Electrógeno", 0.60) * 100)), 5, key="client_sens_mix_elect")
+        with m3:
+            st.markdown('<div class="client-input-section">&nbsp;</div>', unsafe_allow_html=True)
+            mix_fv_pct = st.slider("Mix FV/BESS", 0, 100, int(round(mix_defaults.get("FV/BESS existente", 0.10) * 100)), 5, key="client_sens_mix_fv")
+        with m4:
+            st.markdown('<div class="client-input-section">&nbsp;</div>', unsafe_allow_html=True)
+            om_anual_pct = st.slider("O&M anual sobre CAPEX", 0.0, 8.0, float(defaults["om_anual_pct"] * 100), 0.25, key="client_sens_om")
+
+    cobertura_objetivo = cobertura_objetivo_pct / 100.0
+    margen_seguridad = margen_seguridad_pct / 100.0
+    factor_planta = factor_planta_pct / 100.0
+    bos_rate = bos_pct / 100.0
+    om_rate = om_anual_pct / 100.0
+    mix_red = mix_red_pct / 100.0
+    mix_elect = mix_elect_pct / 100.0
+    mix_fv = mix_fv_pct / 100.0
+    mix_total = mix_red + mix_elect + mix_fv
+    if abs(mix_total - 1.0) > 0.001:
+        st.warning(f"El mix energético suma {mix_total * 100:.0f}%. Para el cálculo se normaliza automáticamente a 100%.")
+
+    scenario_df = build_client_sensitivity_scenarios(
+        source_scenarios,
+        consumo_mensual,
+        cobertura_objetivo,
+        margen_seguridad,
+        factor_planta,
+        bos_rate,
+        om_rate,
+        vida_util,
+        costo_red,
+        costo_electrogeno,
+        costo_fv_bess,
+        valor_monetizacion_excedente,
+        mix_red,
+        mix_elect,
+        mix_fv,
+    )
+    if scenario_df.empty:
+        st.info("No hay escenarios disponibles en la hoja de sensibilidad.")
+        return
+
+    best_payback_row = scenario_df.dropna(subset=["Payback neto híbrido años"]).sort_values("Payback neto híbrido años").head(1)
+    best_lcoe_row = scenario_df.dropna(subset=["LCOE simple CLP/kWh"]).sort_values("LCOE simple CLP/kWh").head(1)
+    recommended = best_payback_row.iloc[0] if not best_payback_row.empty else scenario_df.iloc[0]
+    lcoe_best = best_lcoe_row.iloc[0] if not best_lcoe_row.empty else recommended
+    normalized_mix_total = max(mix_total, 0.0001)
+    costo_ponderado = ((mix_red / normalized_mix_total) * costo_red) + ((mix_elect / normalized_mix_total) * costo_electrogeno) + ((mix_fv / normalized_mix_total) * costo_fv_bess)
+
+    chart_df = scenario_df.copy()
+    turbine_order = ["VAWT 1 kW", "VAWT 3 kW", "VAWT 5 kW", "VAWT 10 kW", "VAWT 80 kW"]
+    chart_df["Escenario"] = pd.Categorical(chart_df["Escenario"], categories=turbine_order, ordered=True)
+    chart_df = chart_df.sort_values("Escenario").copy()
+    chart_df["Escenario"] = chart_df["Escenario"].astype(str)
+    chart_df["CAPEX MM CLP"] = chart_df["CAPEX total CLP"] / 1_000_000
+    chart_df["LCOE"] = pd.to_numeric(chart_df["LCOE simple CLP/kWh"], errors="coerce")
+    chart_df["Payback híbrido"] = pd.to_numeric(chart_df["Payback neto híbrido años"], errors="coerce")
+    chart_df["Payback sin excedente"] = pd.to_numeric(chart_df["Payback neto híbrido sin excedente años"], errors="coerce")
+    chart_df["Monetización excedente MM"] = pd.to_numeric(chart_df["Monetización excedente anual CLP"], errors="coerce") / 1_000_000
+    chart_df = chart_df.replace([np.inf, -np.inf], np.nan)
+    payback_chart_df = chart_df.dropna(subset=["Payback híbrido"]).copy()
+    payback_axis_max = float(payback_chart_df["Payback híbrido"].max() * 1.22) if not payback_chart_df.empty else 10.0
+
+    def _format_payback_years(value) -> str:
+        if pd.isna(value) or not np.isfinite(float(value)):
+            return "N/A"
+        value = float(value)
+        total_months = max(1, int(round(value * 12)))
+        years = total_months // 12
+        months = total_months % 12
+        if years <= 0:
+            return f"{months} mes" if months == 1 else f"{months} meses"
+        if months == 0:
+            return f"{years} año" if years == 1 else f"{years} años"
+        year_label = "año" if years == 1 else "años"
+        month_label = "mes" if months == 1 else "meses"
+        return f"{years} {year_label} {months} {month_label}"
+
+    rec_useful_kwh_year = float(recommended.get("Energía útil kWh/mes", 0.0) or 0.0) * 12.0
+    rec_om_annual = float(recommended.get("O&M anual CLP", 0.0) or 0.0)
+    rec_capex = float(recommended.get("CAPEX total CLP", 0.0) or 0.0)
+    rec_gross_savings = float(recommended.get("Ahorro anual híbrido CLP", 0.0) or 0.0)
+    rec_net_savings = max(rec_gross_savings - rec_om_annual, 0.0)
+    rec_lifetime_net = (rec_net_savings * vida_util) - rec_capex
+    diesel_share = mix_elect / normalized_mix_total
+    diesel_liters_avoided = rec_useful_kwh_year * diesel_share * 0.30
+    co2_tons_avoided = diesel_liters_avoided * 2.68 / 1000.0
+    capital_efficiency = rec_useful_kwh_year / (rec_capex / 1_000_000) if rec_capex > 0 else 0.0
+
+    st.markdown(
+        """
+        <div class="client-section-marker">
+          <p class="client-section-k">01 · Lectura ejecutiva</p>
+          <p class="client-section-t">Primero se resume la recomendación con indicadores de impacto.</p>
+          <p class="client-section-s">Estos KPIs convierten los supuestos en una decisión inicial: ahorro, retorno, impacto ambiental y eficiencia de capital.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div class="client-impact-grid">
+          <div class="client-impact-card"><p class="client-impact-k">Ahorro neto anual</p><p class="client-impact-v">{format_clp(rec_net_savings)}</p><p class="client-impact-s">Ahorro híbrido anual menos O&M para {html.escape(str(recommended['Escenario']))}.</p></div>
+          <div class="client-impact-card"><p class="client-impact-k">Valor neto vida útil</p><p class="client-impact-v">{format_clp(rec_lifetime_net)}</p><p class="client-impact-s">Flujo neto acumulado menos inversión inicial en {vida_util:.0f} años.</p></div>
+          <div class="client-impact-card"><p class="client-impact-k">Diésel evitado</p><p class="client-impact-v">{diesel_liters_avoided:,.0f} L/año</p><p class="client-impact-s">Estimado con 0,30 L/kWh y participación de electrógeno del mix.</p></div>
+          <div class="client-impact-card"><p class="client-impact-k">CO₂ evitado</p><p class="client-impact-v">{co2_tons_avoided:,.1f} t/año</p><p class="client-impact-s">Factor referencial de 2,68 kg CO₂ por litro de diésel.</p></div>
+          <div class="client-impact-card"><p class="client-impact-k">Eficiencia de capital</p><p class="client-impact-v">{capital_efficiency:,.0f} kWh/MM</p><p class="client-impact-s">Energía útil anual por cada MM CLP invertido.</p></div>
+        </div>
+        """.replace(",", "."),
+        unsafe_allow_html=True,
+    )
+
+    mix_chart_df = pd.DataFrame(
+        [
+            {"Fuente": "Red eléctrica", "Participación": mix_red / normalized_mix_total, "Costo CLP/kWh": costo_red},
+            {"Fuente": "Electrógeno", "Participación": mix_elect / normalized_mix_total, "Costo CLP/kWh": costo_electrogeno},
+            {"Fuente": "FV/BESS", "Participación": mix_fv / normalized_mix_total, "Costo CLP/kWh": costo_fv_bess},
+        ]
+    )
+
+    def render_surplus_payback_chart():
+        st.markdown(
+            '<p class="client-panel-title">Payback con monetización de excedentes</p>'
+            '<p class="client-panel-sub">Compara payback híbrido antes y después de valorizar excedentes energéticos con el precio seleccionado.</p>',
+            unsafe_allow_html=True,
+        )
+        surplus_fig = go.Figure()
+        surplus_payback_df = chart_df.copy()
+        surplus_payback_df["Aporte excedente anual"] = pd.to_numeric(surplus_payback_df["Monetización excedente MM"], errors="coerce").fillna(0.0)
+        payback_without = [_format_payback_years(v) for v in surplus_payback_df["Payback sin excedente"]]
+        payback_with = [_format_payback_years(v) for v in surplus_payback_df["Payback híbrido"]]
+        surplus_customdata = np.stack(
+            [
+                surplus_payback_df["Aporte excedente anual"].fillna(0.0).astype(float),
+                pd.to_numeric(surplus_payback_df["Excedente kWh/mes"], errors="coerce").fillna(0.0).astype(float),
+                pd.to_numeric(surplus_payback_df["N° turbinas"], errors="coerce").fillna(0.0).astype(float),
+            ],
+            axis=-1,
+        )
+        surplus_fig.add_trace(
+            go.Bar(
+                x=surplus_payback_df["Escenario"],
+                y=surplus_payback_df["Payback sin excedente"],
+                name="Payback sin excedentes",
+                marker_color="#8fb7c5",
+                text=payback_without,
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate="<b>%{x}</b><br>Payback sin excedentes: %{text}<br>Turbinas: %{customdata[2]:.0f}<extra></extra>",
+                customdata=surplus_customdata,
+            )
+        )
+        surplus_fig.add_trace(
+            go.Bar(
+                x=surplus_payback_df["Escenario"],
+                y=surplus_payback_df["Payback híbrido"],
+                name="Payback con excedentes",
+                marker_color=["#0b1220" if name == str(recommended["Escenario"]) else "#0f766e" for name in surplus_payback_df["Escenario"]],
+                text=payback_with,
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate="<b>%{x}</b><br>Payback con excedentes: %{text}<br>Aporte excedente: %{customdata[0]:.2f} MM CLP/año<br>Excedente: %{customdata[1]:,.0f} kWh/mes<extra></extra>",
+                customdata=surplus_customdata,
+            )
+        )
+        surplus_fig.add_trace(
+            go.Scatter(
+                x=surplus_payback_df["Escenario"],
+                y=surplus_payback_df["Aporte excedente anual"],
+                name="Aporte excedente",
+                yaxis="y2",
+                mode="lines+markers+text",
+                line=dict(color="#b45309", width=3),
+                marker=dict(size=11, color="#f59e0b", line=dict(color="#ffffff", width=2)),
+                text=[f"{float(v):.1f} MM" if float(v) > 0 else "0 MM" for v in surplus_payback_df["Aporte excedente anual"]],
+                textposition=["top center", "bottom center", "top center", "bottom center", "top center"][: len(surplus_payback_df)],
+                textfont=dict(color="#92400e", size=11),
+                hovertemplate="<b>%{x}</b><br>Aporte por excedentes: %{y:.2f} MM CLP/año<extra></extra>",
+            )
+        )
+        surplus_payback_values = pd.concat(
+            [
+                pd.to_numeric(surplus_payback_df["Payback sin excedente"], errors="coerce"),
+                pd.to_numeric(surplus_payback_df["Payback híbrido"], errors="coerce"),
+            ],
+            ignore_index=True,
+        ).replace([np.inf, -np.inf], np.nan).dropna()
+        max_surplus_payback = float(surplus_payback_values.max()) if not surplus_payback_values.empty else 1.0
+        max_surplus_value = float(surplus_payback_df["Aporte excedente anual"].max()) if not surplus_payback_df.empty else 0.0
+        surplus_fig.update_layout(
+            barmode="group",
+            height=410,
+            margin=dict(l=10, r=42, t=26, b=28),
+            xaxis=dict(categoryorder="array", categoryarray=turbine_order),
+            yaxis=dict(title="Payback neto (años)", gridcolor="rgba(148,163,184,.22)", range=[0, max(max_surplus_payback * 1.26, 1)]),
+            yaxis2=dict(title="Excedentes monetizados (MM CLP/año)", overlaying="y", side="right", showgrid=False, range=[0, max(max_surplus_value * 1.38, 1)]),
+            legend=dict(orientation="h", y=1.13, x=0, title=None, itemclick="toggle", itemdoubleclick="toggleothers"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            hovermode="x unified",
+        )
+        st.plotly_chart(surplus_fig, use_container_width=True, config={"displaylogo": False})
+
+    st.markdown(
+        """
+        <div class="client-section-marker">
+          <p class="client-section-k">02 · Comparación económica</p>
+          <p class="client-section-t">Luego se compara retorno, mix energético, inversión y complejidad de implementación.</p>
+          <p class="client-section-s">El objetivo es separar la alternativa que se paga antes de la que parece barata, pero exige más CAPEX, más unidades o peor LCOE.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    render_surplus_payback_chart()
+    g0, g1 = st.columns([0.82, 1.18])
+    with g0:
+        st.markdown('<p class="client-panel-title">Mix energético del sitio</p><p class="client-panel-sub">Base del costo evitado usado para payback híbrido.</p>', unsafe_allow_html=True)
+        fig_mix = go.Figure(
+            data=[
+                go.Pie(
+                    labels=mix_chart_df["Fuente"],
+                    values=mix_chart_df["Participación"],
+                    hole=0.58,
+                    marker=dict(colors=["#1d4ed8", "#0f766e", "#d9a766"], line=dict(color="#ffffff", width=2)),
+                    textinfo="label+percent",
+                    hovertemplate="<b>%{label}</b><br>Participación: %{percent}<extra></extra>",
+                )
+            ]
+        )
+        fig_mix.add_annotation(text=f"<b>{format_clp(costo_ponderado)}</b><br>CLP/kWh", x=0.5, y=0.5, showarrow=False, font=dict(size=15, color="#0f172a"))
+        fig_mix.update_layout(height=345, margin=dict(l=8, r=8, t=8, b=8), showlegend=False, paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig_mix, use_container_width=True, config={"displaylogo": False})
+    with g1:
+        st.markdown('<p class="client-panel-title">Ranking de payback neto híbrido</p><p class="client-panel-sub">Menor plazo de recuperación, descontando O&M anual.</p>', unsafe_allow_html=True)
+        fig_payback = go.Figure()
+        if not payback_chart_df.empty:
+            fig_payback.add_trace(
+                go.Bar(
+                    x=payback_chart_df["Escenario"],
+                    y=payback_chart_df["Payback híbrido"],
+                    marker_color=["#0f766e" if name == recommended["Escenario"] else "#8fb7c5" for name in payback_chart_df["Escenario"]],
+                    text=[_format_payback_years(v) for v in payback_chart_df["Payback híbrido"]],
+                    textposition="outside",
+                    cliponaxis=False,
+                    hovertemplate="<b>%{x}</b><br>Payback híbrido: %{customdata}<extra></extra>",
+                    customdata=[_format_payback_years(v) for v in payback_chart_df["Payback híbrido"]],
+                )
+            )
+        fig_payback.update_layout(
+            height=345,
+            margin=dict(l=10, r=58, t=8, b=26),
+            xaxis_title=None,
+            yaxis_title="Años",
+            xaxis=dict(categoryorder="array", categoryarray=turbine_order),
+            yaxis=dict(range=[0, payback_axis_max], gridcolor="rgba(148,163,184,.22)"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig_payback, use_container_width=True, config={"displaylogo": False})
+
+    g2, g3 = st.columns([1, 1])
+    with g2:
+        st.markdown('<p class="client-panel-title">CAPEX vs LCOE por configuración</p><p class="client-panel-sub">Barras: inversión total. Línea: costo nivelado de energía.</p>', unsafe_allow_html=True)
+        fig_capex_lcoe = go.Figure()
+        capex_lcoe_customdata = np.stack(
+            [
+                pd.to_numeric(chart_df["CAPEX MM CLP"], errors="coerce").fillna(0.0).astype(float),
+                pd.to_numeric(chart_df["LCOE"], errors="coerce").fillna(0.0).astype(float),
+                pd.to_numeric(chart_df["Payback híbrido"], errors="coerce").fillna(0.0).astype(float),
+                pd.to_numeric(chart_df["N° turbinas"], errors="coerce").fillna(0.0).astype(float),
+                pd.to_numeric(chart_df["Cobertura real"], errors="coerce").fillna(0.0).astype(float) * 100.0,
+            ],
+            axis=-1,
+        )
+        fig_capex_lcoe.add_trace(
+            go.Bar(
+                x=chart_df["Escenario"],
+                y=chart_df["CAPEX MM CLP"],
+                name="CAPEX total",
+                marker_color="#0f766e",
+                text=[f"{v:.1f} MM" for v in chart_df["CAPEX MM CLP"]],
+                textposition="inside",
+                insidetextanchor="end",
+                textfont=dict(color="#ffffff", size=11),
+                customdata=capex_lcoe_customdata,
+                hovertemplate=(
+                    "<b>%{x}</b><br>"
+                    "CAPEX total: %{y:.1f} MM CLP<br>"
+                    "LCOE: %{customdata[1]:,.0f} CLP/kWh<br>"
+                    "Payback: %{customdata[2]:.2f} años<br>"
+                    "Turbinas: %{customdata[3]:.0f}<br>"
+                    "Cobertura real: %{customdata[4]:.0f}%<extra></extra>"
+                ),
+            )
+        )
+        lcoe_positions = ["middle right", "bottom center", "top center", "bottom center", "top center"]
+        fig_capex_lcoe.add_trace(
+            go.Scatter(
+                x=chart_df["Escenario"],
+                y=chart_df["LCOE"],
+                name="LCOE",
+                yaxis="y2",
+                mode="lines+markers+text",
+                line=dict(color="#b45309", width=3),
+                marker=dict(size=10, color="#f59e0b", line=dict(color="#ffffff", width=2)),
+                text=[format_clp(float(v)) if pd.notna(v) else "" for v in chart_df["LCOE"]],
+                textposition=lcoe_positions[: len(chart_df)],
+                textfont=dict(color="#92400e", size=11),
+                customdata=capex_lcoe_customdata,
+                hovertemplate=(
+                    "<b>%{x}</b><br>"
+                    "LCOE: %{y:,.0f} CLP/kWh<br>"
+                    "CAPEX: %{customdata[0]:.1f} MM CLP<br>"
+                    "Payback: %{customdata[2]:.2f} años<br>"
+                    "Cobertura real: %{customdata[4]:.0f}%<extra></extra>"
+                ),
+            )
+        )
+        max_capex_mm = float(chart_df["CAPEX MM CLP"].max()) if not chart_df.empty else 1.0
+        max_lcoe_chart = float(pd.to_numeric(chart_df["LCOE"], errors="coerce").max()) if not chart_df.empty else 1.0
+        valid_lcoe = pd.to_numeric(chart_df["LCOE"], errors="coerce").dropna()
+        if not chart_df.empty and not valid_lcoe.empty:
+            min_lcoe_row = chart_df.loc[valid_lcoe.idxmin()]
+            fig_capex_lcoe.add_annotation(
+                x=str(min_lcoe_row["Escenario"]),
+                y=float(min_lcoe_row["LCOE"]),
+                yref="y2",
+                text="Mejor LCOE",
+                showarrow=True,
+                arrowhead=2,
+                ax=24,
+                ay=-34,
+                bgcolor="rgba(255,255,255,.92)",
+                bordercolor="#b45309",
+                font=dict(color="#92400e", size=11),
+            )
+            fig_capex_lcoe.add_annotation(
+                x=str(recommended["Escenario"]),
+                y=float(recommended["CAPEX total CLP"]) / 1_000_000,
+                text="Recomendada",
+                showarrow=True,
+                arrowhead=2,
+                ax=-8,
+                ay=-42,
+                bgcolor="#0b1220",
+                bordercolor="#0b1220",
+                font=dict(color="#ffffff", size=11),
+            )
+        fig_capex_lcoe.update_layout(
+            height=360,
+            margin=dict(l=10, r=36, t=28, b=24),
+            barmode="group",
+            legend=dict(orientation="h", y=1.15, x=0, title=None, itemclick="toggle", itemdoubleclick="toggleothers"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            hovermode="x unified",
+            xaxis=dict(categoryorder="array", categoryarray=turbine_order),
+            yaxis=dict(title="CAPEX total (MM CLP)", gridcolor="rgba(148,163,184,.22)", range=[0, max(max_capex_mm * 1.14, 1)]),
+            yaxis2=dict(title="LCOE (CLP/kWh)", overlaying="y", side="right", showgrid=False, range=[0, max(max_lcoe_chart * 1.22, 1)]),
+        )
+        st.plotly_chart(fig_capex_lcoe, use_container_width=True, config={"displaylogo": False})
+    with g3:
+        st.markdown('<p class="client-panel-title">CAPEX total por alternativa</p><p class="client-panel-sub">Barras: inversión por componente. Línea: cantidad de turbinas requeridas.</p>', unsafe_allow_html=True)
+        capex_stack = chart_df[["Escenario", "CAPEX turbinas CLP", "BOS/instalación CLP", "N° turbinas"]].copy()
+        capex_stack["Turbinas MM CLP"] = capex_stack["CAPEX turbinas CLP"] / 1_000_000
+        capex_stack["BOS MM CLP"] = capex_stack["BOS/instalación CLP"] / 1_000_000
+        capex_stack["Total MM CLP"] = capex_stack["Turbinas MM CLP"] + capex_stack["BOS MM CLP"]
+        capex_stack_customdata = np.stack(
+            [
+                capex_stack["Total MM CLP"].fillna(0.0).astype(float),
+                capex_stack["N° turbinas"].fillna(0.0).astype(float),
+                pd.to_numeric(chart_df["Potencia instalada kW"], errors="coerce").fillna(0.0).astype(float),
+            ],
+            axis=-1,
+        )
+        fig_capex = go.Figure()
+        fig_capex.add_trace(
+            go.Bar(
+                x=capex_stack["Escenario"],
+                y=capex_stack["Turbinas MM CLP"],
+                name="Turbinas",
+                marker_color="#0f766e",
+                customdata=capex_stack_customdata,
+                hovertemplate="<b>%{x}</b><br>CAPEX turbinas: %{y:.1f} MM CLP<br>Total: %{customdata[0]:.1f} MM CLP<br>Potencia instalada: %{customdata[2]:.0f} kW<extra></extra>",
+            )
+        )
+        fig_capex.add_trace(
+            go.Bar(
+                x=capex_stack["Escenario"],
+                y=capex_stack["BOS MM CLP"],
+                name="BOS/instalación",
+                marker_color="#d9a766",
+                customdata=capex_stack_customdata,
+                hovertemplate="<b>%{x}</b><br>BOS/instalación: %{y:.1f} MM CLP<br>Total: %{customdata[0]:.1f} MM CLP<br>Turbinas: %{customdata[1]:.0f}<extra></extra>",
+            )
+        )
+        fig_capex.add_trace(
+            go.Scatter(
+                x=capex_stack["Escenario"],
+                y=capex_stack["N° turbinas"],
+                name="N° turbinas",
+                yaxis="y2",
+                mode="lines+markers+text",
+                line=dict(color="#0b1220", width=3),
+                marker=dict(size=23, color="#0b1220", line=dict(color="#ffffff", width=2)),
+                text=[f"{int(v)}" for v in capex_stack["N° turbinas"]],
+                textposition="middle center",
+                textfont=dict(color="#ffffff", size=10),
+                customdata=capex_stack_customdata,
+                hovertemplate="<b>%{x}</b><br>Turbinas requeridas: %{y:.0f}<br>CAPEX total: %{customdata[0]:.1f} MM CLP<br>Potencia instalada: %{customdata[2]:.0f} kW<extra></extra>",
+            )
+        )
+        if not capex_stack.empty:
+            fig_capex.add_trace(
+                go.Scatter(
+                    x=capex_stack["Escenario"],
+                    y=capex_stack["Total MM CLP"],
+                    name="CAPEX total",
+                    mode="text",
+                    text=[f"{v:.1f} MM" for v in capex_stack["Total MM CLP"]],
+                    textposition="top center",
+                    textfont=dict(color="#64748b", size=11),
+                    hoverinfo="skip",
+                    showlegend=False,
+                )
+            )
+            fig_capex.add_annotation(
+                x=str(recommended["Escenario"]),
+                y=float(recommended["CAPEX total CLP"]) / 1_000_000,
+                text="Recomendada",
+                showarrow=True,
+                arrowhead=2,
+                ax=4,
+                ay=-42,
+                bgcolor="#0b1220",
+                bordercolor="#0b1220",
+                font=dict(color="#ffffff", size=11),
+            )
+        fig_capex.update_layout(
+            barmode="stack",
+            height=360,
+            margin=dict(l=10, r=34, t=28, b=24),
+            yaxis_title="MM CLP",
+            xaxis_title=None,
+            legend=dict(orientation="h", y=1.15, x=0, title=None, itemclick="toggle", itemdoubleclick="toggleothers"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            hovermode="x unified",
+            xaxis=dict(categoryorder="array", categoryarray=turbine_order),
+            yaxis=dict(gridcolor="rgba(148,163,184,.22)", range=[0, max(float(capex_stack["Total MM CLP"].max()) * 1.24, 1)]),
+            yaxis2=dict(title="N° turbinas", overlaying="y", side="right", showgrid=False, dtick=1, range=[0, max(float(capex_stack["N° turbinas"].max()) * 1.45, 2)]),
+        )
+        st.plotly_chart(fig_capex, use_container_width=True, config={"displaylogo": False})
+
+    st.markdown(
+        """
+        <div class="client-section-marker">
+          <p class="client-section-k">03 · Dimensionamiento técnico</p>
+          <p class="client-section-t">Antes de sensibilidad, se valida si cada alternativa cubre la demanda objetivo ajustada.</p>
+          <p class="client-section-s">La demanda técnica suma cobertura objetivo más seguridad adicional, expresada en kWh mensuales requeridos.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="client-panel-title">Generación mensual y cobertura real</p>'
+        '<p class="client-panel-sub">Barras: generación estimada. Líneas: cobertura real, cobertura objetivo y demanda objetivo del caso.</p>',
+        unsafe_allow_html=True,
+    )
+    gen_chart_df = chart_df.copy()
+    gen_chart_df["Cobertura %"] = pd.to_numeric(gen_chart_df["Cobertura real"], errors="coerce") * 100.0
+    gen_chart_df["Excedente kWh/mes"] = pd.to_numeric(gen_chart_df["Excedente kWh/mes"], errors="coerce")
+    gen_chart_df["Potencia instalada kW"] = pd.to_numeric(gen_chart_df["Potencia instalada kW"], errors="coerce")
+    gen_chart_df["N° turbinas"] = pd.to_numeric(gen_chart_df["N° turbinas"], errors="coerce")
+    target_kwh_month = consumo_mensual * cobertura_objetivo * (1 + margen_seguridad)
+    target_coverage_pct = cobertura_objetivo * (1 + margen_seguridad) * 100.0
+    gen_bar_colors = []
+    for _, row in gen_chart_df.iterrows():
+        scenario_name = str(row["Escenario"])
+        coverage_pct = float(row["Cobertura %"]) if pd.notna(row["Cobertura %"]) else 0.0
+        if scenario_name == str(recommended["Escenario"]):
+            gen_bar_colors.append("#0b1220")
+        elif coverage_pct < target_coverage_pct * 0.92:
+            gen_bar_colors.append("#8fb7c5")
+        elif coverage_pct <= 125:
+            gen_bar_colors.append("#0f766e")
+        else:
+            gen_bar_colors.append("#d9a766")
+    gen_labels = []
+    coverage_labels = []
+    max_generation_name = str(gen_chart_df.loc[gen_chart_df["Generación kWh/mes"].idxmax(), "Escenario"]) if not gen_chart_df.empty else ""
+    for _, row in gen_chart_df.iterrows():
+        scenario_name = str(row["Escenario"])
+        should_label = scenario_name in {str(recommended["Escenario"]), max_generation_name}
+        gen_labels.append(f"{float(row['Generación kWh/mes']):,.0f}".replace(",", ".") if should_label else "")
+        coverage_labels.append(f"{float(row['Cobertura %']):.0f}%" if should_label else "")
+    gen_customdata = np.stack(
+        [
+            gen_chart_df["N° turbinas"].fillna(0).astype(float),
+            gen_chart_df["Potencia instalada kW"].fillna(0).astype(float),
+            gen_chart_df["Cobertura %"].fillna(0).astype(float),
+            gen_chart_df["Excedente kWh/mes"].fillna(0).astype(float),
+        ],
+        axis=-1,
+    )
+    gen_fig = go.Figure()
+    gen_fig.add_trace(
+        go.Bar(
+            x=gen_chart_df["Escenario"],
+            y=gen_chart_df["Generación kWh/mes"],
+            name="Generación mensual",
+            marker_color=gen_bar_colors,
+            text=gen_labels,
+            textposition="outside",
+            cliponaxis=False,
+            customdata=gen_customdata,
+            hovertemplate=(
+                "<b>%{x}</b><br>"
+                "Generación: %{y:,.0f} kWh/mes<br>"
+                "Cobertura real: %{customdata[2]:.0f}%<br>"
+                "Turbinas: %{customdata[0]:.0f}<br>"
+                "Potencia instalada: %{customdata[1]:.0f} kW<br>"
+                "Excedente: %{customdata[3]:,.0f} kWh/mes<extra></extra>"
+            ),
+        )
+    )
+    gen_fig.add_trace(
+        go.Scatter(
+            x=gen_chart_df["Escenario"],
+            y=gen_chart_df["Cobertura %"],
+            name="Cobertura real",
+            yaxis="y2",
+            mode="lines+markers+text",
+            line=dict(color="#b45309", width=3),
+            marker=dict(size=10, color="#f59e0b", line=dict(color="#ffffff", width=2)),
+            text=coverage_labels,
+            textposition="top center",
+            hovertemplate="<b>%{x}</b><br>Cobertura real: %{y:.0f}%<extra></extra>",
+        )
+    )
+    gen_fig.add_trace(
+        go.Scatter(
+            x=gen_chart_df["Escenario"],
+            y=[target_coverage_pct] * len(gen_chart_df),
+            name="Cobertura objetivo",
+            yaxis="y2",
+            mode="lines",
+            line=dict(color="#1d4ed8", width=2.4, dash="dash"),
+            hovertemplate="Cobertura objetivo: %{y:.0f}%<extra></extra>",
+        )
+    )
+    gen_fig.add_trace(
+        go.Scatter(
+            x=gen_chart_df["Escenario"],
+            y=[target_kwh_month] * len(gen_chart_df),
+            name="Demanda objetivo",
+            mode="lines",
+            line=dict(color="#64748b", width=2, dash="dot"),
+            hovertemplate="Demanda objetivo: %{y:,.0f} kWh/mes<extra></extra>",
+        )
+    )
+    if not gen_chart_df.empty:
+        gen_fig.add_annotation(
+            x=str(recommended["Escenario"]),
+            y=float(recommended["Generación kWh/mes"]),
+            text="Recomendada",
+            showarrow=True,
+            arrowhead=2,
+            ax=0,
+            ay=-44,
+            bgcolor="#0b1220",
+            bordercolor="#0b1220",
+            font=dict(color="#ffffff", size=11),
+        )
+        gen_fig.add_annotation(
+            x=gen_chart_df["Escenario"].iloc[-1],
+            y=target_coverage_pct,
+            yref="y2",
+            text=f"Objetivo ajustado {target_coverage_pct:.0f}%",
+            showarrow=False,
+            xanchor="right",
+            yanchor="bottom",
+            bgcolor="rgba(255,255,255,.88)",
+            bordercolor="#1d4ed8",
+            font=dict(color="#1d4ed8", size=11),
+        )
+        gen_fig.add_annotation(
+            x=gen_chart_df["Escenario"].iloc[-1],
+            y=target_kwh_month,
+            text=f"Demanda ajustada {target_kwh_month:,.0f} kWh/mes".replace(",", "."),
+            showarrow=False,
+            xanchor="right",
+            yanchor="top",
+            bgcolor="rgba(255,255,255,.88)",
+            bordercolor="#64748b",
+            font=dict(color="#475569", size=11),
+        )
+    max_gen_value = float(pd.to_numeric(gen_chart_df["Generación kWh/mes"], errors="coerce").max()) if not gen_chart_df.empty else 1.0
+    max_coverage_value = float(pd.to_numeric(gen_chart_df["Cobertura %"], errors="coerce").max()) if not gen_chart_df.empty else target_coverage_pct
+    gen_fig.update_layout(
+        height=430,
+        margin=dict(l=10, r=34, t=26, b=28),
+        hovermode="x unified",
+        yaxis=dict(
+            title="Generación mensual (kWh)",
+            gridcolor="rgba(148,163,184,.22)",
+            range=[0, max(max_gen_value * 1.18, target_kwh_month * 1.24, 1)],
+        ),
+        yaxis2=dict(
+            title="Cobertura real",
+            overlaying="y",
+            side="right",
+            ticksuffix="%",
+            showgrid=False,
+            range=[0, max(max_coverage_value * 1.16, target_coverage_pct * 1.28, 120)],
+        ),
+        xaxis=dict(categoryorder="array", categoryarray=turbine_order),
+        legend=dict(orientation="h", y=1.16, x=0, title=None),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+    st.plotly_chart(gen_fig, use_container_width=True, config={"displaylogo": False})
+
+    selected_coverage = round(float(cobertura_objetivo), 4)
+    coverage_options = sorted(set([0.20, 0.35, 0.50, 0.75, 1.00, selected_coverage]))
+    heat_records = []
+    for coverage in coverage_options:
+        tmp = build_client_sensitivity_scenarios(
+            source_scenarios,
+            consumo_mensual,
+            coverage,
+            margen_seguridad,
+            factor_planta,
+            bos_rate,
+            om_rate,
+            vida_util,
+            costo_red,
+            costo_electrogeno,
+            costo_fv_bess,
+            valor_monetizacion_excedente,
+            mix_red,
+            mix_elect,
+            mix_fv,
+        )
+        for _, row in tmp.iterrows():
+            heat_records.append(
+                {
+                    "Cobertura": f"{coverage * 100:.0f}%",
+                    "Turbina": row["Escenario"],
+                    "Payback híbrido": row["Payback neto híbrido años"],
+                }
+            )
+    heat_df = pd.DataFrame(heat_records)
+    heat_matrix = (
+        heat_df.pivot(index="Cobertura", columns="Turbina", values="Payback híbrido")
+        .reindex([f"{c * 100:.0f}%" for c in coverage_options])
+        .reindex(columns=turbine_order)
+    )
+    heat_z = heat_matrix.to_numpy(dtype=float)
+    best_heat_x = None
+    best_heat_y = None
+    best_heat_value = np.nan
+    if np.isfinite(heat_z).any():
+        best_heat_pos = np.unravel_index(np.nanargmin(heat_z), heat_z.shape)
+        best_heat_y = list(heat_matrix.index)[best_heat_pos[0]]
+        best_heat_x = list(heat_matrix.columns)[best_heat_pos[1]]
+        best_heat_value = float(heat_z[best_heat_pos])
+    selected_heat_label = f"{selected_coverage * 100:.0f}%"
+    selected_heat_x = None
+    selected_heat_y = None
+    selected_heat_value = np.nan
+    if selected_heat_label in heat_matrix.index:
+        selected_row = heat_matrix.loc[selected_heat_label]
+        if np.isfinite(selected_row.to_numpy(dtype=float)).any():
+            selected_heat_x = str(selected_row.astype(float).idxmin())
+            selected_heat_y = selected_heat_label
+            selected_heat_value = float(selected_row[selected_heat_x])
+    heat_text = []
+    for y_label, row in zip(list(heat_matrix.index), heat_z):
+        row_text = []
+        for x_label, value in zip(list(heat_matrix.columns), row):
+            if pd.isna(value):
+                row_text.append("")
+                continue
+            markers = ""
+            if x_label == best_heat_x and y_label == best_heat_y:
+                markers += "★ "
+            if x_label == selected_heat_x and y_label == selected_heat_y:
+                markers += "● "
+            row_text.append(f"{markers}{float(value):.1f}")
+        heat_text.append(row_text)
+
+    st.markdown(
+        """
+        <div class="client-section-marker">
+          <p class="client-section-k">04 · Sensibilidad y riesgo</p>
+          <p class="client-section-t">La matriz valida si la recomendación se mantiene robusta al cambiar la cobertura.</p>
+          <p class="client-section-s">Aquí se identifica el mejor payback global y el mejor payback bajo la cobertura seleccionada.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown('<p class="client-panel-title">Matriz de sensibilidad de payback híbrido</p><p class="client-panel-sub">Años de recuperación por cobertura objetivo y tipo de turbina. Verde indica menor payback. ★ Mejor global · ● Mejor en cobertura seleccionada.</p>', unsafe_allow_html=True)
+    fig_heat = go.Figure(
+        data=go.Heatmap(
+            z=heat_z.tolist(),
+            x=list(heat_matrix.columns),
+            y=list(heat_matrix.index),
+            colorscale=[[0, "#0f766e"], [0.5, "#f6c85f"], [1, "#ef4444"]],
+            text=heat_text,
+            texttemplate="%{text}",
+            textfont=dict(size=13, color="#ffffff"),
+            hovertemplate="Cobertura %{y}<br>%{x}<br>Payback híbrido: %{z:.1f} años<extra></extra>",
+            colorbar=dict(title="Años"),
+            zmin=float(np.nanmin(heat_z)) if np.isfinite(heat_z).any() else 0,
+            zmax=float(np.nanmax(heat_z)) if np.isfinite(heat_z).any() else 1,
+        )
+    )
+    fig_heat.update_layout(
+        height=390,
+        margin=dict(l=10, r=10, t=24, b=20),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(side="top"),
+    )
+    st.plotly_chart(fig_heat, use_container_width=True, config={"displaylogo": False})
+
+    st.markdown(
+        """
+        <div class="client-section-marker">
+          <p class="client-section-k">05 · Explicación del ahorro</p>
+          <p class="client-section-t">Después de la sensibilidad se muestra de dónde viene el retorno económico.</p>
+          <p class="client-section-s">La lectura separa ahorro contra red, electrógeno, mix híbrido bruto y resultado neto después de O&M.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    savings_col, generation_col = st.columns([1, 1])
+    with savings_col:
+        st.markdown(
+            f'<p class="client-panel-title">Ahorro anual claro · {html.escape(str(recommended["Escenario"]))}</p>'
+            '<p class="client-panel-sub">Lectura enfocada en la turbina con menor payback: ahorro por fuente y ahorro neto después de O&M.</p>',
+            unsafe_allow_html=True,
+        )
+        rec_savings_df = pd.DataFrame(
+            [
+                {"Concepto": "Si reemplaza red", "Valor MM": float(recommended["Ahorro anual red CLP"]) / 1_000_000, "Color": "#1d4ed8"},
+                {"Concepto": "Si reemplaza electrógeno", "Valor MM": float(recommended["Ahorro anual electrógeno CLP"]) / 1_000_000, "Color": "#0f766e"},
+                {"Concepto": "Mix híbrido bruto", "Valor MM": float(recommended["Ahorro anual híbrido CLP"]) / 1_000_000, "Color": "#d9a766"},
+                {"Concepto": "Mix híbrido neto", "Valor MM": rec_net_savings / 1_000_000, "Color": "#0b1220"},
+            ]
+        )
+        savings_fig = go.Figure()
+        savings_fig.add_trace(
+            go.Bar(
+                x=rec_savings_df["Valor MM"],
+                y=rec_savings_df["Concepto"],
+                orientation="h",
+                marker_color=rec_savings_df["Color"],
+                text=[f"{v:.1f} MM" for v in rec_savings_df["Valor MM"]],
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate="<b>%{y}</b><br>Ahorro: %{x:.2f} MM CLP/año<extra></extra>",
+            )
+        )
+        savings_fig.add_annotation(
+            x=rec_savings_df.loc[rec_savings_df["Concepto"] == "Mix híbrido neto", "Valor MM"].iloc[0],
+            y="Mix híbrido neto",
+            text="después de O&M",
+            showarrow=True,
+            arrowhead=2,
+            ax=48,
+            ay=-28,
+            font=dict(size=11, color="#0b1220"),
+        )
+        savings_fig.update_layout(
+            height=370,
+            margin=dict(l=10, r=62, t=8, b=24),
+            xaxis=dict(title="MM CLP/año", gridcolor="rgba(148,163,184,.22)", range=[0, max(float(rec_savings_df["Valor MM"].max()) * 1.25, 1)]),
+            yaxis=dict(title=None, autorange="reversed"),
+            showlegend=False,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(savings_fig, use_container_width=True, config={"displaylogo": False})
+
+    with generation_col:
+        st.markdown(
+            f"""
+            <div class="client-reading-card">
+              <p class="client-reading-k">Lectura para cliente</p>
+              <p class="client-reading-t">La recomendación se sostiene si el ahorro neto cubre CAPEX y operación sin sobredimensionar el sitio.</p>
+              <div class="client-reading-line"><span>Alternativa recomendada</span><b>{html.escape(str(recommended["Escenario"]))}</b></div>
+              <div class="client-reading-line"><span>Seguridad adicional</span><b>{margen_seguridad_pct:.0f}%</b></div>
+              <div class="client-reading-line"><span>Demanda ajustada</span><b>{float(recommended["Demanda objetivo ajustada kWh/mes"]):,.0f} kWh/mes</b></div>
+              <div class="client-reading-line"><span>Cobertura real</span><b>{float(recommended["Cobertura real"]) * 100:.0f}%</b></div>
+              <div class="client-reading-line"><span>Excedente estimado</span><b>{float(recommended["Excedente kWh/mes"]):,.0f} kWh/mes</b></div>
+              <div class="client-reading-line"><span>Aporte excedentes</span><b>{format_clp(float(recommended["Monetización excedente anual CLP"]))}/año</b></div>
+              <div class="client-reading-line"><span>Payback neto híbrido</span><b>{_format_payback_years(recommended["Payback neto híbrido años"])}</b></div>
+              <div class="client-reading-line"><span>Ahorro neto anual</span><b>{format_clp(rec_net_savings)}</b></div>
+            </div>
+            """.replace(",", "."),
+            unsafe_allow_html=True,
+        )
+
+    years = np.arange(1, int(max(vida_util, 1)) + 1)
+    cumulative_diesel = diesel_liters_avoided * years
+    cumulative_co2 = co2_tons_avoided * years
+    cumulative_gross_savings = rec_gross_savings * years
+    cumulative_net_savings = rec_net_savings * years
+    cumulative_after_capex = cumulative_net_savings - rec_capex
+
+    st.markdown(
+        """
+        <div class="client-section-marker">
+          <p class="client-section-k">06 · Impacto y valor en el tiempo</p>
+          <p class="client-section-t">El cierre gráfico traduce la recomendación en impacto ambiental y flujo acumulado.</p>
+          <p class="client-section-s">Esta capa sirve para explicar el beneficio anual, la recuperación de CAPEX y el efecto acumulado durante la vida útil.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    impact_col, saving_col = st.columns([1, 1])
+    with impact_col:
+        st.markdown(
+            f'<p class="client-panel-title">Impacto ambiental acumulado · {html.escape(str(recommended["Escenario"]))}</p>'
+            '<p class="client-panel-sub">Diésel evitado y CO₂ evitado para la turbina con menor payback bajo la cobertura seleccionada.</p>',
+            unsafe_allow_html=True,
+        )
+        impact_fig = go.Figure()
+        impact_fig.add_trace(
+            go.Bar(
+                x=years,
+                y=cumulative_diesel,
+                name="Diésel evitado",
+                marker_color="#0f766e",
+                text=[f"{v/1000:.1f}k L" if idx in {0, len(years) - 1} else "" for idx, v in enumerate(cumulative_diesel)],
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate="Año %{x}<br>Diésel evitado: %{y:,.0f} L<extra></extra>",
+            )
+        )
+        impact_fig.add_trace(
+            go.Scatter(
+                x=years,
+                y=cumulative_co2,
+                name="CO₂ evitado",
+                yaxis="y2",
+                mode="lines+markers+text",
+                line=dict(color="#b45309", width=3),
+                marker=dict(size=8, color="#f59e0b", line=dict(color="#ffffff", width=1.5)),
+                text=[f"{v:.1f} t" if idx in {0, len(years) - 1} else "" for idx, v in enumerate(cumulative_co2)],
+                textposition="top center",
+                hovertemplate="Año %{x}<br>CO₂ evitado: %{y:.1f} t<extra></extra>",
+            )
+        )
+        impact_fig.update_layout(
+            height=380,
+            margin=dict(l=10, r=20, t=8, b=24),
+            xaxis=dict(title="Año de operación", dtick=1),
+            yaxis=dict(title="Litros de diésel", gridcolor="rgba(148,163,184,.22)"),
+            yaxis2=dict(title="Ton CO₂", overlaying="y", side="right", showgrid=False),
+            legend=dict(orientation="h", y=1.10, x=0),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(impact_fig, use_container_width=True, config={"displaylogo": False})
+
+    with saving_col:
+        st.markdown(
+            f'<p class="client-panel-title">Ahorro acumulado · {html.escape(str(recommended["Escenario"]))}</p>'
+            '<p class="client-panel-sub">Evolución del ahorro bruto, ahorro neto operativo y recuperación acumulada descontando CAPEX.</p>',
+            unsafe_allow_html=True,
+        )
+        saving_fig = go.Figure()
+        saving_fig.add_trace(
+            go.Scatter(
+                x=years,
+                y=cumulative_gross_savings / 1_000_000,
+                name="Ahorro bruto",
+                mode="lines",
+                line=dict(color="#8fb7c5", width=2, dash="dot"),
+                hovertemplate="Año %{x}<br>Ahorro bruto: %{y:.1f} MM CLP<extra></extra>",
+            )
+        )
+        saving_fig.add_trace(
+            go.Scatter(
+                x=years,
+                y=cumulative_net_savings / 1_000_000,
+                name="Ahorro neto",
+                mode="lines+markers",
+                line=dict(color="#0f766e", width=3),
+                marker=dict(size=7, color="#0f766e", line=dict(color="#ffffff", width=1.5)),
+                hovertemplate="Año %{x}<br>Ahorro neto: %{y:.1f} MM CLP<extra></extra>",
+            )
+        )
+        saving_fig.add_trace(
+            go.Scatter(
+                x=years,
+                y=cumulative_after_capex / 1_000_000,
+                name="Neto después CAPEX",
+                mode="lines+markers",
+                line=dict(color="#b45309", width=3),
+                marker=dict(size=7, color="#f59e0b", line=dict(color="#ffffff", width=1.5)),
+                fill="tozeroy",
+                fillcolor="rgba(245,158,11,.12)",
+                hovertemplate="Año %{x}<br>Neto post CAPEX: %{y:.1f} MM CLP<extra></extra>",
+            )
+        )
+        saving_fig.add_hline(y=0, line_color="#0f172a", line_width=1, opacity=.55)
+        if np.isfinite(float(recommended.get("Payback neto híbrido años", np.nan))):
+            payback_x = max(1.0, min(float(recommended["Payback neto híbrido años"]), float(years[-1])))
+            saving_fig.add_vline(
+                x=payback_x,
+                line_color="#0f766e",
+                line_dash="dash",
+                annotation_text=f"Payback {_format_payback_years(recommended['Payback neto híbrido años'])}",
+                annotation_position="top right",
+            )
+        saving_fig.update_layout(
+            height=380,
+            margin=dict(l=10, r=12, t=8, b=24),
+            xaxis=dict(title="Año de operación", dtick=1),
+            yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.22)"),
+            legend=dict(orientation="h", y=1.10, x=0),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(saving_fig, use_container_width=True, config={"displaylogo": False})
+
+    st.markdown(
+        """
+        <div class="client-section-marker">
+          <p class="client-section-k">07 · Cierre ejecutivo</p>
+          <p class="client-section-t">La tabla final consolida la comparación para revisión comercial y descarga.</p>
+          <p class="client-section-s">Este es el resumen que debe quedar como respaldo de decisión: configuración, cobertura, inversión, LCOE y payback.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    display_df = chart_df[
+        [
+            "Escenario",
+            "N° turbinas",
+            "Potencia instalada kW",
+            "Generación kWh/mes",
+            "Excedente kWh/mes",
+            "Cobertura real",
+            "CAPEX total CLP",
+            "LCOE simple CLP/kWh",
+            "Payback neto red años",
+            "Payback neto electrógeno años",
+            "Payback neto híbrido años",
+        ]
+    ].copy()
+    display_table = display_df.copy()
+    display_table["Potencia instalada kW"] = display_table["Potencia instalada kW"].map(lambda v: f"{float(v):.0f}")
+    display_table["Generación kWh/mes"] = display_table["Generación kWh/mes"].map(lambda v: f"{float(v):,.0f}".replace(",", "."))
+    display_table["Excedente kWh/mes"] = display_table["Excedente kWh/mes"].map(lambda v: f"{float(v):,.0f}".replace(",", "."))
+    display_table["Cobertura real"] = display_table["Cobertura real"].map(lambda v: f"{float(v) * 100:.0f}%")
+    display_table["CAPEX total CLP"] = display_table["CAPEX total CLP"].map(lambda v: format_clp(float(v)))
+    display_table["LCOE simple CLP/kWh"] = display_table["LCOE simple CLP/kWh"].map(lambda v: format_clp(float(v)))
+    for col in ["Payback neto red años", "Payback neto electrógeno años", "Payback neto híbrido años"]:
+        display_table[col] = display_table[col].map(lambda v: "N/A" if pd.isna(v) else f"{float(v):.1f}")
+
+    def _payback_tag(value) -> str:
+        if pd.isna(value):
+            return '<span class="client-muted">N/A</span>'
+        value = float(value)
+        if value <= 4:
+            color = "#065f46"
+            bg = "#d1fae5"
+            label = "Preferente"
+        elif value <= 7:
+            color = "#92400e"
+            bg = "#fef3c7"
+            label = "Competitivo"
+        else:
+            color = "#991b1b"
+            bg = "#fee2e2"
+            label = "Largo"
+        return f'<span style="display:inline-flex;border-radius:999px;background:{bg};color:{color};padding:5px 8px;font-size:10px;font-weight:950;text-transform:uppercase;">{label}</span>'
+
+    scenario_rows_html = []
+    for _, row in chart_df.iterrows():
+        is_recommended = str(row["Escenario"]) == str(recommended["Escenario"])
+        scenario_rows_html.append(
+            (
+                f"<tr class=\"{'recommended' if is_recommended else ''}\">"
+                f"<td><b>{html.escape(str(row['Escenario']))}</b><br>"
+                f"{'<span class=\"client-badge\">Recomendada</span>' if is_recommended else '<span class=\"client-muted\">Alternativa evaluada</span>'}</td>"
+                f"<td>{int(row['N° turbinas'])}</td>"
+                f"<td>{float(row['Potencia instalada kW']):.0f} kW</td>"
+                f"<td>{float(row['Generación kWh/mes']):,.0f}</td>"
+                f"<td>{float(row['Excedente kWh/mes']):,.0f}</td>"
+                f"<td>{float(row['Cobertura real']) * 100:.0f}%</td>"
+                f"<td>{format_clp(float(row['CAPEX total CLP']))}</td>"
+                f"<td>{format_clp(float(row['LCOE simple CLP/kWh']))}</td>"
+                f"<td>{'N/A' if pd.isna(row['Payback neto híbrido años']) else f'{float(row['Payback neto híbrido años']):.1f} años'}</td>"
+                f"<td>{_payback_tag(row['Payback neto híbrido años'])}</td>"
+                "</tr>"
+            )
+        )
+
+    scenario_table_html = (
+        '<div class="client-table-shell">'
+        '<div class="client-table-head">'
+        '<div><h3>Tabla ejecutiva de escenarios</h3>'
+        '<p>Comparación normalizada por configuración, inversión total, costo nivelado y recuperación híbrida.</p></div>'
+        f'<div class="client-badge">{html.escape(str(recommended["Escenario"]))}</div>'
+        '</div>'
+        '<table class="client-table"><thead><tr>'
+        '<th>Escenario</th><th>Turbinas</th><th>Potencia</th><th>Gen. kWh/mes</th><th>Excedente</th><th>Cobertura</th>'
+        '<th>CAPEX total</th><th>LCOE</th><th>Payback híbrido</th><th>Lectura</th>'
+        f'</tr></thead><tbody>{"".join(scenario_rows_html)}</tbody></table></div>'
+    )
+    st.markdown(scenario_table_html, unsafe_allow_html=True)
+
+    report_inputs_rows = "".join(
+        f"<tr><td>{label}</td><td>{value}</td></tr>"
+        for label, value in [
+            ("Consumo mensual torre", f"{consumo_mensual:,.0f}".replace(",", ".") + " kWh/mes"),
+            ("Cobertura objetivo", f"{cobertura_objetivo_pct:.0f}%"),
+            ("Seguridad adicional", f"{margen_seguridad_pct:.0f}%"),
+            ("Demanda objetivo ajustada", f"{target_kwh_month:,.0f}".replace(",", ".") + " kWh/mes"),
+            ("Factor planta", f"{factor_planta_pct:.0f}%"),
+            ("Vida útil", f"{vida_util:.0f} años"),
+            ("Costo red", f"{format_clp(costo_red)}/kWh"),
+            ("Costo electrógeno", f"{format_clp(costo_electrogeno)}/kWh"),
+            ("Costo FV/BESS", f"{format_clp(costo_fv_bess)}/kWh"),
+            ("Monetización excedente", f"{format_clp(valor_monetizacion_excedente)}/kWh"),
+            ("BOS", f"{bos_pct:.0f}%"),
+            ("O&M anual", f"{om_anual_pct:.2f}%"),
+            ("Mix energético", f"{mix_red / normalized_mix_total:.0%} red · {mix_elect / normalized_mix_total:.0%} electrógeno · {mix_fv / normalized_mix_total:.0%} FV/BESS"),
+        ]
+    )
+    impact_rows = "".join(
+        f"<tr><td>{label}</td><td>{value}</td><td>{note}</td></tr>"
+        for label, value, note in [
+            ("Ahorro neto anual", format_clp(rec_net_savings), "Ahorro híbrido menos O&M."),
+            ("Valor neto vida útil", format_clp(rec_lifetime_net), "Flujo neto acumulado menos inversión."),
+            ("Diésel evitado", f"{diesel_liters_avoided:,.0f}".replace(",", ".") + " L/año", "Estimado por energía desplazada del electrógeno."),
+            ("CO₂ evitado", f"{co2_tons_avoided:,.1f}".replace(",", ".") + " t/año", "Factor referencial diésel."),
+            ("Eficiencia de capital", f"{capital_efficiency:,.0f}".replace(",", ".") + " kWh/MM", "Energía útil anual por MM CLP."),
+        ]
+    )
+    heat_report_rows = "".join(
+        "<tr><td><b>{}</b></td>{}</tr>".format(
+            html.escape(str(idx)),
+            "".join(f"<td>{'' if pd.isna(val) else f'{float(val):.1f}'}</td>" for val in heat_matrix.loc[idx]),
+        )
+        for idx in heat_matrix.index
+    )
+    if REPORTLAB_AVAILABLE:
+        def _pdf_report_bytes() -> bytes:
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(
+                buffer,
+                pagesize=A4,
+                rightMargin=1.15 * cm,
+                leftMargin=1.15 * cm,
+                topMargin=1.0 * cm,
+                bottomMargin=1.0 * cm,
+            )
+            styles = getSampleStyleSheet()
+            title_style = styles["Title"].clone("client_pdf_title")
+            title_style.textColor = colors.white
+            title_style.fontSize = 19
+            title_style.leading = 22
+            subtitle_style = styles["BodyText"].clone("client_pdf_subtitle")
+            subtitle_style.textColor = colors.HexColor("#d6f3ed")
+            subtitle_style.fontSize = 8.8
+            subtitle_style.leading = 12
+            h2_style = styles["Heading2"].clone("client_pdf_h2")
+            h2_style.textColor = colors.HexColor("#0f172a")
+            h2_style.fontSize = 12
+            h2_style.leading = 15
+            h2_style.spaceBefore = 8
+            h2_style.spaceAfter = 6
+            body_style = styles["BodyText"].clone("client_pdf_body")
+            body_style.fontSize = 7.8
+            body_style.leading = 10
+
+            story = []
+            hero = Table(
+                [[
+                    Paragraph("Sub bloque 4 · Reporte ejecutivo", subtitle_style),
+                    Paragraph("Análisis de sensibilidad para clientes", title_style),
+                    Paragraph("Inputs, impacto, matriz de sensibilidad, ahorros anuales y tabla ejecutiva de escenarios.", subtitle_style),
+                ]],
+                colWidths=[18.0 * cm],
+            )
+            hero.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#0b1220")),
+                ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#14313a")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 16),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 16),
+                ("TOPPADDING", (0, 0), (-1, -1), 14),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+            ]))
+            story.extend([hero, Spacer(1, 10)])
+
+            impact_data = [
+                ["Ahorro neto anual", format_clp(rec_net_savings)],
+                ["Valor neto vida útil", format_clp(rec_lifetime_net)],
+                ["Diésel evitado", f"{diesel_liters_avoided:,.0f}".replace(",", ".") + " L/año"],
+                ["CO₂ evitado", f"{co2_tons_avoided:,.1f}".replace(",", ".") + " t/año"],
+                ["Eficiencia capital", f"{capital_efficiency:,.0f}".replace(",", ".") + " kWh/MM"],
+            ]
+            kpi_table = Table(impact_data, colWidths=[8.7 * cm, 9.3 * cm])
+            kpi_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#d7e1eb")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#e2e8f0")),
+                ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#0f172a")),
+                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 6.7),
+                ("TOPPADDING", (0, 0), (-1, -1), 7),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ]))
+            story.extend([Paragraph("KPIs de impacto", h2_style), kpi_table, Spacer(1, 8)])
+
+            inputs_table = Table(
+                [["Input", "Valor"]] + [
+                    [label, value]
+                    for label, value in [
+                        ("Consumo mensual torre", f"{consumo_mensual:,.0f}".replace(",", ".") + " kWh/mes"),
+                        ("Cobertura objetivo", f"{cobertura_objetivo_pct:.0f}%"),
+                        ("Seguridad adicional", f"{margen_seguridad_pct:.0f}%"),
+                        ("Demanda objetivo ajustada", f"{target_kwh_month:,.0f}".replace(",", ".") + " kWh/mes"),
+                        ("Factor planta", f"{factor_planta_pct:.0f}%"),
+                        ("Vida útil", f"{vida_util:.0f} años"),
+                        ("Costo red", f"{format_clp(costo_red)}/kWh"),
+                        ("Costo electrógeno", f"{format_clp(costo_electrogeno)}/kWh"),
+                        ("Costo FV/BESS", f"{format_clp(costo_fv_bess)}/kWh"),
+                        ("Monetización excedente", f"{format_clp(valor_monetizacion_excedente)}/kWh"),
+                        ("BOS", f"{bos_pct:.0f}%"),
+                        ("O&M anual", f"{om_anual_pct:.2f}%"),
+                    ]
+                ],
+                colWidths=[8.5 * cm, 9.5 * cm],
+            )
+            inputs_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b1220")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d7e1eb")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]))
+            story.extend([Paragraph("Inputs principales", h2_style), inputs_table, Spacer(1, 8)])
+
+            savings_table_data = [["Escenario", "Red", "Electrógeno", "Híbrido"]] + [
+                [
+                    str(row["Escenario"]),
+                    format_clp(float(row["Ahorro anual red CLP"])),
+                    format_clp(float(row["Ahorro anual electrógeno CLP"])),
+                    format_clp(float(row["Ahorro anual híbrido CLP"])),
+                ]
+                for _, row in chart_df.iterrows()
+            ]
+            savings_table = Table(savings_table_data, colWidths=[4.5 * cm, 4.5 * cm, 4.5 * cm, 4.5 * cm])
+            savings_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b1220")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d7e1eb")),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 7.2),
+                ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+            ]))
+            story.extend([Paragraph("Ahorro anual por fuente desplazada", h2_style), savings_table, Spacer(1, 8)])
+
+            heat_table_data = [["Cobertura"] + list(heat_matrix.columns)] + [
+                [str(idx)] + ["" if pd.isna(val) else f"{float(val):.1f}" for val in heat_matrix.loc[idx]]
+                for idx in heat_matrix.index
+            ]
+            heat_table = Table(heat_table_data, colWidths=[3.0 * cm] + [3.0 * cm] * len(heat_matrix.columns))
+            heat_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b1220")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d7e1eb")),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 7.0),
+                ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+            ]))
+            story.extend([Paragraph("Matriz de sensibilidad · Payback híbrido", h2_style), heat_table, Spacer(1, 8)])
+
+            table_rows = [["Escenario", "Turb.", "Pot.", "Gen.", "Exc.", "Cob.", "CAPEX", "LCOE", "PB híbrido"]] + [
+                [
+                    str(row["Escenario"]),
+                    str(int(row["N° turbinas"])),
+                    f"{float(row['Potencia instalada kW']):.0f} kW",
+                    f"{float(row['Generación kWh/mes']):,.0f}".replace(",", "."),
+                    f"{float(row['Excedente kWh/mes']):,.0f}".replace(",", "."),
+                    f"{float(row['Cobertura real']) * 100:.0f}%",
+                    format_clp(float(row["CAPEX total CLP"])),
+                    format_clp(float(row["LCOE simple CLP/kWh"])),
+                    "N/A" if pd.isna(row["Payback neto híbrido años"]) else f"{float(row['Payback neto híbrido años']):.1f} años",
+                ]
+                for _, row in chart_df.iterrows()
+            ]
+            rec_pdf_row_pos = next(
+                (pos + 1 for pos, row in enumerate(chart_df.to_dict("records")) if str(row["Escenario"]) == str(recommended["Escenario"])),
+                1,
+            )
+            scenario_pdf_table = Table(table_rows, colWidths=[2.7 * cm, 1.2 * cm, 1.5 * cm, 1.9 * cm, 1.6 * cm, 1.3 * cm, 2.8 * cm, 1.8 * cm, 2.0 * cm])
+            scenario_pdf_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b1220")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d7e1eb")),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                ("BACKGROUND", (0, rec_pdf_row_pos), (-1, rec_pdf_row_pos), colors.HexColor("#ecfdf5")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 6.8),
+                ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+            ]))
+            story.extend([Paragraph("Tabla ejecutiva de escenarios", h2_style), scenario_pdf_table])
+            doc.build(story)
+            return buffer.getvalue()
+
+        st.download_button(
+            "Descargar reporte ejecutivo PDF",
+            data=_pdf_report_bytes(),
+            file_name="reporte_sensibilidad_clientes.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="download_client_sensitivity_pdf",
+        )
+    else:
+        st.warning("La descarga PDF requiere ReportLab instalado en el entorno.")
+
+    if not checklist_df.empty:
+        with st.expander("Checklist de validación técnica/comercial", expanded=False):
+            st.dataframe(checklist_df, use_container_width=True, hide_index=True)
+
+
 def render_inputs_capex_10kw_detail():
     try:
         df_10kw = build_restante_piloto_10kw_view(RESTANTE_PILOTO_10KW_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
@@ -9076,12 +10676,16 @@ def render_inputs_capex_10kw_detail():
         .capex10-foot-ico{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eef4ff;color:#315d9b;font-size:20px;}
         .capex10-foot-k{font-size:11px;color:#587093;margin:0 0 4px 0;}
         .capex10-foot-v{font-size:12px;color:#18345c;margin:0;font-weight:600;}
-        .capex10-subnav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 16px 0;}
+        .capex10-subnav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 16px 0;}
         .capex10-subcard{border:1px solid #d9e2ee;border-radius:13px;background:linear-gradient(180deg,#fff,#f8fbff);padding:15px 16px;min-height:98px;box-shadow:0 10px 24px rgba(15,23,42,.045);}
         .capex10-subcard.active{border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.10),0 12px 28px rgba(15,23,42,.06);}
         .capex10-sub-k{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:0 0 7px 0;}
         .capex10-sub-t{font-size:15px;font-weight:950;color:#0b1730;line-height:1.15;margin:0 0 6px 0;}
         .capex10-sub-s{font-size:11.5px;line-height:1.35;color:#475569;margin:0;}
+        .capex10-sens-shell{border:1px solid #d9e2ee;border-radius:18px;background:linear-gradient(135deg,#ffffff 0%,#f8fbff 58%,#eefdf9 100%);padding:22px 24px;margin:18px 0 0 0;box-shadow:0 14px 30px rgba(15,23,42,.055);}
+        .capex10-sens-k{font-size:11px;font-weight:950;letter-spacing:.12em;text-transform:uppercase;color:#0f766e;margin:0 0 8px 0;}
+        .capex10-sens-t{font-size:26px;line-height:1.08;font-weight:950;color:#071427;margin:0 0 8px 0;}
+        .capex10-sens-s{font-size:13px;line-height:1.45;color:#475569;font-weight:750;margin:0;max-width:860px;}
         @media (max-width: 1300px){.capex10-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}}
         @media (max-width: 1100px){.capex10-main,.capex10-footer{grid-template-columns:1fr}.capex10-foot-item{border-right:0;border-bottom:1px solid #d8e2ee;padding:10px 0}.capex10-foot-item:last-child{border-bottom:0}.capex10-panel{height:auto;overflow:visible}.capex10-panel-body,.capex10-table-scroll{height:auto;overflow:visible}}
         @media (max-width: 720px){.capex10-kpis{grid-template-columns:1fr}.capex10-shell{padding:18px}.capex10-title{font-size:24px}}
@@ -9106,7 +10710,7 @@ def render_inputs_capex_10kw_detail():
             ):
                 st.session_state.pop(gantt_key, None)
 
-    valid_capex10_subblocks = {"control_fondos", "vista_integrada", "control_cost"}
+    valid_capex10_subblocks = {"control_fondos", "vista_integrada", "control_cost", "sensibilidad_clientes"}
     if capex10_subblock_key not in st.session_state:
         st.session_state[capex10_subblock_key] = "control_fondos"
     elif st.session_state[capex10_subblock_key] not in valid_capex10_subblocks:
@@ -9128,8 +10732,13 @@ def render_inputs_capex_10kw_detail():
             "Control Cost",
             "Gestión de cortes históricos, snapshots EVM y comparación mensual de control PMO.",
         ),
+        (
+            "sensibilidad_clientes",
+            "Análisis de sensibilidad para clientes",
+            "Escenarios de variación comercial, precio, demanda y retorno para lectura de cliente.",
+        ),
     ]
-    sub_cols = st.columns(3)
+    sub_cols = st.columns(4)
     for idx, (sub_value, sub_title, sub_copy) in enumerate(capex10_subblocks):
         is_active = st.session_state.get(capex10_subblock_key) == sub_value
         with sub_cols[idx]:
@@ -9172,6 +10781,10 @@ def render_inputs_capex_10kw_detail():
             st.warning(f"No se pudo cargar Control Cost: {exc}")
         else:
             render_control_cost_block(df_control_cost)
+        return
+
+    if selected_capex10_subblock == "sensibilidad_clientes":
+        render_client_sensitivity_analysis()
         return
 
     render_pilotos_ana_embedded_view()
