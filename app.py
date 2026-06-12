@@ -9226,38 +9226,44 @@ def render_client_sensitivity_analysis():
     mix_defaults = model["mix"]
     source_scenarios = model["scenarios"]
     checklist_df = model["checklist"]
+    client_blue_1 = "#B7D0E4"
+    client_blue_2 = "#8DBDE6"
+    client_blue_3 = "#63A8DE"
+    client_blue_4 = "#3F95D3"
+    client_blue_5 = "#1769AA"
+    client_blue_text = "#0B3D66"
 
     st.markdown(
         """
         <style>
-        .client-sens-hero{border:1px solid rgba(15,23,42,.12);border-radius:18px;background:linear-gradient(135deg,#0b1220 0%,#14313a 55%,#0f766e 100%);padding:24px 26px;margin:18px 0 16px 0;box-shadow:0 18px 42px rgba(15,23,42,.18);}
+        .client-sens-hero{border:1px solid rgba(23,105,170,.18);border-radius:18px;background:linear-gradient(135deg,#1769AA 0%,#3F95D3 55%,#B7D0E4 100%);padding:24px 26px;margin:18px 0 16px 0;box-shadow:0 18px 42px rgba(23,105,170,.18);}
         .client-sens-k{font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#99f6e4;margin:0 0 8px 0;}
         .client-sens-t{font-size:30px;line-height:1.05;font-weight:950;color:#ffffff;margin:0 0 8px 0;}
         .client-sens-s{font-size:13.5px;line-height:1.48;color:#d6f3ed;font-weight:760;margin:0;max-width:1050px;}
-        .client-note{border:1px solid #bae6df;border-left:5px solid #0f766e;background:#f0fdfa;border-radius:10px;padding:13px 15px;color:#164e63;font-size:12.5px;font-weight:790;line-height:1.42;margin:8px 0 16px;}
+        .client-note{border:1px solid #B7D0E4;border-left:5px solid #1769AA;background:#F4FAFE;border-radius:10px;padding:13px 15px;color:#0B3D66;font-size:12.5px;font-weight:790;line-height:1.42;margin:8px 0 16px;}
         .client-panel-title{font-size:16px;font-weight:950;color:#0f172a;margin:0 0 4px;}
         .client-panel-sub{font-size:12px;font-weight:760;color:#64748b;margin:0 0 10px;}
         .client-input-head{border:1px solid #d7e1eb;border-radius:14px;background:#ffffff;padding:16px 18px;margin:0 0 14px;box-shadow:0 10px 24px rgba(15,23,42,.045);}
-        .client-input-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#0f766e;font-weight:950;margin:0 0 6px;}
+        .client-input-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#1769AA;font-weight:950;margin:0 0 6px;}
         .client-input-t{font-size:20px;line-height:1.1;color:#0f172a;font-weight:950;margin:0 0 6px;}
         .client-input-s{font-size:12.5px;line-height:1.38;color:#64748b;font-weight:760;margin:0;max-width:980px;}
         .client-input-section{font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:#334155;font-weight:950;margin:2px 0 8px;padding:0 0 7px;border-bottom:1px solid #e2e8f0;}
         .client-impact-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:14px 0 18px;}
         .client-impact-card{border:1px solid #d7e1eb;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);padding:15px 16px;box-shadow:0 10px 24px rgba(15,23,42,.055);min-height:112px;}
-        .client-impact-k{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#0f766e;font-weight:950;margin:0 0 8px;}
+        .client-impact-k{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#1769AA;font-weight:950;margin:0 0 8px;}
         .client-impact-v{font-size:22px;line-height:1.02;font-weight:950;color:#0b1730;margin:0 0 7px;overflow-wrap:anywhere;}
         .client-impact-s{font-size:11.5px;line-height:1.28;color:#475569;font-weight:740;margin:0;}
-        .client-section-marker{margin:22px 0 12px;padding:12px 14px;border-left:5px solid #0f766e;background:#f8fafc;border-radius:10px;border-top:1px solid #e2e8f0;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;}
-        .client-section-k{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#0f766e;font-weight:950;margin:0 0 4px;}
+        .client-section-marker{margin:22px 0 12px;padding:12px 14px;border-left:5px solid #1769AA;background:#F8FBFF;border-radius:10px;border-top:1px solid #B7D0E4;border-right:1px solid #B7D0E4;border-bottom:1px solid #B7D0E4;}
+        .client-section-k{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#1769AA;font-weight:950;margin:0 0 4px;}
         .client-section-t{font-size:15px;line-height:1.15;color:#0f172a;font-weight:950;margin:0;}
         .client-section-s{font-size:12px;line-height:1.35;color:#64748b;font-weight:740;margin:4px 0 0;}
         .client-reading-card{border:1px solid #d7e1eb;border-radius:14px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);box-shadow:0 10px 24px rgba(15,23,42,.05);padding:16px 18px;margin-top:30px;min-height:300px;}
-        .client-reading-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#0f766e;font-weight:950;margin:0 0 8px;}
+        .client-reading-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#1769AA;font-weight:950;margin:0 0 8px;}
         .client-reading-t{font-size:18px;line-height:1.12;color:#0f172a;font-weight:950;margin:0 0 10px;}
         .client-reading-line{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #e2e8f0;font-size:12px;color:#475569;font-weight:760;}
         .client-reading-line b{color:#0f172a;font-weight:950;text-align:right;}
         .client-table-shell{border:1px solid #d7e1eb;border-radius:14px;background:#ffffff;box-shadow:0 12px 28px rgba(15,23,42,.055);overflow:hidden;margin:8px 0 14px;}
-        .client-table-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;background:#0b1220;color:#fff;padding:16px 18px;}
+        .client-table-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;background:#1769AA;color:#fff;padding:16px 18px;}
         .client-table-head h3{font-size:17px;font-weight:950;margin:0 0 4px;}
         .client-table-head p{font-size:12px;line-height:1.35;color:#cbd5e1;font-weight:760;margin:0;}
         .client-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;color:#0f172a;}
@@ -9497,7 +9503,7 @@ def render_client_sensitivity_analysis():
                 x=surplus_payback_df["Escenario"],
                 y=surplus_payback_df["Payback sin excedente"],
                 name="Payback sin excedentes",
-                marker_color="#8fb7c5",
+                marker_color=client_blue_2,
                 text=payback_without,
                 textposition="outside",
                 cliponaxis=False,
@@ -9510,7 +9516,7 @@ def render_client_sensitivity_analysis():
                 x=surplus_payback_df["Escenario"],
                 y=surplus_payback_df["Payback híbrido"],
                 name="Payback con excedentes",
-                marker_color=["#0b1220" if name == str(recommended["Escenario"]) else "#0f766e" for name in surplus_payback_df["Escenario"]],
+                marker_color=[client_blue_5 if name == str(recommended["Escenario"]) else client_blue_4 for name in surplus_payback_df["Escenario"]],
                 text=payback_with,
                 textposition="outside",
                 cliponaxis=False,
@@ -9525,11 +9531,11 @@ def render_client_sensitivity_analysis():
                 name="Aporte excedente",
                 yaxis="y2",
                 mode="lines+markers+text",
-                line=dict(color="#b45309", width=3),
-                marker=dict(size=11, color="#f59e0b", line=dict(color="#ffffff", width=2)),
+                line=dict(color=client_blue_5, width=3),
+                marker=dict(size=11, color=client_blue_3, line=dict(color="#ffffff", width=2)),
                 text=[f"{float(v):.1f} MM" if float(v) > 0 else "0 MM" for v in surplus_payback_df["Aporte excedente anual"]],
                 textposition=["top center", "bottom center", "top center", "bottom center", "top center"][: len(surplus_payback_df)],
-                textfont=dict(color="#92400e", size=11),
+                textfont=dict(color=client_blue_text, size=11),
                 hovertemplate="<b>%{x}</b><br>Aporte por excedentes: %{y:.2f} MM CLP/año<extra></extra>",
             )
         )
@@ -9576,7 +9582,7 @@ def render_client_sensitivity_analysis():
                     labels=mix_chart_df["Fuente"],
                     values=mix_chart_df["Participación"],
                     hole=0.58,
-                    marker=dict(colors=["#1d4ed8", "#0f766e", "#d9a766"], line=dict(color="#ffffff", width=2)),
+                    marker=dict(colors=[client_blue_5, client_blue_4, client_blue_2], line=dict(color="#ffffff", width=2)),
                     textinfo="label+percent",
                     hovertemplate="<b>%{label}</b><br>Participación: %{percent}<extra></extra>",
                 )
@@ -9593,7 +9599,7 @@ def render_client_sensitivity_analysis():
                 go.Bar(
                     x=payback_chart_df["Escenario"],
                     y=payback_chart_df["Payback híbrido"],
-                    marker_color=["#0f766e" if name == recommended["Escenario"] else "#8fb7c5" for name in payback_chart_df["Escenario"]],
+                    marker_color=[client_blue_5 if name == recommended["Escenario"] else client_blue_2 for name in payback_chart_df["Escenario"]],
                     text=[_format_payback_years(v) for v in payback_chart_df["Payback híbrido"]],
                     textposition="outside",
                     cliponaxis=False,
@@ -9632,7 +9638,7 @@ def render_client_sensitivity_analysis():
                 x=chart_df["Escenario"],
                 y=chart_df["CAPEX MM CLP"],
                 name="CAPEX total",
-                marker_color="#0f766e",
+                marker_color=client_blue_4,
                 text=[f"{v:.1f} MM" for v in chart_df["CAPEX MM CLP"]],
                 textposition="inside",
                 insidetextanchor="end",
@@ -9656,11 +9662,11 @@ def render_client_sensitivity_analysis():
                 name="LCOE",
                 yaxis="y2",
                 mode="lines+markers+text",
-                line=dict(color="#b45309", width=3),
-                marker=dict(size=10, color="#f59e0b", line=dict(color="#ffffff", width=2)),
+                line=dict(color=client_blue_5, width=3),
+                marker=dict(size=10, color=client_blue_3, line=dict(color="#ffffff", width=2)),
                 text=[format_clp(float(v)) if pd.notna(v) else "" for v in chart_df["LCOE"]],
                 textposition=lcoe_positions[: len(chart_df)],
-                textfont=dict(color="#92400e", size=11),
+                textfont=dict(color=client_blue_text, size=11),
                 customdata=capex_lcoe_customdata,
                 hovertemplate=(
                     "<b>%{x}</b><br>"
@@ -9686,8 +9692,8 @@ def render_client_sensitivity_analysis():
                 ax=24,
                 ay=-34,
                 bgcolor="rgba(255,255,255,.92)",
-                bordercolor="#b45309",
-                font=dict(color="#92400e", size=11),
+                bordercolor=client_blue_5,
+                font=dict(color=client_blue_text, size=11),
             )
             fig_capex_lcoe.add_annotation(
                 x=str(recommended["Escenario"]),
@@ -9697,8 +9703,8 @@ def render_client_sensitivity_analysis():
                 arrowhead=2,
                 ax=-8,
                 ay=-42,
-                bgcolor="#0b1220",
-                bordercolor="#0b1220",
+                bgcolor=client_blue_5,
+                bordercolor=client_blue_5,
                 font=dict(color="#ffffff", size=11),
             )
         fig_capex_lcoe.update_layout(
@@ -9734,7 +9740,7 @@ def render_client_sensitivity_analysis():
                 x=capex_stack["Escenario"],
                 y=capex_stack["Turbinas MM CLP"],
                 name="Turbinas",
-                marker_color="#0f766e",
+                marker_color=client_blue_4,
                 customdata=capex_stack_customdata,
                 hovertemplate="<b>%{x}</b><br>CAPEX turbinas: %{y:.1f} MM CLP<br>Total: %{customdata[0]:.1f} MM CLP<br>Potencia instalada: %{customdata[2]:.0f} kW<extra></extra>",
             )
@@ -9744,7 +9750,7 @@ def render_client_sensitivity_analysis():
                 x=capex_stack["Escenario"],
                 y=capex_stack["BOS MM CLP"],
                 name="BOS/instalación",
-                marker_color="#d9a766",
+                marker_color=client_blue_1,
                 customdata=capex_stack_customdata,
                 hovertemplate="<b>%{x}</b><br>BOS/instalación: %{y:.1f} MM CLP<br>Total: %{customdata[0]:.1f} MM CLP<br>Turbinas: %{customdata[1]:.0f}<extra></extra>",
             )
@@ -9756,8 +9762,8 @@ def render_client_sensitivity_analysis():
                 name="N° turbinas",
                 yaxis="y2",
                 mode="lines+markers+text",
-                line=dict(color="#0b1220", width=3),
-                marker=dict(size=23, color="#0b1220", line=dict(color="#ffffff", width=2)),
+                line=dict(color=client_blue_5, width=3),
+                marker=dict(size=23, color=client_blue_5, line=dict(color="#ffffff", width=2)),
                 text=[f"{int(v)}" for v in capex_stack["N° turbinas"]],
                 textposition="middle center",
                 textfont=dict(color="#ffffff", size=10),
@@ -9774,7 +9780,7 @@ def render_client_sensitivity_analysis():
                     mode="text",
                     text=[f"{v:.1f} MM" for v in capex_stack["Total MM CLP"]],
                     textposition="top center",
-                    textfont=dict(color="#64748b", size=11),
+                    textfont=dict(color=client_blue_text, size=11),
                     hoverinfo="skip",
                     showlegend=False,
                 )
@@ -9787,8 +9793,8 @@ def render_client_sensitivity_analysis():
                 arrowhead=2,
                 ax=4,
                 ay=-42,
-                bgcolor="#0b1220",
-                bordercolor="#0b1220",
+                bgcolor=client_blue_5,
+                bordercolor=client_blue_5,
                 font=dict(color="#ffffff", size=11),
             )
         fig_capex.update_layout(
@@ -9834,13 +9840,13 @@ def render_client_sensitivity_analysis():
         scenario_name = str(row["Escenario"])
         coverage_pct = float(row["Cobertura %"]) if pd.notna(row["Cobertura %"]) else 0.0
         if scenario_name == str(recommended["Escenario"]):
-            gen_bar_colors.append("#0b1220")
+            gen_bar_colors.append(client_blue_5)
         elif coverage_pct < target_coverage_pct * 0.92:
-            gen_bar_colors.append("#8fb7c5")
+            gen_bar_colors.append(client_blue_1)
         elif coverage_pct <= 125:
-            gen_bar_colors.append("#0f766e")
+            gen_bar_colors.append(client_blue_4)
         else:
-            gen_bar_colors.append("#d9a766")
+            gen_bar_colors.append(client_blue_2)
     gen_labels = []
     coverage_labels = []
     max_generation_name = str(gen_chart_df.loc[gen_chart_df["Generación kWh/mes"].idxmax(), "Escenario"]) if not gen_chart_df.empty else ""
@@ -9886,8 +9892,8 @@ def render_client_sensitivity_analysis():
             name="Cobertura real",
             yaxis="y2",
             mode="lines+markers+text",
-            line=dict(color="#b45309", width=3),
-            marker=dict(size=10, color="#f59e0b", line=dict(color="#ffffff", width=2)),
+            line=dict(color=client_blue_5, width=3),
+            marker=dict(size=10, color=client_blue_3, line=dict(color="#ffffff", width=2)),
             text=coverage_labels,
             textposition="top center",
             hovertemplate="<b>%{x}</b><br>Cobertura real: %{y:.0f}%<extra></extra>",
@@ -9900,7 +9906,7 @@ def render_client_sensitivity_analysis():
             name="Cobertura objetivo",
             yaxis="y2",
             mode="lines",
-            line=dict(color="#1d4ed8", width=2.4, dash="dash"),
+            line=dict(color=client_blue_5, width=2.4, dash="dash"),
             hovertemplate="Cobertura objetivo: %{y:.0f}%<extra></extra>",
         )
     )
@@ -9910,7 +9916,7 @@ def render_client_sensitivity_analysis():
             y=[target_kwh_month] * len(gen_chart_df),
             name="Demanda objetivo",
             mode="lines",
-            line=dict(color="#64748b", width=2, dash="dot"),
+            line=dict(color=client_blue_2, width=2, dash="dot"),
             hovertemplate="Demanda objetivo: %{y:,.0f} kWh/mes<extra></extra>",
         )
     )
@@ -9923,8 +9929,8 @@ def render_client_sensitivity_analysis():
             arrowhead=2,
             ax=0,
             ay=-44,
-            bgcolor="#0b1220",
-            bordercolor="#0b1220",
+            bgcolor=client_blue_5,
+            bordercolor=client_blue_5,
             font=dict(color="#ffffff", size=11),
         )
         gen_fig.add_annotation(
@@ -9936,8 +9942,8 @@ def render_client_sensitivity_analysis():
             xanchor="right",
             yanchor="bottom",
             bgcolor="rgba(255,255,255,.88)",
-            bordercolor="#1d4ed8",
-            font=dict(color="#1d4ed8", size=11),
+            bordercolor=client_blue_5,
+            font=dict(color=client_blue_text, size=11),
         )
         gen_fig.add_annotation(
             x=gen_chart_df["Escenario"].iloc[-1],
@@ -9947,8 +9953,8 @@ def render_client_sensitivity_analysis():
             xanchor="right",
             yanchor="top",
             bgcolor="rgba(255,255,255,.88)",
-            bordercolor="#64748b",
-            font=dict(color="#475569", size=11),
+            bordercolor=client_blue_2,
+            font=dict(color=client_blue_text, size=11),
         )
     max_gen_value = float(pd.to_numeric(gen_chart_df["Generación kWh/mes"], errors="coerce").max()) if not gen_chart_df.empty else 1.0
     max_coverage_value = float(pd.to_numeric(gen_chart_df["Cobertura %"], errors="coerce").max()) if not gen_chart_df.empty else target_coverage_pct
@@ -10061,7 +10067,7 @@ def render_client_sensitivity_analysis():
             z=heat_z.tolist(),
             x=list(heat_matrix.columns),
             y=list(heat_matrix.index),
-            colorscale=[[0, "#0f766e"], [0.5, "#f6c85f"], [1, "#ef4444"]],
+            colorscale=[[0, client_blue_5], [0.45, client_blue_3], [1, client_blue_1]],
             text=heat_text,
             texttemplate="%{text}",
             textfont=dict(size=13, color="#ffffff"),
@@ -10099,10 +10105,10 @@ def render_client_sensitivity_analysis():
         )
         rec_savings_df = pd.DataFrame(
             [
-                {"Concepto": "Si reemplaza red", "Valor MM": float(recommended["Ahorro anual red CLP"]) / 1_000_000, "Color": "#1d4ed8"},
-                {"Concepto": "Si reemplaza electrógeno", "Valor MM": float(recommended["Ahorro anual electrógeno CLP"]) / 1_000_000, "Color": "#0f766e"},
-                {"Concepto": "Mix híbrido bruto", "Valor MM": float(recommended["Ahorro anual híbrido CLP"]) / 1_000_000, "Color": "#d9a766"},
-                {"Concepto": "Mix híbrido neto", "Valor MM": rec_net_savings / 1_000_000, "Color": "#0b1220"},
+                {"Concepto": "Si reemplaza red", "Valor MM": float(recommended["Ahorro anual red CLP"]) / 1_000_000, "Color": client_blue_3},
+                {"Concepto": "Si reemplaza electrógeno", "Valor MM": float(recommended["Ahorro anual electrógeno CLP"]) / 1_000_000, "Color": client_blue_4},
+                {"Concepto": "Mix híbrido bruto", "Valor MM": float(recommended["Ahorro anual híbrido CLP"]) / 1_000_000, "Color": client_blue_2},
+                {"Concepto": "Mix híbrido neto", "Valor MM": rec_net_savings / 1_000_000, "Color": client_blue_5},
             ]
         )
         savings_fig = go.Figure()
@@ -10126,7 +10132,7 @@ def render_client_sensitivity_analysis():
             arrowhead=2,
             ax=48,
             ay=-28,
-            font=dict(size=11, color="#0b1220"),
+            font=dict(size=11, color=client_blue_text),
         )
         savings_fig.update_layout(
             height=370,
@@ -10188,7 +10194,7 @@ def render_client_sensitivity_analysis():
                 x=years,
                 y=cumulative_diesel,
                 name="Diésel evitado",
-                marker_color="#0f766e",
+                marker_color=client_blue_4,
                 text=[f"{v/1000:.1f}k L" if idx in {0, len(years) - 1} else "" for idx, v in enumerate(cumulative_diesel)],
                 textposition="outside",
                 cliponaxis=False,
@@ -10202,8 +10208,8 @@ def render_client_sensitivity_analysis():
                 name="CO₂ evitado",
                 yaxis="y2",
                 mode="lines+markers+text",
-                line=dict(color="#b45309", width=3),
-                marker=dict(size=8, color="#f59e0b", line=dict(color="#ffffff", width=1.5)),
+                line=dict(color=client_blue_5, width=3),
+                marker=dict(size=8, color=client_blue_3, line=dict(color="#ffffff", width=1.5)),
                 text=[f"{v:.1f} t" if idx in {0, len(years) - 1} else "" for idx, v in enumerate(cumulative_co2)],
                 textposition="top center",
                 hovertemplate="Año %{x}<br>CO₂ evitado: %{y:.1f} t<extra></extra>",
@@ -10234,7 +10240,7 @@ def render_client_sensitivity_analysis():
                 y=cumulative_gross_savings / 1_000_000,
                 name="Ahorro bruto",
                 mode="lines",
-                line=dict(color="#8fb7c5", width=2, dash="dot"),
+                line=dict(color=client_blue_1, width=2, dash="dot"),
                 hovertemplate="Año %{x}<br>Ahorro bruto: %{y:.1f} MM CLP<extra></extra>",
             )
         )
@@ -10244,8 +10250,8 @@ def render_client_sensitivity_analysis():
                 y=cumulative_net_savings / 1_000_000,
                 name="Ahorro neto",
                 mode="lines+markers",
-                line=dict(color="#0f766e", width=3),
-                marker=dict(size=7, color="#0f766e", line=dict(color="#ffffff", width=1.5)),
+                line=dict(color=client_blue_4, width=3),
+                marker=dict(size=7, color=client_blue_4, line=dict(color="#ffffff", width=1.5)),
                 hovertemplate="Año %{x}<br>Ahorro neto: %{y:.1f} MM CLP<extra></extra>",
             )
         )
@@ -10255,10 +10261,10 @@ def render_client_sensitivity_analysis():
                 y=cumulative_after_capex / 1_000_000,
                 name="Neto después CAPEX",
                 mode="lines+markers",
-                line=dict(color="#b45309", width=3),
-                marker=dict(size=7, color="#f59e0b", line=dict(color="#ffffff", width=1.5)),
+                line=dict(color=client_blue_5, width=3),
+                marker=dict(size=7, color=client_blue_3, line=dict(color="#ffffff", width=1.5)),
                 fill="tozeroy",
-                fillcolor="rgba(245,158,11,.12)",
+                fillcolor="rgba(99,168,222,.14)",
                 hovertemplate="Año %{x}<br>Neto post CAPEX: %{y:.1f} MM CLP<extra></extra>",
             )
         )
@@ -10267,7 +10273,7 @@ def render_client_sensitivity_analysis():
             payback_x = max(1.0, min(float(recommended["Payback neto híbrido años"]), float(years[-1])))
             saving_fig.add_vline(
                 x=payback_x,
-                line_color="#0f766e",
+                line_color=client_blue_5,
                 line_dash="dash",
                 annotation_text=f"Payback {_format_payback_years(recommended['Payback neto híbrido años'])}",
                 annotation_position="top right",
@@ -10340,11 +10346,15 @@ def render_client_sensitivity_analysis():
     scenario_rows_html = []
     for _, row in chart_df.iterrows():
         is_recommended = str(row["Escenario"]) == str(recommended["Escenario"])
+        row_class = "recommended" if is_recommended else ""
+        row_badge = '<span class="client-badge">Recomendada</span>' if is_recommended else '<span class="client-muted">Alternativa evaluada</span>'
+        payback_value = row["Payback neto híbrido años"]
+        payback_text = "N/A" if pd.isna(payback_value) else f"{float(payback_value):.1f} años"
         scenario_rows_html.append(
             (
-                f"<tr class=\"{'recommended' if is_recommended else ''}\">"
+                f'<tr class="{row_class}">'
                 f"<td><b>{html.escape(str(row['Escenario']))}</b><br>"
-                f"{'<span class=\"client-badge\">Recomendada</span>' if is_recommended else '<span class=\"client-muted\">Alternativa evaluada</span>'}</td>"
+                f"{row_badge}</td>"
                 f"<td>{int(row['N° turbinas'])}</td>"
                 f"<td>{float(row['Potencia instalada kW']):.0f} kW</td>"
                 f"<td>{float(row['Generación kWh/mes']):,.0f}</td>"
@@ -10352,7 +10362,7 @@ def render_client_sensitivity_analysis():
                 f"<td>{float(row['Cobertura real']) * 100:.0f}%</td>"
                 f"<td>{format_clp(float(row['CAPEX total CLP']))}</td>"
                 f"<td>{format_clp(float(row['LCOE simple CLP/kWh']))}</td>"
-                f"<td>{'N/A' if pd.isna(row['Payback neto híbrido años']) else f'{float(row['Payback neto híbrido años']):.1f} años'}</td>"
+                f"<td>{payback_text}</td>"
                 f"<td>{_payback_tag(row['Payback neto híbrido años'])}</td>"
                 "</tr>"
             )
@@ -10447,8 +10457,8 @@ def render_client_sensitivity_analysis():
                 colWidths=[18.0 * cm],
             )
             hero.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#0b1220")),
-                ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#14313a")),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(client_blue_5)),
+                ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor(client_blue_4)),
                 ("LEFTPADDING", (0, 0), (-1, -1), 16),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 16),
                 ("TOPPADDING", (0, 0), (-1, -1), 14),
@@ -10497,7 +10507,7 @@ def render_client_sensitivity_analysis():
                 colWidths=[8.5 * cm, 9.5 * cm],
             )
             inputs_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b1220")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(client_blue_5)),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("BACKGROUND", (0, 1), (-1, -1), colors.white),
                 ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d7e1eb")),
@@ -10519,7 +10529,7 @@ def render_client_sensitivity_analysis():
             ]
             savings_table = Table(savings_table_data, colWidths=[4.5 * cm, 4.5 * cm, 4.5 * cm, 4.5 * cm])
             savings_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b1220")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(client_blue_5)),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d7e1eb")),
                 ("BACKGROUND", (0, 1), (-1, -1), colors.white),
@@ -10535,7 +10545,7 @@ def render_client_sensitivity_analysis():
             ]
             heat_table = Table(heat_table_data, colWidths=[3.0 * cm] + [3.0 * cm] * len(heat_matrix.columns))
             heat_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b1220")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(client_blue_5)),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d7e1eb")),
                 ("BACKGROUND", (0, 1), (-1, -1), colors.white),
@@ -10565,7 +10575,7 @@ def render_client_sensitivity_analysis():
             )
             scenario_pdf_table = Table(table_rows, colWidths=[2.7 * cm, 1.2 * cm, 1.5 * cm, 1.9 * cm, 1.6 * cm, 1.3 * cm, 2.8 * cm, 1.8 * cm, 2.0 * cm])
             scenario_pdf_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b1220")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(client_blue_5)),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d7e1eb")),
                 ("BACKGROUND", (0, 1), (-1, -1), colors.white),
