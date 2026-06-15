@@ -258,6 +258,31 @@ SENSIBILIDAD_CLIENTES_CSV_URL_DEFAULT = (
     "2PACX-1vRBfp2xkolGQ-6lbjUN60ST71pSD6fjR7rjQol3NqOJGpHRYYoEZmrPFVw20aP3VlfeitYqDr0L25c2/"
     "pub?gid=1789037315&single=true&output=csv"
 )
+EVALUACION_TELECOM_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
+    "pub?gid=2071685330&single=true&output=csv"
+)
+EVALUACION_TELECOM_SITE_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
+    "pub?gid=42604384&single=true&output=csv"
+)
+EVALUACION_TELECOM_BILLING_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
+    "pub?gid=903883227&single=true&output=csv"
+)
+EVALUACION_TELECOM_WIND_MODEL_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
+    "pub?gid=444879365&single=true&output=csv"
+)
+EVALUACION_TELECOM_WIND_RESOURCE_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
+    "pub?gid=740982553&single=true&output=csv"
+)
 INGENIERIA_PILOTO_10KW_CACHE_VERSION = 3
 INGENIERIA_PILOTO_10KW_ALLOWED_MONTHS = {"dic", "abr", "may"}
 BULLET_CONTEXTO_10KW_CSV_URL_DEFAULT = (
@@ -10604,6 +10629,1654 @@ def render_client_sensitivity_analysis():
             st.dataframe(checklist_df, use_container_width=True, hide_index=True)
 
 
+def _parse_turbine_kw_from_name(name: str) -> float:
+    match = re.search(r"(\d+(?:[,.]\d+)?)\s*kW", str(name), flags=re.IGNORECASE)
+    return parse_float_local(match.group(1), 0.0) if match else 0.0
+
+
+def _telecom_score(series: pd.Series, higher_is_better: bool = False) -> pd.Series:
+    values = pd.to_numeric(series, errors="coerce").replace([np.inf, -np.inf], np.nan)
+    if values.dropna().empty:
+        return pd.Series([0.5] * len(series), index=series.index)
+    low = float(values.min())
+    high = float(values.max())
+    if math.isclose(low, high):
+        return pd.Series([0.5] * len(series), index=series.index)
+    normalized = (values - low) / (high - low)
+    return normalized if higher_is_better else 1 - normalized
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_telecom_site_inputs_model(url: str, refresh_nonce: int = 0) -> dict:
+    def fallback_model(error: Exception | None = None) -> dict:
+        rows = [
+            ("Identificación y ubicación", "ID Sitio", "Sitio piloto 01", "", "Entel", "Trazabilidad", "Por validar", "", "Alta"),
+            ("Identificación y ubicación", "Nombre sitio", "Torre telecom", "", "Entel", "Ficha técnica", "Por validar", "", "Alta"),
+            ("Identificación y ubicación", "Región", "Por definir", "", "Entel", "Logística", "Por validar", "", "Alta"),
+            ("Identificación y ubicación", "Comuna", "Por definir", "", "Entel", "Permisos", "Por validar", "", "Alta"),
+            ("Identificación y ubicación", "Latitud", "", "°", "Entel/Google Earth", "Recurso eólico", "Por validar", "", "Alta"),
+            ("Identificación y ubicación", "Longitud", "", "°", "Entel/Google Earth", "Recurso eólico", "Por validar", "", "Alta"),
+            ("Identificación y ubicación", "Altitud", "", "msnm", "Google Earth", "Densidad aire", "Por validar", "", "Media"),
+            ("Consumo, suministro y costos energéticos", "Consumo mensual modelo", "3.238", "kWh/mes", "Boleta/medidor", "Dimensionamiento", "Automático", "Vinculado a Boleta y Carga", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Consumo anual", "38.851", "kWh/año", "Calculado", "Modelo", "Automático", "", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Tarifa red modelo", "$182", "$/kWh", "Boleta", "Ahorro red", "Automático", "Vinculado a Boleta y Carga", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Costo electrógeno base", "$800", "$/kWh", "Entel/O&M", "Ahorro diésel", "Por validar", "Incluye combustible + O&M + logística", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Costo solar referencia", "$120", "$/kWh", "Entel/proveedor", "Comparación", "Por validar", "", "Media"),
+            ("Consumo, suministro y costos energéticos", "Costo batería referencia", "$180", "$/kWh", "Entel/proveedor", "Comparación", "Por validar", "", "Media"),
+            ("Consumo, suministro y costos energéticos", "Mix Red", "60,0%", "% energía", "Entel", "Costo ponderado", "Por validar", "", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Mix Electrógeno", "40,0%", "% energía", "Entel", "Costo ponderado", "Por validar", "", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Mix Batería/Solar", "0,0%", "% energía", "Entel", "Costo ponderado", "Por validar", "", "Media"),
+            ("Consumo, suministro y costos energéticos", "Costo ponderado actual", "$429", "$/kWh", "Calculado", "Ahorro híbrido", "Automático", "", "Alta"),
+            ("Supuestos de proyecto eólico", "Cobertura objetivo", "100,0%", "% consumo", "Cliente", "Dimensionamiento", "Editable", "Escenario de sensibilidad", "Alta"),
+            ("Supuestos de proyecto eólico", "Vida útil", "20", "años", "Proveedor", "LCOE/VAN", "Por validar", "", "Alta"),
+            ("Supuestos de proyecto eólico", "Tasa descuento", "10,0%", "%", "Finanzas", "VAN", "Por validar", "", "Media"),
+            ("Supuestos de proyecto eólico", "O&M anual", "2,0%", "% CAPEX/año", "Proveedor/O&M", "Payback neto", "Por validar", "", "Alta"),
+            ("Supuestos de proyecto eólico", "Disponibilidad", "95,0%", "%", "Proveedor/O&M", "Energía", "Por validar", "", "Alta"),
+            ("Supuestos de proyecto eólico", "Pérdidas eléctricas", "3,0%", "%", "Diseño eléctrico", "Energía", "Por validar", "", "Alta"),
+            ("Supuestos de proyecto eólico", "Pérdidas adicionales", "2,0%", "%", "Sitio", "Energía", "Por validar", "", "Media"),
+            ("Supuestos de proyecto eólico", "Factor planta ficha sitio", "35,0%", "%", "Ficha sitio/medición/simulación", "Energía", "Por validar", "Debe justificarse por sitio", "Alta"),
+            ("Supuestos de proyecto eólico", "Consumo específico diésel", "0,30", "L/kWh", "Operación", "Diésel evitado", "Por validar", "", "Alta"),
+            ("Supuestos de proyecto eólico", "Factor emisión diésel", "2,68", "kgCO₂/L", "Factor estándar", "CO₂ evitado", "Por validar", "", "Media"),
+            ("Supuestos de proyecto eólico", "Permite venta excedente", "SI", "SI/NO", "", "", "", "", ""),
+            ("Supuestos de proyecto eólico", "Precio venta excedente", "90", "$/kWh", "", "", "", "", ""),
+            ("Supuestos de proyecto eólico", "Factor valorización excedente", "1", "factor", "", "", "", "", ""),
+        ]
+        data = pd.DataFrame(
+            rows,
+            columns=["Sección", "Variable", "Valor", "Unidad", "Fuente requerida", "Uso", "Estado", "Comentario", "Prioridad"],
+        )
+        return {
+            "title": "Datos del sitio - inputs maestros",
+            "data": data,
+            "sections": {name: group.reset_index(drop=True) for name, group in data.groupby("Sección", sort=False)},
+            "source_warning": "" if error is None else str(error),
+            "source_mode": "fallback",
+        }
+
+    try:
+        raw = read_remote_csv(url, refresh_nonce=refresh_nonce, header=None, dtype=str).fillna("")
+    except Exception as exc:
+        return fallback_model(exc)
+
+    def cell(row: int, col: int) -> str:
+        try:
+            return str(raw.iat[row, col]).strip()
+        except Exception:
+            return ""
+
+    rows = []
+    current_section = ""
+    headers = []
+    title = cell(0, 0) or "Datos del sitio - inputs maestros"
+    for idx in range(raw.shape[0]):
+        first = cell(idx, 0)
+        row_values = [cell(idx, col) for col in range(raw.shape[1])]
+        non_empty = [value for value in row_values if value]
+        if not non_empty:
+            continue
+        if first == "Variable":
+            headers = row_values[:8]
+            continue
+        if len(non_empty) == 1 and first and first != title:
+            current_section = first
+            continue
+        if headers and first and current_section:
+            row = {headers[col]: row_values[col] if col < len(row_values) else "" for col in range(len(headers))}
+            row["Sección"] = current_section
+            rows.append(row)
+
+    if not rows:
+        return fallback_model()
+
+    data = pd.DataFrame(rows)
+    for col in ["Variable", "Valor", "Unidad", "Fuente requerida", "Uso", "Estado", "Comentario", "Prioridad"]:
+        if col not in data.columns:
+            data[col] = ""
+    data = data[["Sección", "Variable", "Valor", "Unidad", "Fuente requerida", "Uso", "Estado", "Comentario", "Prioridad"]]
+    sections = {name: group.reset_index(drop=True) for name, group in data.groupby("Sección", sort=False)}
+    return {
+        "title": title,
+        "data": data,
+        "sections": sections,
+        "source_warning": "",
+        "source_mode": "remote",
+    }
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_telecom_billing_load_model(url: str, refresh_nonce: int = 0) -> dict:
+    def fallback_model(error: Exception | None = None) -> dict:
+        months = [
+            ("Enero", 2160.0, 356400.0, 35640.0, 392040.0, 182.0),
+            ("Febrero", 2376.0, 392040.0, 39204.0, 431244.0, 182.0),
+            ("Marzo", 2614.0, 431244.0, 43124.0, 474368.0, 182.0),
+            ("Abril", 2875.0, 474368.0, 47437.0, 521805.0, 182.0),
+            ("Mayo", 3019.0, 498087.0, 49809.0, 547896.0, 182.0),
+            ("Junio", 3170.0, 522991.0, 52299.0, 575290.0, 182.0),
+            ("Julio", 3328.0, 549141.0, 54914.0, 604055.0, 182.0),
+            ("Agosto", 3495.0, 576598.0, 57660.0, 634258.0, 182.0),
+            ("Septiembre", 3669.0, 605428.0, 60543.0, 665970.0, 182.0),
+            ("Octubre", 3853.0, 635699.0, 63570.0, 699269.0, 182.0),
+            ("Noviembre", 4045.0, 667484.0, 66748.0, 734232.0, 182.0),
+            ("Diciembre", 4248.0, 700858.0, 70086.0, 770944.0, 182.0),
+        ]
+        bills = pd.DataFrame(
+            months,
+            columns=["Mes", "Consumo kWh", "Cargo energía CLP", "Cargos fijos/otros CLP", "Total boleta CLP", "Tarifa calculada CLP/kWh"],
+        )
+        hourly = pd.DataFrame(
+            [
+                {
+                    "Hora": hour,
+                    "Potencia estimada kW": 4.14 if hour <= 5 else 4.86 if hour >= 18 else 4.50,
+                    "Factor horario": 0.92 if hour <= 5 else 1.08 if hour >= 18 else 1.00,
+                    "Consumo horario kWh": 4.14 if hour <= 5 else 4.86 if hour >= 18 else 4.50,
+                }
+                for hour in range(24)
+            ]
+        )
+        summary_rows = {
+            "Promedio mensual boletas": 3237.5,
+            "Consumo máximo": 4247.6,
+            "Consumo mínimo": 2160.0,
+            "Tarifa promedio calculada": 181.5,
+            "Modo consumo": "Promedio boletas",
+            "Consumo mensual modelo": 3237.5,
+            "Consumo manual": 2160.0,
+            "Tarifa red modelo": 181.5,
+            "Modo tarifa": "Promedio boletas",
+            "Tarifa manual red": 220.0,
+        }
+        return {
+            "title": "Boleta eléctrica y perfil de carga",
+            "bills": bills,
+            "summary": summary_rows,
+            "hourly": hourly,
+            "source_warning": "" if error is None else str(error),
+            "source_mode": "fallback",
+        }
+
+    try:
+        raw = read_remote_csv(url, refresh_nonce=refresh_nonce, header=None, dtype=str).fillna("")
+    except Exception as exc:
+        return fallback_model(exc)
+
+    def cell(row: int, col: int) -> str:
+        try:
+            return str(raw.iat[row, col]).strip()
+        except Exception:
+            return ""
+
+    title = cell(0, 0) or "Boleta eléctrica y perfil de carga"
+    bills = []
+    for row in range(4, min(raw.shape[0], 16)):
+        month = cell(row, 0)
+        if not month:
+            continue
+        bills.append(
+            {
+                "Mes": month,
+                "Consumo kWh": parse_float_local(cell(row, 1), 0.0),
+                "Cargo energía CLP": parse_money_clp_robusto(cell(row, 2)) or parse_float_local(cell(row, 2), 0.0),
+                "Cargos fijos/otros CLP": parse_money_clp_robusto(cell(row, 3)) or parse_float_local(cell(row, 3), 0.0),
+                "Total boleta CLP": parse_money_clp_robusto(cell(row, 4)) or parse_float_local(cell(row, 4), 0.0),
+                "Tarifa calculada CLP/kWh": parse_money_clp_robusto(cell(row, 5)) or parse_float_local(cell(row, 5), 0.0),
+                "Observación": cell(row, 6),
+                "Dato requerido": cell(row, 7),
+            }
+        )
+
+    summary_rows = {}
+    for row in range(18, min(raw.shape[0], 24)):
+        if cell(row, 0):
+            summary_rows[cell(row, 0)] = cell(row, 1)
+        if cell(row, 4):
+            summary_rows[cell(row, 4)] = cell(row, 5)
+    parsed_summary = {
+        "Promedio mensual boletas": parse_float_local(summary_rows.get("Promedio mensual boletas", ""), 0.0),
+        "Consumo máximo": parse_float_local(summary_rows.get("Consumo máximo", ""), 0.0),
+        "Consumo mínimo": parse_float_local(summary_rows.get("Consumo mínimo", ""), 0.0),
+        "Tarifa promedio calculada": parse_money_clp_robusto(str(summary_rows.get("Tarifa promedio calculada", ""))) or parse_float_local(summary_rows.get("Tarifa promedio calculada", ""), 0.0),
+        "Modo consumo": str(summary_rows.get("Modo consumo", "")).strip(),
+        "Consumo mensual modelo": parse_float_local(summary_rows.get("Consumo mensual modelo", ""), 0.0),
+        "Consumo manual": parse_float_local(summary_rows.get("Consumo manual", ""), 0.0),
+        "Tarifa red modelo": parse_money_clp_robusto(str(summary_rows.get("Tarifa red modelo", ""))) or parse_float_local(summary_rows.get("Tarifa red modelo", ""), 0.0),
+        "Modo tarifa": str(summary_rows.get("Modo tarifa", "")).strip(),
+        "Tarifa manual red": parse_money_clp_robusto(str(summary_rows.get("Tarifa manual red", ""))) or parse_float_local(summary_rows.get("Tarifa manual red", ""), 0.0),
+    }
+    if not parsed_summary["Tarifa manual red"]:
+        parsed_summary["Tarifa manual red"] = parse_money_clp_robusto(cell(23, 1)) or parse_float_local(cell(23, 1), 0.0)
+
+    hourly = []
+    for row in range(28, raw.shape[0]):
+        hour = cell(row, 0)
+        if hour == "" or not re.match(r"^\d+$", hour):
+            continue
+        hourly.append(
+            {
+                "Hora": int(parse_float_local(hour, 0.0)),
+                "Potencia estimada kW": parse_float_local(cell(row, 1), 0.0),
+                "Factor horario": parse_float_local(cell(row, 2), 0.0),
+                "Consumo horario kWh": parse_float_local(cell(row, 3), 0.0),
+            }
+        )
+
+    if not bills or not hourly:
+        return fallback_model()
+
+    return {
+        "title": title,
+        "bills": pd.DataFrame(bills),
+        "summary": parsed_summary,
+        "hourly": pd.DataFrame(hourly),
+        "source_warning": "",
+        "source_mode": "remote",
+    }
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_telecom_wind_model(url: str, refresh_nonce: int = 0) -> dict:
+    numeric_columns = {
+        "Potencia unitaria kW",
+        "CAPEX unitario $",
+        "BoS/instalación %",
+        "CAPEX total unitario $",
+        "Factor planta",
+        "Generación mensual/turbina kWh",
+        "Cobertura objetivo kWh/mes",
+        "Nº turbinas requerido",
+        "Potencia instalada kW",
+        "Generación mensual total kWh",
+        "Energía útil anual kWh",
+        "Cobertura real",
+        "CAPEX total $",
+        "O&M anual $",
+        "Ahorro anual red $",
+        "Ahorro anual electrógeno $",
+        "Ahorro anual híbrido $",
+        "Beneficio neto red $",
+        "Beneficio neto electrógeno $",
+        "Beneficio neto híbrido $",
+        "Payback red años",
+        "Payback electrógeno años",
+        "Payback híbrido años",
+        "LCOE $/kWh",
+        "Diésel evitado L/año",
+        "CO₂ evitado t/año",
+        "VAN híbrido $",
+        "Índice decisión",
+        "Remanente anual kWh",
+        "Ingreso venta excedente $",
+        "Beneficio total híbrido $",
+        "Payback híbrido c/remanente",
+        "Remanente acumulado 20 años $",
+    }
+    money_columns = {
+        "CAPEX unitario $",
+        "CAPEX total unitario $",
+        "CAPEX total $",
+        "O&M anual $",
+        "Ahorro anual red $",
+        "Ahorro anual electrógeno $",
+        "Ahorro anual híbrido $",
+        "Beneficio neto red $",
+        "Beneficio neto electrógeno $",
+        "Beneficio neto híbrido $",
+        "LCOE $/kWh",
+        "VAN híbrido $",
+        "Ingreso venta excedente $",
+        "Beneficio total híbrido $",
+        "Remanente acumulado 20 años $",
+    }
+    percent_columns = {"BoS/instalación %", "Factor planta", "Cobertura real"}
+
+    def parse_model_value(column: str, value: str):
+        value = str(value or "").strip()
+        if column in money_columns:
+            money = parse_money_clp_robusto(value)
+            if money or money == 0:
+                return float(money)
+            cleaned = value.replace("(", "-").replace(")", "")
+            return parse_float_local(cleaned, 0.0)
+        if column in percent_columns:
+            return parse_percent_local(value, 0.0) * 100.0
+        if column in numeric_columns:
+            return parse_float_local(value, 0.0)
+        return value
+
+    def fallback_model(error: Exception | None = None) -> dict:
+        rows = [
+            ["VAWT 1 kW", 1, 7500000, 20, 9000000, 35, 227.6, 3237.5, 15, 15, 3413.6, 38850.5, 100, 135000000, 2700000, 7051371, 31080425, 16662993, 4351371, 28380425, 13962993, 31.0, 4.8, 9.7, 243, 4662.1, 12.5, -16125170, 60.5, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", "", 2113, 190145, 14153138, 9.5, 3802903, "Excedente valorizable"],
+            ["VAWT 3 kW", 3, 14500000, 15, 16675000, 35, 682.7, 3237.5, 5, 15, 3413.6, 38850.5, 100, 83375000, 1667500, 7051371, 31080425, 16662993, 5383871, 29412925, 14995493, 15.5, 2.8, 5.6, 150, 4662.1, 12.5, 44290084, 67.6, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", "", 2113, 190145, 15185638, 5.5, 3802903, "Excedente valorizable"],
+            ["VAWT 5 kW", 5, 24000000, 12, 26880000, 35, 1137.9, 3237.5, 3, 15, 3413.6, 38850.5, 100, 80640000, 1612800, 7051371, 31080425, 16662993, 5438571, 29467625, 15050193, 14.8, 2.7, 5.4, 145, 4662.1, 12.5, 47490776, 68.3, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", "", 2113, 190145, 15240338, 5.3, 3802903, "Excedente valorizable"],
+            ["VAWT 10 kW", 10, 58000000, 10, 63800000, 35, 2275.7, 3237.5, 2, 20, 4551.5, 38850.5, 100, 127600000, 2552000, 7051371, 31080425, 16662993, 4499371, 28528425, 14110993, 28.4, 4.5, 9.0, 230, 4662.1, 12.5, -7465163, 61.2, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", "", 15767, 1419043, 15530036, 8.2, 28380856, "Excedente valorizable"],
+            ["VAWT 80 kW", 80, 104000000, 8, 112320000, 35, 18205.9, 3237.5, 1, 80, 18205.9, 38850.5, 100, 112320000, 2246400, 7051371, 31080425, 16662993, 4804971, 28834025, 14416593, 23.4, 3.9, 7.8, 202, 4662.1, 12.5, 10416582, 62.8, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", "", 179620, 16165815, 30582408, 3.7, 323316293, "Excedente valorizable"],
+        ]
+        columns = [
+            "Alternativa", "Potencia unitaria kW", "CAPEX unitario $", "BoS/instalación %", "CAPEX total unitario $", "Factor planta",
+            "Generación mensual/turbina kWh", "Cobertura objetivo kWh/mes", "Nº turbinas requerido", "Potencia instalada kW",
+            "Generación mensual total kWh", "Energía útil anual kWh", "Cobertura real", "CAPEX total $", "O&M anual $",
+            "Ahorro anual red $", "Ahorro anual electrógeno $", "Ahorro anual híbrido $", "Beneficio neto red $",
+            "Beneficio neto electrógeno $", "Beneficio neto híbrido $", "Payback red años", "Payback electrógeno años",
+            "Payback híbrido años", "LCOE $/kWh", "Diésel evitado L/año", "CO₂ evitado t/año", "VAN híbrido $",
+            "Índice decisión", "Estado payback híbrido", "Recomendación", "Dato crítico a validar", "Comentario cliente",
+            "Remanente anual kWh", "Ingreso venta excedente $", "Beneficio total híbrido $", "Payback híbrido c/remanente",
+            "Remanente acumulado 20 años $", "Comentario remanente",
+        ]
+        data = pd.DataFrame(rows, columns=columns)
+        return {
+            "title": "Modelo eólico 1 kW / 3 kW / 5 kW / 10 kW / 80 kW",
+            "subtitle": "Comparación técnica-económica por alternativa",
+            "data": data,
+            "source_warning": "" if error is None else str(error),
+            "source_mode": "fallback",
+        }
+
+    try:
+        raw = read_remote_csv(url, refresh_nonce=refresh_nonce, header=None, dtype=str).fillna("")
+    except Exception as exc:
+        return fallback_model(exc)
+
+    if raw.shape[0] < 5 or raw.shape[1] < 39:
+        return fallback_model()
+
+    headers = [str(value).strip() for value in raw.iloc[3, :39].tolist()]
+    rows = []
+    for row_idx in range(4, raw.shape[0]):
+        first = str(raw.iat[row_idx, 0]).strip()
+        if not first:
+            continue
+        item = {}
+        for col_idx, column in enumerate(headers):
+            item[column] = parse_model_value(column, str(raw.iat[row_idx, col_idx]).strip())
+        rows.append(item)
+
+    if not rows:
+        return fallback_model()
+
+    data = pd.DataFrame(rows)
+    return {
+        "title": str(raw.iat[0, 0]).strip() or "Modelo eólico 1 kW / 3 kW / 5 kW / 10 kW / 80 kW",
+        "subtitle": str(raw.iat[2, 0]).strip() or "Comparación técnica-económica por alternativa",
+        "data": data,
+        "source_warning": "",
+        "source_mode": "remote",
+    }
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_telecom_wind_resource_model(url: str, refresh_nonce: int = 0) -> dict:
+    def parse_resource_value(value: str, unit: str = ""):
+        text = str(value or "").strip()
+        if not text:
+            return np.nan
+        if "%" in text or "%" in str(unit):
+            return parse_percent_local(text, np.nan) * 100.0
+        return parse_float_local(text, np.nan)
+
+    def fallback_model(error: Exception | None = None) -> dict:
+        rows = [
+            {"Variable": "Velocidad media medición", "Valor": "6,00", "Unidad": "m/s", "Fuente requerida": "Mástil/LiDAR/estación cercana", "Uso": "Base eólica", "Bloque": "Base recurso"},
+            {"Variable": "Altura medición", "Valor": "10,00", "Unidad": "m", "Fuente requerida": "Ficha estación", "Uso": "Extrapolación", "Bloque": "Base recurso"},
+            {"Variable": "Altura rotor", "Valor": "14,00", "Unidad": "m", "Fuente requerida": "Diseño turbina", "Uso": "Extrapolación", "Bloque": "Extrapolación"},
+            {"Variable": "Exponente rugosidad", "Valor": "0,14", "Unidad": "", "Fuente requerida": "Terreno", "Uso": "Perfil vertical", "Bloque": "Extrapolación"},
+            {"Variable": "Velocidad a rotor", "Valor": "0,03", "Unidad": "m/s", "Fuente requerida": "Calculado", "Uso": "Energía", "Bloque": "Energía"},
+            {"Variable": "Densidad aire", "Valor": "1,23", "Unidad": "kg/m³", "Fuente requerida": "Altitud/temperatura", "Uso": "Potencia", "Bloque": "Energía"},
+            {"Variable": "Weibull k", "Valor": "2,00", "Unidad": "", "Fuente requerida": "Base eólica", "Uso": "Distribución", "Bloque": "Distribución"},
+            {"Variable": "Disponibilidad", "Valor": "95,0%", "Unidad": "%", "Fuente requerida": "Ficha sitio/proveedor", "Uso": "Pérdidas", "Bloque": "Pérdidas"},
+            {"Variable": "Pérdidas eléctricas", "Valor": "3,0%", "Unidad": "%", "Fuente requerida": "Diseño eléctrico", "Uso": "Pérdidas", "Bloque": "Pérdidas"},
+            {"Variable": "Pérdidas adicionales", "Valor": "2,0%", "Unidad": "%", "Fuente requerida": "Sitio", "Uso": "Pérdidas", "Bloque": "Pérdidas"},
+            {"Variable": "Factor planta preliminar", "Valor": "35,0%", "Unidad": "%", "Fuente requerida": "Ficha sitio", "Uso": "Comparar con ficha", "Bloque": "Control"},
+            {"Variable": "Factor planta ficha", "Valor": "35,0%", "Unidad": "%", "Fuente requerida": "Ficha sitio", "Uso": "Control", "Bloque": "Control"},
+            {"Variable": "Diferencia FP", "Valor": "1,0%", "Unidad": "pp", "Fuente requerida": "Control", "Uso": "Validación", "Bloque": "Control"},
+            {"Variable": "Estado", "Valor": "Revisar", "Unidad": "", "Fuente requerida": "Control", "Uso": "", "Bloque": "Control"},
+            {"Variable": "Recomendación", "Valor": "Revisar fuente de FP", "Unidad": "", "Fuente requerida": "Texto", "Uso": "Cliente", "Bloque": "Cierre"},
+        ]
+        data = pd.DataFrame(rows)
+        data["Valor numérico"] = data.apply(lambda row: parse_resource_value(row["Valor"], row["Unidad"]), axis=1)
+        return {
+            "title": "Recurso eólico y validación energética",
+            "subtitle": "Inputs de recurso - reemplazar por medición o base confiable del sitio",
+            "data": data,
+            "note": "El factor planta usado en el modelo sale de Datos Sitio/Ficha Sitio. Debe validarse con medición, simulación o base eólica confiable antes de ingeniería de detalle.",
+            "source_warning": "" if error is None else str(error),
+            "source_mode": "fallback",
+        }
+
+    try:
+        raw = read_remote_csv(url, refresh_nonce=refresh_nonce, header=None, dtype=str).fillna("")
+    except Exception as exc:
+        return fallback_model(exc)
+
+    if raw.shape[0] < 5 or raw.shape[1] < 10:
+        return fallback_model()
+
+    title = str(raw.iat[0, 0]).strip() or "Recurso eólico y validación energética"
+    subtitle = str(raw.iat[2, 0]).strip() or "Inputs de recurso - reemplazar por medición o base confiable del sitio"
+    rows = []
+    for row_idx in range(4, min(raw.shape[0], 12)):
+        for offset, block_name in [(0, "Base recurso"), (5, "Validación")]:
+            variable = str(raw.iat[row_idx, offset]).strip()
+            if not variable:
+                continue
+            rows.append(
+                {
+                    "Variable": variable,
+                    "Valor": str(raw.iat[row_idx, offset + 1]).strip(),
+                    "Unidad": str(raw.iat[row_idx, offset + 2]).strip(),
+                    "Fuente requerida": str(raw.iat[row_idx, offset + 3]).strip(),
+                    "Uso": str(raw.iat[row_idx, offset + 4]).strip(),
+                    "Bloque": block_name,
+                }
+            )
+    data = pd.DataFrame(rows)
+    if data.empty:
+        return fallback_model()
+    data["Valor numérico"] = data.apply(lambda row: parse_resource_value(row["Valor"], row["Unidad"]), axis=1)
+    note = ""
+    if raw.shape[0] > 12:
+        note = " ".join([str(raw.iat[12, col]).strip() for col in range(min(raw.shape[1], 10)) if str(raw.iat[12, col]).strip()])
+    return {
+        "title": title,
+        "subtitle": subtitle,
+        "data": data,
+        "note": note,
+        "source_warning": "",
+        "source_mode": "remote",
+    }
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_telecom_tower_eval_model(url: str, refresh_nonce: int = 0) -> dict:
+    def fallback_model(error: Exception | None = None) -> dict:
+        summary = {
+            "title": "Dashboard ejecutivo - Evaluación eólica para torres telecom",
+            "consumo_mensual": 3238.0,
+            "cobertura_objetivo": 1.0,
+            "costo_ponderado_actual": 429.0,
+            "tecnologia_recomendada": "VAWT 5 kW",
+            "numero_turbinas": 3,
+            "potencia_instalada_kw": 15.0,
+            "capex_recomendado": 80640000.0,
+            "payback_hibrido": 2.7,
+            "lcoe": 145.0,
+            "ahorro_anual_hibrido": 16662993.0,
+            "diesel_evitado_l_anio": 4662.0,
+            "co2_evitado_t_anio": 12.5,
+            "mensaje_ejecutivo": (
+                "El modelo compara alternativas de 1, 3, 5, 10 y 80 kW. "
+                "Para Entel, la decisión debe priorizar costo real del kWh actual, reducción de uso de electrógeno, "
+                "continuidad operacional y validación del recurso eólico del sitio."
+            ),
+        }
+        alternatives = pd.DataFrame(
+            [
+                {"Alternativa": "VAWT 1 kW", "Potencia unitaria kW": 1.0, "CAPEX CLP": 135000000.0, "Payback híbrido años": 4.8, "LCOE CLP/kWh": 243.0, "Energía útil anual kWh": 38850.5, "CO2 evitado t/año": 12.5},
+                {"Alternativa": "VAWT 3 kW", "Potencia unitaria kW": 3.0, "CAPEX CLP": 83375000.0, "Payback híbrido años": 2.8, "LCOE CLP/kWh": 150.0, "Energía útil anual kWh": 38850.5, "CO2 evitado t/año": 12.5},
+                {"Alternativa": "VAWT 5 kW", "Potencia unitaria kW": 5.0, "CAPEX CLP": 80640000.0, "Payback híbrido años": 2.7, "LCOE CLP/kWh": 145.0, "Energía útil anual kWh": 38850.5, "CO2 evitado t/año": 12.5},
+                {"Alternativa": "VAWT 10 kW", "Potencia unitaria kW": 10.0, "CAPEX CLP": 127600000.0, "Payback híbrido años": 4.5, "LCOE CLP/kWh": 230.0, "Energía útil anual kWh": 38850.5, "CO2 evitado t/año": 12.5},
+                {"Alternativa": "VAWT 80 kW", "Potencia unitaria kW": 80.0, "CAPEX CLP": 112320000.0, "Payback híbrido años": 3.9, "LCOE CLP/kWh": 202.0, "Energía útil anual kWh": 38850.5, "CO2 evitado t/año": 12.5},
+            ]
+        )
+        return {
+            "summary": summary,
+            "alternatives": alternatives,
+            "source_warning": "" if error is None else str(error),
+            "source_mode": "fallback",
+        }
+
+    try:
+        raw = read_remote_csv(url, refresh_nonce=refresh_nonce, header=None, dtype=str).fillna("")
+    except Exception as exc:
+        return fallback_model(exc)
+
+    def cell(row: int, col: int) -> str:
+        try:
+            return str(raw.iat[row, col]).strip()
+        except Exception:
+            return ""
+
+    summary = {
+        "title": cell(0, 0) or "Dashboard ejecutivo - Evaluación eólica para torres telecom",
+        "consumo_mensual": parse_float_local(cell(3, 1), 0.0),
+        "cobertura_objetivo": parse_percent_local(cell(3, 4), 1.0),
+        "costo_ponderado_actual": parse_money_clp_robusto(cell(3, 7)) or parse_float_local(cell(3, 7), 0.0),
+        "tecnologia_recomendada": cell(4, 1),
+        "numero_turbinas": int(parse_float_local(cell(4, 4), 0.0)),
+        "potencia_instalada_kw": parse_float_local(cell(4, 7), 0.0),
+        "capex_recomendado": parse_money_clp_robusto(cell(5, 1)),
+        "payback_hibrido": parse_float_local(cell(5, 4), np.nan),
+        "lcoe": parse_money_clp_robusto(cell(5, 7)) or parse_float_local(cell(5, 7), np.nan),
+        "ahorro_anual_hibrido": parse_money_clp_robusto(cell(6, 1)),
+        "diesel_evitado_l_anio": parse_float_local(cell(6, 4), 0.0),
+        "co2_evitado_t_anio": parse_float_local(cell(6, 7), 0.0),
+        "mensaje_ejecutivo": cell(10, 7),
+    }
+    rows = []
+    for row in range(11, raw.shape[0]):
+        name = cell(row, 0)
+        if not name:
+            continue
+        rows.append(
+            {
+                "Alternativa": name,
+                "Potencia unitaria kW": _parse_turbine_kw_from_name(name),
+                "CAPEX CLP": parse_money_clp_robusto(cell(row, 1)),
+                "Payback híbrido años": parse_float_local(cell(row, 2), np.nan),
+                "LCOE CLP/kWh": parse_money_clp_robusto(cell(row, 3)) or parse_float_local(cell(row, 3), np.nan),
+                "Energía útil anual kWh": parse_float_local(cell(row, 4), 0.0),
+                "CO2 evitado t/año": parse_float_local(cell(row, 5), 0.0),
+            }
+        )
+    return {
+        "summary": summary,
+        "alternatives": pd.DataFrame(rows),
+        "source_warning": "",
+        "source_mode": "remote",
+    }
+
+
+def render_telecom_tower_eval_analysis():
+    try:
+        model = load_telecom_tower_eval_model(EVALUACION_TELECOM_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+    except Exception as exc:
+        st.error(f"No se pudo cargar el modelo ejecutivo telecom: {exc}")
+        return
+
+    summary = model["summary"]
+    alternatives = model["alternatives"].copy()
+    if alternatives.empty:
+        st.info("El CSV de evaluación telecom no contiene alternativas comparables.")
+        return
+    site_model = load_telecom_site_inputs_model(
+        EVALUACION_TELECOM_SITE_CSV_URL_DEFAULT,
+        refresh_nonce=data_refresh_nonce,
+    )
+    billing_model = load_telecom_billing_load_model(
+        EVALUACION_TELECOM_BILLING_CSV_URL_DEFAULT,
+        refresh_nonce=data_refresh_nonce,
+    )
+    wind_model = load_telecom_wind_model(
+        EVALUACION_TELECOM_WIND_MODEL_CSV_URL_DEFAULT,
+        refresh_nonce=data_refresh_nonce,
+    )
+    resource_model = load_telecom_wind_resource_model(
+        EVALUACION_TELECOM_WIND_RESOURCE_CSV_URL_DEFAULT,
+        refresh_nonce=data_refresh_nonce,
+    )
+    site_data = site_model["data"].copy()
+    site_sections = site_model["sections"]
+    billing_df = billing_model["bills"].copy()
+    billing_summary = billing_model["summary"]
+    hourly_df = billing_model["hourly"].copy()
+    wind_df = wind_model["data"].copy()
+    resource_df = resource_model["data"].copy()
+
+    def site_value(variable: str, default: str = "") -> str:
+        matches = site_data[site_data["Variable"].astype(str).str.casefold() == variable.casefold()]
+        if matches.empty:
+            return default
+        value = str(matches.iloc[0].get("Valor", "")).strip()
+        return value if value else default
+
+    def site_numeric(variable: str, default: float = 0.0) -> float:
+        value = site_value(variable, "")
+        money = parse_money_clp_robusto(value)
+        if money:
+            return float(money)
+        return parse_float_local(value, default)
+
+    def site_percent_value(variable: str, default_pct: float = 0.0) -> float:
+        value = site_value(variable, "")
+        if "%" in value:
+            return parse_percent_local(value, default_pct / 100.0) * 100.0
+        return parse_float_local(value, default_pct)
+
+    blue_1 = "#DCECEF"
+    blue_2 = "#75A9B8"
+    blue_3 = "#A9673B"
+    blue_4 = "#EA6400"
+    blue_5 = "#284763"
+    blue_text = "#20384F"
+    turbine_order = ["VAWT 1 kW", "VAWT 3 kW", "VAWT 5 kW", "VAWT 10 kW", "VAWT 80 kW"]
+
+    def years_label(value) -> str:
+        if pd.isna(value) or not np.isfinite(float(value)):
+            return "N/A"
+        months_total = max(1, int(round(float(value) * 12)))
+        years = months_total // 12
+        months = months_total % 12
+        if years == 0:
+            return f"{months} meses"
+        if months == 0:
+            return f"{years} año" if years == 1 else f"{years} años"
+        return f"{years} años {months} meses"
+
+    def section(number: str, title: str, copy: str) -> None:
+        return
+
+    st.markdown(
+        """
+        <style>
+        .telecom-hero{border:1px solid rgba(40,71,99,.20);border-radius:18px;background:linear-gradient(135deg,#284763 0%,#75A9B8 58%,#EA6400 100%);padding:24px 26px;margin:18px 0 16px;box-shadow:0 18px 42px rgba(40,71,99,.18);}
+        .telecom-k{font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#F6E7DD;margin:0 0 8px;}
+        .telecom-t{font-size:30px;line-height:1.05;font-weight:950;color:#fff;margin:0 0 8px;}
+        .telecom-s{font-size:13.5px;line-height:1.48;color:#F8FBFC;font-weight:760;margin:0;max-width:1080px;}
+        .telecom-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin:14px 0 18px;}
+        .telecom-grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0 18px;}
+        .telecom-card{border:1px solid #DCECEF;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#F7FBFC 100%);padding:15px 16px;box-shadow:0 10px 24px rgba(40,71,99,.07);min-height:112px;}
+        .telecom-card-k{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#284763;font-weight:950;margin:0 0 8px;}
+        .telecom-card-v{font-size:21px;line-height:1.02;font-weight:950;color:#0b1730;margin:0 0 7px;overflow-wrap:anywhere;}
+        .telecom-card-s{font-size:11.2px;line-height:1.28;color:#475569;font-weight:740;margin:0;}
+        .telecom-dash-shell{border:1px solid #DCECEF;border-radius:16px;background:#ffffff;box-shadow:0 16px 34px rgba(40,71,99,.075);overflow:hidden;margin:10px 0 16px;}
+        .telecom-dash-head{display:grid;grid-template-columns:1.25fr .75fr;gap:18px;align-items:center;background:linear-gradient(135deg,#284763 0%,#75A9B8 62%,#A9673B 100%);padding:20px 22px;color:#fff;}
+        .telecom-dash-k{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#F6E7DD;font-weight:950;margin:0 0 7px;}
+        .telecom-dash-t{font-size:24px;line-height:1.05;font-weight:950;color:#fff;margin:0 0 8px;}
+        .telecom-dash-s{font-size:12.5px;line-height:1.42;color:#F8FBFC;font-weight:740;margin:0;max-width:820px;}
+        .telecom-dash-rec{border:1px solid rgba(255,255,255,.34);border-radius:13px;background:rgba(255,255,255,.12);padding:14px 15px;text-align:right;}
+        .telecom-dash-rec-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#F6E7DD;font-weight:950;margin:0 0 6px;}
+        .telecom-dash-rec-v{font-size:28px;line-height:1;font-weight:950;color:#fff;margin:0;}
+        .telecom-dash-body{padding:16px 18px 18px;}
+        .telecom-dash-layout{display:grid;grid-template-columns:.9fr 1.1fr;gap:18px;align-items:start;margin-top:12px;}
+        .telecom-dash-message{border:1px solid #DCECEF;border-left:5px solid #EA6400;border-radius:12px;background:#F7FBFC;padding:14px 16px;color:#20384F;font-size:12.5px;font-weight:760;line-height:1.45;}
+        .telecom-section{margin:22px 0 12px;padding:12px 14px;border-left:5px solid #EA6400;background:#F7FBFC;border-radius:10px;border-top:1px solid #DCECEF;border-right:1px solid #DCECEF;border-bottom:1px solid #DCECEF;}
+        .telecom-section-k{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#A9673B;font-weight:950;margin:0 0 4px;}
+        .telecom-section-t{font-size:15px;line-height:1.15;color:#0f172a;font-weight:950;margin:0;}
+        .telecom-section-s{font-size:12px;line-height:1.35;color:#64748b;font-weight:740;margin:4px 0 0;}
+        .telecom-panel-title{font-size:16px;font-weight:950;color:#0f172a;margin:0 0 4px;}
+        .telecom-panel-sub{font-size:12px;font-weight:760;color:#64748b;margin:0 0 10px;}
+        .telecom-input-head{border:1px solid #DCECEF;border-radius:14px;background:#fff;padding:16px 18px;margin:0 0 14px;box-shadow:0 10px 24px rgba(40,71,99,.055);}
+        .telecom-input-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#A9673B;font-weight:950;margin:0 0 6px;}
+        .telecom-input-t{font-size:20px;line-height:1.1;color:#0f172a;font-weight:950;margin:0 0 6px;}
+        .telecom-input-s{font-size:12.5px;line-height:1.38;color:#64748b;font-weight:760;margin:0;max-width:1000px;}
+        .telecom-note{border:1px solid #DCECEF;border-left:5px solid #EA6400;background:#FFF7F1;border-radius:10px;padding:13px 15px;color:#20384F;font-size:12.5px;font-weight:790;line-height:1.42;margin:8px 0 16px;}
+        .telecom-site-shell{border:1px solid #DCECEF;border-radius:16px;background:#fff;box-shadow:0 16px 34px rgba(40,71,99,.07);overflow:hidden;margin:10px 0 16px;}
+        .telecom-site-head{display:grid;grid-template-columns:1fr .55fr;gap:18px;align-items:center;padding:18px 20px;background:linear-gradient(135deg,#F7FBFC 0%,#DCECEF 58%,#75A9B8 100%);border-bottom:1px solid #DCECEF;}
+        .telecom-site-k{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#A9673B;font-weight:950;margin:0 0 6px;}
+        .telecom-site-t{font-size:22px;line-height:1.08;color:#0b1730;font-weight:950;margin:0 0 6px;}
+        .telecom-site-s{font-size:12.5px;line-height:1.4;color:#475569;font-weight:760;margin:0;max-width:900px;}
+        .telecom-site-status{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+        .telecom-site-pill{border:1px solid rgba(40,71,99,.18);border-radius:12px;background:rgba(255,255,255,.74);padding:10px 11px;text-align:center;}
+        .telecom-site-pill strong{display:block;color:#0b1730;font-size:20px;line-height:1;font-weight:950;margin-bottom:4px;}
+        .telecom-site-pill span{display:block;color:#284763;font-size:9.5px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;}
+        .telecom-site-body{padding:16px 18px 18px;}
+        .telecom-site-block{border:1px solid #DCECEF;border-radius:13px;background:#fff;margin:0 0 14px;overflow:hidden;box-shadow:0 10px 24px rgba(40,71,99,.055);}
+        .telecom-site-block-h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;background:#F7FBFC;border-bottom:1px solid #DCECEF;padding:13px 15px;}
+        .telecom-site-block-h h4{font-size:14px;color:#0f172a;font-weight:950;margin:0;}
+        .telecom-site-block-h p{font-size:11.5px;color:#64748b;font-weight:750;line-height:1.32;margin:4px 0 0;}
+        .telecom-site-mini{display:inline-flex;align-items:center;border-radius:999px;background:#DCECEF;color:#20384F;padding:5px 8px;font-size:10px;font-weight:950;text-transform:uppercase;white-space:nowrap;}
+        .telecom-site-table{width:100%;border-collapse:separate;border-spacing:0;font-size:11.5px;color:#102039;}
+        .telecom-site-table th{background:#ffffff;color:#64748b;text-transform:uppercase;letter-spacing:.07em;font-size:9.5px;font-weight:950;text-align:left;padding:10px 12px;border-bottom:1px solid #e2e8f0;}
+        .telecom-site-table td{padding:10px 12px;border-bottom:1px solid #edf2f7;vertical-align:top;font-weight:760;}
+        .telecom-site-table tr:last-child td{border-bottom:none;}
+        .telecom-site-value{font-weight:950;color:#0b1730;white-space:nowrap;}
+        .telecom-site-auto{display:inline-flex;border-radius:999px;background:#DCECEF;color:#20384F;padding:4px 7px;font-size:9.5px;font-weight:950;}
+        .telecom-site-edit{display:inline-flex;border-radius:999px;background:#D8EBEF;color:#284763;padding:4px 7px;font-size:9.5px;font-weight:950;}
+        .telecom-site-pending{display:inline-flex;border-radius:999px;background:#FFE8D8;color:#A94700;padding:4px 7px;font-size:9.5px;font-weight:950;}
+        .telecom-location-hero{display:grid;grid-template-columns:1.2fr .8fr;gap:14px;padding:15px;background:linear-gradient(135deg,#F7FBFC 0%,#ffffff 62%,#FFF7F1 100%);border-bottom:1px solid #DCECEF;}
+        .telecom-location-main{border:1px solid #DCECEF;border-radius:12px;background:#fff;padding:14px 15px;box-shadow:0 10px 22px rgba(40,71,99,.055);}
+        .telecom-location-k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#A9673B;font-weight:950;margin:0 0 6px;}
+        .telecom-location-v{font-size:28px;line-height:1.02;color:#20384F;font-weight:950;margin:0 0 8px;overflow-wrap:anywhere;}
+        .telecom-location-s{font-size:12px;color:#64748b;font-weight:760;line-height:1.38;margin:0;}
+        .telecom-location-side{display:grid;grid-template-columns:1fr;gap:9px;}
+        .telecom-location-chip{border:1px solid #DCECEF;border-radius:10px;background:#fff;padding:10px 11px;}
+        .telecom-location-chip span{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#64748b;font-weight:950;margin-bottom:4px;}
+        .telecom-location-chip b{display:block;font-size:14px;color:#0f172a;font-weight:950;overflow-wrap:anywhere;}
+        .telecom-location-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:13px 15px;}
+        .telecom-location-card{border:1px solid #DCECEF;border-radius:11px;background:#fff;padding:12px 13px;min-height:88px;}
+        .telecom-location-card p:first-child{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#64748b;font-weight:950;margin:0 0 6px;}
+        .telecom-location-card p:nth-child(2){font-size:16px;line-height:1.1;color:#0f172a;font-weight:950;margin:0 0 6px;overflow-wrap:anywhere;}
+        .telecom-location-card p:last-child{font-size:11px;line-height:1.28;color:#64748b;font-weight:740;margin:0;}
+        .telecom-location-alert{margin:0 15px 15px;border:1px solid #F4C89E;border-left:5px solid #EA6400;background:#FFF7F1;border-radius:10px;padding:11px 13px;color:#20384F;font-size:12px;font-weight:790;line-height:1.38;}
+        .telecom-table-shell{border:1px solid #DCECEF;border-radius:14px;background:#fff;box-shadow:0 12px 28px rgba(40,71,99,.065);overflow:hidden;margin:8px 0 14px;}
+        .telecom-table-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;background:#284763;color:#fff;padding:16px 18px;}
+        .telecom-table-head h3{font-size:17px;font-weight:950;margin:0 0 4px;}
+        .telecom-table-head p{font-size:12px;line-height:1.35;color:#DCECEF;font-weight:760;margin:0;}
+        .telecom-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;color:#0f172a;}
+        .telecom-table th{background:#f8fafc;color:#475569;text-transform:uppercase;letter-spacing:.07em;font-size:10px;font-weight:950;text-align:right;padding:11px 12px;border-bottom:1px solid #e2e8f0;}
+        .telecom-table th:first-child,.telecom-table td:first-child{text-align:left;}
+        .telecom-table td{padding:12px;border-bottom:1px solid #edf2f7;text-align:right;font-weight:780;vertical-align:middle;}
+        .telecom-table tr:last-child td{border-bottom:none;}
+        .telecom-table tr.recommended td{background:#FFF7F1;}
+        .telecom-badge{display:inline-flex;align-items:center;border-radius:999px;background:#DCECEF;color:#20384F;padding:5px 8px;font-size:10px;font-weight:950;letter-spacing:.04em;text-transform:uppercase;}
+        .telecom-muted{color:#64748b;font-weight:740;}
+        @media (max-width:1400px){.telecom-grid{grid-template-columns:repeat(3,minmax(0,1fr));}.telecom-grid-4{grid-template-columns:repeat(2,minmax(0,1fr));}.telecom-dash-layout{grid-template-columns:1fr;}}
+        @media (max-width:760px){.telecom-grid,.telecom-grid-4,.telecom-dash-head,.telecom-site-head,.telecom-site-status,.telecom-location-hero,.telecom-location-grid{grid-template-columns:1fr}.telecom-t{font-size:24px}.telecom-dash-rec{text-align:left;}}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div class="telecom-hero">
+          <p class="telecom-k">Sub bloque 5 · Modelo ejecutivo telecom</p>
+          <h2 class="telecom-t">Evaluación eólica para torres telecom</h2>
+          <p class="telecom-s">{html.escape(str(summary["title"]))}. Ocho bloques para replicar la información del URL, analizarla y convertirla en una recomendación técnica para cliente.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if model.get("source_mode") == "fallback":
+        st.warning(
+            "Google Sheets no respondió a tiempo. El Sub bloque 5 está usando una copia base de los últimos valores analizados "
+            "para mantener operativo el tablero. Usa el botón de refrescar datos para reintentar la lectura online."
+        )
+
+    (
+        tab_url,
+        tab_inputs,
+        tab_exec,
+        tab_dimension,
+        tab_risk,
+        tab_savings,
+        tab_economics,
+        tab_impact,
+    ) = st.tabs(
+        [
+            "01 Dashboard",
+            "02_Datos_Sitio",
+            "03_Boleta_Carga",
+            "04_Modelo_Eolico",
+            "05_Recurso_Eolico",
+            "06 Ahorro",
+            "07 Economía",
+            "08 Cierre",
+        ]
+    )
+
+    with tab_inputs:
+        section("02 · Datos del sitio", "Inputs maestros desde 02_Datos_Sitio", "La pestaña replica la hoja de datos del sitio, separando trazabilidad, energía, costos y supuestos que alimentan la simulación.")
+        status_counts = site_data["Estado"].replace("", "Sin estado").value_counts().to_dict()
+        alta_count = int((site_data["Prioridad"].astype(str).str.casefold() == "alta").sum())
+        auto_count = int((site_data["Estado"].astype(str).str.casefold() == "automático").sum())
+        pending_count = int((site_data["Estado"].astype(str).str.casefold() == "por validar").sum())
+        st.markdown(
+            f"""
+            <div class="telecom-site-shell">
+              <div class="telecom-site-head">
+                <div>
+                  <p class="telecom-site-k">Pestaña 02_Datos_Sitio · Fuente Google Sheets</p>
+                  <h3 class="telecom-site-t">{html.escape(str(site_model["title"]))}</h3>
+                  <p class="telecom-site-s">Ficha maestra para controlar qué datos vienen de Entel, qué datos son calculados, cuáles son editables y cuáles deben validarse antes de presentar una oferta técnica.</p>
+                </div>
+                <div class="telecom-site-status">
+                  <div class="telecom-site-pill"><strong>{len(site_data)}</strong><span>Variables</span></div>
+                  <div class="telecom-site-pill"><strong>{alta_count}</strong><span>Prioridad alta</span></div>
+                  <div class="telecom-site-pill"><strong>{pending_count}</strong><span>Por validar</span></div>
+                </div>
+              </div>
+              <div class="telecom-site-body">
+                <div class="telecom-grid-4">
+                  <div class="telecom-card"><p class="telecom-card-k">Consumo mensual modelo</p><p class="telecom-card-v">{site_value("Consumo mensual modelo", "3.238")} kWh</p><p class="telecom-card-s">Vinculado a boleta/medidor.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Costo ponderado actual</p><p class="telecom-card-v">{site_value("Costo ponderado actual", "$429")}</p><p class="telecom-card-s">Calculado desde mix red/electrógeno.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Cobertura objetivo</p><p class="telecom-card-v">{site_value("Cobertura objetivo", "100,0%")}</p><p class="telecom-card-s">Escenario editable de sensibilidad.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Fuente de datos</p><p class="telecom-card-v">{html.escape(str(site_model.get("source_mode", "remote")).upper())}</p><p class="telecom-card-s">{auto_count} variables automáticas detectadas.</p></div>
+                </div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        default_consumo = site_numeric("Consumo mensual modelo", float(summary["consumo_mensual"] or 3238.0))
+        default_cobertura = int(round(site_percent_value("Cobertura objetivo", float(summary["cobertura_objetivo"] or 1.0) * 100)))
+        default_costo_ponderado = site_numeric("Costo ponderado actual", float(summary["costo_ponderado_actual"] or 429.0))
+        default_factor_co2 = site_numeric("Factor emisión diésel", 2.68)
+        default_mix_red = int(round(site_percent_value("Mix Red", 60.0)))
+        default_mix_diesel = int(round(site_percent_value("Mix Electrógeno", 40.0)))
+        default_mix_bess = int(round(site_percent_value("Mix Batería/Solar", 0.0)))
+
+        with st.container(border=True):
+            i1, i2, i3, i4 = st.columns(4)
+            with i1:
+                consumo_mensual = st.number_input("Consumo mensual (kWh/mes)", min_value=100.0, max_value=150000.0, value=float(default_consumo), step=100.0, key="telecom_eval_consumo")
+            with i2:
+                cobertura_pct = st.slider("Cobertura objetivo", min_value=10, max_value=150, value=max(10, min(150, default_cobertura)), step=5, key="telecom_eval_cobertura")
+            with i3:
+                costo_ponderado = st.number_input("Costo ponderado actual (CLP/kWh)", min_value=0.0, max_value=5000.0, value=float(default_costo_ponderado), step=10.0, key="telecom_eval_costo_ponderado")
+            with i4:
+                factor_co2_diesel = st.number_input("Factor CO2 diésel (kg/L)", min_value=1.0, max_value=4.0, value=float(default_factor_co2), step=0.01, key="telecom_eval_factor_co2")
+            m1, m2, m3, m4 = st.columns([1, 1, 1, 1.15])
+            with m1:
+                mix_red_pct = st.slider("Mix red eléctrica", min_value=0, max_value=100, value=max(0, min(100, default_mix_red)), step=5, key="telecom_eval_mix_red")
+            with m2:
+                mix_diesel_pct = st.slider("Mix electrógeno", min_value=0, max_value=100, value=max(0, min(100, default_mix_diesel)), step=5, key="telecom_eval_mix_diesel")
+            with m3:
+                mix_bess_pct = st.slider("Mix batería/solar", min_value=0, max_value=100, value=max(0, min(100, default_mix_bess)), step=5, key="telecom_eval_mix_bess")
+            with m4:
+                criterio = st.selectbox("Criterio de recomendación", ["Balance técnico-económico", "Menor payback", "Menor LCOE", "Menor CAPEX", "Mayor impacto CO2"], key="telecom_eval_criterio")
+
+        mix_total = mix_red_pct + mix_diesel_pct + mix_bess_pct
+        energia_objetivo = consumo_mensual * 12 * cobertura_pct / 100
+        st.markdown(
+            f"""
+            <div class="telecom-grid-4">
+              <div class="telecom-card"><p class="telecom-card-k">Demanda anual activa</p><p class="telecom-card-v">{consumo_mensual * 12:,.0f} kWh</p><p class="telecom-card-s">Consumo mensual multiplicado por 12.</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">Energía objetivo</p><p class="telecom-card-v">{energia_objetivo:,.0f} kWh</p><p class="telecom-card-s">Demanda anual ajustada por cobertura.</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">Mix energético</p><p class="telecom-card-v">{mix_total:.0f}%</p><p class="telecom-card-s">Red {mix_red_pct}% · Electrógeno {mix_diesel_pct}% · BESS {mix_bess_pct}%.</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">Criterio activo</p><p class="telecom-card-v">{html.escape(criterio)}</p><p class="telecom-card-s">Regla usada para destacar la alternativa.</p></div>
+            </div>
+            """.replace(",", "."),
+            unsafe_allow_html=True,
+        )
+        if mix_total != 100:
+            st.markdown(
+                f'<div class="telecom-note"><b>Revisión de mix:</b> la suma actual es {mix_total:.0f}%. Para una lectura financiera cerrada, conviene normalizar red + electrógeno + batería/solar a 100%.</div>',
+                unsafe_allow_html=True,
+            )
+
+        c1, c2 = st.columns([0.95, 1.05])
+        with c1:
+            status_df = (
+                site_data.assign(Estado=site_data["Estado"].replace("", "Sin estado"))
+                .groupby(["Sección", "Estado"], as_index=False)
+                .size()
+            )
+            fig_status = px.bar(
+                status_df,
+                x="Sección",
+                y="size",
+                color="Estado",
+                color_discrete_map={
+                    "Automático": blue_5,
+                    "Editable": blue_3,
+                    "Por validar": blue_2,
+                    "Sin estado": blue_1,
+                },
+                text="size",
+            )
+            fig_status.update_traces(textposition="inside", textfont=dict(color="#ffffff", size=11), hovertemplate="<b>%{x}</b><br>%{legendgroup}: %{y} variables<extra></extra>")
+            fig_status.update_layout(
+                height=330,
+                margin=dict(l=10, r=10, t=18, b=70),
+                legend=dict(orientation="h", y=1.18, x=0, title=None),
+                xaxis=dict(title=None, tickangle=-12),
+                yaxis=dict(title="Variables", gridcolor="rgba(148,163,184,.22)"),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_status, use_container_width=True, config={"displaylogo": False})
+        with c2:
+            priority_df = (
+                site_data.assign(Prioridad=site_data["Prioridad"].replace("", "Sin prioridad"))
+                .groupby(["Sección", "Prioridad"], as_index=False)
+                .size()
+            )
+            fig_priority = px.bar(
+                priority_df,
+                x="size",
+                y="Sección",
+                color="Prioridad",
+                orientation="h",
+                color_discrete_map={"Alta": blue_5, "Media": blue_2, "Sin prioridad": blue_1},
+                text="size",
+            )
+            fig_priority.update_traces(textposition="inside", textfont=dict(color="#ffffff", size=11), hovertemplate="<b>%{y}</b><br>%{legendgroup}: %{x} variables<extra></extra>")
+            fig_priority.update_layout(
+                height=330,
+                margin=dict(l=10, r=10, t=18, b=36),
+                legend=dict(orientation="h", y=1.18, x=0, title=None),
+                xaxis=dict(title="Variables", gridcolor="rgba(148,163,184,.22)"),
+                yaxis=dict(title=None),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_priority, use_container_width=True, config={"displaylogo": False})
+
+        def site_badge(status: str) -> str:
+            value = str(status or "Sin estado").strip()
+            css_class = "telecom-site-auto" if value == "Automático" else "telecom-site-edit" if value == "Editable" else "telecom-site-pending"
+            return f'<span class="{css_class}">{html.escape(value)}</span>'
+
+        section_notes = {
+            "Identificación y ubicación": "Datos base para trazabilidad, permisos, logística y validación del recurso eólico.",
+            "Consumo, suministro y costos energéticos": "Base financiera del caso: consumo, costos evitados y mix energético actual.",
+            "Supuestos de proyecto eólico": "Parámetros técnicos que afectan energía útil, LCOE, payback, excedentes e impacto.",
+        }
+        for section_name, section_df in site_sections.items():
+            if str(section_name) == "Identificación y ubicación":
+                identity = {
+                    str(row.get("Variable", "")).strip(): row
+                    for _, row in section_df.iterrows()
+                    if str(row.get("Variable", "")).strip()
+                }
+
+                def identity_value(variable: str, fallback: str = "Pendiente") -> str:
+                    row = identity.get(variable)
+                    if row is None:
+                        return fallback
+                    value = str(row.get("Valor", "")).strip()
+                    return value or fallback
+
+                def identity_unit(variable: str) -> str:
+                    row = identity.get(variable)
+                    if row is None:
+                        return ""
+                    return str(row.get("Unidad", "")).strip()
+
+                site_id = identity_value("ID Sitio", "Sitio por definir")
+                site_name = identity_value("Nombre sitio", "Torre telecom")
+                region = identity_value("Región", "Por definir")
+                comuna = identity_value("Comuna", "Por definir")
+                latitud = identity_value("Latitud")
+                longitud = identity_value("Longitud")
+                altitud = identity_value("Altitud")
+                altitud_unit = identity_unit("Altitud")
+                cliente = str(identity.get("Nombre sitio", pd.Series(dtype=object)).get("Fuente requerida", "Entel")).strip() or "Entel"
+                pending_vars = [
+                    variable
+                    for variable in ["Región", "Comuna", "Latitud", "Longitud", "Altitud"]
+                    if identity_value(variable).lower() in {"pendiente", "por definir", "n/a", "na", "-"}
+                ]
+                pending_label = ", ".join(pending_vars) if pending_vars else "Sin brechas críticas declaradas"
+                coord_value = f"{latitud}, {longitud}" if latitud != "Pendiente" or longitud != "Pendiente" else "Pendiente"
+                altitude_value = f"{altitud} {altitud_unit}".strip()
+                location_cards = [
+                    ("Región", region, "Impacta logística, permisos y acceso a obra."),
+                    ("Comuna", comuna, "Base para permisos, visitas y validación territorial."),
+                    ("Coordenadas", coord_value, "Necesarias para recurso eólico y layout de instalación."),
+                    ("Altitud", altitude_value, "Variable de densidad de aire y rendimiento esperado."),
+                ]
+                card_html = "".join(
+                    '<div class="telecom-location-card">'
+                    f'<p>{html.escape(label)}</p>'
+                    f'<p>{html.escape(value)}</p>'
+                    f'<p>{html.escape(note)}</p>'
+                    '</div>'
+                    for label, value, note in location_cards
+                )
+                st.markdown(
+                    '<div class="telecom-site-block">'
+                    '<div class="telecom-site-block-h">'
+                    '<div>'
+                    '<h4>Identificación y ubicación</h4>'
+                    '<p>Ficha ejecutiva para cliente: resume trazabilidad del sitio y brechas que deben cerrarse antes de oferta final.</p>'
+                    '</div>'
+                    f'<span class="telecom-site-mini">{len(section_df)} variables</span>'
+                    '</div>'
+                    '<div class="telecom-location-hero">'
+                    '<div class="telecom-location-main">'
+                    '<p class="telecom-location-k">Sitio telecom</p>'
+                    f'<p class="telecom-location-v">{html.escape(site_name)}</p>'
+                    f'<p class="telecom-location-s"><b>{html.escape(site_id)}</b> · Cliente/fuente: {html.escape(cliente)} · Estado de ingeniería preliminar.</p>'
+                    '</div>'
+                    '<div class="telecom-location-side">'
+                    '<div class="telecom-location-chip"><span>Ubicación comercial</span>'
+                    f'<b>{html.escape(comuna)} · {html.escape(region)}</b></div>'
+                    '<div class="telecom-location-chip"><span>Validación requerida</span>'
+                    f'<b>{html.escape(pending_label)}</b></div>'
+                    '</div>'
+                    '</div>'
+                    f'<div class="telecom-location-grid">{card_html}</div>'
+                    '<div class="telecom-location-alert"><b>Lectura para cliente:</b> esta ficha permite presentar el sitio sin exponer una tabla operativa. Las coordenadas, comuna/región y altitud deben validarse para confirmar recurso eólico, permisos, logística y precisión del CAPEX.</div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+                continue
+
+            row_html = []
+            for _, row in section_df.iterrows():
+                value_text = str(row.get("Valor", "")).strip() or "Pendiente"
+                unit_text = str(row.get("Unidad", "")).strip()
+                value_cell = html.escape(value_text)
+                if unit_text:
+                    value_cell = f'{value_cell}<br><span class="telecom-muted">{html.escape(unit_text)}</span>'
+                row_html.append(
+                    "<tr>"
+                    f'<td><b>{html.escape(str(row.get("Variable", "")))}</b><br><span class="telecom-muted">{html.escape(str(row.get("Uso", "")))}</span></td>'
+                    f'<td class="telecom-site-value">{value_cell}</td>'
+                    f'<td>{html.escape(str(row.get("Fuente requerida", "")))}</td>'
+                    f'<td>{site_badge(str(row.get("Estado", "")))}</td>'
+                    f'<td>{html.escape(str(row.get("Prioridad", "")) or "Sin prioridad")}</td>'
+                    f'<td>{html.escape(str(row.get("Comentario", "")))}</td>'
+                    "</tr>"
+                )
+            st.markdown(
+                '<div class="telecom-site-block">'
+                '<div class="telecom-site-block-h">'
+                '<div>'
+                f'<h4>{html.escape(str(section_name))}</h4>'
+                f'<p>{html.escape(section_notes.get(str(section_name), "Variables publicadas por la hoja fuente."))}</p>'
+                '</div>'
+                f'<span class="telecom-site-mini">{len(section_df)} variables</span>'
+                '</div>'
+                '<table class="telecom-site-table">'
+                '<thead><tr><th>Variable / Uso</th><th>Valor</th><th>Fuente requerida</th><th>Estado</th><th>Prioridad</th><th>Comentario</th></tr></thead>'
+                f'<tbody>{"".join(row_html)}</tbody>'
+                '</table>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+    alternatives["Alternativa"] = pd.Categorical(alternatives["Alternativa"], categories=turbine_order, ordered=True)
+    alternatives = alternatives.sort_values("Alternativa").copy()
+    alternatives["Alternativa"] = alternatives["Alternativa"].astype(str)
+    base_energy = float(alternatives["Energía útil anual kWh"].replace(0, np.nan).dropna().median() or consumo_mensual * 12)
+    target_energy = max(consumo_mensual * 12 * (cobertura_pct / 100.0), 0.0)
+    energy_scale = target_energy / base_energy if base_energy > 0 else 1.0
+    base_co2_intensity = float(alternatives["CO2 evitado t/año"].replace(0, np.nan).dropna().median() or summary["co2_evitado_t_anio"] or 0.0) / base_energy if base_energy > 0 else 0.0
+    alternatives["CAPEX MM CLP"] = alternatives["CAPEX CLP"] / 1_000_000
+    alternatives["Energía simulada anual kWh"] = alternatives["Energía útil anual kWh"] * energy_scale
+    alternatives["Ahorro simulado anual CLP"] = alternatives["Energía simulada anual kWh"] * costo_ponderado
+    alternatives["Payback simple simulado años"] = alternatives["CAPEX CLP"] / alternatives["Ahorro simulado anual CLP"].replace(0, np.nan)
+    alternatives["CO2 simulado t/año"] = alternatives["Energía simulada anual kWh"] * base_co2_intensity
+    alternatives["Diésel simulado L/año"] = alternatives["CO2 simulado t/año"] * 1000 / max(factor_co2_diesel, 0.0001)
+    alternatives["Score payback"] = _telecom_score(alternatives["Payback híbrido años"])
+    alternatives["Score LCOE"] = _telecom_score(alternatives["LCOE CLP/kWh"])
+    alternatives["Score CAPEX"] = _telecom_score(alternatives["CAPEX CLP"])
+    alternatives["Score impacto"] = _telecom_score(alternatives["CO2 simulado t/año"], higher_is_better=True)
+    alternatives["Score técnico"] = (alternatives["Score payback"] * 0.36 + alternatives["Score LCOE"] * 0.26 + alternatives["Score CAPEX"] * 0.18 + alternatives["Score impacto"] * 0.20) * 100
+
+    if criterio == "Menor payback":
+        recommended = alternatives.sort_values("Payback híbrido años", na_position="last").iloc[0]
+    elif criterio == "Menor LCOE":
+        recommended = alternatives.sort_values("LCOE CLP/kWh", na_position="last").iloc[0]
+    elif criterio == "Menor CAPEX":
+        recommended = alternatives.sort_values("CAPEX CLP", na_position="last").iloc[0]
+    elif criterio == "Mayor impacto CO2":
+        recommended = alternatives.sort_values("CO2 simulado t/año", ascending=False, na_position="last").iloc[0]
+    else:
+        recommended = alternatives.sort_values("Score técnico", ascending=False, na_position="last").iloc[0]
+
+    rec_capex = float(recommended["CAPEX CLP"] or 0.0)
+    rec_saving = float(recommended["Ahorro simulado anual CLP"] or 0.0)
+    rec_energy = float(recommended["Energía simulada anual kWh"] or 0.0)
+    rec_payback = recommended["Payback híbrido años"]
+    rec_simple_payback = recommended["Payback simple simulado años"]
+    lifetime_value = (rec_saving * 15) - rec_capex
+
+    with tab_url:
+        section("01 · Dashboard", "Dashboard ejecutivo publicado", "Representa la pestaña Dashboard del archivo: resumen del escenario actual, comparativo de alternativas y mensaje ejecutivo.")
+        dashboard_message = str(summary.get("mensaje_ejecutivo") or "").strip()
+        st.markdown(
+            f"""
+            <div class="telecom-dash-shell">
+              <div class="telecom-dash-head">
+                <div>
+                  <p class="telecom-dash-k">Pestaña Dashboard · Fuente Google Sheets</p>
+                  <h3 class="telecom-dash-t">{html.escape(str(summary["title"]))}</h3>
+                  <p class="telecom-dash-s">Lectura ejecutiva para evaluar una solución eólica en torres telecom, combinando consumo, cobertura, costo ponderado, inversión, payback, LCOE e impacto ambiental.</p>
+                </div>
+                <div class="telecom-dash-rec">
+                  <p class="telecom-dash-rec-k">Tecnología recomendada</p>
+                  <p class="telecom-dash-rec-v">{html.escape(str(summary["tecnologia_recomendada"]))}</p>
+                  <p class="telecom-dash-s">{int(summary["numero_turbinas"])} turbinas · {float(summary["potencia_instalada_kw"]):.1f} kW instalados</p>
+                </div>
+              </div>
+              <div class="telecom-dash-body">
+                <div class="telecom-grid">
+                  <div class="telecom-card"><p class="telecom-card-k">Consumo mensual</p><p class="telecom-card-v">{float(summary["consumo_mensual"]):,.0f} kWh</p><p class="telecom-card-s">Demanda base del sitio.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Cobertura objetivo</p><p class="telecom-card-v">{float(summary["cobertura_objetivo"]) * 100:.0f}%</p><p class="telecom-card-s">Meta de suministro eólico.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Costo ponderado</p><p class="telecom-card-v">{format_clp(float(summary["costo_ponderado_actual"]))}</p><p class="telecom-card-s">CLP/kWh actual del sitio.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">CAPEX recomendado</p><p class="telecom-card-v">{format_clp(float(summary["capex_recomendado"]))}</p><p class="telecom-card-s">Inversión de la opción recomendada.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Payback híbrido</p><p class="telecom-card-v">{years_label(summary["payback_hibrido"])}</p><p class="telecom-card-s">Recuperación publicada en la hoja.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">LCOE</p><p class="telecom-card-v">{format_clp(float(summary["lcoe"]))}</p><p class="telecom-card-s">Costo nivelado publicado.</p></div>
+                </div>
+              </div>
+            </div>
+            """.replace(",", "."),
+            unsafe_allow_html=True,
+        )
+        dash_left, dash_right = st.columns([1.08, 0.92])
+        with dash_left:
+            st.markdown('<p class="telecom-panel-title">Comparativo alternativas · Dashboard</p><p class="telecom-panel-sub">CAPEX por alternativa con lectura simultánea de payback y LCOE publicados.</p>', unsafe_allow_html=True)
+            dashboard_fig = go.Figure()
+            dashboard_fig.add_trace(
+                go.Bar(
+                    x=alternatives["Alternativa"],
+                    y=alternatives["CAPEX MM CLP"],
+                    name="CAPEX",
+                    marker_color=[blue_5 if str(name) == str(summary["tecnologia_recomendada"]) else blue_3 for name in alternatives["Alternativa"]],
+                    text=[f"{v:.1f} MM" for v in alternatives["CAPEX MM CLP"]],
+                    textposition="inside",
+                    textfont=dict(color="#ffffff", size=11),
+                    hovertemplate="<b>%{x}</b><br>CAPEX: %{y:.1f} MM CLP<extra></extra>",
+                )
+            )
+            dashboard_fig.add_trace(
+                go.Scatter(
+                    x=alternatives["Alternativa"],
+                    y=alternatives["Payback híbrido años"],
+                    name="Payback",
+                    yaxis="y2",
+                    mode="lines+markers+text",
+                    line=dict(color=blue_5, width=3),
+                    marker=dict(size=10, color=blue_1, line=dict(color="#ffffff", width=2)),
+                    text=[years_label(v) for v in alternatives["Payback híbrido años"]],
+                    textposition=["top center", "bottom center", "top center", "bottom center", "top center"],
+                    textfont=dict(color=blue_text, size=11),
+                    hovertemplate="<b>%{x}</b><br>Payback: %{text}<extra></extra>",
+                )
+            )
+            dashboard_fig.update_layout(
+                height=385,
+                margin=dict(l=10, r=44, t=24, b=24),
+                legend=dict(orientation="h", y=1.14, x=0, title=None),
+                xaxis=dict(categoryorder="array", categoryarray=turbine_order),
+                yaxis=dict(title="CAPEX (MM CLP)", gridcolor="rgba(148,163,184,.22)"),
+                yaxis2=dict(title="Payback (años)", overlaying="y", side="right", showgrid=False),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                hovermode="x unified",
+            )
+            st.plotly_chart(dashboard_fig, use_container_width=True, config={"displaylogo": False})
+        with dash_right:
+            st.markdown('<p class="telecom-panel-title">Ahorro e impacto publicados</p><p class="telecom-panel-sub">Indicadores del resumen del escenario actual.</p>', unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div class="telecom-grid-4" style="grid-template-columns:1fr 1fr;">
+                  <div class="telecom-card"><p class="telecom-card-k">Ahorro anual híbrido</p><p class="telecom-card-v">{format_clp(float(summary["ahorro_anual_hibrido"]))}</p><p class="telecom-card-s">Ahorro publicado por la hoja.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Diésel evitado</p><p class="telecom-card-v">{float(summary["diesel_evitado_l_anio"]):,.0f} L/año</p><p class="telecom-card-s">Impacto operacional.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">CO2 evitado</p><p class="telecom-card-v">{float(summary["co2_evitado_t_anio"]):.1f} t/año</p><p class="telecom-card-s">Impacto ambiental.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Energía útil anual</p><p class="telecom-card-v">{float(alternatives["Energía útil anual kWh"].median()):,.0f} kWh</p><p class="telecom-card-s">Base comparativa del Dashboard.</p></div>
+                </div>
+                <div class="telecom-dash-message"><b>Mensaje ejecutivo:</b> {html.escape(dashboard_message)}</div>
+                """.replace(",", "."),
+                unsafe_allow_html=True,
+            )
+        source_table = alternatives[["Alternativa", "CAPEX CLP", "Payback híbrido años", "LCOE CLP/kWh", "Energía útil anual kWh", "CO2 evitado t/año"]].copy()
+        source_table["CAPEX CLP"] = source_table["CAPEX CLP"].apply(format_clp)
+        source_table["LCOE CLP/kWh"] = source_table["LCOE CLP/kWh"].apply(format_clp)
+        source_table["Payback híbrido años"] = source_table["Payback híbrido años"].apply(years_label)
+        st.dataframe(source_table, use_container_width=True, hide_index=True)
+
+    with tab_exec:
+        section("03 · Boleta y carga", "Lectura del consumo real y perfil horario", "Esta pestaña replica 03_Boleta_Carga: boletas mensuales, resumen vinculado a Datos Sitio y curva horaria base para dimensionamiento.")
+        bill_avg = float(billing_summary.get("Promedio mensual boletas") or billing_df["Consumo kWh"].mean() or 0.0)
+        bill_max = float(billing_summary.get("Consumo máximo") or billing_df["Consumo kWh"].max() or 0.0)
+        bill_min = float(billing_summary.get("Consumo mínimo") or billing_df["Consumo kWh"].min() or 0.0)
+        tariff_avg = float(billing_summary.get("Tarifa promedio calculada") or billing_df["Tarifa calculada CLP/kWh"].mean() or 0.0)
+        monthly_model = float(billing_summary.get("Consumo mensual modelo") or bill_avg)
+        tariff_model = float(billing_summary.get("Tarifa red modelo") or tariff_avg)
+        bill_total_year = float(billing_df["Total boleta CLP"].sum() or 0.0)
+        demand_spread = ((bill_max - bill_min) / bill_avg * 100.0) if bill_avg else 0.0
+        peak_hour = hourly_df.sort_values("Potencia estimada kW", ascending=False).iloc[0]
+        st.markdown(
+            f"""
+            <div class="telecom-site-shell">
+              <div class="telecom-site-head">
+                <div>
+                  <p class="telecom-site-k">Pestaña 03_Boleta_Carga · Fuente Google Sheets</p>
+                  <h3 class="telecom-site-t">{html.escape(str(billing_model["title"]))}</h3>
+                  <p class="telecom-site-s">La boleta define el consumo mensual que alimenta Datos Sitio y la tarifa red usada para valorar ahorro. El perfil horario permite evaluar continuidad, potencia base y momentos de mayor carga.</p>
+                </div>
+                <div class="telecom-site-status">
+                  <div class="telecom-site-pill"><strong>{len(billing_df)}</strong><span>Boletas</span></div>
+                  <div class="telecom-site-pill"><strong>{len(hourly_df)}</strong><span>Horas perfil</span></div>
+                  <div class="telecom-site-pill"><strong>{html.escape(str(billing_model.get("source_mode", "remote")).upper())}</strong><span>Fuente</span></div>
+                </div>
+              </div>
+              <div class="telecom-site-body">
+                <div class="telecom-grid">
+                  <div class="telecom-card"><p class="telecom-card-k">Promedio mensual</p><p class="telecom-card-v">{bill_avg:,.0f} kWh</p><p class="telecom-card-s">Promedio de boletas publicado.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Consumo máximo</p><p class="telecom-card-v">{bill_max:,.0f} kWh</p><p class="telecom-card-s">Mes de mayor demanda.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Consumo mínimo</p><p class="telecom-card-v">{bill_min:,.0f} kWh</p><p class="telecom-card-s">Mes de menor demanda.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Tarifa promedio</p><p class="telecom-card-v">{format_clp(tariff_avg)}</p><p class="telecom-card-s">CLP/kWh calculado desde boletas.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Total anual boletas</p><p class="telecom-card-v">{format_clp(bill_total_year)}</p><p class="telecom-card-s">Suma anual del total facturado.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Variación demanda</p><p class="telecom-card-v">{demand_spread:.0f}%</p><p class="telecom-card-s">Rango min-max sobre promedio.</p></div>
+                </div>
+              </div>
+            </div>
+            """.replace(",", "."),
+            unsafe_allow_html=True,
+        )
+        b1, b2 = st.columns([1.08, 0.92])
+        with b1:
+            st.markdown('<p class="telecom-panel-title">Boletas mensuales: consumo y costo</p><p class="telecom-panel-sub">Barras: consumo mensual. Línea: total boleta facturado.</p>', unsafe_allow_html=True)
+            fig_bills = go.Figure()
+            fig_bills.add_trace(
+                go.Bar(
+                    x=billing_df["Mes"],
+                    y=billing_df["Consumo kWh"],
+                    name="Consumo",
+                    marker_color=blue_2,
+                    text=[f"{v:,.0f} kWh".replace(",", ".") for v in billing_df["Consumo kWh"]],
+                    textposition="outside",
+                    cliponaxis=False,
+                    hovertemplate="<b>%{x}</b><br>Consumo: %{y:,.0f} kWh<extra></extra>",
+                )
+            )
+            fig_bills.add_trace(
+                go.Scatter(
+                    x=billing_df["Mes"],
+                    y=billing_df["Total boleta CLP"] / 1_000_000,
+                    name="Total boleta",
+                    yaxis="y2",
+                    mode="lines+markers+text",
+                    line=dict(color=blue_4, width=3),
+                    marker=dict(size=8, color=blue_4, line=dict(color="#fff", width=1.5)),
+                    text=[f"{v/1_000_000:.2f} MM" for v in billing_df["Total boleta CLP"]],
+                    textposition="top center",
+                    textfont=dict(color=blue_text, size=10),
+                    hovertemplate="<b>%{x}</b><br>Total boleta: %{y:.2f} MM CLP<extra></extra>",
+                )
+            )
+            fig_bills.update_layout(
+                height=390,
+                margin=dict(l=10, r=48, t=28, b=70),
+                legend=dict(orientation="h", y=1.14, x=0, title=None),
+                xaxis=dict(title=None, tickangle=-25),
+                yaxis=dict(title="Consumo (kWh/mes)", gridcolor="rgba(148,163,184,.22)"),
+                yaxis2=dict(title="MM CLP", overlaying="y", side="right", showgrid=False),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                hovermode="x unified",
+            )
+            st.plotly_chart(fig_bills, use_container_width=True, config={"displaylogo": False})
+        with b2:
+            st.markdown('<p class="telecom-panel-title">Resumen utilizado por el modelo</p><p class="telecom-panel-sub">Valores que salen de la boleta hacia Datos Sitio.</p>', unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div class="telecom-grid-4" style="grid-template-columns:1fr 1fr;">
+                  <div class="telecom-card"><p class="telecom-card-k">Modo consumo</p><p class="telecom-card-v">{html.escape(str(billing_summary.get("Modo consumo", "Promedio boletas")))}</p><p class="telecom-card-s">Criterio de alimentación.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Consumo modelo</p><p class="telecom-card-v">{monthly_model:,.0f} kWh</p><p class="telecom-card-s">Salida vinculada a Datos Sitio.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Modo tarifa</p><p class="telecom-card-v">{html.escape(str(billing_summary.get("Modo tarifa", "Promedio boletas")))}</p><p class="telecom-card-s">Criterio de tarifa.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Tarifa red modelo</p><p class="telecom-card-v">{format_clp(tariff_model)}</p><p class="telecom-card-s">Salida vinculada a Datos Sitio.</p></div>
+                </div>
+                <div class="telecom-note"><b>Lectura:</b> la demanda crece desde {bill_min:,.0f} hasta {bill_max:,.0f} kWh/mes. Para ofertar al cliente, el promedio mensual debe cruzarse con estacionalidad, potencia horaria y validación del sitio.</div>
+                """.replace(",", "."),
+                unsafe_allow_html=True,
+            )
+        h1, h2 = st.columns([1, 1])
+        with h1:
+            st.markdown('<p class="telecom-panel-title">Perfil horario base</p><p class="telecom-panel-sub">Potencia estimada por hora para entender carga base y horario crítico.</p>', unsafe_allow_html=True)
+            fig_hour = go.Figure()
+            fig_hour.add_trace(
+                go.Scatter(
+                    x=hourly_df["Hora"],
+                    y=hourly_df["Potencia estimada kW"],
+                    name="Potencia estimada",
+                    mode="lines+markers",
+                    fill="tozeroy",
+                    line=dict(color=blue_5, width=3),
+                    marker=dict(size=7, color=blue_3, line=dict(color="#fff", width=1.3)),
+                    hovertemplate="Hora %{x}:00<br>Potencia: %{y:.2f} kW<extra></extra>",
+                )
+            )
+            fig_hour.add_hline(
+                y=float(hourly_df["Potencia estimada kW"].mean()),
+                line_dash="dash",
+                line_color=blue_4,
+                annotation_text="Promedio",
+                annotation_position="top left",
+            )
+            fig_hour.update_layout(
+                height=335,
+                margin=dict(l=10, r=18, t=18, b=34),
+                xaxis=dict(title="Hora", dtick=2, range=[-0.5, 23.5]),
+                yaxis=dict(title="kW", gridcolor="rgba(148,163,184,.22)"),
+                showlegend=False,
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_hour, use_container_width=True, config={"displaylogo": False})
+        with h2:
+            st.markdown('<p class="telecom-panel-title">Factor horario</p><p class="telecom-panel-sub">Multiplicador operativo por hora del día.</p>', unsafe_allow_html=True)
+            fig_factor = go.Figure()
+            fig_factor.add_trace(
+                go.Bar(
+                    x=hourly_df["Hora"],
+                    y=hourly_df["Factor horario"],
+                    name="Factor horario",
+                    marker_color=[blue_4 if v >= 1.08 else blue_2 if v >= 1.0 else blue_1 for v in hourly_df["Factor horario"]],
+                    hovertemplate="Hora %{x}:00<br>Factor: %{y:.2f}<extra></extra>",
+                )
+            )
+            fig_factor.update_layout(
+                height=335,
+                margin=dict(l=10, r=18, t=18, b=34),
+                xaxis=dict(title="Hora", dtick=2),
+                yaxis=dict(title="Factor", gridcolor="rgba(148,163,184,.22)"),
+                showlegend=False,
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_factor, use_container_width=True, config={"displaylogo": False})
+        billing_table = billing_df.copy()
+        billing_table["Cargo energía CLP"] = billing_table["Cargo energía CLP"].apply(format_clp)
+        billing_table["Cargos fijos/otros CLP"] = billing_table["Cargos fijos/otros CLP"].apply(format_clp)
+        billing_table["Total boleta CLP"] = billing_table["Total boleta CLP"].apply(format_clp)
+        billing_table["Tarifa calculada CLP/kWh"] = billing_table["Tarifa calculada CLP/kWh"].apply(format_clp)
+        st.dataframe(billing_table, use_container_width=True, hide_index=True)
+
+    with tab_dimension:
+        section("04 · Modelo eólico", "Dimensionamiento técnico-económico completo", "Replica 04_Modelo_Eolico usando columnas A:AM desde la fila 4: potencia, generación, inversión, beneficios, payback, LCOE, VAN, excedentes y recomendación.")
+        wind_df["Alternativa"] = pd.Categorical(wind_df["Alternativa"].astype(str), categories=turbine_order, ordered=True)
+        wind_df = wind_df.sort_values("Alternativa").copy()
+        wind_df["Alternativa"] = wind_df["Alternativa"].astype(str)
+        best_payback = wind_df.sort_values("Payback híbrido c/remanente", na_position="last").iloc[0]
+        best_index = wind_df.sort_values("Índice decisión", ascending=False, na_position="last").iloc[0]
+        best_lcoe = wind_df.sort_values("LCOE $/kWh", na_position="last").iloc[0]
+        total_rem_20 = float(wind_df["Remanente acumulado 20 años $"].max() or 0.0)
+        st.markdown(
+            f"""
+            <div class="telecom-site-shell">
+              <div class="telecom-site-head">
+                <div>
+                  <p class="telecom-site-k">Pestaña 04_Modelo_Eolico · Fuente Google Sheets</p>
+                  <h3 class="telecom-site-t">{html.escape(str(wind_model["title"]))}</h3>
+                  <p class="telecom-site-s">{html.escape(str(wind_model["subtitle"]))}. El bloque compara cinco alternativas con la misma demanda objetivo y muestra dónde cambia la decisión al incluir CAPEX, LCOE, excedentes y complejidad de implementación.</p>
+                </div>
+                <div class="telecom-site-status">
+                  <div class="telecom-site-pill"><strong>{len(wind_df)}</strong><span>Alternativas</span></div>
+                  <div class="telecom-site-pill"><strong>{wind_df.shape[1]}</strong><span>Columnas A:AM</span></div>
+                  <div class="telecom-site-pill"><strong>{html.escape(str(wind_model.get("source_mode", "remote")).upper())}</strong><span>Fuente</span></div>
+                </div>
+              </div>
+              <div class="telecom-site-body">
+                <div class="telecom-grid">
+                  <div class="telecom-card"><p class="telecom-card-k">Mejor índice decisión</p><p class="telecom-card-v">{html.escape(str(best_index["Alternativa"]))}</p><p class="telecom-card-s">{float(best_index["Índice decisión"]):.1f} puntos.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Menor payback c/remanente</p><p class="telecom-card-v">{html.escape(str(best_payback["Alternativa"]))}</p><p class="telecom-card-s">{years_label(best_payback["Payback híbrido c/remanente"])}.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Menor LCOE</p><p class="telecom-card-v">{html.escape(str(best_lcoe["Alternativa"]))}</p><p class="telecom-card-s">{format_clp(float(best_lcoe["LCOE $/kWh"]))}/kWh.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Energía útil anual</p><p class="telecom-card-v">{float(wind_df["Energía útil anual kWh"].median()):,.0f} kWh</p><p class="telecom-card-s">Base útil común valorizada.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">CO₂ evitado</p><p class="telecom-card-v">{float(wind_df["CO₂ evitado t/año"].median()):.1f} t/año</p><p class="telecom-card-s">Impacto anual modelado.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Mayor remanente 20 años</p><p class="telecom-card-v">{format_clp(total_rem_20)}</p><p class="telecom-card-s">Valor máximo por excedentes.</p></div>
+                </div>
+              </div>
+            </div>
+            """.replace(",", "."),
+            unsafe_allow_html=True,
+        )
+        w1, w2 = st.columns([1.05, 0.95])
+        with w1:
+            st.markdown('<p class="telecom-panel-title">Dimensionamiento: unidades, potencia y generación</p><p class="telecom-panel-sub">Barras apiladas: potencia instalada y unidades requeridas. Línea: generación mensual total.</p>', unsafe_allow_html=True)
+            fig_dim = go.Figure()
+            fig_dim.add_trace(go.Bar(x=wind_df["Alternativa"], y=wind_df["Potencia instalada kW"], name="Potencia instalada", marker_color=blue_5, text=[f"{v:.0f} kW" for v in wind_df["Potencia instalada kW"]], textposition="inside", textfont=dict(color="#fff", size=11), hovertemplate="<b>%{x}</b><br>Potencia instalada: %{y:.1f} kW<extra></extra>"))
+            fig_dim.add_trace(go.Scatter(x=wind_df["Alternativa"], y=wind_df["Nº turbinas requerido"], name="N° turbinas", yaxis="y2", mode="lines+markers+text", line=dict(color=blue_4, width=3), marker=dict(size=10, color=blue_4, line=dict(color="#fff", width=1.5)), text=[f"{v:.0f}" for v in wind_df["Nº turbinas requerido"]], textposition="top center", textfont=dict(color=blue_text, size=11), hovertemplate="<b>%{x}</b><br>Turbinas: %{y:.0f}<extra></extra>"))
+            fig_dim.add_trace(go.Scatter(x=wind_df["Alternativa"], y=wind_df["Generación mensual total kWh"] / 1000, name="Generación mensual", yaxis="y3", mode="lines+markers", line=dict(color=blue_3, width=2.5, dash="dot"), marker=dict(size=8, color=blue_3, line=dict(color="#fff", width=1.3)), hovertemplate="<b>%{x}</b><br>Generación mensual: %{y:.1f} MWh<extra></extra>"))
+            fig_dim.update_layout(height=405, margin=dict(l=10, r=62, t=30, b=45), legend=dict(orientation="h", y=1.16, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="kW", gridcolor="rgba(148,163,184,.22)"), yaxis2=dict(title="N°", overlaying="y", side="right", showgrid=False), yaxis3=dict(title="MWh/mes", overlaying="y", side="right", anchor="free", position=0.93, showgrid=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
+            st.plotly_chart(fig_dim, use_container_width=True, config={"displaylogo": False})
+        with w2:
+            st.markdown('<p class="telecom-panel-title">CAPEX total, LCOE e índice de decisión</p><p class="telecom-panel-sub">Permite separar la alternativa con mejor retorno de la que requiere más capital.</p>', unsafe_allow_html=True)
+            fig_econ = go.Figure()
+            fig_econ.add_trace(go.Bar(x=wind_df["Alternativa"], y=wind_df["CAPEX total $"] / 1_000_000, name="CAPEX total", marker_color=blue_2, text=[f"{v/1_000_000:.1f} MM" for v in wind_df["CAPEX total $"]], textposition="outside", cliponaxis=False, hovertemplate="<b>%{x}</b><br>CAPEX: %{y:.1f} MM CLP<extra></extra>"))
+            fig_econ.add_trace(go.Scatter(x=wind_df["Alternativa"], y=wind_df["LCOE $/kWh"], name="LCOE", yaxis="y2", mode="lines+markers+text", line=dict(color=blue_4, width=3), marker=dict(size=9, color=blue_4, line=dict(color="#fff", width=1.5)), text=[format_clp(v) for v in wind_df["LCOE $/kWh"]], textposition=["top center", "bottom center", "top center", "bottom center", "top center"], textfont=dict(color=blue_text, size=10), hovertemplate="<b>%{x}</b><br>LCOE: %{y:,.0f} CLP/kWh<extra></extra>"))
+            fig_econ.add_trace(go.Scatter(x=wind_df["Alternativa"], y=wind_df["Índice decisión"], name="Índice decisión", yaxis="y3", mode="lines+markers", line=dict(color=blue_5, width=2.6, dash="dash"), marker=dict(size=8, color=blue_5, line=dict(color="#fff", width=1.4)), hovertemplate="<b>%{x}</b><br>Índice: %{y:.1f}<extra></extra>"))
+            fig_econ.update_layout(height=405, margin=dict(l=10, r=64, t=30, b=45), legend=dict(orientation="h", y=1.16, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.22)"), yaxis2=dict(title="CLP/kWh", overlaying="y", side="right", showgrid=False), yaxis3=dict(title="Índice", overlaying="y", side="right", anchor="free", position=0.93, showgrid=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
+            st.plotly_chart(fig_econ, use_container_width=True, config={"displaylogo": False})
+        p1, p2 = st.columns([1, 1])
+        with p1:
+            st.markdown('<p class="telecom-panel-title">Payback por fuente de ahorro</p><p class="telecom-panel-sub">Comparación del retorno si desplaza red, electrógeno, mix híbrido y mix con remanente.</p>', unsafe_allow_html=True)
+            fig_pay = go.Figure()
+            for col, color in [
+                ("Payback red años", blue_1),
+                ("Payback electrógeno años", blue_2),
+                ("Payback híbrido años", blue_3),
+                ("Payback híbrido c/remanente", blue_4),
+            ]:
+                fig_pay.add_trace(go.Bar(x=wind_df["Alternativa"], y=wind_df[col], name=col.replace("Payback ", "").replace(" años", ""), text=[years_label(v) for v in wind_df[col]], textposition="outside", cliponaxis=False, marker_color=color, hovertemplate=f"<b>%{{x}}</b><br>{col}: %{{text}}<extra></extra>"))
+            fig_pay.update_layout(height=390, margin=dict(l=10, r=28, t=30, b=45), barmode="group", legend=dict(orientation="h", y=1.17, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="Años", gridcolor="rgba(148,163,184,.22)"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
+            st.plotly_chart(fig_pay, use_container_width=True, config={"displaylogo": False})
+        with p2:
+            st.markdown('<p class="telecom-panel-title">Excedentes y beneficio total híbrido</p><p class="telecom-panel-sub">Visualiza el peso de monetizar remanentes por tipo de turbina.</p>', unsafe_allow_html=True)
+            fig_rem = go.Figure()
+            fig_rem.add_trace(go.Bar(x=wind_df["Alternativa"], y=wind_df["Beneficio neto híbrido $"] / 1_000_000, name="Beneficio neto híbrido", marker_color=blue_5, text=[f"{v/1_000_000:.1f} MM" for v in wind_df["Beneficio neto híbrido $"]], textposition="inside", textfont=dict(color="#fff", size=10), hovertemplate="<b>%{x}</b><br>Beneficio neto: %{y:.1f} MM CLP<extra></extra>"))
+            fig_rem.add_trace(go.Bar(x=wind_df["Alternativa"], y=wind_df["Ingreso venta excedente $"] / 1_000_000, name="Ingreso excedente", marker_color=blue_4, text=[f"{v/1_000_000:.1f} MM" for v in wind_df["Ingreso venta excedente $"]], textposition="outside", cliponaxis=False, hovertemplate="<b>%{x}</b><br>Excedente: %{y:.1f} MM CLP<extra></extra>"))
+            fig_rem.add_trace(go.Scatter(x=wind_df["Alternativa"], y=wind_df["Remanente anual kWh"] / 1000, name="Remanente anual", yaxis="y2", mode="lines+markers", line=dict(color=blue_3, width=3), marker=dict(size=9, color=blue_3, line=dict(color="#fff", width=1.5)), hovertemplate="<b>%{x}</b><br>Remanente: %{y:.1f} MWh/año<extra></extra>"))
+            fig_rem.update_layout(height=390, margin=dict(l=10, r=52, t=30, b=45), barmode="group", legend=dict(orientation="h", y=1.17, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="MM CLP/año", gridcolor="rgba(148,163,184,.22)"), yaxis2=dict(title="MWh/año", overlaying="y", side="right", showgrid=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
+            st.plotly_chart(fig_rem, use_container_width=True, config={"displaylogo": False})
+        i1, i2 = st.columns([0.96, 1.04])
+        with i1:
+            st.markdown('<p class="telecom-panel-title">Impacto operativo y ambiental</p><p class="telecom-panel-sub">Diésel y CO₂ evitado se mantienen como beneficio base anual del caso.</p>', unsafe_allow_html=True)
+            fig_impact = go.Figure()
+            fig_impact.add_trace(go.Bar(x=wind_df["Alternativa"], y=wind_df["Diésel evitado L/año"], name="Diésel evitado", marker_color=blue_2, text=[f"{v:,.0f} L".replace(",", ".") for v in wind_df["Diésel evitado L/año"]], textposition="outside", cliponaxis=False))
+            fig_impact.add_trace(go.Scatter(x=wind_df["Alternativa"], y=wind_df["CO₂ evitado t/año"], name="CO₂ evitado", yaxis="y2", mode="lines+markers+text", line=dict(color=blue_4, width=3), marker=dict(size=9, color=blue_4, line=dict(color="#fff", width=1.5)), text=[f"{v:.1f} t" for v in wind_df["CO₂ evitado t/año"]], textposition="top center", textfont=dict(color=blue_text, size=10)))
+            fig_impact.update_layout(height=350, margin=dict(l=10, r=50, t=30, b=45), legend=dict(orientation="h", y=1.16, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="L/año", gridcolor="rgba(148,163,184,.22)"), yaxis2=dict(title="t/año", overlaying="y", side="right", showgrid=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
+            st.plotly_chart(fig_impact, use_container_width=True, config={"displaylogo": False})
+        with i2:
+            st.markdown('<p class="telecom-panel-title">VAN híbrido y CAPEX</p><p class="telecom-panel-sub">Control de viabilidad financiera frente a inversión requerida.</p>', unsafe_allow_html=True)
+            fig_van = px.scatter(wind_df, x="CAPEX total $", y="VAN híbrido $", size="Beneficio total híbrido $", color="Alternativa", color_discrete_sequence=[blue_1, blue_2, blue_3, blue_4, blue_5], text="Alternativa", custom_data=["Payback híbrido c/remanente", "Índice decisión", "LCOE $/kWh"])
+            fig_van.update_traces(textposition="top center", marker=dict(line=dict(color="#fff", width=1.5), opacity=0.9), hovertemplate="<b>%{text}</b><br>CAPEX: %{x:,.0f} CLP<br>VAN: %{y:,.0f} CLP<br>Payback c/rem: %{customdata[0]:.1f} años<br>Índice: %{customdata[1]:.1f}<br>LCOE: %{customdata[2]:,.0f}<extra></extra>")
+            fig_van.update_layout(height=350, margin=dict(l=10, r=20, t=30, b=45), showlegend=False, xaxis=dict(title="CAPEX total", gridcolor="rgba(148,163,184,.22)", tickformat=",.0f"), yaxis=dict(title="VAN híbrido", gridcolor="rgba(148,163,184,.22)", tickformat=",.0f"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_van, use_container_width=True, config={"displaylogo": False})
+        display_cols = [
+            "Alternativa", "Potencia unitaria kW", "Nº turbinas requerido", "Potencia instalada kW", "Generación mensual total kWh",
+            "CAPEX total $", "O&M anual $", "Beneficio neto híbrido $", "Ingreso venta excedente $", "Beneficio total híbrido $",
+            "Payback híbrido años", "Payback híbrido c/remanente", "LCOE $/kWh", "VAN híbrido $", "Índice decisión",
+            "Estado payback híbrido", "Recomendación", "Dato crítico a validar", "Comentario remanente",
+        ]
+        full_table = wind_df[display_cols].copy()
+        for col in ["CAPEX total $", "O&M anual $", "Beneficio neto híbrido $", "Ingreso venta excedente $", "Beneficio total híbrido $", "LCOE $/kWh", "VAN híbrido $"]:
+            full_table[col] = full_table[col].apply(format_clp)
+        for col in ["Payback híbrido años", "Payback híbrido c/remanente"]:
+            full_table[col] = full_table[col].apply(years_label)
+        st.dataframe(full_table, use_container_width=True, hide_index=True)
+
+    with tab_risk:
+        section("05 · Recurso eólico", "Validación energética del sitio", "Replica 05_Recurso_Eolico usando columnas A:J desde la fila 4. El objetivo es validar si el factor planta y la velocidad de diseño son defendibles antes de ingeniería de detalle.")
+
+        def resource_row(name: str) -> pd.Series | None:
+            matches = resource_df[resource_df["Variable"].astype(str).str.casefold() == name.casefold()]
+            return None if matches.empty else matches.iloc[0]
+
+        def resource_num(name: str, default: float = np.nan) -> float:
+            row = resource_row(name)
+            if row is None:
+                return default
+            value = row.get("Valor numérico", default)
+            return float(value) if pd.notna(value) else default
+
+        def resource_text(name: str, default: str = "") -> str:
+            row = resource_row(name)
+            if row is None:
+                return default
+            value = str(row.get("Valor", "")).strip()
+            return value or default
+
+        measured_speed = resource_num("Velocidad media medición", 0.0)
+        measurement_height = resource_num("Altura medición", 0.0)
+        rotor_height = resource_num("Altura rotor", 0.0)
+        roughness_exp = resource_num("Exponente rugosidad", 0.0)
+        rotor_speed_sheet = resource_num("Velocidad a rotor", np.nan)
+        density_air = resource_num("Densidad aire", 0.0)
+        weibull_k = resource_num("Weibull k", 0.0)
+        availability_pct = resource_num("Disponibilidad", 0.0)
+        electrical_losses_pct = resource_num("Pérdidas eléctricas", 0.0)
+        additional_losses_pct = resource_num("Pérdidas adicionales", 0.0)
+        fp_prelim = resource_num("Factor planta preliminar", 0.0)
+        fp_sheet = resource_num("Factor planta ficha", 0.0)
+        fp_delta = resource_num("Diferencia FP", 0.0)
+        status = resource_text("Estado", "Revisar")
+        recommendation_resource = resource_text("Recomendación", "Revisar fuente de FP")
+        rotor_speed_calc = measured_speed * ((rotor_height / measurement_height) ** roughness_exp) if measured_speed > 0 and measurement_height > 0 and rotor_height > 0 else np.nan
+        rotor_gap = rotor_speed_calc - rotor_speed_sheet if pd.notna(rotor_speed_sheet) and pd.notna(rotor_speed_calc) else np.nan
+        usable_factor = (availability_pct / 100.0) * (1 - electrical_losses_pct / 100.0) * (1 - additional_losses_pct / 100.0)
+        gross_loss_pct = max(0.0, (1 - usable_factor) * 100.0)
+        validation_alert = rotor_speed_sheet < max(1.0, measured_speed * 0.3) if pd.notna(rotor_speed_sheet) else False
+
+        st.markdown(
+            f"""
+            <div class="telecom-site-shell">
+              <div class="telecom-site-head">
+                <div>
+                  <p class="telecom-site-k">Pestaña 05_Recurso_Eolico · Fuente Google Sheets</p>
+                  <h3 class="telecom-site-t">{html.escape(str(resource_model["title"]))}</h3>
+                  <p class="telecom-site-s">{html.escape(str(resource_model["subtitle"]))}. Esta lectura separa medición, extrapolación, pérdidas y control del factor planta para identificar riesgos técnicos antes de comprometer CAPEX.</p>
+                </div>
+                <div class="telecom-site-status">
+                  <div class="telecom-site-pill"><strong>{len(resource_df)}</strong><span>Variables</span></div>
+                  <div class="telecom-site-pill"><strong>10</strong><span>Columnas A:J</span></div>
+                  <div class="telecom-site-pill"><strong>{html.escape(str(resource_model.get("source_mode", "remote")).upper())}</strong><span>Fuente</span></div>
+                </div>
+              </div>
+              <div class="telecom-site-body">
+                <div class="telecom-grid">
+                  <div class="telecom-card"><p class="telecom-card-k">Velocidad medida</p><p class="telecom-card-v">{measured_speed:.2f} m/s</p><p class="telecom-card-s">Base eólica declarada.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Velocidad a rotor hoja</p><p class="telecom-card-v">{rotor_speed_sheet:.2f} m/s</p><p class="telecom-card-s">Valor calculado publicado.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Velocidad extrapolada</p><p class="telecom-card-v">{rotor_speed_calc:.2f} m/s</p><p class="telecom-card-s">Cálculo referencial por ley de potencia.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Factor planta preliminar</p><p class="telecom-card-v">{fp_prelim:.1f}%</p><p class="telecom-card-s">Base usada para comparar con ficha.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Pérdida operativa total</p><p class="telecom-card-v">{gross_loss_pct:.1f}%</p><p class="telecom-card-s">Disponibilidad y pérdidas combinadas.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Estado</p><p class="telecom-card-v">{html.escape(status)}</p><p class="telecom-card-s">{html.escape(recommendation_resource)}.</p></div>
+                </div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if validation_alert:
+            st.markdown(
+                f'<div class="telecom-note"><b>Alerta técnica:</b> la hoja publica velocidad a rotor de <b>{rotor_speed_sheet:.2f} m/s</b>, pero con {measured_speed:.2f} m/s a {measurement_height:.0f} m y rotor a {rotor_height:.0f} m, la extrapolación referencial entrega cerca de <b>{rotor_speed_calc:.2f} m/s</b>. Conviene revisar fórmula, unidad o referencia de celda antes de usar este valor en ingeniería.</div>',
+                unsafe_allow_html=True,
+            )
+        r1, r2 = st.columns([1, 1])
+        with r1:
+            st.markdown('<p class="telecom-panel-title">Extrapolación de velocidad</p><p class="telecom-panel-sub">Compara la medición base, el valor publicado a rotor y una extrapolación referencial.</p>', unsafe_allow_html=True)
+            speed_df = pd.DataFrame(
+                [
+                    {"Concepto": "Medición", "Velocidad m/s": measured_speed, "Color": blue_2},
+                    {"Concepto": "A rotor hoja", "Velocidad m/s": rotor_speed_sheet, "Color": blue_4 if validation_alert else blue_3},
+                    {"Concepto": "A rotor ref.", "Velocidad m/s": rotor_speed_calc, "Color": blue_5},
+                ]
+            )
+            fig_speed = go.Figure(
+                go.Bar(
+                    x=speed_df["Concepto"],
+                    y=speed_df["Velocidad m/s"],
+                    marker_color=speed_df["Color"],
+                    text=[f"{v:.2f} m/s" for v in speed_df["Velocidad m/s"]],
+                    textposition="outside",
+                    cliponaxis=False,
+                    hovertemplate="<b>%{x}</b><br>Velocidad: %{y:.2f} m/s<extra></extra>",
+                )
+            )
+            fig_speed.update_layout(height=350, margin=dict(l=10, r=20, t=20, b=38), yaxis=dict(title="m/s", gridcolor="rgba(148,163,184,.22)"), xaxis=dict(title=None), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_speed, use_container_width=True, config={"displaylogo": False})
+        with r2:
+            st.markdown('<p class="telecom-panel-title">Factor planta y control</p><p class="telecom-panel-sub">Valida coherencia entre factor preliminar, ficha y diferencia informada.</p>', unsafe_allow_html=True)
+            fp_df = pd.DataFrame(
+                [
+                    {"Concepto": "FP preliminar", "Valor": fp_prelim},
+                    {"Concepto": "FP ficha", "Valor": fp_sheet},
+                    {"Concepto": "Diferencia", "Valor": fp_delta},
+                ]
+            )
+            fig_fp = go.Figure()
+            fig_fp.add_trace(go.Bar(x=fp_df["Concepto"], y=fp_df["Valor"], marker_color=[blue_5, blue_2, blue_4], text=[f"{v:.1f}%" for v in fp_df["Valor"]], textposition="outside", cliponaxis=False, hovertemplate="<b>%{x}</b><br>Valor: %{y:.1f}%<extra></extra>"))
+            fig_fp.update_layout(height=350, margin=dict(l=10, r=20, t=20, b=38), yaxis=dict(title="%", gridcolor="rgba(148,163,184,.22)"), xaxis=dict(title=None), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_fp, use_container_width=True, config={"displaylogo": False})
+        l1, l2 = st.columns([1, 1])
+        with l1:
+            st.markdown('<p class="telecom-panel-title">Pérdidas y disponibilidad</p><p class="telecom-panel-sub">Lectura operativa para convertir recurso bruto en energía útil.</p>', unsafe_allow_html=True)
+            loss_df = pd.DataFrame(
+                [
+                    {"Concepto": "Disponibilidad útil", "Valor": availability_pct},
+                    {"Concepto": "Pérdidas eléctricas", "Valor": electrical_losses_pct},
+                    {"Concepto": "Pérdidas adicionales", "Valor": additional_losses_pct},
+                    {"Concepto": "Pérdida total combinada", "Valor": gross_loss_pct},
+                ]
+            )
+            fig_loss = go.Figure(go.Bar(x=loss_df["Valor"], y=loss_df["Concepto"], orientation="h", marker_color=[blue_2, blue_3, blue_4, blue_5], text=[f"{v:.1f}%" for v in loss_df["Valor"]], textposition="outside", cliponaxis=False, hovertemplate="<b>%{y}</b><br>%{x:.1f}%<extra></extra>"))
+            fig_loss.update_layout(height=340, margin=dict(l=10, r=40, t=16, b=34), xaxis=dict(title="%", gridcolor="rgba(148,163,184,.22)"), yaxis=dict(title=None), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_loss, use_container_width=True, config={"displaylogo": False})
+        with l2:
+            st.markdown('<p class="telecom-panel-title">Variables críticas por uso</p><p class="telecom-panel-sub">Distribución de la hoja A:J según rol técnico.</p>', unsafe_allow_html=True)
+            usage_df = resource_df.assign(Uso=resource_df["Uso"].replace("", "Control")).groupby("Uso", as_index=False).size().sort_values("size", ascending=True)
+            fig_usage = go.Figure(go.Bar(x=usage_df["size"], y=usage_df["Uso"], orientation="h", marker_color=blue_2, text=usage_df["size"], textposition="outside", cliponaxis=False, hovertemplate="<b>%{y}</b><br>%{x} variables<extra></extra>"))
+            fig_usage.update_layout(height=340, margin=dict(l=10, r=32, t=16, b=34), xaxis=dict(title="Variables", gridcolor="rgba(148,163,184,.22)"), yaxis=dict(title=None), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_usage, use_container_width=True, config={"displaylogo": False})
+        note_resource = str(resource_model.get("note", "")).strip()
+        if note_resource:
+            st.markdown(f'<div class="telecom-note"><b>Nota de la hoja:</b> {html.escape(note_resource)}</div>', unsafe_allow_html=True)
+        resource_table = resource_df[["Bloque", "Variable", "Valor", "Unidad", "Fuente requerida", "Uso"]].copy()
+        resource_table["Valor"] = resource_table["Valor"].replace("", "Pendiente")
+        resource_table["Unidad"] = resource_table["Unidad"].replace("", "-")
+        st.dataframe(resource_table, use_container_width=True, hide_index=True)
+
+    with tab_savings:
+        section("06 · Explicación del ahorro", "Ahorro anual y payback simple", "Se muestra cómo la energía útil se monetiza con el costo ponderado seleccionado.")
+        a1, a2 = st.columns([1, 1])
+        with a1:
+            fig_saving = go.Figure(go.Bar(x=alternatives["Alternativa"], y=alternatives["Ahorro simulado anual CLP"] / 1_000_000, marker_color=[blue_5 if x == str(recommended["Alternativa"]) else blue_3 for x in alternatives["Alternativa"]], text=[f"{v/1_000_000:.1f} MM" for v in alternatives["Ahorro simulado anual CLP"]], textposition="outside", cliponaxis=False))
+            fig_saving.update_layout(height=340, margin=dict(l=10, r=42, t=10, b=24), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="MM CLP/año", gridcolor="rgba(148,163,184,.22)"), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_saving, use_container_width=True, config={"displaylogo": False})
+        with a2:
+            fig_payback = go.Figure()
+            fig_payback.add_trace(go.Bar(x=alternatives["Alternativa"], y=alternatives["Payback híbrido años"], name="Payback hoja", marker_color=blue_5, text=[years_label(v) for v in alternatives["Payback híbrido años"]], textposition="outside", cliponaxis=False))
+            fig_payback.add_trace(go.Bar(x=alternatives["Alternativa"], y=alternatives["Payback simple simulado años"], name="Payback simple", marker_color=blue_2, text=[years_label(v) for v in alternatives["Payback simple simulado años"]], textposition="outside", cliponaxis=False))
+            fig_payback.update_layout(height=340, margin=dict(l=10, r=42, t=18, b=24), barmode="group", legend=dict(orientation="h", y=1.18, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="Años", gridcolor="rgba(148,163,184,.22)"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_payback, use_container_width=True, config={"displaylogo": False})
+
+    with tab_economics:
+        section("07 · Comparación económica", "CAPEX, LCOE y retorno", "La comparación separa inversión inicial, costo nivelado y plazo de recuperación para defender la recomendación.")
+        e1, e2 = st.columns([1, 1])
+        with e1:
+            fig_capex_lcoe = go.Figure()
+            fig_capex_lcoe.add_trace(go.Bar(x=alternatives["Alternativa"], y=alternatives["CAPEX MM CLP"], name="CAPEX", marker_color=blue_4, text=[f"{v:.1f} MM" for v in alternatives["CAPEX MM CLP"]], textposition="inside", textfont=dict(color="#fff", size=11)))
+            fig_capex_lcoe.add_trace(go.Scatter(x=alternatives["Alternativa"], y=alternatives["LCOE CLP/kWh"], name="LCOE", yaxis="y2", mode="lines+markers+text", line=dict(color=blue_5, width=3), marker=dict(size=10, color=blue_2, line=dict(color="#fff", width=2)), text=[format_clp(v) for v in alternatives["LCOE CLP/kWh"]], textposition=["middle left", "bottom center", "top center", "bottom center", "top center"], textfont=dict(color=blue_text, size=11)))
+            fig_capex_lcoe.update_layout(height=360, margin=dict(l=10, r=42, t=28, b=24), legend=dict(orientation="h", y=1.14, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="CAPEX (MM CLP)", gridcolor="rgba(148,163,184,.22)"), yaxis2=dict(title="LCOE (CLP/kWh)", overlaying="y", side="right", showgrid=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
+            st.plotly_chart(fig_capex_lcoe, use_container_width=True, config={"displaylogo": False})
+        with e2:
+            fig_capex_payback = go.Figure()
+            fig_capex_payback.add_trace(go.Bar(x=alternatives["Alternativa"], y=alternatives["CAPEX MM CLP"], name="CAPEX", marker_color=blue_3, text=[f"{v:.1f} MM" for v in alternatives["CAPEX MM CLP"]], textposition="inside", textfont=dict(color="#fff", size=11)))
+            fig_capex_payback.add_trace(go.Scatter(x=alternatives["Alternativa"], y=alternatives["Payback simple simulado años"], name="Payback simple", yaxis="y2", mode="lines+markers+text", line=dict(color=blue_5, width=3), marker=dict(size=10, color=blue_1, line=dict(color="#fff", width=2)), text=[years_label(v) for v in alternatives["Payback simple simulado años"]], textposition=["top center", "bottom center", "top center", "bottom center", "top center"], textfont=dict(color=blue_text, size=11)))
+            fig_capex_payback.update_layout(height=360, margin=dict(l=10, r=42, t=28, b=24), legend=dict(orientation="h", y=1.14, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="CAPEX (MM CLP)", gridcolor="rgba(148,163,184,.22)"), yaxis2=dict(title="Años", overlaying="y", side="right", showgrid=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
+            st.plotly_chart(fig_capex_payback, use_container_width=True, config={"displaylogo": False})
+
+    with tab_impact:
+        section("08 · Impacto y cierre ejecutivo", "Valor en el tiempo, tabla final y mensaje ejecutivo", "El cierre consolida impacto, valor acumulado, ranking y el mensaje publicado en el URL.")
+        st.markdown(
+            f"""
+            <div class="telecom-grid-4">
+              <div class="telecom-card"><p class="telecom-card-k">Valor simulado 15 años</p><p class="telecom-card-v">{format_clp(lifetime_value)}</p><p class="telecom-card-s">Ahorro anual por 15 años menos CAPEX.</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">Diésel evitado</p><p class="telecom-card-v">{float(recommended["Diésel simulado L/año"]):,.0f} L/año</p><p class="telecom-card-s">Derivado desde CO2 y factor de emisión.</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">CO2 evitado</p><p class="telecom-card-v">{float(recommended["CO2 simulado t/año"]):,.1f} t/año</p><p class="telecom-card-s">Escalado por cobertura seleccionada.</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">Energía útil</p><p class="telecom-card-v">{rec_energy:,.0f} kWh/año</p><p class="telecom-card-s">Energía anual valorizada.</p></div>
+            </div>
+            """.replace(",", "."),
+            unsafe_allow_html=True,
+        )
+
+    with tab_impact:
+        table_rows = []
+        for _, row in alternatives.sort_values("Score técnico", ascending=False).iterrows():
+            is_rec = str(row["Alternativa"]) == str(recommended["Alternativa"])
+            badge = '<span class="telecom-badge">Recomendada</span>' if is_rec else '<span class="telecom-muted">Alternativa evaluada</span>'
+            row_class = "recommended" if is_rec else ""
+            table_rows.append(
+                f"""
+                <tr class="{row_class}">
+                  <td><b>{html.escape(str(row["Alternativa"]))}</b><br>{badge}</td>
+                  <td>{format_clp(float(row["CAPEX CLP"]))}</td>
+                  <td>{format_clp(float(row["LCOE CLP/kWh"]))}</td>
+                  <td>{years_label(row["Payback híbrido años"])}</td>
+                  <td>{years_label(row["Payback simple simulado años"])}</td>
+                  <td>{float(row["Score técnico"]):.0f}/100</td>
+                  <td>{float(row["Energía simulada anual kWh"]):,.0f}</td>
+                  <td>{float(row["CO2 simulado t/año"]):,.1f}</td>
+                </tr>
+                """.replace(",", ".")
+            )
+        st.markdown(
+            '<div class="telecom-table-shell">'
+            '<div class="telecom-table-head">'
+            '<div><h3>Tabla ejecutiva de alternativas telecom</h3>'
+            '<p>Ranking técnico-económico con resultados de hoja y sensibilidad simulada por inputs activos.</p></div>'
+            f'<div class="telecom-badge">{html.escape(str(recommended["Alternativa"]))}</div>'
+            '</div>'
+            '<table class="telecom-table"><thead><tr>'
+            '<th>Alternativa</th><th>CAPEX</th><th>LCOE</th><th>Payback hoja</th><th>Payback simple</th><th>Score</th><th>Energía kWh/año</th><th>CO2 t/año</th>'
+            f'</tr></thead><tbody>{"".join(table_rows)}</tbody></table></div>',
+            unsafe_allow_html=True,
+        )
+        message = str(summary.get("mensaje_ejecutivo") or "").strip()
+        if message:
+            st.markdown(f'<div class="telecom-note"><b>Mensaje ejecutivo de la hoja fuente:</b> {html.escape(message)}</div>', unsafe_allow_html=True)
+
+        export_df = alternatives.copy()
+        export_df["CAPEX"] = export_df["CAPEX CLP"].apply(format_clp)
+        export_df["LCOE"] = export_df["LCOE CLP/kWh"].apply(format_clp)
+        export_df["Payback hoja"] = export_df["Payback híbrido años"].apply(years_label)
+        export_df["Payback simple"] = export_df["Payback simple simulado años"].apply(years_label)
+        st.download_button(
+            "Descargar tabla ejecutiva CSV",
+            data=export_df[["Alternativa", "CAPEX", "LCOE", "Payback hoja", "Payback simple", "Score técnico", "Energía simulada anual kWh", "Ahorro simulado anual CLP", "CO2 simulado t/año", "Diésel simulado L/año"]].to_csv(index=False).encode("utf-8-sig"),
+            file_name="evaluacion_eolica_torres_telecom.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key="download_telecom_eval_csv",
+        )
+
+
 def render_inputs_capex_10kw_detail():
     try:
         df_10kw = build_restante_piloto_10kw_view(RESTANTE_PILOTO_10KW_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
@@ -10686,7 +12359,7 @@ def render_inputs_capex_10kw_detail():
         .capex10-foot-ico{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eef4ff;color:#315d9b;font-size:20px;}
         .capex10-foot-k{font-size:11px;color:#587093;margin:0 0 4px 0;}
         .capex10-foot-v{font-size:12px;color:#18345c;margin:0;font-weight:600;}
-        .capex10-subnav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 16px 0;}
+        .capex10-subnav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:0 0 16px 0;}
         .capex10-subcard{border:1px solid #d9e2ee;border-radius:13px;background:linear-gradient(180deg,#fff,#f8fbff);padding:15px 16px;min-height:98px;box-shadow:0 10px 24px rgba(15,23,42,.045);}
         .capex10-subcard.active{border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.10),0 12px 28px rgba(15,23,42,.06);}
         .capex10-sub-k{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:0 0 7px 0;}
@@ -10720,7 +12393,7 @@ def render_inputs_capex_10kw_detail():
             ):
                 st.session_state.pop(gantt_key, None)
 
-    valid_capex10_subblocks = {"control_fondos", "vista_integrada", "control_cost", "sensibilidad_clientes"}
+    valid_capex10_subblocks = {"control_fondos", "vista_integrada", "control_cost", "sensibilidad_clientes", "evaluacion_telecom"}
     if capex10_subblock_key not in st.session_state:
         st.session_state[capex10_subblock_key] = "control_fondos"
     elif st.session_state[capex10_subblock_key] not in valid_capex10_subblocks:
@@ -10747,8 +12420,13 @@ def render_inputs_capex_10kw_detail():
             "Análisis de sensibilidad para clientes",
             "Escenarios de variación comercial, precio, demanda y retorno para lectura de cliente.",
         ),
+        (
+            "evaluacion_telecom",
+            "Evaluación eólica torres telecom",
+            "Ocho bloques ejecutivos conectados al CSV Entel para ranking, impacto, CAPEX, LCOE y retorno.",
+        ),
     ]
-    sub_cols = st.columns(4)
+    sub_cols = st.columns(5)
     for idx, (sub_value, sub_title, sub_copy) in enumerate(capex10_subblocks):
         is_active = st.session_state.get(capex10_subblock_key) == sub_value
         with sub_cols[idx]:
@@ -10795,6 +12473,10 @@ def render_inputs_capex_10kw_detail():
 
     if selected_capex10_subblock == "sensibilidad_clientes":
         render_client_sensitivity_analysis()
+        return
+
+    if selected_capex10_subblock == "evaluacion_telecom":
+        render_telecom_tower_eval_analysis()
         return
 
     render_pilotos_ana_embedded_view()
