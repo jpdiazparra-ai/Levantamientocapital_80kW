@@ -259,30 +259,36 @@ SENSIBILIDAD_CLIENTES_CSV_URL_DEFAULT = (
     "2PACX-1vRBfp2xkolGQ-6lbjUN60ST71pSD6fjR7rjQol3NqOJGpHRYYoEZmrPFVw20aP3VlfeitYqDr0L25c2/"
     "pub?gid=1789037315&single=true&output=csv"
 )
+EVALUACION_TELECOM_PUB_BASE_URL = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
+    "pub"
+)
+EVALUACION_TELECOM_PUBHTML_URL = f"{EVALUACION_TELECOM_PUB_BASE_URL}html"
 EVALUACION_TELECOM_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
-    "pub?gid=2071685330&single=true&output=csv"
+    "pub?gid=1488344347&single=true&output=csv"
 )
 EVALUACION_TELECOM_SITE_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
-    "pub?gid=42604384&single=true&output=csv"
+    "pub?gid=2085467779&single=true&output=csv"
 )
 EVALUACION_TELECOM_BILLING_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
-    "pub?gid=903883227&single=true&output=csv"
+    "pub?gid=602888510&single=true&output=csv"
 )
 EVALUACION_TELECOM_WIND_MODEL_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
-    "pub?gid=444879365&single=true&output=csv"
+    "pub?gid=1565352378&single=true&output=csv"
 )
 EVALUACION_TELECOM_WIND_RESOURCE_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
-    "pub?gid=740982553&single=true&output=csv"
+    "pub?gid=1760504560&single=true&output=csv"
 )
 INGENIERIA_PILOTO_10KW_CACHE_VERSION = 3
 INGENIERIA_PILOTO_10KW_ALLOWED_MONTHS = {"dic", "abr", "may"}
@@ -421,6 +427,25 @@ def read_remote_csv(url: str, *, refresh_nonce: int = 0, **kwargs) -> pd.DataFra
 
 def read_remote_excel(url: str, *, refresh_nonce: int = 0, **kwargs) -> pd.DataFrame:
     return pd.read_excel(BytesIO(fetch_remote_file_bytes(url, refresh_nonce=refresh_nonce)), **kwargs)
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_google_pubhtml_sheet_gids(pubhtml_url: str, refresh_nonce: int = 0) -> dict[str, str]:
+    content = fetch_remote_file_bytes(pubhtml_url, refresh_nonce=refresh_nonce)
+    text = content.decode("utf-8", errors="replace")
+    matches = re.findall(r'items\.push\(\{name: "([^"]+)"[^}]*gid: "(\d+)"', text)
+    return {name: gid for name, gid in matches}
+
+
+def telecom_published_csv_url(sheet_name: str, fallback_url: str, refresh_nonce: int = 0) -> str:
+    try:
+        gid_map = load_google_pubhtml_sheet_gids(EVALUACION_TELECOM_PUBHTML_URL, refresh_nonce=refresh_nonce)
+        gid = gid_map.get(sheet_name)
+        if gid:
+            return f"{EVALUACION_TELECOM_PUB_BASE_URL}?gid={gid}&single=true&output=csv"
+    except Exception:
+        pass
+    return fallback_url
 
 
 @st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
@@ -11190,8 +11215,13 @@ def load_telecom_tower_eval_model(url: str, refresh_nonce: int = 0) -> dict:
 
 
 def render_telecom_tower_eval_analysis():
+    dashboard_url = telecom_published_csv_url("01_Dashboard", EVALUACION_TELECOM_CSV_URL_DEFAULT, data_refresh_nonce)
+    site_url = telecom_published_csv_url("02_Datos_Sitio", EVALUACION_TELECOM_SITE_CSV_URL_DEFAULT, data_refresh_nonce)
+    billing_url = telecom_published_csv_url("03_Boleta_Carga", EVALUACION_TELECOM_BILLING_CSV_URL_DEFAULT, data_refresh_nonce)
+    wind_url = telecom_published_csv_url("04_Modelo_Eolico", EVALUACION_TELECOM_WIND_MODEL_CSV_URL_DEFAULT, data_refresh_nonce)
+    resource_url = telecom_published_csv_url("05_Recurso_Eolico", EVALUACION_TELECOM_WIND_RESOURCE_CSV_URL_DEFAULT, data_refresh_nonce)
     try:
-        model = load_telecom_tower_eval_model(EVALUACION_TELECOM_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+        model = load_telecom_tower_eval_model(dashboard_url, refresh_nonce=data_refresh_nonce)
     except Exception as exc:
         st.error(f"No se pudo cargar el modelo ejecutivo telecom: {exc}")
         return
@@ -11202,19 +11232,19 @@ def render_telecom_tower_eval_analysis():
         st.info("El CSV de evaluación telecom no contiene alternativas comparables.")
         return
     site_model = load_telecom_site_inputs_model(
-        EVALUACION_TELECOM_SITE_CSV_URL_DEFAULT,
+        site_url,
         refresh_nonce=data_refresh_nonce,
     )
     billing_model = load_telecom_billing_load_model(
-        EVALUACION_TELECOM_BILLING_CSV_URL_DEFAULT,
+        billing_url,
         refresh_nonce=data_refresh_nonce,
     )
     wind_model = load_telecom_wind_model(
-        EVALUACION_TELECOM_WIND_MODEL_CSV_URL_DEFAULT,
+        wind_url,
         refresh_nonce=data_refresh_nonce,
     )
     resource_model = load_telecom_wind_resource_model(
-        EVALUACION_TELECOM_WIND_RESOURCE_CSV_URL_DEFAULT,
+        resource_url,
         refresh_nonce=data_refresh_nonce,
     )
     site_data = site_model["data"].copy()
