@@ -15,6 +15,7 @@ import unicodedata
 import math
 import html
 import textwrap
+import time
 import requests
 import plotly.graph_objects as go
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -321,7 +322,8 @@ GANTT_COLUMN_ALIASES = {
 }
 REMOTE_FETCH_TTL_SECONDS = 3600
 REMOTE_CONNECT_TIMEOUT_SECONDS = 5
-REMOTE_READ_TIMEOUT_SECONDS = 20
+REMOTE_READ_TIMEOUT_SECONDS = 45
+REMOTE_FETCH_RETRIES = 2
 CONTROL_CUT_HISTORY_PATH = Path(__file__).parent / "data" / "historial_cortes.csv"
 CONTROL_CUT_HISTORY_COLUMNS = [
     "ID Corte",
@@ -393,13 +395,24 @@ CONTROL_CUT_REQUIRED_FIELDS = [
 # =========================
 @st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def fetch_remote_file_bytes(url: str, refresh_nonce: int = 0) -> bytes:
-    response = requests.get(
-        url,
-        timeout=(REMOTE_CONNECT_TIMEOUT_SECONDS, REMOTE_READ_TIMEOUT_SECONDS),
-        headers={"User-Agent": "streamlit-render-capex-dashboard/1.0"},
-    )
-    response.raise_for_status()
-    return response.content
+    last_error: Exception | None = None
+    for attempt in range(REMOTE_FETCH_RETRIES + 1):
+        try:
+            response = requests.get(
+                url,
+                timeout=(REMOTE_CONNECT_TIMEOUT_SECONDS, REMOTE_READ_TIMEOUT_SECONDS),
+                headers={"User-Agent": "streamlit-render-capex-dashboard/1.0"},
+            )
+            response.raise_for_status()
+            return response.content
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            last_error = exc
+            if attempt >= REMOTE_FETCH_RETRIES:
+                break
+            time.sleep(0.8 * (attempt + 1))
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("No se pudo descargar el archivo remoto.")
 
 
 def read_remote_csv(url: str, *, refresh_nonce: int = 0, **kwargs) -> pd.DataFrame:
