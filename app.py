@@ -290,6 +290,11 @@ EVALUACION_TELECOM_WIND_RESOURCE_CSV_URL_DEFAULT = (
     "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
     "pub?gid=1760504560&single=true&output=csv"
 )
+EVALUACION_TELECOM_SENSITIVITY_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
+    "pub?gid=1448973768&single=true&output=csv"
+)
 INGENIERIA_PILOTO_10KW_CACHE_VERSION = 3
 INGENIERIA_PILOTO_10KW_ALLOWED_MONTHS = {"dic", "abr", "may"}
 BULLET_CONTEXTO_10KW_CSV_URL_DEFAULT = (
@@ -10984,11 +10989,11 @@ def load_telecom_wind_model(url: str, refresh_nonce: int = 0) -> dict:
 
     def fallback_model(error: Exception | None = None) -> dict:
         rows = [
-            ["VAWT 1 kW", 1, 7500000, 20, 9000000, 35, 227.6, 3237.5, 15, 15, 3413.6, 38850.5, 100, 135000000, 2700000, 7051371, 31080425, 16662993, 4351371, 28380425, 13962993, 31.0, 4.8, 9.7, 243, 4662.1, 12.5, -16125170, 60.5, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", "", 2113, 190145, 14153138, 9.5, 3802903, "Excedente valorizable"],
-            ["VAWT 3 kW", 3, 14500000, 15, 16675000, 35, 682.7, 3237.5, 5, 15, 3413.6, 38850.5, 100, 83375000, 1667500, 7051371, 31080425, 16662993, 5383871, 29412925, 14995493, 15.5, 2.8, 5.6, 150, 4662.1, 12.5, 44290084, 67.6, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", "", 2113, 190145, 15185638, 5.5, 3802903, "Excedente valorizable"],
-            ["VAWT 5 kW", 5, 24000000, 12, 26880000, 35, 1137.9, 3237.5, 3, 15, 3413.6, 38850.5, 100, 80640000, 1612800, 7051371, 31080425, 16662993, 5438571, 29467625, 15050193, 14.8, 2.7, 5.4, 145, 4662.1, 12.5, 47490776, 68.3, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", "", 2113, 190145, 15240338, 5.3, 3802903, "Excedente valorizable"],
-            ["VAWT 10 kW", 10, 58000000, 10, 63800000, 35, 2275.7, 3237.5, 2, 20, 4551.5, 38850.5, 100, 127600000, 2552000, 7051371, 31080425, 16662993, 4499371, 28528425, 14110993, 28.4, 4.5, 9.0, 230, 4662.1, 12.5, -7465163, 61.2, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", "", 15767, 1419043, 15530036, 8.2, 28380856, "Excedente valorizable"],
-            ["VAWT 80 kW", 80, 104000000, 8, 112320000, 35, 18205.9, 3237.5, 1, 80, 18205.9, 38850.5, 100, 112320000, 2246400, 7051371, 31080425, 16662993, 4804971, 28834025, 14416593, 23.4, 3.9, 7.8, 202, 4662.1, 12.5, 10416582, 62.8, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", "", 179620, 16165815, 30582408, 3.7, 323316293, "Excedente valorizable"],
+            ["VAWT 1 kW", 1, 7500000, 20, 9000000, 35, 227.6, 3237.5, 15, 15, 3413.6, 38850.5, 100, 135000000, 2700000, 7051371, 31080425, 16662993, 4351371, 28380425, 13962993, 31.0, 4.8, 9.7, 243, 4662.1, 12.5, -16125170, 60.5, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", 2113, 190145, 14153138, 9.5, 3802903, "Excedente valorizable"],
+            ["VAWT 3 kW", 3, 14500000, 15, 16675000, 35, 682.7, 3237.5, 5, 15, 3413.6, 38850.5, 100, 83375000, 1667500, 7051371, 31080425, 16662993, 5383871, 29412925, 14995493, 15.5, 2.8, 5.6, 150, 4662.1, 12.5, 44290084, 67.6, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", 2113, 190145, 15185638, 5.5, 3802903, "Excedente valorizable"],
+            ["VAWT 5 kW", 5, 24000000, 12, 26880000, 35, 1137.9, 3237.5, 3, 15, 3413.6, 38850.5, 100, 80640000, 1612800, 7051371, 31080425, 16662993, 5438571, 29467625, 15050193, 14.8, 2.7, 5.4, 145, 4662.1, 12.5, 47490776, 68.3, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", 2113, 190145, 15240338, 5.3, 3802903, "Excedente valorizable"],
+            ["VAWT 10 kW", 10, 58000000, 10, 63800000, 35, 2275.7, 3237.5, 2, 20, 4551.5, 38850.5, 100, 127600000, 2552000, 7051371, 31080425, 16662993, 4499371, 28528425, 14110993, 28.4, 4.5, 9.0, 230, 4662.1, 12.5, -7465163, 61.2, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", 15767, 1419043, 15530036, 8.2, 28380856, "Excedente valorizable"],
+            ["VAWT 80 kW", 80, 104000000, 8, 112320000, 35, 18205.9, 3237.5, 1, 80, 18205.9, 38850.5, 100, 112320000, 2246400, 7051371, 31080425, 16662993, 4804971, 28834025, 14416593, 23.4, 3.9, 7.8, 202, 4662.1, 12.5, 10416582, 62.8, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", 179620, 16165815, 30582408, 3.7, 323316293, "Excedente valorizable"],
         ]
         columns = [
             "Alternativa", "Potencia unitaria kW", "CAPEX unitario $", "BoS/instalación %", "CAPEX total unitario $", "Factor planta",
@@ -10997,7 +11002,7 @@ def load_telecom_wind_model(url: str, refresh_nonce: int = 0) -> dict:
             "Ahorro anual red $", "Ahorro anual electrógeno $", "Ahorro anual híbrido $", "Beneficio neto red $",
             "Beneficio neto electrógeno $", "Beneficio neto híbrido $", "Payback red años", "Payback electrógeno años",
             "Payback híbrido años", "LCOE $/kWh", "Diésel evitado L/año", "CO₂ evitado t/año", "VAN híbrido $",
-            "Índice decisión", "Estado payback híbrido", "Recomendación", "Dato crítico a validar", "Comentario cliente",
+            "Índice decisión", "Estado payback híbrido", "Recomendación", "Dato crítico a validar",
             "Remanente anual kWh", "Ingreso venta excedente $", "Beneficio total híbrido $", "Payback híbrido c/remanente",
             "Remanente acumulado 20 años $", "Comentario remanente",
         ]
@@ -11015,10 +11020,11 @@ def load_telecom_wind_model(url: str, refresh_nonce: int = 0) -> dict:
     except Exception as exc:
         return fallback_model(exc)
 
-    if raw.shape[0] < 5 or raw.shape[1] < 39:
+    if raw.shape[0] < 5 or raw.shape[1] < 38:
         return fallback_model()
 
-    headers = [str(value).strip() for value in raw.iloc[3, :39].tolist()]
+    wind_model_cols = min(raw.shape[1], 38)
+    headers = [str(value).strip() for value in raw.iloc[3, :wind_model_cols].tolist()]
     rows = []
     for row_idx in range(4, raw.shape[0]):
         first = str(raw.iat[row_idx, 0]).strip()
@@ -11125,6 +11131,160 @@ def load_telecom_wind_resource_model(url: str, refresh_nonce: int = 0) -> dict:
 
 
 @st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_telecom_sensitivity_model(url: str, refresh_nonce: int = 0) -> dict:
+    turbines = ["1 kW", "3 kW", "5 kW", "10 kW", "80 kW"]
+
+    def fallback_model(error: Exception | None = None) -> dict:
+        coverage_matrix = pd.DataFrame(
+            [
+                {"Cobertura %": 25.0, "Turbina": "1 kW", "Payback años": 10.1},
+                {"Cobertura %": 25.0, "Turbina": "3 kW", "Payback años": 8.1},
+                {"Cobertura %": 25.0, "Turbina": "5 kW", "Payback años": 6.7},
+                {"Cobertura %": 25.0, "Turbina": "10 kW", "Payback años": 14.3},
+                {"Cobertura %": 25.0, "Turbina": "80 kW", "Payback años": 5.4},
+                {"Cobertura %": 50.0, "Turbina": "1 kW", "Payback años": 10.1},
+                {"Cobertura %": 50.0, "Turbina": "3 kW", "Payback años": 6.4},
+                {"Cobertura %": 50.0, "Turbina": "5 kW", "Payback años": 6.7},
+                {"Cobertura %": 50.0, "Turbina": "10 kW", "Payback años": 8.2},
+                {"Cobertura %": 50.0, "Turbina": "80 kW", "Payback años": 4.7},
+            ]
+        )
+        wind_matrix = pd.DataFrame(
+            [
+                {"Velocidad m/s": 5.0, "FP ajustado %": 20.3, "Turbina": "1 kW", "Payback años": 19.2},
+                {"Velocidad m/s": 5.0, "FP ajustado %": 20.3, "Turbina": "80 kW", "Payback años": 7.1},
+                {"Velocidad m/s": 6.0, "FP ajustado %": 35.0, "Turbina": "3 kW", "Payback años": 6.4},
+                {"Velocidad m/s": 7.0, "FP ajustado %": 55.6, "Turbina": "5 kW", "Payback años": 3.4},
+                {"Velocidad m/s": 8.0, "FP ajustado %": 60.0, "Turbina": "80 kW", "Payback años": 3.0},
+            ]
+        )
+        detail = pd.DataFrame(columns=["Cobertura %", "Tecnología", "CAPEX total CLP", "Beneficio neto anual CLP", "Ingreso venta anual CLP", "Payback c/remanente años"])
+        return {
+            "title": "Sensibilidad de cobertura y costo energético",
+            "coverage_matrix": coverage_matrix,
+            "wind_matrix": wind_matrix,
+            "detail": detail,
+            "velocity_detail": pd.DataFrame(),
+            "notes": pd.DataFrame(),
+            "source_warning": "" if error is None else str(error),
+            "source_mode": "fallback",
+        }
+
+    def cell(raw: pd.DataFrame, row: int, col: int) -> str:
+        try:
+            return str(raw.iat[row, col]).strip()
+        except Exception:
+            return ""
+
+    def money_value(value: str) -> float:
+        parsed = parse_money_clp_robusto(str(value))
+        if parsed is not None:
+            return float(parsed)
+        return parse_float_local(str(value), np.nan)
+
+    def parse_detail(raw: pd.DataFrame, header_row: int, first_row: int, first_col: int = 0) -> pd.DataFrame:
+        headers = [cell(raw, header_row, col) for col in range(first_col, min(raw.shape[1], first_col + 16))]
+        rows = []
+        for row_idx in range(first_row, raw.shape[0]):
+            first = cell(raw, row_idx, first_col)
+            if not first:
+                break
+            item = {headers[col_idx]: cell(raw, row_idx, first_col + col_idx) for col_idx in range(len(headers)) if headers[col_idx]}
+            rows.append(item)
+        data = pd.DataFrame(rows)
+        if data.empty:
+            return data
+        rename_map = {
+            "Cobertura": "Cobertura",
+            "Tecnología": "Tecnología",
+            "TecnologÃ­a": "Tecnología",
+            "Nº turbinas": "Nº turbinas",
+            "NÂº turbinas": "Nº turbinas",
+            "Payback c/remanente años": "Payback c/remanente años",
+            "Payback c/remanente aÃ±os": "Payback c/remanente años",
+        }
+        data = data.rename(columns={col: rename_map.get(col, col) for col in data.columns})
+        if "Cobertura" in data.columns:
+            data["Cobertura %"] = data["Cobertura"].apply(lambda value: parse_percent_local(str(value), parse_float_local(str(value), np.nan) / 100.0) * 100.0)
+        if "Velocidad m/s" in data.columns:
+            data["Velocidad m/s num"] = data["Velocidad m/s"].apply(lambda value: parse_float_local(str(value), np.nan))
+        if "FP ajustado" in data.columns:
+            data["FP ajustado %"] = data["FP ajustado"].apply(lambda value: parse_percent_local(str(value), np.nan) * 100.0)
+        for col in ["Potencia kW", "Gen mensual/turbina kWh", "Consumo objetivo kWh/mes", "Nº turbinas", "Gen mensual total kWh", "Autoconsumo mensual kWh", "Remanente mensual kWh", "Payback c/remanente años"]:
+            if col in data.columns:
+                data[f"{col} num"] = data[col].apply(lambda value: parse_float_local(str(value), np.nan))
+        for col in ["CAPEX unitario total $", "Ahorro anual híbrido $", "Ahorro anual hÃ­brido $", "Ingreso venta anual $", "O&M anual $", "Beneficio neto anual $", "CAPEX total $"]:
+            if col in data.columns:
+                clean_name = col.replace("hÃ­brido", "híbrido").replace("$", "CLP").strip()
+                data[clean_name] = data[col].apply(money_value)
+        return data
+
+    try:
+        raw = read_remote_csv(url, refresh_nonce=refresh_nonce, header=None, dtype=str).fillna("")
+    except Exception as exc:
+        return fallback_model(exc)
+
+    if raw.shape[0] < 17 or raw.shape[1] < 7:
+        return fallback_model()
+
+    title = cell(raw, 0, 0) or "Sensibilidad de cobertura y costo energético"
+    coverage_rows = []
+    for row_idx in range(4, raw.shape[0]):
+        coverage_text = cell(raw, row_idx, 0)
+        if not coverage_text:
+            break
+        coverage_pct = parse_percent_local(coverage_text, np.nan) * 100.0
+        for col_idx, turbine in enumerate(turbines, start=1):
+            coverage_rows.append(
+                {
+                    "Cobertura %": coverage_pct,
+                    "Turbina": turbine,
+                    "Payback años": parse_float_local(cell(raw, row_idx, col_idx), np.nan),
+                    "Costo híbrido CLP/kWh": money_value(cell(raw, row_idx, 7)),
+                    "Comentario": cell(raw, row_idx, 13),
+                }
+            )
+    coverage_matrix = pd.DataFrame(coverage_rows)
+
+    wind_rows = []
+    for row_idx in range(12, raw.shape[0]):
+        speed_text = cell(raw, row_idx, 0)
+        if not speed_text:
+            break
+        speed = parse_float_local(speed_text, np.nan)
+        fp_pct = parse_percent_local(cell(raw, row_idx, 1), np.nan) * 100.0
+        for col_idx, turbine in enumerate(turbines, start=2):
+            wind_rows.append(
+                {
+                    "Velocidad m/s": speed,
+                    "FP ajustado %": fp_pct,
+                    "Turbina": turbine,
+                    "Payback años": parse_float_local(cell(raw, row_idx, col_idx), np.nan),
+                }
+            )
+    wind_matrix = pd.DataFrame(wind_rows)
+    detail = parse_detail(raw, 21, 22)
+    velocity_detail = parse_detail(raw, 51, 52)
+    notes = []
+    for row_idx in range(43, min(raw.shape[0], 47)):
+        label = cell(raw, row_idx, 0)
+        value = cell(raw, row_idx, 1)
+        if label or value:
+            notes.append({"Concepto": label, "Detalle": value})
+
+    return {
+        "title": title,
+        "coverage_matrix": coverage_matrix,
+        "wind_matrix": wind_matrix,
+        "detail": detail,
+        "velocity_detail": velocity_detail,
+        "notes": pd.DataFrame(notes),
+        "source_warning": "",
+        "source_mode": "remote",
+    }
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_telecom_tower_eval_model(url: str, refresh_nonce: int = 0) -> dict:
     def fallback_model(error: Exception | None = None) -> dict:
         summary = {
@@ -11220,6 +11380,7 @@ def render_telecom_tower_eval_analysis():
     billing_url = telecom_published_csv_url("03_Boleta_Carga", EVALUACION_TELECOM_BILLING_CSV_URL_DEFAULT, data_refresh_nonce)
     wind_url = telecom_published_csv_url("04_Modelo_Eolico", EVALUACION_TELECOM_WIND_MODEL_CSV_URL_DEFAULT, data_refresh_nonce)
     resource_url = telecom_published_csv_url("05_Recurso_Eolico", EVALUACION_TELECOM_WIND_RESOURCE_CSV_URL_DEFAULT, data_refresh_nonce)
+    sensitivity_url = telecom_published_csv_url("06_Sensibilidad", EVALUACION_TELECOM_SENSITIVITY_CSV_URL_DEFAULT, data_refresh_nonce)
     try:
         model = load_telecom_tower_eval_model(dashboard_url, refresh_nonce=data_refresh_nonce)
     except Exception as exc:
@@ -11247,6 +11408,10 @@ def render_telecom_tower_eval_analysis():
         resource_url,
         refresh_nonce=data_refresh_nonce,
     )
+    sensitivity_model = load_telecom_sensitivity_model(
+        sensitivity_url,
+        refresh_nonce=data_refresh_nonce,
+    )
     site_data = site_model["data"].copy()
     site_sections = site_model["sections"]
     billing_df = billing_model["bills"].copy()
@@ -11254,6 +11419,10 @@ def render_telecom_tower_eval_analysis():
     hourly_df = billing_model["hourly"].copy()
     wind_df = wind_model["data"].copy()
     resource_df = resource_model["data"].copy()
+    sensitivity_coverage_df = sensitivity_model["coverage_matrix"].copy()
+    sensitivity_wind_df = sensitivity_model["wind_matrix"].copy()
+    sensitivity_detail_df = sensitivity_model["detail"].copy()
+    sensitivity_velocity_detail_df = sensitivity_model["velocity_detail"].copy()
 
     def site_value(variable: str, default: str = "") -> str:
         matches = site_data[site_data["Variable"].astype(str).str.casefold() == variable.casefold()]
@@ -11349,13 +11518,23 @@ def render_telecom_tower_eval_analysis():
         .telecom-site-block-h p{font-size:11.5px;color:#64748b;font-weight:750;line-height:1.32;margin:4px 0 0;}
         .telecom-site-mini{display:inline-flex;align-items:center;border-radius:999px;background:#DCECEF;color:#20384F;padding:5px 8px;font-size:10px;font-weight:950;text-transform:uppercase;white-space:nowrap;}
         .telecom-site-table{width:100%;border-collapse:separate;border-spacing:0;font-size:11.5px;color:#102039;}
-        .telecom-site-table th{background:#ffffff;color:#64748b;text-transform:uppercase;letter-spacing:.07em;font-size:9.5px;font-weight:950;text-align:left;padding:10px 12px;border-bottom:1px solid #e2e8f0;}
-        .telecom-site-table td{padding:10px 12px;border-bottom:1px solid #edf2f7;vertical-align:top;font-weight:760;}
+        .telecom-site-table th{background:#F7FBFC;color:#284763;text-transform:uppercase;letter-spacing:.07em;font-size:9.5px;font-weight:950;text-align:left;padding:11px 12px;border-bottom:1px solid #DCECEF;}
+        .telecom-site-table td{padding:11px 12px;border-bottom:1px solid #edf2f7;vertical-align:top;font-weight:760;}
+        .telecom-site-table tbody tr:nth-child(even) td{background:#FBFEFF;}
+        .telecom-site-table tbody tr:hover td{background:#FFF7F1;}
         .telecom-site-table tr:last-child td{border-bottom:none;}
         .telecom-site-value{font-weight:950;color:#0b1730;white-space:nowrap;}
         .telecom-site-auto{display:inline-flex;border-radius:999px;background:#DCECEF;color:#20384F;padding:4px 7px;font-size:9.5px;font-weight:950;}
         .telecom-site-edit{display:inline-flex;border-radius:999px;background:#D8EBEF;color:#284763;padding:4px 7px;font-size:9.5px;font-weight:950;}
         .telecom-site-pending{display:inline-flex;border-radius:999px;background:#FFE8D8;color:#A94700;padding:4px 7px;font-size:9.5px;font-weight:950;}
+        .telecom-site-priority-high{display:inline-flex;border-radius:999px;background:#284763;color:#fff;padding:4px 7px;font-size:9.5px;font-weight:950;}
+        .telecom-site-priority-medium{display:inline-flex;border-radius:999px;background:#DCECEF;color:#20384F;padding:4px 7px;font-size:9.5px;font-weight:950;}
+        .telecom-site-priority-low{display:inline-flex;border-radius:999px;background:#F7FBFC;color:#64748b;padding:4px 7px;font-size:9.5px;font-weight:950;border:1px solid #DCECEF;}
+        .telecom-site-critical{border:1px solid #F4C89E;border-radius:14px;background:#fff;box-shadow:0 12px 28px rgba(40,71,99,.065);overflow:hidden;margin:10px 0 16px;}
+        .telecom-site-critical-h{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;background:#FFF7F1;border-bottom:1px solid #F4C89E;padding:14px 16px;}
+        .telecom-site-critical-h h4{font-size:15px;color:#0f172a;font-weight:950;margin:0 0 4px;}
+        .telecom-site-critical-h p{font-size:11.5px;color:#64748b;font-weight:760;line-height:1.34;margin:0;}
+        .telecom-site-critical-count{display:inline-flex;align-items:center;border-radius:999px;background:#EA6400;color:#fff;padding:6px 9px;font-size:10px;font-weight:950;white-space:nowrap;}
         .telecom-location-hero{display:grid;grid-template-columns:1.2fr .8fr;gap:14px;padding:15px;background:linear-gradient(135deg,#F7FBFC 0%,#ffffff 62%,#FFF7F1 100%);border-bottom:1px solid #DCECEF;}
         .telecom-location-main{border:1px solid #DCECEF;border-radius:12px;background:#fff;padding:14px 15px;box-shadow:0 10px 22px rgba(40,71,99,.055);}
         .telecom-location-k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#A9673B;font-weight:950;margin:0 0 6px;}
@@ -11421,7 +11600,7 @@ def render_telecom_tower_eval_analysis():
             "03_Boleta_Carga",
             "04_Modelo_Eolico",
             "05_Recurso_Eolico",
-            "06 Ahorro",
+            "06_Sensibilidad",
             "07 Economía",
             "08 Cierre",
         ]
@@ -11433,6 +11612,86 @@ def render_telecom_tower_eval_analysis():
         alta_count = int((site_data["Prioridad"].astype(str).str.casefold() == "alta").sum())
         auto_count = int((site_data["Estado"].astype(str).str.casefold() == "automático").sum())
         pending_count = int((site_data["Estado"].astype(str).str.casefold() == "por validar").sum())
+
+        def render_site_identity_block(section_df: pd.DataFrame) -> None:
+            identity = {
+                str(row.get("Variable", "")).strip(): row
+                for _, row in section_df.iterrows()
+                if str(row.get("Variable", "")).strip()
+            }
+
+            def identity_value(variable: str, fallback: str = "Pendiente") -> str:
+                row = identity.get(variable)
+                if row is None:
+                    return fallback
+                value = str(row.get("Valor", "")).strip()
+                return value or fallback
+
+            def identity_unit(variable: str) -> str:
+                row = identity.get(variable)
+                if row is None:
+                    return ""
+                return str(row.get("Unidad", "")).strip()
+
+            site_id = identity_value("ID Sitio", "Sitio por definir")
+            site_name = identity_value("Nombre sitio", "Torre telecom")
+            region = identity_value("Región", "Por definir")
+            comuna = identity_value("Comuna", "Por definir")
+            latitud = identity_value("Latitud")
+            longitud = identity_value("Longitud")
+            altitud = identity_value("Altitud")
+            altitud_unit = identity_unit("Altitud")
+            cliente = str(identity.get("Nombre sitio", pd.Series(dtype=object)).get("Fuente requerida", "Entel")).strip() or "Entel"
+            pending_vars = [
+                variable
+                for variable in ["Región", "Comuna", "Latitud", "Longitud", "Altitud"]
+                if identity_value(variable).lower() in {"pendiente", "por definir", "n/a", "na", "-"}
+            ]
+            pending_label = ", ".join(pending_vars) if pending_vars else "Sin brechas críticas declaradas"
+            coord_value = f"{latitud}, {longitud}" if latitud != "Pendiente" or longitud != "Pendiente" else "Pendiente"
+            altitude_value = f"{altitud} {altitud_unit}".strip()
+            location_cards = [
+                ("Región", region, "Impacta logística, permisos y acceso a obra."),
+                ("Comuna", comuna, "Base para permisos, visitas y validación territorial."),
+                ("Coordenadas", coord_value, "Necesarias para recurso eólico y layout de instalación."),
+                ("Altitud", altitude_value, "Variable de densidad de aire y rendimiento esperado."),
+            ]
+            card_html = "".join(
+                '<div class="telecom-location-card">'
+                f'<p>{html.escape(label)}</p>'
+                f'<p>{html.escape(value)}</p>'
+                f'<p>{html.escape(note)}</p>'
+                '</div>'
+                for label, value, note in location_cards
+            )
+            st.markdown(
+                '<div class="telecom-site-block">'
+                '<div class="telecom-site-block-h">'
+                '<div>'
+                '<h4>Identificación y ubicación</h4>'
+                '<p>Ficha ejecutiva para cliente: resume trazabilidad del sitio y brechas que deben cerrarse antes de oferta final.</p>'
+                '</div>'
+                f'<span class="telecom-site-mini">{len(section_df)} variables</span>'
+                '</div>'
+                '<div class="telecom-location-hero">'
+                '<div class="telecom-location-main">'
+                '<p class="telecom-location-k">Sitio telecom</p>'
+                f'<p class="telecom-location-v">{html.escape(site_name)}</p>'
+                f'<p class="telecom-location-s"><b>{html.escape(site_id)}</b> · Cliente/fuente: {html.escape(cliente)} · Estado de ingeniería preliminar.</p>'
+                '</div>'
+                '<div class="telecom-location-side">'
+                '<div class="telecom-location-chip"><span>Ubicación comercial</span>'
+                f'<b>{html.escape(comuna)} · {html.escape(region)}</b></div>'
+                '<div class="telecom-location-chip"><span>Validación requerida</span>'
+                f'<b>{html.escape(pending_label)}</b></div>'
+                '</div>'
+                '</div>'
+                f'<div class="telecom-location-grid">{card_html}</div>'
+                '<div class="telecom-location-alert"><b>Lectura para cliente:</b> esta ficha permite presentar el sitio sin exponer una tabla operativa. Las coordenadas, comuna/región y altitud deben validarse para confirmar recurso eólico, permisos, logística y precisión del CAPEX.</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
         st.markdown(
             f"""
             <div class="telecom-site-shell">
@@ -11460,6 +11719,9 @@ def render_telecom_tower_eval_analysis():
             """,
             unsafe_allow_html=True,
         )
+        identity_section = site_sections.get("Identificación y ubicación")
+        if identity_section is not None and not identity_section.empty:
+            render_site_identity_block(identity_section)
 
         default_consumo = site_numeric("Consumo mensual modelo", float(summary["consumo_mensual"] or 3238.0))
         default_cobertura = int(round(site_percent_value("Cobertura objetivo", float(summary["cobertura_objetivo"] or 1.0) * 100)))
@@ -11469,37 +11731,44 @@ def render_telecom_tower_eval_analysis():
         default_mix_diesel = int(round(site_percent_value("Mix Electrógeno", 40.0)))
         default_mix_bess = int(round(site_percent_value("Mix Batería/Solar", 0.0)))
 
-        with st.container(border=True):
-            i1, i2, i3, i4 = st.columns(4)
-            with i1:
-                consumo_mensual = st.number_input("Consumo mensual (kWh/mes)", min_value=100.0, max_value=150000.0, value=float(default_consumo), step=100.0, key="telecom_eval_consumo")
-            with i2:
-                cobertura_pct = st.slider("Cobertura objetivo", min_value=10, max_value=150, value=max(10, min(150, default_cobertura)), step=5, key="telecom_eval_cobertura")
-            with i3:
-                costo_ponderado = st.number_input("Costo ponderado actual (CLP/kWh)", min_value=0.0, max_value=5000.0, value=float(default_costo_ponderado), step=10.0, key="telecom_eval_costo_ponderado")
-            with i4:
-                factor_co2_diesel = st.number_input("Factor CO2 diésel (kg/L)", min_value=1.0, max_value=4.0, value=float(default_factor_co2), step=0.01, key="telecom_eval_factor_co2")
-            m1, m2, m3, m4 = st.columns([1, 1, 1, 1.15])
-            with m1:
-                mix_red_pct = st.slider("Mix red eléctrica", min_value=0, max_value=100, value=max(0, min(100, default_mix_red)), step=5, key="telecom_eval_mix_red")
-            with m2:
-                mix_diesel_pct = st.slider("Mix electrógeno", min_value=0, max_value=100, value=max(0, min(100, default_mix_diesel)), step=5, key="telecom_eval_mix_diesel")
-            with m3:
-                mix_bess_pct = st.slider("Mix batería/solar", min_value=0, max_value=100, value=max(0, min(100, default_mix_bess)), step=5, key="telecom_eval_mix_bess")
-            with m4:
-                criterio = st.selectbox("Criterio de recomendación", ["Balance técnico-económico", "Menor payback", "Menor LCOE", "Menor CAPEX", "Mayor impacto CO2"], key="telecom_eval_criterio")
+        consumo_mensual = float(default_consumo)
+        cobertura_pct = float(default_cobertura)
+        costo_ponderado = float(default_costo_ponderado)
+        factor_co2_diesel = float(default_factor_co2)
+        mix_red_pct = float(default_mix_red)
+        mix_diesel_pct = float(default_mix_diesel)
+        mix_bess_pct = float(default_mix_bess)
+        criterio = "Balance técnico-económico"
 
         mix_total = mix_red_pct + mix_diesel_pct + mix_bess_pct
         energia_objetivo = consumo_mensual * 12 * cobertura_pct / 100
+        costo_red = site_numeric("Tarifa red modelo", 0.0)
+        costo_diesel = site_numeric("Costo electrógeno base", 0.0)
+        costo_solar = site_numeric("Costo solar referencia", 0.0)
+        costo_bateria = site_numeric("Costo batería referencia", 0.0)
+        costo_ponderado_calc = (
+            costo_red * mix_red_pct / 100.0
+            + costo_diesel * mix_diesel_pct / 100.0
+            + ((costo_solar + costo_bateria) / 2.0) * mix_bess_pct / 100.0
+        )
+        data_health = (len(site_data) - pending_count) / max(len(site_data), 1) * 100.0
+        high_pending_df = site_data[
+            (site_data["Prioridad"].astype(str).str.casefold() == "alta")
+            & (site_data["Estado"].astype(str).str.casefold() == "por validar")
+        ].copy()
         st.markdown(
             f"""
             <div class="telecom-grid-4">
-              <div class="telecom-card"><p class="telecom-card-k">Demanda anual activa</p><p class="telecom-card-v">{consumo_mensual * 12:,.0f} kWh</p><p class="telecom-card-s">Consumo mensual multiplicado por 12.</p></div>
-              <div class="telecom-card"><p class="telecom-card-k">Energía objetivo</p><p class="telecom-card-v">{energia_objetivo:,.0f} kWh</p><p class="telecom-card-s">Demanda anual ajustada por cobertura.</p></div>
-              <div class="telecom-card"><p class="telecom-card-k">Mix energético</p><p class="telecom-card-v">{mix_total:.0f}%</p><p class="telecom-card-s">Red {mix_red_pct}% · Electrógeno {mix_diesel_pct}% · BESS {mix_bess_pct}%.</p></div>
-              <div class="telecom-card"><p class="telecom-card-k">Criterio activo</p><p class="telecom-card-v">{html.escape(criterio)}</p><p class="telecom-card-s">Regla usada para destacar la alternativa.</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">Demanda anual base</p><p class="telecom-card-v">{consumo_mensual * 12:,.0f} kWh</p><p class="telecom-card-s">Dato publicado desde 02_Datos_Sitio, sin edición manual en app.</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">Energía objetivo</p><p class="telecom-card-v">{energia_objetivo:,.0f} kWh</p><p class="telecom-card-s">Demanda anual por cobertura objetivo publicada.</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">Calidad de datos</p><p class="telecom-card-v">{data_health:.0f}%</p><p class="telecom-card-s">{pending_count} variables por validar antes de cierre comercial.</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">Costo ponderado</p><p class="telecom-card-v">{format_clp(costo_ponderado)}</p><p class="telecom-card-s">Referencia hoja: cálculo control {format_clp(costo_ponderado_calc)}.</p></div>
             </div>
             """.replace(",", "."),
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="telecom-note"><b>Lectura ejecutiva:</b> la pestaña 02_Datos_Sitio queda como fuente maestra, no como simulador. El caso publicado usa {consumo_mensual:,.0f} kWh/mes, cobertura objetivo {cobertura_pct:.0f}%, mix {mix_red_pct:.0f}% red / {mix_diesel_pct:.0f}% electrógeno / {mix_bess_pct:.0f}% BESS y costo ponderado {format_clp(costo_ponderado)}/kWh. Las variables de prioridad alta por validar deben cerrarse antes de prometer payback, CAPEX final o impacto ambiental.</div>'.replace(",", "."),
             unsafe_allow_html=True,
         )
         if mix_total != 100:
@@ -11508,67 +11777,192 @@ def render_telecom_tower_eval_analysis():
                 unsafe_allow_html=True,
             )
 
-        c1, c2 = st.columns([0.95, 1.05])
-        with c1:
-            status_df = (
-                site_data.assign(Estado=site_data["Estado"].replace("", "Sin estado"))
-                .groupby(["Sección", "Estado"], as_index=False)
-                .size()
+        def tune_site_chart(fig: go.Figure, height: int = 360) -> go.Figure:
+            fig.update_layout(
+                height=height,
+                margin=dict(l=12, r=18, t=34, b=46),
+                font=dict(family="Inter, Arial, sans-serif", color=blue_text, size=11),
+                legend=dict(orientation="h", y=1.12, x=0, title=None, font=dict(size=11)),
+                hoverlabel=dict(bgcolor="#ffffff", bordercolor=blue_1, font=dict(color="#0f172a")),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
             )
+            fig.update_xaxes(showline=False, zeroline=False, gridcolor="rgba(148,163,184,.18)")
+            fig.update_yaxes(showline=False, zeroline=False, gridcolor="rgba(148,163,184,.18)")
+            return fig
+
+        mix_df = pd.DataFrame(
+            [
+                {"Fuente": "Red eléctrica", "Participación": mix_red_pct, "Costo CLP/kWh": costo_red, "Color": blue_5},
+                {"Fuente": "Electrógeno", "Participación": mix_diesel_pct, "Costo CLP/kWh": costo_diesel, "Color": blue_4},
+                {"Fuente": "Batería/Solar", "Participación": mix_bess_pct, "Costo CLP/kWh": (costo_solar + costo_bateria) / 2.0 if costo_solar or costo_bateria else 0.0, "Color": blue_2},
+            ]
+        )
+        mix_df["Aporte ponderado CLP/kWh"] = mix_df["Participación"] * mix_df["Costo CLP/kWh"] / 100.0
+        chart_left, chart_right = st.columns(2)
+        with chart_left:
+            st.markdown('<p class="telecom-panel-title">Mix energético y costo por fuente</p><p class="telecom-panel-sub">Barras: participación del suministro. Línea: costo unitario asociado a cada fuente.</p>', unsafe_allow_html=True)
+            fig_mix = go.Figure()
+            fig_mix.add_trace(
+                go.Bar(
+                    x=mix_df["Fuente"],
+                    y=mix_df["Participación"],
+                    name="Mix energético",
+                    marker_color=mix_df["Color"],
+                    text=[f"{v:.0f}%" for v in mix_df["Participación"]],
+                    textposition="inside",
+                    textfont=dict(color="#ffffff", size=12),
+                    hovertemplate="<b>%{x}</b><br>Participación: %{y:.0f}%<extra></extra>",
+                )
+            )
+            fig_mix.add_trace(
+                go.Scatter(
+                    x=mix_df["Fuente"],
+                    y=mix_df["Costo CLP/kWh"],
+                    name="Costo unitario",
+                    yaxis="y2",
+                    mode="lines+markers+text",
+                    line=dict(color=blue_3, width=3),
+                    marker=dict(size=10, color="#ffffff", line=dict(color=blue_3, width=2)),
+                    text=[format_clp(v) for v in mix_df["Costo CLP/kWh"]],
+                    textposition=["top center", "top center", "bottom center"],
+                    textfont=dict(color=blue_text, size=11),
+                    hovertemplate="<b>%{x}</b><br>Costo: %{text}/kWh<extra></extra>",
+                )
+            )
+            fig_mix.update_layout(
+                yaxis=dict(title="Participación", ticksuffix="%", range=[0, max(100, mix_df["Participación"].max() * 1.22)]),
+                yaxis2=dict(title="CLP/kWh", overlaying="y", side="right", showgrid=False, rangemode="tozero"),
+            )
+            st.plotly_chart(tune_site_chart(fig_mix, 380), use_container_width=True, config={"displaylogo": False})
+        with chart_right:
+            st.markdown('<p class="telecom-panel-title">Construcción del costo ponderado</p><p class="telecom-panel-sub">Aporte real de cada fuente al costo promedio actual del sitio.</p>', unsafe_allow_html=True)
+            fig_cost = go.Figure()
+            fig_cost.add_trace(
+                go.Bar(
+                    x=mix_df["Fuente"],
+                    y=mix_df["Aporte ponderado CLP/kWh"],
+                    name="Aporte ponderado",
+                    marker_color=mix_df["Color"],
+                    text=[format_clp(v) for v in mix_df["Aporte ponderado CLP/kWh"]],
+                    textposition="outside",
+                    cliponaxis=False,
+                    textfont=dict(color=blue_text, size=12),
+                    hovertemplate="<b>%{x}</b><br>Aporte: %{text}/kWh<extra></extra>",
+                )
+            )
+            fig_cost.add_hline(
+                y=costo_ponderado,
+                line=dict(color=blue_4, width=2, dash="dash"),
+                annotation_text=f"Costo hoja {format_clp(costo_ponderado)}",
+                annotation_position="top left",
+                annotation_font=dict(size=11, color=blue_text),
+            )
+            fig_cost.update_layout(yaxis=dict(title="CLP/kWh", rangemode="tozero"))
+            st.plotly_chart(tune_site_chart(fig_cost, 380), use_container_width=True, config={"displaylogo": False})
+
+        status_df = (
+            site_data.assign(Estado=site_data["Estado"].replace("", "Sin estado"))
+            .groupby(["Sección", "Estado"], as_index=False)
+            .size()
+        )
+        priority_df = (
+            site_data.assign(Prioridad=site_data["Prioridad"].replace("", "Sin prioridad"))
+            .groupby(["Sección", "Prioridad"], as_index=False)
+            .size()
+        )
+        control_left, control_right = st.columns(2)
+        with control_left:
+            st.markdown('<p class="telecom-panel-title">Gobernanza de datos por sección</p><p class="telecom-panel-sub">Control ejecutivo de variables automáticas, editables y pendientes por validar.</p>', unsafe_allow_html=True)
             fig_status = px.bar(
                 status_df,
-                x="Sección",
-                y="size",
+                x="size",
+                y="Sección",
                 color="Estado",
+                orientation="h",
                 color_discrete_map={
                     "Automático": blue_5,
-                    "Editable": blue_3,
-                    "Por validar": blue_2,
+                    "Editable": blue_2,
+                    "Por validar": blue_4,
                     "Sin estado": blue_1,
                 },
                 text="size",
             )
-            fig_status.update_traces(textposition="inside", textfont=dict(color="#ffffff", size=11), hovertemplate="<b>%{x}</b><br>%{legendgroup}: %{y} variables<extra></extra>")
-            fig_status.update_layout(
-                height=330,
-                margin=dict(l=10, r=10, t=18, b=70),
-                legend=dict(orientation="h", y=1.18, x=0, title=None),
-                xaxis=dict(title=None, tickangle=-12),
-                yaxis=dict(title="Variables", gridcolor="rgba(148,163,184,.22)"),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
+            fig_status.update_traces(textposition="inside", textfont=dict(color="#ffffff", size=12), hovertemplate="<b>%{y}</b><br>%{legendgroup}: %{x} variables<extra></extra>")
+            fig_status.update_layout(xaxis=dict(title="Variables", dtick=1), yaxis=dict(title=None, autorange="reversed"))
+            st.plotly_chart(tune_site_chart(fig_status, 360), use_container_width=True, config={"displaylogo": False})
+        with control_right:
+            st.markdown('<p class="telecom-panel-title">Mapa de riesgo de validación</p><p class="telecom-panel-sub">Cruce de prioridad y estado para enfocar los cierres técnicos antes de cliente.</p>', unsafe_allow_html=True)
+            risk_matrix = (
+                site_data.assign(
+                    Estado=site_data["Estado"].replace("", "Sin estado"),
+                    Prioridad=site_data["Prioridad"].replace("", "Sin prioridad"),
+                )
+                .pivot_table(index="Prioridad", columns="Estado", values="Variable", aggfunc="count", fill_value=0)
             )
-            st.plotly_chart(fig_status, use_container_width=True, config={"displaylogo": False})
-        with c2:
-            priority_df = (
-                site_data.assign(Prioridad=site_data["Prioridad"].replace("", "Sin prioridad"))
-                .groupby(["Sección", "Prioridad"], as_index=False)
-                .size()
+            priority_order = [label for label in ["Alta", "Media", "Sin prioridad"] if label in risk_matrix.index]
+            status_order = [label for label in ["Por validar", "Editable", "Automático", "Sin estado"] if label in risk_matrix.columns]
+            risk_matrix = risk_matrix.reindex(index=priority_order, columns=status_order, fill_value=0)
+            fig_risk = go.Figure(
+                go.Heatmap(
+                    z=risk_matrix.values,
+                    x=risk_matrix.columns,
+                    y=risk_matrix.index,
+                    colorscale=[[0, "#F7FBFC"], [0.35, blue_2], [0.7, blue_3], [1, blue_4]],
+                    text=risk_matrix.values,
+                    texttemplate="%{text}",
+                    textfont=dict(color="#0f172a", size=14),
+                    hovertemplate="<b>%{y}</b><br>%{x}: %{z} variables<extra></extra>",
+                    showscale=False,
+                    xgap=4,
+                    ygap=4,
+                )
             )
-            fig_priority = px.bar(
-                priority_df,
-                x="size",
-                y="Sección",
-                color="Prioridad",
-                orientation="h",
-                color_discrete_map={"Alta": blue_5, "Media": blue_2, "Sin prioridad": blue_1},
-                text="size",
+            fig_risk.update_layout(xaxis=dict(title=None), yaxis=dict(title=None, autorange="reversed"))
+            st.plotly_chart(tune_site_chart(fig_risk, 360), use_container_width=True, config={"displaylogo": False})
+        if not high_pending_df.empty:
+            pending_view = high_pending_df[["Sección", "Variable", "Valor", "Fuente requerida", "Uso", "Comentario"]].copy()
+            pending_view["Valor"] = pending_view["Valor"].replace("", "Pendiente")
+            pending_rows = []
+            for _, row in pending_view.iterrows():
+                pending_rows.append(
+                    "<tr>"
+                    f'<td><b>{html.escape(str(row["Variable"]))}</b><br><span class="telecom-muted">{html.escape(str(row["Uso"]))}</span></td>'
+                    f'<td>{html.escape(str(row["Sección"]))}</td>'
+                    f'<td class="telecom-site-value">{html.escape(str(row["Valor"]))}</td>'
+                    f'<td>{html.escape(str(row["Fuente requerida"]))}</td>'
+                    f'<td>{html.escape(str(row["Comentario"]))}</td>'
+                    "</tr>"
+                )
+            st.markdown(
+                '<div class="telecom-site-critical">'
+                '<div class="telecom-site-critical-h">'
+                '<div><h4>Brechas críticas de validación</h4>'
+                '<p>Variables de prioridad alta que deben cerrarse antes de presentar una oferta vinculante.</p></div>'
+                f'<span class="telecom-site-critical-count">{len(pending_view)} pendientes</span>'
+                '</div>'
+                '<table class="telecom-site-table">'
+                '<thead><tr><th>Variable / Uso</th><th>Sección</th><th>Valor actual</th><th>Fuente requerida</th><th>Comentario</th></tr></thead>'
+                f'<tbody>{"".join(pending_rows)}</tbody>'
+                '</table>'
+                '</div>',
+                unsafe_allow_html=True,
             )
-            fig_priority.update_traces(textposition="inside", textfont=dict(color="#ffffff", size=11), hovertemplate="<b>%{y}</b><br>%{legendgroup}: %{x} variables<extra></extra>")
-            fig_priority.update_layout(
-                height=330,
-                margin=dict(l=10, r=10, t=18, b=36),
-                legend=dict(orientation="h", y=1.18, x=0, title=None),
-                xaxis=dict(title="Variables", gridcolor="rgba(148,163,184,.22)"),
-                yaxis=dict(title=None),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-            )
-            st.plotly_chart(fig_priority, use_container_width=True, config={"displaylogo": False})
 
         def site_badge(status: str) -> str:
             value = str(status or "Sin estado").strip()
             css_class = "telecom-site-auto" if value == "Automático" else "telecom-site-edit" if value == "Editable" else "telecom-site-pending"
+            return f'<span class="{css_class}">{html.escape(value)}</span>'
+
+        def site_priority_badge(priority: str) -> str:
+            value = str(priority or "Sin prioridad").strip() or "Sin prioridad"
+            value_key = value.casefold()
+            if value_key == "alta":
+                css_class = "telecom-site-priority-high"
+            elif value_key == "media":
+                css_class = "telecom-site-priority-medium"
+            else:
+                css_class = "telecom-site-priority-low"
             return f'<span class="{css_class}">{html.escape(value)}</span>'
 
         section_notes = {
@@ -11578,83 +11972,6 @@ def render_telecom_tower_eval_analysis():
         }
         for section_name, section_df in site_sections.items():
             if str(section_name) == "Identificación y ubicación":
-                identity = {
-                    str(row.get("Variable", "")).strip(): row
-                    for _, row in section_df.iterrows()
-                    if str(row.get("Variable", "")).strip()
-                }
-
-                def identity_value(variable: str, fallback: str = "Pendiente") -> str:
-                    row = identity.get(variable)
-                    if row is None:
-                        return fallback
-                    value = str(row.get("Valor", "")).strip()
-                    return value or fallback
-
-                def identity_unit(variable: str) -> str:
-                    row = identity.get(variable)
-                    if row is None:
-                        return ""
-                    return str(row.get("Unidad", "")).strip()
-
-                site_id = identity_value("ID Sitio", "Sitio por definir")
-                site_name = identity_value("Nombre sitio", "Torre telecom")
-                region = identity_value("Región", "Por definir")
-                comuna = identity_value("Comuna", "Por definir")
-                latitud = identity_value("Latitud")
-                longitud = identity_value("Longitud")
-                altitud = identity_value("Altitud")
-                altitud_unit = identity_unit("Altitud")
-                cliente = str(identity.get("Nombre sitio", pd.Series(dtype=object)).get("Fuente requerida", "Entel")).strip() or "Entel"
-                pending_vars = [
-                    variable
-                    for variable in ["Región", "Comuna", "Latitud", "Longitud", "Altitud"]
-                    if identity_value(variable).lower() in {"pendiente", "por definir", "n/a", "na", "-"}
-                ]
-                pending_label = ", ".join(pending_vars) if pending_vars else "Sin brechas críticas declaradas"
-                coord_value = f"{latitud}, {longitud}" if latitud != "Pendiente" or longitud != "Pendiente" else "Pendiente"
-                altitude_value = f"{altitud} {altitud_unit}".strip()
-                location_cards = [
-                    ("Región", region, "Impacta logística, permisos y acceso a obra."),
-                    ("Comuna", comuna, "Base para permisos, visitas y validación territorial."),
-                    ("Coordenadas", coord_value, "Necesarias para recurso eólico y layout de instalación."),
-                    ("Altitud", altitude_value, "Variable de densidad de aire y rendimiento esperado."),
-                ]
-                card_html = "".join(
-                    '<div class="telecom-location-card">'
-                    f'<p>{html.escape(label)}</p>'
-                    f'<p>{html.escape(value)}</p>'
-                    f'<p>{html.escape(note)}</p>'
-                    '</div>'
-                    for label, value, note in location_cards
-                )
-                st.markdown(
-                    '<div class="telecom-site-block">'
-                    '<div class="telecom-site-block-h">'
-                    '<div>'
-                    '<h4>Identificación y ubicación</h4>'
-                    '<p>Ficha ejecutiva para cliente: resume trazabilidad del sitio y brechas que deben cerrarse antes de oferta final.</p>'
-                    '</div>'
-                    f'<span class="telecom-site-mini">{len(section_df)} variables</span>'
-                    '</div>'
-                    '<div class="telecom-location-hero">'
-                    '<div class="telecom-location-main">'
-                    '<p class="telecom-location-k">Sitio telecom</p>'
-                    f'<p class="telecom-location-v">{html.escape(site_name)}</p>'
-                    f'<p class="telecom-location-s"><b>{html.escape(site_id)}</b> · Cliente/fuente: {html.escape(cliente)} · Estado de ingeniería preliminar.</p>'
-                    '</div>'
-                    '<div class="telecom-location-side">'
-                    '<div class="telecom-location-chip"><span>Ubicación comercial</span>'
-                    f'<b>{html.escape(comuna)} · {html.escape(region)}</b></div>'
-                    '<div class="telecom-location-chip"><span>Validación requerida</span>'
-                    f'<b>{html.escape(pending_label)}</b></div>'
-                    '</div>'
-                    '</div>'
-                    f'<div class="telecom-location-grid">{card_html}</div>'
-                    '<div class="telecom-location-alert"><b>Lectura para cliente:</b> esta ficha permite presentar el sitio sin exponer una tabla operativa. Las coordenadas, comuna/región y altitud deben validarse para confirmar recurso eólico, permisos, logística y precisión del CAPEX.</div>'
-                    '</div>',
-                    unsafe_allow_html=True,
-                )
                 continue
 
             row_html = []
@@ -11670,7 +11987,7 @@ def render_telecom_tower_eval_analysis():
                     f'<td class="telecom-site-value">{value_cell}</td>'
                     f'<td>{html.escape(str(row.get("Fuente requerida", "")))}</td>'
                     f'<td>{site_badge(str(row.get("Estado", "")))}</td>'
-                    f'<td>{html.escape(str(row.get("Prioridad", "")) or "Sin prioridad")}</td>'
+                    f'<td>{site_priority_badge(str(row.get("Prioridad", "")))}</td>'
                     f'<td>{html.escape(str(row.get("Comentario", "")))}</td>'
                     "</tr>"
                 )
@@ -11760,51 +12077,57 @@ def render_telecom_tower_eval_analysis():
             """.replace(",", "."),
             unsafe_allow_html=True,
         )
+        def tune_dashboard_chart(fig: go.Figure, height: int = 390) -> go.Figure:
+            fig.update_layout(
+                height=height,
+                margin=dict(l=12, r=24, t=36, b=46),
+                font=dict(family="Inter, Arial, sans-serif", color=blue_text, size=11),
+                legend=dict(orientation="h", y=1.12, x=0, title=None, font=dict(size=11)),
+                hoverlabel=dict(bgcolor="#ffffff", bordercolor=blue_1, font=dict(color="#0f172a")),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            fig.update_xaxes(showline=False, zeroline=False, gridcolor="rgba(148,163,184,.18)")
+            fig.update_yaxes(showline=False, zeroline=False, gridcolor="rgba(148,163,184,.18)")
+            return fig
+
+        dashboard_rank = alternatives.copy()
+        dashboard_rank["Recomendada"] = dashboard_rank["Alternativa"].astype(str) == str(summary["tecnologia_recomendada"])
+        dashboard_rank = dashboard_rank.sort_values("Score técnico", ascending=True)
         dash_left, dash_right = st.columns([1.08, 0.92])
         with dash_left:
-            st.markdown('<p class="telecom-panel-title">Comparativo alternativas · Dashboard</p><p class="telecom-panel-sub">CAPEX por alternativa con lectura simultánea de payback y LCOE publicados.</p>', unsafe_allow_html=True)
+            st.markdown('<p class="telecom-panel-title">Ranking ejecutivo de alternativas</p><p class="telecom-panel-sub">Índice técnico-económico normalizado: integra payback, LCOE, CAPEX e impacto ambiental.</p>', unsafe_allow_html=True)
             dashboard_fig = go.Figure()
             dashboard_fig.add_trace(
                 go.Bar(
-                    x=alternatives["Alternativa"],
-                    y=alternatives["CAPEX MM CLP"],
-                    name="CAPEX",
-                    marker_color=[blue_5 if str(name) == str(summary["tecnologia_recomendada"]) else blue_3 for name in alternatives["Alternativa"]],
-                    text=[f"{v:.1f} MM" for v in alternatives["CAPEX MM CLP"]],
+                    x=dashboard_rank["Score técnico"],
+                    y=dashboard_rank["Alternativa"],
+                    orientation="h",
+                    name="Índice decisión",
+                    marker_color=[blue_5 if rec else blue_2 for rec in dashboard_rank["Recomendada"]],
+                    text=[f"{v:.0f}" for v in dashboard_rank["Score técnico"]],
                     textposition="inside",
-                    textfont=dict(color="#ffffff", size=11),
-                    hovertemplate="<b>%{x}</b><br>CAPEX: %{y:.1f} MM CLP<extra></extra>",
-                )
-            )
-            dashboard_fig.add_trace(
-                go.Scatter(
-                    x=alternatives["Alternativa"],
-                    y=alternatives["Payback híbrido años"],
-                    name="Payback",
-                    yaxis="y2",
-                    mode="lines+markers+text",
-                    line=dict(color=blue_5, width=3),
-                    marker=dict(size=10, color=blue_1, line=dict(color="#ffffff", width=2)),
-                    text=[years_label(v) for v in alternatives["Payback híbrido años"]],
-                    textposition=["top center", "bottom center", "top center", "bottom center", "top center"],
-                    textfont=dict(color=blue_text, size=11),
-                    hovertemplate="<b>%{x}</b><br>Payback: %{text}<extra></extra>",
+                    textfont=dict(color="#ffffff", size=12),
+                    customdata=np.stack(
+                        [
+                            dashboard_rank["CAPEX MM CLP"],
+                            dashboard_rank["Payback híbrido años"].apply(years_label),
+                            dashboard_rank["LCOE CLP/kWh"].apply(format_clp),
+                        ],
+                        axis=-1,
+                    ),
+                    hovertemplate="<b>%{y}</b><br>Índice: %{x:.0f}/100<br>CAPEX: %{customdata[0]:.1f} MM CLP<br>Payback: %{customdata[1]}<br>LCOE: %{customdata[2]}/kWh<extra></extra>",
                 )
             )
             dashboard_fig.update_layout(
-                height=385,
-                margin=dict(l=10, r=44, t=24, b=24),
-                legend=dict(orientation="h", y=1.14, x=0, title=None),
-                xaxis=dict(categoryorder="array", categoryarray=turbine_order),
-                yaxis=dict(title="CAPEX (MM CLP)", gridcolor="rgba(148,163,184,.22)"),
-                yaxis2=dict(title="Payback (años)", overlaying="y", side="right", showgrid=False),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                hovermode="x unified",
+                xaxis=dict(title="Índice técnico-económico", range=[0, max(100, float(dashboard_rank["Score técnico"].max()) * 1.12)]),
+                yaxis=dict(title=None),
+                showlegend=False,
             )
-            st.plotly_chart(dashboard_fig, use_container_width=True, config={"displaylogo": False})
+            dashboard_fig.add_vline(x=float(dashboard_rank["Score técnico"].median()), line=dict(color=blue_3, width=2, dash="dot"), annotation_text="Mediana", annotation_position="top")
+            st.plotly_chart(tune_dashboard_chart(dashboard_fig, 390), use_container_width=True, config={"displaylogo": False})
         with dash_right:
-            st.markdown('<p class="telecom-panel-title">Ahorro e impacto publicados</p><p class="telecom-panel-sub">Indicadores del resumen del escenario actual.</p>', unsafe_allow_html=True)
+            st.markdown('<p class="telecom-panel-title">Resumen de valor publicado</p><p class="telecom-panel-sub">Indicadores clave que conectan ahorro, operación e impacto ambiental.</p>', unsafe_allow_html=True)
             st.markdown(
                 f"""
                 <div class="telecom-grid-4" style="grid-template-columns:1fr 1fr;">
@@ -11817,11 +12140,276 @@ def render_telecom_tower_eval_analysis():
                 """.replace(",", "."),
                 unsafe_allow_html=True,
             )
+        dash_econ_left, dash_econ_right = st.columns(2)
+        with dash_econ_left:
+            st.markdown('<p class="telecom-panel-title">CAPEX, payback y LCOE</p><p class="telecom-panel-sub">Lectura conjunta para separar inversión requerida, retorno y costo nivelado.</p>', unsafe_allow_html=True)
+            fig_econ_dash = go.Figure()
+            fig_econ_dash.add_trace(
+                go.Bar(
+                    x=alternatives["Alternativa"],
+                    y=alternatives["CAPEX MM CLP"],
+                    name="CAPEX",
+                    marker_color=[blue_5 if str(name) == str(summary["tecnologia_recomendada"]) else blue_2 for name in alternatives["Alternativa"]],
+                    text=[f"{v:.1f} MM" for v in alternatives["CAPEX MM CLP"]],
+                    textposition="inside",
+                    textfont=dict(color="#ffffff", size=11),
+                    hovertemplate="<b>%{x}</b><br>CAPEX: %{y:.1f} MM CLP<extra></extra>",
+                )
+            )
+            fig_econ_dash.add_trace(
+                go.Scatter(
+                    x=alternatives["Alternativa"],
+                    y=alternatives["Payback híbrido años"],
+                    name="Payback",
+                    yaxis="y2",
+                    mode="lines+markers+text",
+                    line=dict(color=blue_4, width=3),
+                    marker=dict(size=10, color="#ffffff", line=dict(color=blue_4, width=2)),
+                    text=[years_label(v) for v in alternatives["Payback híbrido años"]],
+                    textposition=["top center", "bottom center", "top center", "bottom center", "top center"],
+                    textfont=dict(color=blue_text, size=11),
+                    hovertemplate="<b>%{x}</b><br>Payback: %{text}<extra></extra>",
+                )
+            )
+            fig_econ_dash.add_trace(
+                go.Scatter(
+                    x=alternatives["Alternativa"],
+                    y=alternatives["LCOE CLP/kWh"],
+                    name="LCOE",
+                    yaxis="y3",
+                    mode="lines+markers",
+                    line=dict(color=blue_3, width=2.5, dash="dash"),
+                    marker=dict(size=8, color=blue_3, line=dict(color="#ffffff", width=1.5)),
+                    hovertemplate="<b>%{x}</b><br>LCOE: %{y:,.0f} CLP/kWh<extra></extra>",
+                )
+            )
+            fig_econ_dash.update_layout(
+                xaxis=dict(categoryorder="array", categoryarray=turbine_order),
+                yaxis=dict(title="CAPEX (MM CLP)", rangemode="tozero"),
+                yaxis2=dict(title="Payback", overlaying="y", side="right", showgrid=False),
+                yaxis3=dict(title="LCOE", overlaying="y", side="right", anchor="free", position=.94, showgrid=False, visible=False),
+                hovermode="x unified",
+            )
+            st.plotly_chart(tune_dashboard_chart(fig_econ_dash, 410), use_container_width=True, config={"displaylogo": False})
+        with dash_econ_right:
+            st.markdown('<p class="telecom-panel-title">Mapa de decisión CAPEX vs retorno</p><p class="telecom-panel-sub">Menor payback y menor CAPEX se ubican hacia la zona inferior izquierda.</p>', unsafe_allow_html=True)
+            fig_quad = px.scatter(
+                alternatives,
+                x="CAPEX MM CLP",
+                y="Payback híbrido años",
+                size="Energía útil anual kWh",
+                color="Score técnico",
+                text="Alternativa",
+                color_continuous_scale=[blue_1, blue_2, blue_5],
+                custom_data=["LCOE CLP/kWh", "CO2 evitado t/año"],
+            )
+            fig_quad.update_traces(
+                textposition="top center",
+                textfont=dict(size=11, color=blue_text),
+                marker=dict(line=dict(color="#ffffff", width=2), sizemin=10),
+                hovertemplate="<b>%{text}</b><br>CAPEX: %{x:.1f} MM CLP<br>Payback: %{y:.1f} años<br>LCOE: %{customdata[0]:,.0f} CLP/kWh<br>CO2: %{customdata[1]:.1f} t/año<extra></extra>",
+            )
+            fig_quad.add_vline(x=float(alternatives["CAPEX MM CLP"].median()), line=dict(color=blue_3, width=1.8, dash="dot"))
+            fig_quad.add_hline(y=float(alternatives["Payback híbrido años"].median()), line=dict(color=blue_3, width=1.8, dash="dot"))
+            fig_quad.update_layout(
+                xaxis=dict(title="CAPEX total (MM CLP)", rangemode="tozero"),
+                yaxis=dict(title="Payback híbrido (años)", rangemode="tozero"),
+                coloraxis_colorbar=dict(title="Índice"),
+            )
+            st.plotly_chart(tune_dashboard_chart(fig_quad, 410), use_container_width=True, config={"displaylogo": False})
+        st.markdown('<p class="telecom-panel-title">Panorama económico integral por turbina</p><p class="telecom-panel-sub">Vista ancha: barras de CAPEX, línea de LCOE y marcadores de payback para comparar inversión, costo nivelado y retorno en una sola lectura.</p>', unsafe_allow_html=True)
+        turbine_units_map = {}
+        if "Nº turbinas requerido" in wind_df.columns:
+            turbine_units_map = wind_df.set_index("Alternativa")["Nº turbinas requerido"].to_dict()
+        integral_units = alternatives["Alternativa"].map(turbine_units_map).fillna(0).astype(float)
+        fig_integral = go.Figure()
+        fig_integral.add_trace(
+            go.Bar(
+                x=alternatives["Alternativa"],
+                y=alternatives["CAPEX MM CLP"],
+                name="CAPEX total",
+                marker_color=[blue_5 if str(name) == str(summary["tecnologia_recomendada"]) else blue_2 for name in alternatives["Alternativa"]],
+                customdata=np.stack(
+                    [
+                        alternatives["LCOE CLP/kWh"].apply(format_clp),
+                        alternatives["Payback híbrido años"].apply(years_label),
+                        alternatives["Score técnico"],
+                        integral_units,
+                    ],
+                    axis=-1,
+                ),
+                hovertemplate="<b>%{x}</b><br>CAPEX: %{y:.1f} MM CLP<br>N° turbinas: %{customdata[3]:.0f}<br>LCOE: %{customdata[0]}/kWh<br>Payback: %{customdata[1]}<br>Índice: %{customdata[2]:.0f}/100<extra></extra>",
+            )
+        )
+        fig_integral.add_trace(
+            go.Scatter(
+                x=alternatives["Alternativa"],
+                y=alternatives["CAPEX MM CLP"] * 1.14,
+                name="N° turbinas",
+                mode="markers+text",
+                marker=dict(size=13, color="#ffffff", symbol="square", line=dict(color=blue_5, width=2)),
+                text=[f"{v:.0f} turb." if v > 0 else "s/d" for v in integral_units],
+                textposition="top center",
+                textfont=dict(color=blue_text, size=11),
+                hovertemplate="<b>%{x}</b><br>N° turbinas: %{text}<extra></extra>",
+            )
+        )
+        fig_integral.add_trace(
+            go.Scatter(
+                x=alternatives["Alternativa"],
+                y=alternatives["LCOE CLP/kWh"],
+                name="LCOE",
+                yaxis="y2",
+                mode="lines+markers+text",
+                line=dict(color=blue_4, width=3.2),
+                marker=dict(size=11, color="#ffffff", line=dict(color=blue_4, width=2)),
+                text=[format_clp(v) for v in alternatives["LCOE CLP/kWh"]],
+                textposition=["top center", "bottom center", "top center", "bottom center", "top center"],
+                textfont=dict(color=blue_text, size=11),
+                hovertemplate="<b>%{x}</b><br>LCOE: %{text}/kWh<extra></extra>",
+            )
+        )
+        fig_integral.add_trace(
+            go.Scatter(
+                x=alternatives["Alternativa"],
+                y=alternatives["Payback híbrido años"],
+                name="Payback",
+                yaxis="y3",
+                mode="markers+text",
+                marker=dict(
+                    size=np.clip(18 - alternatives["Payback híbrido años"].fillna(0).astype(float), 8, 18),
+                    color=blue_3,
+                    symbol="diamond",
+                    line=dict(color="#ffffff", width=1.8),
+                ),
+                text=[years_label(v) for v in alternatives["Payback híbrido años"]],
+                textposition=["middle right", "middle left", "middle right", "middle left", "middle right"],
+                textfont=dict(color=blue_text, size=11),
+                hovertemplate="<b>%{x}</b><br>Payback: %{text}<extra></extra>",
+            )
+        )
+        best_integral = alternatives.sort_values("Score técnico", ascending=False).iloc[0]
+        for _, row in alternatives.iterrows():
+            fig_integral.add_annotation(
+                x=str(row["Alternativa"]),
+                y=float(row["CAPEX MM CLP"]) * 0.30,
+                text=f'{float(row["CAPEX MM CLP"]):.1f} MM',
+                showarrow=False,
+                font=dict(color="#ffffff", size=12),
+                bgcolor="rgba(15,23,42,.18)",
+                bordercolor="rgba(255,255,255,.30)",
+                borderwidth=1,
+                borderpad=3,
+            )
+        fig_integral.add_annotation(
+            x=str(best_integral["Alternativa"]),
+            y=float(best_integral["CAPEX MM CLP"]) * 1.26,
+            text="Mejor balance",
+            showarrow=True,
+            arrowhead=2,
+            arrowcolor=blue_4,
+            bgcolor="#ffffff",
+            bordercolor=blue_4,
+            borderwidth=1,
+            font=dict(color=blue_text, size=11),
+        )
+        fig_integral.update_layout(
+            xaxis=dict(categoryorder="array", categoryarray=turbine_order, title=None),
+            yaxis=dict(title="CAPEX total (MM CLP)", range=[0, max(1.0, float(alternatives["CAPEX MM CLP"].max()) * 1.34)]),
+            yaxis2=dict(title="LCOE (CLP/kWh)", overlaying="y", side="right", showgrid=False, rangemode="tozero"),
+            yaxis3=dict(title="Payback", overlaying="y", side="right", anchor="free", position=.94, showgrid=False, visible=False),
+            hovermode="x unified",
+        )
+        st.plotly_chart(tune_dashboard_chart(fig_integral, 440), use_container_width=True, config={"displaylogo": False})
+        impact_left, impact_right = st.columns(2)
+        with impact_left:
+            st.markdown('<p class="telecom-panel-title">Impacto anual por alternativa</p><p class="telecom-panel-sub">Comparación de energía útil y CO₂ evitado para conectar decisión económica con valor operacional.</p>', unsafe_allow_html=True)
+            fig_impact = go.Figure()
+            fig_impact.add_trace(
+                go.Bar(
+                    x=alternatives["Alternativa"],
+                    y=alternatives["Energía útil anual kWh"],
+                    name="Energía útil",
+                    marker_color=blue_5,
+                    text=[f"{v/1000:.1f} MWh" for v in alternatives["Energía útil anual kWh"]],
+                    textposition="inside",
+                    textfont=dict(color="#ffffff", size=11),
+                    hovertemplate="<b>%{x}</b><br>Energía: %{y:,.0f} kWh/año<extra></extra>",
+                )
+            )
+            fig_impact.add_trace(
+                go.Scatter(
+                    x=alternatives["Alternativa"],
+                    y=alternatives["CO2 evitado t/año"],
+                    name="CO₂ evitado",
+                    yaxis="y2",
+                    mode="lines+markers+text",
+                    line=dict(color=blue_4, width=3),
+                    marker=dict(size=10, color="#ffffff", line=dict(color=blue_4, width=2)),
+                    text=[f"{v:.1f} t" for v in alternatives["CO2 evitado t/año"]],
+                    textposition="top center",
+                    textfont=dict(color=blue_text, size=11),
+                    hovertemplate="<b>%{x}</b><br>CO₂ evitado: %{text}/año<extra></extra>",
+                )
+            )
+            fig_impact.update_layout(
+                yaxis=dict(title="kWh/año", rangemode="tozero"),
+                yaxis2=dict(title="tCO₂/año", overlaying="y", side="right", showgrid=False),
+                hovermode="x unified",
+            )
+            st.plotly_chart(tune_dashboard_chart(fig_impact, 360), use_container_width=True, config={"displaylogo": False})
+        with impact_right:
+            st.markdown('<p class="telecom-panel-title">Ahorro anual y diésel evitado</p><p class="telecom-panel-sub">Lectura de valor monetario y reducción operacional publicada en el Dashboard.</p>', unsafe_allow_html=True)
+            impact_kpi_df = pd.DataFrame(
+                [
+                    {"Indicador": "Ahorro anual", "Valor": float(summary["ahorro_anual_hibrido"]) / 1_000_000, "Unidad": "MM CLP", "Color": blue_5},
+                    {"Indicador": "Diésel evitado", "Valor": float(summary["diesel_evitado_l_anio"]) / 1_000, "Unidad": "mil L", "Color": blue_3},
+                    {"Indicador": "CO₂ evitado", "Valor": float(summary["co2_evitado_t_anio"]), "Unidad": "tCO₂", "Color": blue_4},
+                ]
+            )
+            fig_value = go.Figure(
+                go.Bar(
+                    x=impact_kpi_df["Valor"],
+                    y=impact_kpi_df["Indicador"],
+                    orientation="h",
+                    marker_color=impact_kpi_df["Color"],
+                    text=[f"{row.Valor:.1f} {row.Unidad}" for row in impact_kpi_df.itertuples()],
+                    textposition="outside",
+                    cliponaxis=False,
+                    textfont=dict(color=blue_text, size=12),
+                    hovertemplate="<b>%{y}</b><br>%{text}<extra></extra>",
+                )
+            )
+            fig_value.update_layout(xaxis=dict(title="Valor normalizado por unidad", rangemode="tozero"), yaxis=dict(title=None, autorange="reversed"), showlegend=False)
+            st.plotly_chart(tune_dashboard_chart(fig_value, 360), use_container_width=True, config={"displaylogo": False})
         source_table = alternatives[["Alternativa", "CAPEX CLP", "Payback híbrido años", "LCOE CLP/kWh", "Energía útil anual kWh", "CO2 evitado t/año"]].copy()
-        source_table["CAPEX CLP"] = source_table["CAPEX CLP"].apply(format_clp)
-        source_table["LCOE CLP/kWh"] = source_table["LCOE CLP/kWh"].apply(format_clp)
-        source_table["Payback híbrido años"] = source_table["Payback híbrido años"].apply(years_label)
-        st.dataframe(source_table, use_container_width=True, hide_index=True)
+        table_rows = []
+        for _, row in source_table.iterrows():
+            is_rec = str(row["Alternativa"]) == str(summary["tecnologia_recomendada"])
+            row_class = ' class="recommended"' if is_rec else ""
+            label = '<br><span class="telecom-badge">Recomendada</span>' if is_rec else '<br><span class="telecom-muted">Alternativa evaluada</span>'
+            table_rows.append(
+                f"<tr{row_class}>"
+                f'<td><b>{html.escape(str(row["Alternativa"]))}</b>{label}</td>'
+                f'<td>{format_clp(float(row["CAPEX CLP"]))}</td>'
+                f'<td>{years_label(row["Payback híbrido años"])}</td>'
+                f'<td>{format_clp(float(row["LCOE CLP/kWh"]))}</td>'
+                f'<td>{float(row["Energía útil anual kWh"]):,.0f} kWh</td>'
+                f'<td>{float(row["CO2 evitado t/año"]):.1f} t/año</td>'
+                "</tr>"
+            )
+        st.markdown(
+            '<div class="telecom-table-shell">'
+            '<div class="telecom-table-head"><div><h3>Tabla ejecutiva del Dashboard</h3>'
+            '<p>Fuente publicada: alternativas comparadas con inversión, retorno, costo nivelado, energía e impacto.</p></div>'
+            f'<span class="telecom-badge">{html.escape(str(summary["tecnologia_recomendada"]))}</span></div>'
+            '<table class="telecom-table">'
+            '<thead><tr><th>Alternativa</th><th>CAPEX</th><th>Payback híbrido</th><th>LCOE</th><th>Energía útil anual</th><th>CO₂ evitado</th></tr></thead>'
+            f'<tbody>{"".join(table_rows)}</tbody>'
+            '</table>'
+            '</div>'.replace(",", "."),
+            unsafe_allow_html=True,
+        )
 
     with tab_exec:
         section("03 · Boleta y carga", "Lectura del consumo real y perfil horario", "Esta pestaña replica 03_Boleta_Carga: boletas mensuales, resumen vinculado a Datos Sitio y curva horaria base para dimensionamiento.")
@@ -11983,7 +12571,7 @@ def render_telecom_tower_eval_analysis():
         st.dataframe(billing_table, use_container_width=True, hide_index=True)
 
     with tab_dimension:
-        section("04 · Modelo eólico", "Dimensionamiento técnico-económico completo", "Replica 04_Modelo_Eolico usando columnas A:AM desde la fila 4: potencia, generación, inversión, beneficios, payback, LCOE, VAN, excedentes y recomendación.")
+        section("04 · Modelo eólico", "Dimensionamiento técnico-económico completo", "Replica 04_Modelo_Eolico usando columnas A:AL desde la fila 4: potencia, generación, inversión, beneficios, payback, LCOE, VAN, excedentes y recomendación.")
         wind_df["Alternativa"] = pd.Categorical(wind_df["Alternativa"].astype(str), categories=turbine_order, ordered=True)
         wind_df = wind_df.sort_values("Alternativa").copy()
         wind_df["Alternativa"] = wind_df["Alternativa"].astype(str)
@@ -12002,7 +12590,7 @@ def render_telecom_tower_eval_analysis():
                 </div>
                 <div class="telecom-site-status">
                   <div class="telecom-site-pill"><strong>{len(wind_df)}</strong><span>Alternativas</span></div>
-                  <div class="telecom-site-pill"><strong>{wind_df.shape[1]}</strong><span>Columnas A:AM</span></div>
+                  <div class="telecom-site-pill"><strong>{wind_df.shape[1]}</strong><span>Columnas A:AL</span></div>
                   <div class="telecom-site-pill"><strong>{html.escape(str(wind_model.get("source_mode", "remote")).upper())}</strong><span>Fuente</span></div>
                 </div>
               </div>
@@ -12051,12 +12639,14 @@ def render_telecom_tower_eval_analysis():
             fig_pay.update_layout(height=390, margin=dict(l=10, r=28, t=30, b=45), barmode="group", legend=dict(orientation="h", y=1.17, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="Años", gridcolor="rgba(148,163,184,.22)"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
             st.plotly_chart(fig_pay, use_container_width=True, config={"displaylogo": False})
         with p2:
-            st.markdown('<p class="telecom-panel-title">Excedentes y beneficio total híbrido</p><p class="telecom-panel-sub">Visualiza el peso de monetizar remanentes por tipo de turbina.</p>', unsafe_allow_html=True)
+            st.markdown('<p class="telecom-panel-title">Excedentes y beneficio total híbrido</p><p class="telecom-panel-sub">AG:AK · Barras: beneficio anual. Líneas: remanente energético anual y valor acumulado 20 años.</p>', unsafe_allow_html=True)
             fig_rem = go.Figure()
             fig_rem.add_trace(go.Bar(x=wind_df["Alternativa"], y=wind_df["Beneficio neto híbrido $"] / 1_000_000, name="Beneficio neto híbrido", marker_color=blue_5, text=[f"{v/1_000_000:.1f} MM" for v in wind_df["Beneficio neto híbrido $"]], textposition="inside", textfont=dict(color="#fff", size=10), hovertemplate="<b>%{x}</b><br>Beneficio neto: %{y:.1f} MM CLP<extra></extra>"))
             fig_rem.add_trace(go.Bar(x=wind_df["Alternativa"], y=wind_df["Ingreso venta excedente $"] / 1_000_000, name="Ingreso excedente", marker_color=blue_4, text=[f"{v/1_000_000:.1f} MM" for v in wind_df["Ingreso venta excedente $"]], textposition="outside", cliponaxis=False, hovertemplate="<b>%{x}</b><br>Excedente: %{y:.1f} MM CLP<extra></extra>"))
-            fig_rem.add_trace(go.Scatter(x=wind_df["Alternativa"], y=wind_df["Remanente anual kWh"] / 1000, name="Remanente anual", yaxis="y2", mode="lines+markers", line=dict(color=blue_3, width=3), marker=dict(size=9, color=blue_3, line=dict(color="#fff", width=1.5)), hovertemplate="<b>%{x}</b><br>Remanente: %{y:.1f} MWh/año<extra></extra>"))
-            fig_rem.update_layout(height=390, margin=dict(l=10, r=52, t=30, b=45), barmode="group", legend=dict(orientation="h", y=1.17, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="MM CLP/año", gridcolor="rgba(148,163,184,.22)"), yaxis2=dict(title="MWh/año", overlaying="y", side="right", showgrid=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
+            fig_rem.add_trace(go.Scatter(x=wind_df["Alternativa"], y=wind_df["Beneficio total híbrido $"] / 1_000_000, name="Beneficio total", mode="lines+markers+text", line=dict(color=blue_2, width=3), marker=dict(size=9, color="#ffffff", line=dict(color=blue_2, width=1.8)), text=[f"{v/1_000_000:.1f} MM" for v in wind_df["Beneficio total híbrido $"]], textposition=["top center", "top center", "bottom center", "top center", "top center"], textfont=dict(color=blue_text, size=10), hovertemplate="<b>%{x}</b><br>Beneficio total: %{y:.1f} MM CLP/año<extra></extra>"))
+            fig_rem.add_trace(go.Scatter(x=wind_df["Alternativa"], y=wind_df["Remanente anual kWh"] / 1000, name="Remanente anual", yaxis="y2", mode="lines+markers", line=dict(color=blue_3, width=3, dash="dot"), marker=dict(size=9, color=blue_3, line=dict(color="#fff", width=1.5)), hovertemplate="<b>%{x}</b><br>Remanente: %{y:.1f} MWh/año<extra></extra>"))
+            fig_rem.add_trace(go.Scatter(x=wind_df["Alternativa"], y=wind_df["Remanente acumulado 20 años $"] / 1_000_000, name="Remanente acumulado 20 años", yaxis="y3", mode="lines+markers", line=dict(color=blue_text, width=2.8, dash="dash"), marker=dict(size=8, color=blue_text, line=dict(color="#fff", width=1.4)), hovertemplate="<b>%{x}</b><br>Acumulado 20 años: %{y:.1f} MM CLP<extra></extra>"))
+            fig_rem.update_layout(height=410, margin=dict(l=10, r=78, t=30, b=45), barmode="relative", legend=dict(orientation="h", y=1.20, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="MM CLP/año", gridcolor="rgba(148,163,184,.22)"), yaxis2=dict(title="MWh/año", overlaying="y", side="right", showgrid=False), yaxis3=dict(title="MM CLP 20 años", overlaying="y", side="right", anchor="free", position=0.93, showgrid=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
             st.plotly_chart(fig_rem, use_container_width=True, config={"displaylogo": False})
         i1, i2 = st.columns([0.96, 1.04])
         with i1:
@@ -12226,18 +12816,145 @@ def render_telecom_tower_eval_analysis():
         st.dataframe(resource_table, use_container_width=True, hide_index=True)
 
     with tab_savings:
-        section("06 · Explicación del ahorro", "Ahorro anual y payback simple", "Se muestra cómo la energía útil se monetiza con el costo ponderado seleccionado.")
-        a1, a2 = st.columns([1, 1])
-        with a1:
-            fig_saving = go.Figure(go.Bar(x=alternatives["Alternativa"], y=alternatives["Ahorro simulado anual CLP"] / 1_000_000, marker_color=[blue_5 if x == str(recommended["Alternativa"]) else blue_3 for x in alternatives["Alternativa"]], text=[f"{v/1_000_000:.1f} MM" for v in alternatives["Ahorro simulado anual CLP"]], textposition="outside", cliponaxis=False))
-            fig_saving.update_layout(height=340, margin=dict(l=10, r=42, t=10, b=24), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="MM CLP/año", gridcolor="rgba(148,163,184,.22)"), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig_saving, use_container_width=True, config={"displaylogo": False})
-        with a2:
-            fig_payback = go.Figure()
-            fig_payback.add_trace(go.Bar(x=alternatives["Alternativa"], y=alternatives["Payback híbrido años"], name="Payback hoja", marker_color=blue_5, text=[years_label(v) for v in alternatives["Payback híbrido años"]], textposition="outside", cliponaxis=False))
-            fig_payback.add_trace(go.Bar(x=alternatives["Alternativa"], y=alternatives["Payback simple simulado años"], name="Payback simple", marker_color=blue_2, text=[years_label(v) for v in alternatives["Payback simple simulado años"]], textposition="outside", cliponaxis=False))
-            fig_payback.update_layout(height=340, margin=dict(l=10, r=42, t=18, b=24), barmode="group", legend=dict(orientation="h", y=1.18, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="Años", gridcolor="rgba(148,163,184,.22)"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig_payback, use_container_width=True, config={"displaylogo": False})
+        section("06 · Sensibilidad", "Cobertura, viento y remanente", "Replica 06_Sensibilidad para mostrar cómo cambia el payback por cobertura objetivo, recurso eólico y valorización de excedentes.")
+        coverage_long = sensitivity_coverage_df.dropna(subset=["Payback años"]).copy() if not sensitivity_coverage_df.empty else pd.DataFrame()
+        wind_long = sensitivity_wind_df.dropna(subset=["Payback años"]).copy() if not sensitivity_wind_df.empty else pd.DataFrame()
+        detail_sens = sensitivity_detail_df.copy()
+        payback_col = "Payback c/remanente años num"
+        best_source = detail_sens.dropna(subset=[payback_col]).copy() if payback_col in detail_sens.columns else pd.DataFrame()
+        best_global = best_source.sort_values(payback_col).iloc[0] if not best_source.empty else coverage_long.sort_values("Payback años").iloc[0]
+        if "Cobertura %" in best_source.columns and not best_source.empty:
+            nearest_coverage = float(best_source.iloc[(best_source["Cobertura %"] - float(cobertura_pct)).abs().argsort()].iloc[0]["Cobertura %"])
+            selected_scope = best_source[best_source["Cobertura %"].round(6) == round(nearest_coverage, 6)].copy()
+        else:
+            nearest_coverage = float(cobertura_pct)
+            selected_scope = pd.DataFrame()
+        best_selected = selected_scope.sort_values(payback_col).iloc[0] if not selected_scope.empty else best_global
+        best_turbine = str(best_global.get("Tecnología", best_global.get("Turbina", "")))
+        selected_turbine = str(best_selected.get("Tecnología", best_selected.get("Turbina", "")))
+        best_payback = float(best_global.get(payback_col, best_global.get("Payback años", np.nan)))
+        selected_payback = float(best_selected.get(payback_col, best_selected.get("Payback años", np.nan)))
+        max_excess_income = float(best_source.get("Ingreso venta anual CLP", pd.Series([0.0])).max()) if not best_source.empty else 0.0
+        min_payback = float(coverage_long["Payback años"].min()) if not coverage_long.empty else best_payback
+        max_payback = float(coverage_long["Payback años"].max()) if not coverage_long.empty else best_payback
+
+        st.markdown(
+            f"""
+            <div class="telecom-site-shell">
+              <div class="telecom-site-head">
+                <div>
+                  <p class="telecom-site-k">Pestaña 06_Sensibilidad · Fuente Google Sheets</p>
+                  <h3 class="telecom-site-t">{html.escape(str(sensitivity_model["title"]))}</h3>
+                  <p class="telecom-site-s">Lectura de escenarios con remanente: cruza cobertura objetivo, velocidad de viento, CAPEX, O&M, excedentes monetizados y payback c/remanente para defender la alternativa ante cliente.</p>
+                </div>
+                <div class="telecom-site-status">
+                  <div class="telecom-site-pill"><strong>{len(coverage_long)}</strong><span>Celdas cobertura</span></div>
+                  <div class="telecom-site-pill"><strong>{len(wind_long)}</strong><span>Celdas viento</span></div>
+                  <div class="telecom-site-pill"><strong>{html.escape(str(sensitivity_model.get("source_mode", "remote")).upper())}</strong><span>Fuente</span></div>
+                </div>
+              </div>
+              <div class="telecom-site-body">
+                <div class="telecom-grid">
+                  <div class="telecom-card"><p class="telecom-card-k">Mejor caso global</p><p class="telecom-card-v">{html.escape(best_turbine)}</p><p class="telecom-card-s">{years_label(best_payback)} con remanente.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Mejor cobertura activa</p><p class="telecom-card-v">{html.escape(selected_turbine)}</p><p class="telecom-card-s">{years_label(selected_payback)} cerca de {nearest_coverage:.0f}% de cobertura.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Ingreso excedente máximo</p><p class="telecom-card-v">{format_clp(max_excess_income)}</p><p class="telecom-card-s">Mayor venta anual detectada en la matriz auditable.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Rango de payback</p><p class="telecom-card-v">{min_payback:.1f} - {max_payback:.1f}</p><p class="telecom-card-s">Años mínimo y máximo en matriz de cobertura.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Cobertura evaluada</p><p class="telecom-card-v">{nearest_coverage:.0f}%</p><p class="telecom-card-s">Escenario más cercano al input activo.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Detalle auditable</p><p class="telecom-card-v">{len(detail_sens)}</p><p class="telecom-card-s">Filas con CAPEX, remanente, O&M y beneficio neto.</p></div>
+                </div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        s1, s2 = st.columns([1, 1])
+        with s1:
+            st.markdown('<p class="telecom-panel-title">Matriz de payback por cobertura</p><p class="telecom-panel-sub">Menor valor indica recuperación más rápida con remanente valorizado.</p>', unsafe_allow_html=True)
+            if not coverage_long.empty:
+                coverage_heat = coverage_long.pivot(index="Cobertura %", columns="Turbina", values="Payback años").sort_index()
+                coverage_heat = coverage_heat[[col for col in ["1 kW", "3 kW", "5 kW", "10 kW", "80 kW"] if col in coverage_heat.columns]]
+                fig_cov = go.Figure(
+                    go.Heatmap(
+                        z=coverage_heat.values,
+                        x=coverage_heat.columns,
+                        y=[f"{idx:.0f}%" for idx in coverage_heat.index],
+                        colorscale=[[0, blue_5], [0.28, blue_2], [0.62, "#F2C078"], [1, blue_4]],
+                        text=[[f"{value:.1f}" for value in row] for row in coverage_heat.values],
+                        texttemplate="%{text}",
+                        textfont=dict(color="#ffffff", size=12),
+                        colorbar=dict(title="Años"),
+                        hovertemplate="Cobertura %{y}<br>%{x}: %{z:.1f} años<extra></extra>",
+                    )
+                )
+                fig_cov.update_layout(height=380, margin=dict(l=10, r=16, t=18, b=38), xaxis=dict(title=None), yaxis=dict(title="Cobertura objetivo"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_cov, use_container_width=True, config={"displaylogo": False})
+        with s2:
+            st.markdown('<p class="telecom-panel-title">Matriz de payback por velocidad de viento</p><p class="telecom-panel-sub">Sensibilidad técnica: muestra cuánto depende la decisión del recurso eólico.</p>', unsafe_allow_html=True)
+            if not wind_long.empty:
+                wind_heat = wind_long.pivot(index="Velocidad m/s", columns="Turbina", values="Payback años").sort_index()
+                wind_heat = wind_heat[[col for col in ["1 kW", "3 kW", "5 kW", "10 kW", "80 kW"] if col in wind_heat.columns]]
+                fig_wind_heat = go.Figure(
+                    go.Heatmap(
+                        z=wind_heat.values,
+                        x=wind_heat.columns,
+                        y=[f"{idx:.1f}" for idx in wind_heat.index],
+                        colorscale=[[0, blue_5], [0.28, blue_2], [0.62, "#F2C078"], [1, blue_4]],
+                        text=[[f"{value:.1f}" for value in row] for row in wind_heat.values],
+                        texttemplate="%{text}",
+                        textfont=dict(color="#ffffff", size=12),
+                        colorbar=dict(title="Años"),
+                        hovertemplate="Viento %{y} m/s<br>%{x}: %{z:.1f} años<extra></extra>",
+                    )
+                )
+                fig_wind_heat.update_layout(height=380, margin=dict(l=10, r=16, t=18, b=38), xaxis=dict(title=None), yaxis=dict(title="Velocidad m/s"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_wind_heat, use_container_width=True, config={"displaylogo": False})
+
+        s3, s4 = st.columns([1, 1])
+        with s3:
+            st.markdown('<p class="telecom-panel-title">Mejor tecnología por cobertura</p><p class="telecom-panel-sub">Ranking ejecutivo: identifica qué turbina gana en cada nivel de cobertura.</p>', unsafe_allow_html=True)
+            if not coverage_long.empty:
+                best_by_cov = coverage_long.sort_values("Payback años").groupby("Cobertura %", as_index=False).first()
+                fig_best_cov = go.Figure(
+                    go.Bar(
+                        x=[f"{value:.0f}%" for value in best_by_cov["Cobertura %"]],
+                        y=best_by_cov["Payback años"],
+                        marker_color=blue_5,
+                        text=[f'{row["Turbina"]}<br>{row["Payback años"]:.1f} años' for _, row in best_by_cov.iterrows()],
+                        textposition="outside",
+                        cliponaxis=False,
+                        hovertemplate="Cobertura %{x}<br>Payback %{y:.1f} años<extra></extra>",
+                    )
+                )
+                fig_best_cov.update_layout(height=350, margin=dict(l=10, r=28, t=20, b=38), xaxis=dict(title="Cobertura"), yaxis=dict(title="Años", gridcolor="rgba(148,163,184,.22)"), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_best_cov, use_container_width=True, config={"displaylogo": False})
+        with s4:
+            st.markdown('<p class="telecom-panel-title">CAPEX vs beneficio neto anual</p><p class="telecom-panel-sub">Cada punto es una alternativa de cobertura: tamaño según remanente mensual.</p>', unsafe_allow_html=True)
+            if not best_source.empty and {"CAPEX total CLP", "Beneficio neto anual CLP", "Remanente mensual kWh num"}.issubset(best_source.columns):
+                fig_benefit = px.scatter(
+                    best_source,
+                    x="CAPEX total CLP",
+                    y="Beneficio neto anual CLP",
+                    size="Remanente mensual kWh num",
+                    color="Cobertura %",
+                    hover_name="Tecnología",
+                    color_continuous_scale=[blue_2, blue_5, blue_4],
+                    labels={"CAPEX total CLP": "CAPEX total", "Beneficio neto anual CLP": "Beneficio neto anual", "Cobertura %": "Cobertura %"},
+                )
+                fig_benefit.update_traces(marker=dict(line=dict(color="#ffffff", width=1.5), opacity=.88), hovertemplate="<b>%{hovertext}</b><br>CAPEX: %{x:$,.0f}<br>Beneficio: %{y:$,.0f}<extra></extra>")
+                fig_benefit.update_layout(height=350, margin=dict(l=10, r=20, t=20, b=38), xaxis=dict(gridcolor="rgba(148,163,184,.22)", tickprefix="$", separatethousands=True), yaxis=dict(gridcolor="rgba(148,163,184,.22)", tickprefix="$", separatethousands=True), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_benefit, use_container_width=True, config={"displaylogo": False})
+
+        notes_df = sensitivity_model.get("notes", pd.DataFrame())
+        if isinstance(notes_df, pd.DataFrame) and not notes_df.empty:
+            note_html = "".join(f'<p><b>{html.escape(str(row["Concepto"]))}:</b> {html.escape(str(row["Detalle"]))}</p>' for _, row in notes_df.iterrows())
+            st.markdown(f'<div class="telecom-note">{note_html}</div>', unsafe_allow_html=True)
+
+        if not detail_sens.empty:
+            table_cols = [col for col in ["Cobertura", "Tecnología", "Potencia kW", "Nº turbinas", "Gen mensual total kWh", "Autoconsumo mensual kWh", "Remanente mensual kWh", "Ingreso venta anual $", "O&M anual $", "Beneficio neto anual $", "CAPEX total $", "Payback c/remanente años"] if col in detail_sens.columns]
+            st.dataframe(detail_sens[table_cols], use_container_width=True, hide_index=True)
+        elif not sensitivity_velocity_detail_df.empty:
+            st.dataframe(sensitivity_velocity_detail_df, use_container_width=True, hide_index=True)
 
     with tab_economics:
         section("07 · Comparación económica", "CAPEX, LCOE y retorno", "La comparación separa inversión inicial, costo nivelado y plazo de recuperación para defender la recomendación.")
