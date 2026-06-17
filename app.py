@@ -11205,6 +11205,9 @@ def load_telecom_sensitivity_model(url: str, refresh_nonce: int = 0) -> dict:
             "Payback c/remanente años": "Payback c/remanente años",
             "Payback c/remanente": "Payback c/remanente años",
             "Payback c/remanente aÃ±os": "Payback c/remanente años",
+            "Payback s/remanente años": "Payback s/remanente años",
+            "Payback s/remanente": "Payback s/remanente años",
+            "Payback s/remanente aÃ±os": "Payback s/remanente años",
         }
         data = data.rename(columns={col: rename_map.get(col, col) for col in data.columns})
         if "Cobertura" in data.columns:
@@ -11215,7 +11218,7 @@ def load_telecom_sensitivity_model(url: str, refresh_nonce: int = 0) -> dict:
             data["FP ajustado %"] = data["FP ajustado"].apply(lambda value: parse_percent_local(str(value), np.nan) * 100.0)
         elif "FP ajustado %" in data.columns:
             data["FP ajustado %"] = data["FP ajustado %"].apply(lambda value: parse_percent_local(str(value), parse_float_local(str(value), np.nan) / 100.0) * 100.0)
-        for col in ["Potencia kW", "Gen mensual/turbina kWh", "Consumo objetivo kWh/mes", "Nº turbinas", "Gen mensual total kWh", "Autoconsumo mensual kWh", "Remanente mensual kWh", "Payback c/remanente años"]:
+        for col in ["Potencia kW", "Gen mensual/turbina kWh", "Consumo objetivo kWh/mes", "Nº turbinas", "Gen mensual total kWh", "Autoconsumo mensual kWh", "Remanente mensual kWh", "Payback s/remanente años", "Payback c/remanente años"]:
             if col in data.columns:
                 data[f"{col} num"] = data[col].apply(lambda value: parse_float_local(str(value), np.nan))
         for col in ["CAPEX unitario total $", "Ahorro anual híbrido $", "Ahorro anual hÃ­brido $", "Ingreso venta anual $", "O&M anual $", "Beneficio neto anual $", "CAPEX total $"]:
@@ -11475,33 +11478,33 @@ def render_telecom_tower_eval_analysis():
     st.markdown(
         """
         <style>
-        .telecom-hero{border:1px solid rgba(40,71,99,.20);border-radius:18px;background:linear-gradient(135deg,#284763 0%,#75A9B8 58%,#EA6400 100%);padding:24px 26px;margin:18px 0 16px;box-shadow:0 18px 42px rgba(40,71,99,.18);}
+        .telecom-hero{border:1px solid rgba(40,71,99,.20);border-radius:16px;background:linear-gradient(135deg,#284763 0%,#75A9B8 58%,#EA6400 100%);padding:18px 22px;margin:12px 0 12px;box-shadow:0 14px 32px rgba(40,71,99,.16);}
         .telecom-k{font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#F6E7DD;margin:0 0 8px;}
         .telecom-t{font-size:30px;line-height:1.05;font-weight:950;color:#fff;margin:0 0 8px;}
         .telecom-s{font-size:13.5px;line-height:1.48;color:#F8FBFC;font-weight:760;margin:0;max-width:1080px;}
-        .telecom-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin:14px 0 18px;}
-        .telecom-grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0 18px;}
-        .telecom-card{border:1px solid #DCECEF;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#F7FBFC 100%);padding:15px 16px;box-shadow:0 10px 24px rgba(40,71,99,.07);min-height:112px;}
-        .telecom-card-k{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#284763;font-weight:950;margin:0 0 8px;}
-        .telecom-card-v{font-size:21px;line-height:1.02;font-weight:950;color:#0b1730;margin:0 0 7px;overflow-wrap:anywhere;}
-        .telecom-card-s{font-size:11.2px;line-height:1.28;color:#475569;font-weight:740;margin:0;}
-        .telecom-dash-shell{border:1px solid #DCECEF;border-radius:16px;background:#ffffff;box-shadow:0 16px 34px rgba(40,71,99,.075);overflow:hidden;margin:10px 0 16px;}
-        .telecom-dash-head{display:grid;grid-template-columns:1.25fr .75fr;gap:18px;align-items:center;background:linear-gradient(135deg,#284763 0%,#75A9B8 62%,#A9673B 100%);padding:20px 22px;color:#fff;}
+        .telecom-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:8px 0 10px;}
+        .telecom-grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:8px 0 10px;}
+        .telecom-card{border:1px solid #DCECEF;border-radius:10px;background:linear-gradient(180deg,#ffffff 0%,#F7FBFC 100%);padding:9px 11px;box-shadow:0 8px 18px rgba(40,71,99,.055);min-height:78px;}
+        .telecom-card-k{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:#284763;font-weight:950;margin:0 0 5px;}
+        .telecom-card-v{font-size:17px;line-height:1.02;font-weight:950;color:#0b1730;margin:0 0 4px;overflow-wrap:anywhere;}
+        .telecom-card-s{font-size:10px;line-height:1.18;color:#475569;font-weight:740;margin:0;}
+        .telecom-dash-shell{border:1px solid #DCECEF;border-radius:14px;background:#ffffff;box-shadow:0 12px 28px rgba(40,71,99,.065);overflow:hidden;margin:8px 0 12px;}
+        .telecom-dash-head{display:grid;grid-template-columns:1.25fr .75fr;gap:14px;align-items:center;background:linear-gradient(135deg,#284763 0%,#75A9B8 62%,#A9673B 100%);padding:15px 18px;color:#fff;}
         .telecom-dash-k{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#F6E7DD;font-weight:950;margin:0 0 7px;}
         .telecom-dash-t{font-size:24px;line-height:1.05;font-weight:950;color:#fff;margin:0 0 8px;}
         .telecom-dash-s{font-size:12.5px;line-height:1.42;color:#F8FBFC;font-weight:740;margin:0;max-width:820px;}
-        .telecom-dash-rec{border:1px solid rgba(255,255,255,.34);border-radius:13px;background:rgba(255,255,255,.12);padding:14px 15px;text-align:right;}
+        .telecom-dash-rec{border:1px solid rgba(255,255,255,.34);border-radius:13px;background:rgba(255,255,255,.12);padding:12px 14px;text-align:right;}
         .telecom-dash-rec-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#F6E7DD;font-weight:950;margin:0 0 6px;}
         .telecom-dash-rec-v{font-size:28px;line-height:1;font-weight:950;color:#fff;margin:0;}
-        .telecom-dash-body{padding:16px 18px 18px;}
+        .telecom-dash-body{padding:12px 14px 14px;}
         .telecom-dash-layout{display:grid;grid-template-columns:.9fr 1.1fr;gap:18px;align-items:start;margin-top:12px;}
-        .telecom-dash-message{border:1px solid #DCECEF;border-left:5px solid #EA6400;border-radius:12px;background:#F7FBFC;padding:14px 16px;color:#20384F;font-size:12.5px;font-weight:760;line-height:1.45;}
+        .telecom-dash-message{border:1px solid #DCECEF;border-left:5px solid #EA6400;border-radius:12px;background:#F7FBFC;padding:12px 14px;color:#20384F;font-size:12.2px;font-weight:760;line-height:1.38;}
         .telecom-section{margin:22px 0 12px;padding:12px 14px;border-left:5px solid #EA6400;background:#F7FBFC;border-radius:10px;border-top:1px solid #DCECEF;border-right:1px solid #DCECEF;border-bottom:1px solid #DCECEF;}
         .telecom-section-k{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#A9673B;font-weight:950;margin:0 0 4px;}
         .telecom-section-t{font-size:15px;line-height:1.15;color:#0f172a;font-weight:950;margin:0;}
         .telecom-section-s{font-size:12px;line-height:1.35;color:#64748b;font-weight:740;margin:4px 0 0;}
-        .telecom-panel-title{font-size:16px;font-weight:950;color:#0f172a;margin:0 0 4px;}
-        .telecom-panel-sub{font-size:12px;font-weight:760;color:#64748b;margin:0 0 10px;}
+        .telecom-panel-title{font-size:15px;font-weight:950;color:#0f172a;margin:0 0 3px;}
+        .telecom-panel-sub{font-size:11.5px;font-weight:760;color:#64748b;margin:0 0 7px;}
         .telecom-input-head{border:1px solid #DCECEF;border-radius:14px;background:#fff;padding:16px 18px;margin:0 0 14px;box-shadow:0 10px 24px rgba(40,71,99,.055);}
         .telecom-input-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#A9673B;font-weight:950;margin:0 0 6px;}
         .telecom-input-t{font-size:20px;line-height:1.1;color:#0f172a;font-weight:950;margin:0 0 6px;}
@@ -12053,6 +12056,94 @@ def render_telecom_tower_eval_analysis():
     with tab_url:
         section("01 · Dashboard", "Dashboard ejecutivo publicado", "Representa la pestaña Dashboard del archivo: resumen del escenario actual, comparativo de alternativas y mensaje ejecutivo.")
         dashboard_message = str(summary.get("mensaje_ejecutivo") or "").strip()
+        dashboard_demand = max(float(summary["consumo_mensual"] or 0.0), 0.0)
+        dashboard_coverage_metrics = wind_df[["Alternativa"]].copy()
+        dashboard_generation = pd.to_numeric(wind_df.get("Generación mensual total kWh", 0.0), errors="coerce").fillna(0.0).clip(lower=0.0)
+        if dashboard_demand > 0 and float(dashboard_generation.max() or 0.0) > 0:
+            dashboard_coverage_metrics["Cobertura real"] = dashboard_generation / dashboard_demand * 100.0
+            dashboard_coverage_metrics["Cobertura aprovechada"] = np.minimum(dashboard_generation, dashboard_demand) / dashboard_demand * 100.0
+        else:
+            raw_coverage = pd.to_numeric(wind_df.get("Cobertura real", 0.0), errors="coerce").fillna(0.0)
+            raw_coverage = np.where((raw_coverage > 0) & (raw_coverage <= 1), raw_coverage * 100.0, raw_coverage)
+            dashboard_coverage_metrics["Cobertura real"] = raw_coverage
+            dashboard_coverage_metrics["Cobertura aprovechada"] = np.minimum(raw_coverage, 100.0)
+        score_coverage_lookup = dashboard_coverage_metrics.set_index(dashboard_coverage_metrics["Alternativa"].astype(str))["Cobertura real"].to_dict()
+        alternatives["Cobertura score %"] = alternatives["Alternativa"].astype(str).map(score_coverage_lookup).fillna(0.0)
+        surface_lookup = wind_df.set_index(wind_df["Alternativa"].astype(str))["Impacto superficial"].to_dict() if "Impacto superficial" in wind_df.columns else {}
+        benefit_lookup = wind_df.set_index(wind_df["Alternativa"].astype(str))["Beneficio total híbrido $"].to_dict() if "Beneficio total híbrido $" in wind_df.columns else {}
+        generation_lookup = wind_df.set_index(wind_df["Alternativa"].astype(str))["Generación mensual total kWh"].to_dict() if "Generación mensual total kWh" in wind_df.columns else {}
+        alternatives["Impacto superficial m2"] = alternatives["Alternativa"].astype(str).map(surface_lookup).fillna(0.0).astype(float)
+        alternatives["Beneficio anual publicado CLP"] = alternatives["Alternativa"].astype(str).map(benefit_lookup).fillna(alternatives["Ahorro simulado anual CLP"]).astype(float)
+        alternatives["Generación mensual publicada kWh"] = alternatives["Alternativa"].astype(str).map(generation_lookup).fillna(0.0).astype(float)
+        alternatives["kWh anual por m2"] = (alternatives["Generación mensual publicada kWh"] * 12.0) / alternatives["Impacto superficial m2"].replace(0, np.nan)
+        alternatives["Beneficio anual por m2"] = alternatives["Beneficio anual publicado CLP"] / alternatives["Impacto superficial m2"].replace(0, np.nan)
+        alternatives["Score técnico-económico"] = (
+            _telecom_score(alternatives["CAPEX CLP"]) * 0.32
+            + _telecom_score(alternatives["Payback híbrido años"]) * 0.32
+            + _telecom_score(alternatives["LCOE CLP/kWh"]) * 0.18
+            + _telecom_score(alternatives["Cobertura score %"], higher_is_better=True) * 0.10
+            + _telecom_score(alternatives["Impacto superficial m2"]) * 0.08
+        ) * 100.0
+        dashboard_recommended = alternatives.sort_values("Score técnico-económico", ascending=False, na_position="last").iloc[0]
+        dashboard_rec_name = str(dashboard_recommended["Alternativa"])
+        dashboard_rec_rows = wind_df[wind_df["Alternativa"].astype(str) == dashboard_rec_name]
+        dashboard_rec_row = dashboard_rec_rows.iloc[0] if not dashboard_rec_rows.empty else wind_df.iloc[0]
+        dashboard_coverage_lookup = dashboard_coverage_metrics.set_index(dashboard_coverage_metrics["Alternativa"].astype(str)).to_dict("index")
+        dashboard_rec_coverage = dashboard_coverage_lookup.get(dashboard_rec_name, {})
+        dashboard_coverage = float(dashboard_rec_coverage.get("Cobertura real", 0.0) or 0.0)
+        dashboard_useful_coverage = float(dashboard_rec_coverage.get("Cobertura aprovechada", min(dashboard_coverage, 100.0)) or 0.0)
+        dashboard_target_coverage = float(summary["cobertura_objetivo"] or 0.0) * 100.0
+        dashboard_score = float(dashboard_recommended["Score técnico-económico"] or 0.0)
+        dashboard_rec_capex = float(dashboard_recommended["CAPEX CLP"] or summary["capex_recomendado"] or 0.0)
+        dashboard_rec_payback = float(dashboard_recommended["Payback híbrido años"] or summary["payback_hibrido"] or 0.0)
+        dashboard_rec_lcoe = float(dashboard_recommended["LCOE CLP/kWh"] or summary["lcoe"] or 0.0)
+        dashboard_rec_turbines = int(float(dashboard_rec_row.get("Nº turbinas requerido", summary["numero_turbinas"]) or summary["numero_turbinas"] or 0))
+        dashboard_rec_kw = float(dashboard_rec_row.get("Potencia instalada kW", summary["potencia_instalada_kw"]) or summary["potencia_instalada_kw"] or 0.0)
+        dashboard_surface_m2 = float(dashboard_recommended.get("Impacto superficial m2", 0.0) or 0.0)
+        dashboard_kwh_m2 = float(dashboard_recommended.get("kWh anual por m2", 0.0) or 0.0)
+        dashboard_benefit_m2 = float(dashboard_recommended.get("Beneficio anual por m2", 0.0) or 0.0)
+        dashboard_benefit_annual = float(dashboard_rec_row.get("Beneficio total híbrido $", dashboard_recommended.get("Ahorro simulado anual CLP", 0.0)) or 0.0)
+        dashboard_capex_reference = float(dashboard_rec_capex or dashboard_rec_row.get("CAPEX total $", 0.0) or 0.0)
+        dashboard_payback_reference = float(dashboard_rec_payback or 0.0)
+        dashboard_recovery_annual = dashboard_capex_reference / dashboard_payback_reference if dashboard_payback_reference > 0 and dashboard_capex_reference > 0 else dashboard_benefit_annual
+        dashboard_net_benefit_20 = dashboard_recovery_annual * 20.0 - dashboard_capex_reference
+        dashboard_gross_savings_20 = float(dashboard_rec_row.get("Ahorro anual híbrido $", summary["ahorro_anual_hibrido"]) or 0.0) * 20.0
+        rec_base_fp = float(dashboard_rec_row.get("Factor planta", 0.0) or 0.0)
+        rec_annual_saving = float(dashboard_rec_row.get("Ahorro anual híbrido $", 0.0) or 0.0)
+        rec_surplus_income = float(dashboard_rec_row.get("Ingreso venta excedente $", 0.0) or 0.0)
+        rec_om_cost = float(dashboard_rec_row.get("O&M anual $", 0.0) or 0.0)
+        robustness_points = []
+        for robustness_factor in [0.70, 0.85, 1.00]:
+            benefit_case = max((rec_annual_saving + rec_surplus_income) * robustness_factor - rec_om_cost, 0.0)
+            payback_case = dashboard_capex_reference / benefit_case if benefit_case > 0 else np.nan
+            robustness_points.append((rec_base_fp * robustness_factor, payback_case))
+        robust_under_5 = [fp for fp, pb in robustness_points if np.isfinite(pb) and pb < 5.0]
+        if len(robust_under_5) >= 2:
+            robustness_title = "Alta"
+            robustness_detail = f"PB <5 años entre FP {min(robust_under_5):.0f}% y {max(robust_under_5):.0f}%"
+        elif robust_under_5:
+            robustness_title = "Media"
+            robustness_detail = f"PB <5 años desde FP {min(robust_under_5):.0f}%"
+        else:
+            robustness_title = "Baja"
+            robustness_detail = "Requiere validar viento"
+        rec_capex_mm = dashboard_rec_capex / 1_000_000
+        rec_lcoe_display = format_clp(dashboard_rec_lcoe)
+        rec_reasons = [
+            "Menor payback del análisis" if dashboard_rec_payback <= float(alternatives["Payback híbrido años"].min()) + 0.01 else "Payback competitivo",
+            "CAPEX competitivo" if dashboard_rec_capex <= float(alternatives["CAPEX CLP"].median()) else "CAPEX validado por retorno",
+            "LCOE mínimo" if dashboard_rec_lcoe <= float(alternatives["LCOE CLP/kWh"].min()) + 0.01 else "LCOE competitivo",
+            "Menor impacto superficial" if dashboard_surface_m2 <= float(alternatives["Impacto superficial m2"].replace(0, np.nan).median() or dashboard_surface_m2) else "Impacto superficial controlado",
+        ]
+        rec_reasons_html = "".join(f"<li>{html.escape(reason)}</li>" for reason in rec_reasons)
+        dynamic_dashboard_message = (
+            f"La alternativa {dashboard_rec_name} permite cubrir aproximadamente el {dashboard_coverage:.0f}% "
+            f"de la demanda energética del sitio, alcanzando un payback de {years_label(dashboard_rec_payback)}, "
+            f"con un CAPEX de {rec_capex_mm:.1f} MM CLP y un LCOE de {rec_lcoe_display}/kWh. "
+            "Esta alternativa presenta el mejor equilibrio entre inversión, retorno y seguridad operacional para sitios telecom."
+        )
+        if dashboard_message and not dashboard_coverage:
+            dynamic_dashboard_message = dashboard_message
         st.markdown(
             f"""
             <div class="telecom-dash-shell">
@@ -12064,18 +12155,33 @@ def render_telecom_tower_eval_analysis():
                 </div>
                 <div class="telecom-dash-rec">
                   <p class="telecom-dash-rec-k">Tecnología recomendada</p>
-                  <p class="telecom-dash-rec-v">{html.escape(str(summary["tecnologia_recomendada"]))}</p>
-                  <p class="telecom-dash-s">{int(summary["numero_turbinas"])} turbinas · {float(summary["potencia_instalada_kw"]):.1f} kW instalados</p>
+                  <p class="telecom-dash-rec-v">{html.escape(dashboard_rec_name)}</p>
+                  <p class="telecom-dash-s">Score {dashboard_score:.0f}/100 · {dashboard_rec_turbines} turbinas · {dashboard_rec_kw:.1f} kW instalados</p>
+                  <ul style="margin:10px 0 0;padding-left:18px;text-align:left;color:#fff;font-size:11px;line-height:1.35;font-weight:850;">{rec_reasons_html}</ul>
                 </div>
               </div>
               <div class="telecom-dash-body">
+                <p class="telecom-card-k" style="margin:0 0 8px;color:#A9673B;">Resumen ejecutivo del sitio</p>
                 <div class="telecom-grid">
-                  <div class="telecom-card"><p class="telecom-card-k">Consumo mensual</p><p class="telecom-card-v">{float(summary["consumo_mensual"]):,.0f} kWh</p><p class="telecom-card-s">Demanda base del sitio.</p></div>
-                  <div class="telecom-card"><p class="telecom-card-k">Cobertura objetivo</p><p class="telecom-card-v">{float(summary["cobertura_objetivo"]) * 100:.0f}%</p><p class="telecom-card-s">Meta de suministro eólico.</p></div>
-                  <div class="telecom-card"><p class="telecom-card-k">Costo ponderado</p><p class="telecom-card-v">{format_clp(float(summary["costo_ponderado_actual"]))}</p><p class="telecom-card-s">CLP/kWh actual del sitio.</p></div>
-                  <div class="telecom-card"><p class="telecom-card-k">CAPEX recomendado</p><p class="telecom-card-v">{format_clp(float(summary["capex_recomendado"]))}</p><p class="telecom-card-s">Inversión de la opción recomendada.</p></div>
-                  <div class="telecom-card"><p class="telecom-card-k">Payback híbrido</p><p class="telecom-card-v">{years_label(summary["payback_hibrido"])}</p><p class="telecom-card-s">Recuperación publicada en la hoja.</p></div>
-                  <div class="telecom-card"><p class="telecom-card-k">LCOE</p><p class="telecom-card-v">{format_clp(float(summary["lcoe"]))}</p><p class="telecom-card-s">Costo nivelado publicado.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Consumo</p><p class="telecom-card-v">{float(summary["consumo_mensual"]):,.0f} kWh</p><p class="telecom-card-s">Demanda mensual</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Cobertura</p><p class="telecom-card-v">{dashboard_coverage:.0f}%</p><p class="telecom-card-s">Recomendada</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">CAPEX</p><p class="telecom-card-v">{rec_capex_mm:.1f} MM</p><p class="telecom-card-s">Inversión inicial</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Payback</p><p class="telecom-card-v">{years_label(dashboard_rec_payback)}</p><p class="telecom-card-s">Recuperación</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">LCOE</p><p class="telecom-card-v">{format_clp(dashboard_rec_lcoe)}</p><p class="telecom-card-s">CLP/kWh</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Score</p><p class="telecom-card-v">{dashboard_score:.0f}/100</p><p class="telecom-card-s">Incluye m²</p></div>
+                </div>
+                <div class="telecom-grid">
+                  <div class="telecom-card"><p class="telecom-card-k">Ahorro anual</p><p class="telecom-card-v">{dashboard_benefit_annual/1_000_000:.1f} MM</p><p class="telecom-card-s">Beneficio anual</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Beneficio 20 años</p><p class="telecom-card-v">{dashboard_net_benefit_20/1_000_000:.1f} MM</p><p class="telecom-card-s">Neto post CAPEX</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Diésel evitado</p><p class="telecom-card-v">{float(summary["diesel_evitado_l_anio"]):,.0f} L</p><p class="telecom-card-s">Por año</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">CO2 evitado</p><p class="telecom-card-v">{float(summary["co2_evitado_t_anio"]):.1f} t</p><p class="telecom-card-s">Por año</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Cobertura útil</p><p class="telecom-card-v">{dashboard_useful_coverage:.0f}%</p><p class="telecom-card-s">Aprovechada</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Robustez viento</p><p class="telecom-card-v">{html.escape(robustness_title)}</p><p class="telecom-card-s">{html.escape(robustness_detail)}</p></div>
+                </div>
+                <div class="telecom-grid-4" style="grid-template-columns:repeat(3,minmax(0,1fr));">
+                  <div class="telecom-card"><p class="telecom-card-k">m² intervenidos</p><p class="telecom-card-v">{dashboard_surface_m2:.0f} m²</p><p class="telecom-card-s">Impacto superficial</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">kWh por m²</p><p class="telecom-card-v">{dashboard_kwh_m2:,.0f}</p><p class="telecom-card-s">Generación anual</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Beneficio por m²</p><p class="telecom-card-v">{dashboard_benefit_m2/1_000_000:.2f} MM</p><p class="telecom-card-s">CLP/año por m²</p></div>
                 </div>
               </div>
             </div>
@@ -12132,6 +12238,14 @@ def render_telecom_tower_eval_analysis():
                     f'<td>{years_label(row["Payback c/remanente"])}</td>'
                     "</tr>"
                 )
+            duplicated_remnant = table_df["Remanente anual MWh"].round(1).duplicated(keep=False).any()
+            remnant_note = (
+                '<p style="margin:8px 0 0;color:#64748b;font-size:11px;font-weight:760;">'
+                'Nota: el excedente puede repetirse entre alternativas cuando está limitado por el patrón de consumo del sitio.'
+                '</p>'
+                if duplicated_remnant
+                else ""
+            )
             return (
                 '<div class="telecom-site-block" style="margin-top:10px;">'
                 '<div class="telecom-site-block-h"><div>'
@@ -12141,7 +12255,7 @@ def render_telecom_tower_eval_analysis():
                 '<table class="telecom-site-table">'
                 '<thead><tr><th>Alternativa</th><th>Remanente anual</th><th>Ingreso excedente</th><th>Remanente acumulado 20 años</th><th>Payback c/remanente</th></tr></thead>'
                 f'<tbody>{"".join(rows_html)}</tbody>'
-                '</table></div>'
+                f'</table>{remnant_note}</div>'
             ).replace(",", ".")
 
         def telecom_cumulative_savings_chart(
@@ -12168,18 +12282,34 @@ def render_telecom_tower_eval_analysis():
             cumulative_total = recovery_annual * years_axis
             cumulative_after_capex = cumulative_total - capex_total
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=years_axis, y=cumulative_gross / 1_000_000, name="Ahorro bruto", mode="lines", line=dict(color=blue_1, width=2.2, dash="dot"), hovertemplate="Año %{x}<br>Ahorro bruto: %{y:.1f} MM CLP<extra></extra>"))
-            fig.add_trace(go.Scatter(x=years_axis, y=cumulative_net / 1_000_000, name="Ahorro neto operativo", mode="lines+markers", line=dict(color=blue_4, width=3), marker=dict(size=7, color=blue_4, line=dict(color="#ffffff", width=1.4)), hovertemplate="Año %{x}<br>Ahorro neto: %{y:.1f} MM CLP<extra></extra>"))
-            fig.add_trace(go.Scatter(x=years_axis, y=cumulative_total / 1_000_000, name="Beneficio usado para payback", mode="lines+markers", line=dict(color="#EA6400", width=2.8, dash="dash"), marker=dict(size=7, color="#EA6400", line=dict(color="#ffffff", width=1.4)), hovertemplate="Año %{x}<br>Beneficio acumulado: %{y:.1f} MM CLP<extra></extra>"))
-            fig.add_trace(go.Scatter(x=years_axis, y=cumulative_after_capex / 1_000_000, name="Neto después CAPEX", mode="lines+markers", line=dict(color=blue_5, width=3.2), marker=dict(size=7, color=blue_5, line=dict(color="#ffffff", width=1.4)), fill="tozeroy", fillcolor="rgba(117,169,184,.16)", hovertemplate="Año %{x}<br>Neto post CAPEX: %{y:.1f} MM CLP<extra></extra>"))
+            fig.add_trace(go.Scatter(x=years_axis, y=cumulative_total / 1_000_000, name="Beneficio acumulado", mode="lines+markers", line=dict(color="#EA6400", width=3.8), marker=dict(size=7, color="#EA6400", line=dict(color="#ffffff", width=1.4)), hovertemplate="Año %{x}<br>Beneficio acumulado: %{y:.1f} MM CLP<extra></extra>"))
+            fig.add_trace(go.Scatter(x=years_axis, y=cumulative_after_capex / 1_000_000, name="Neto después CAPEX", mode="lines+markers", line=dict(color=blue_5, width=3.8), marker=dict(size=7, color=blue_5, line=dict(color="#ffffff", width=1.4)), fill="tozeroy", fillcolor="rgba(117,169,184,.16)", hovertemplate="Año %{x}<br>Neto post CAPEX: %{y:.1f} MM CLP<extra></extra>"))
             fig.add_hline(y=0, line_color=blue_text, line_width=1, opacity=.55)
             if np.isfinite(payback_reference):
                 payback_x = max(0.0, min(payback_reference, float(project_years)))
                 fig.add_vline(line_color="#EA6400", line_dash="dash", x=payback_x, annotation_text=f"Payback {years_label(payback_reference)}", annotation_position="top right")
-            fig.update_layout(height=height, margin=dict(l=10, r=16, t=28, b=40), xaxis=dict(title="Año de operación", dtick=max(1, project_years // 10), range=[0, project_years]), yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.22)"), legend=dict(orientation="h", y=1.18, x=0, title=None), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
+                fig.add_trace(go.Scatter(
+                    x=[payback_x],
+                    y=[0],
+                    name="Payback",
+                    mode="markers+text",
+                    marker=dict(size=18, color="#ffffff", line=dict(color="#EA6400", width=4)),
+                    text=[years_label(payback_reference)],
+                    textposition="bottom right",
+                    textfont=dict(color=blue_text, size=12),
+                    hovertemplate=f"Payback: {years_label(payback_reference)}<extra></extra>",
+                ))
+            fig.update_layout(height=height, margin=dict(l=10, r=16, t=18, b=36), xaxis=dict(title="Año de operación", dtick=max(1, project_years // 10), range=[0, project_years]), yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.22)"), legend=dict(orientation="h", y=1.12, x=0, title=None), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
             return fig
 
         def telecom_coverage_by_turbine_chart(chart_df: pd.DataFrame, monthly_consumption: float, selected_turbine: str, height: int = 390) -> go.Figure:
+            def coverage_status_color(value: float) -> str:
+                if value < 100:
+                    return "#F6A6A6"
+                if value <= 110:
+                    return "#2F8F6B"
+                return "#1F9FB5"
+
             coverage_df = chart_df.copy()
             coverage_df["Alternativa"] = pd.Categorical(coverage_df["Alternativa"].astype(str), categories=turbine_order, ordered=True)
             coverage_df = coverage_df.sort_values("Alternativa").copy()
@@ -12195,6 +12325,7 @@ def render_telecom_tower_eval_analysis():
                 blue_5 if name == str(selected_turbine) else blue_3
                 for name in coverage_df["Alternativa"]
             ]
+            coverage_colors = [coverage_status_color(float(v)) for v in coverage_df["Cobertura real %"]]
             fig = go.Figure()
             fig.add_trace(go.Bar(
                 x=coverage_df["Alternativa"],
@@ -12220,8 +12351,6 @@ def render_telecom_tower_eval_analysis():
                 name="Excedente mensual",
                 marker_color="#EA6400",
                 opacity=0.92,
-                text=[f"+{v/1000:.1f} MWh" if v >= 1000 else (f"+{v:.0f} kWh" if v > 0 else "") for v in coverage_df["Excedente kWh"]],
-                textposition="outside",
                 cliponaxis=False,
                 hovertemplate="<b>%{x}</b><br>Excedente mensual: %{y:,.0f} kWh<extra></extra>",
             ))
@@ -12231,23 +12360,37 @@ def render_telecom_tower_eval_analysis():
                 name="Cobertura real",
                 yaxis="y2",
                 mode="lines+markers+text",
-                line=dict(color=blue_2, width=3.2),
-                marker=dict(size=10, color="#ffffff", line=dict(color=blue_2, width=2)),
+                line=dict(color="rgba(117,169,184,.62)", width=3.2),
+                marker=dict(size=11, color="#ffffff", line=dict(color=coverage_colors, width=2.4)),
                 text=[f"{v:.0f}%" for v in coverage_df["Cobertura real %"]],
                 textposition="top center",
-                textfont=dict(color=blue_text, size=11),
+                textfont=dict(color=coverage_colors, size=12),
                 hovertemplate="<b>%{x}</b><br>Cobertura real: %{y:.0f}%<extra></extra>",
             ))
             if demand > 0:
                 fig.add_hline(y=demand, line_color=blue_1, line_dash="dot", line_width=2, annotation_text=f"Consumo mensual {demand:,.0f} kWh".replace(",", "."), annotation_position="top left")
+            for turbine_name, excess_pct in zip(coverage_df["Alternativa"], np.maximum(coverage_df["Cobertura real %"] - 100.0, 0.0)):
+                fig.add_annotation(
+                    x=turbine_name,
+                    yref="paper",
+                    y=-0.30,
+                    text=f"Excedente: {excess_pct:.0f}%",
+                    showarrow=False,
+                    font=dict(color="#A46339" if excess_pct > 0 else "#94A3B8", size=11),
+                    bgcolor="rgba(255,255,255,.82)",
+                    bordercolor="rgba(117,169,184,.20)",
+                    borderwidth=1,
+                    borderpad=3,
+                    yanchor="top",
+                )
             y_max = max(float((coverage_df["Consumo cubierto kWh"] + coverage_df["Brecha kWh"] + coverage_df["Excedente kWh"]).max() or 0.0), demand) * 1.18
             coverage_max = max(float(coverage_df["Cobertura real %"].max() or 0.0), 100.0) * 1.18
             fig.update_layout(
                 height=height,
-                margin=dict(l=10, r=58, t=34, b=45),
+                margin=dict(l=10, r=58, t=24, b=112),
                 barmode="stack",
                 legend=dict(orientation="h", y=1.18, x=0, title=None),
-                xaxis=dict(categoryorder="array", categoryarray=turbine_order),
+                xaxis=dict(categoryorder="array", categoryarray=turbine_order, tickfont=dict(size=11)),
                 yaxis=dict(title="kWh/mes", gridcolor="rgba(148,163,184,.22)", range=[0, y_max]),
                 yaxis2=dict(title="Cobertura real", overlaying="y", side="right", ticksuffix="%", showgrid=False, range=[0, coverage_max]),
                 paper_bgcolor="rgba(0,0,0,0)",
@@ -12263,37 +12406,39 @@ def render_telecom_tower_eval_analysis():
             surplus_income = max(float(row.get("Ingreso venta excedente $", 0.0) or 0.0), 0.0)
             om_cost = max(float(row.get("O&M anual $", 0.0) or 0.0), 0.0)
             net_final = max(current_cost - wind_saving - surplus_income + om_cost, 0.0)
-            values_mm = [
-                current_cost / 1_000_000,
-                -wind_saving / 1_000_000,
-                -surplus_income / 1_000_000,
-                om_cost / 1_000_000,
-                net_final / 1_000_000,
-            ]
-            labels = ["Costo actual", "Ahorro eólico", "Ingreso excedentes", "O&M anual", "Costo neto final"]
-            measures = ["absolute", "relative", "relative", "relative", "total"]
+            total_benefit = wind_saving + surplus_income
+            show_surplus = total_benefit > 0 and surplus_income / total_benefit >= 0.05
+            labels = ["Costo actual", "Ahorro eólico"]
+            values_mm = [current_cost / 1_000_000, -wind_saving / 1_000_000]
+            measures = ["absolute", "relative"]
+            text_values = [f"{current_cost/1_000_000:.1f} MM", f"-{wind_saving/1_000_000:.1f} MM"]
+            if show_surplus:
+                labels.append("Ingreso excedentes")
+                values_mm.append(-surplus_income / 1_000_000)
+                measures.append("relative")
+                text_values.append(f"-{surplus_income/1_000_000:.1f} MM")
+            labels.extend(["O&M anual", "Costo neto final"])
+            values_mm.extend([om_cost / 1_000_000, net_final / 1_000_000])
+            measures.extend(["relative", "total"])
+            text_values.extend([f"+{om_cost/1_000_000:.1f} MM", f"{net_final/1_000_000:.1f} MM"])
             fig = go.Figure(go.Waterfall(
                 name="Waterfall económico",
                 orientation="v",
                 measure=measures,
                 x=labels,
                 y=values_mm,
-                text=[
-                    f"{current_cost/1_000_000:.1f} MM",
-                    f"-{wind_saving/1_000_000:.1f} MM",
-                    f"-{surplus_income/1_000_000:.1f} MM",
-                    f"+{om_cost/1_000_000:.1f} MM",
-                    f"{net_final/1_000_000:.1f} MM",
-                ],
+                text=text_values,
                 textposition="outside",
-                connector={"line": {"color": "rgba(100,116,139,.42)", "width": 1.4}},
-                increasing={"marker": {"color": "#A46339"}},
-                decreasing={"marker": {"color": blue_2}},
-                totals={"marker": {"color": blue_5}},
+                textfont=dict(color=blue_text, size=12),
+                connector={"line": {"color": "rgba(100,116,139,.35)", "width": 1.2, "dash": "dot"}},
+                increasing={"marker": {"color": "#A46339", "line": {"color": "#ffffff", "width": 1.2}}},
+                decreasing={"marker": {"color": blue_2, "line": {"color": "#ffffff", "width": 1.2}}},
+                totals={"marker": {"color": blue_5, "line": {"color": "#ffffff", "width": 1.4}}},
                 hovertemplate="<b>%{x}</b><br>Impacto: %{y:.1f} MM CLP/año<extra></extra>",
             ))
+            fig.add_hline(y=0, line_color="rgba(32,56,79,.45)", line_width=1)
             fig.add_annotation(
-                x=4,
+                x=len(labels) - 1,
                 y=net_final / 1_000_000,
                 text=f"Reducción neta {(1 - net_final / current_cost) * 100:.0f}%" if current_cost > 0 else "Costo neto final",
                 showarrow=False,
@@ -12302,12 +12447,23 @@ def render_telecom_tower_eval_analysis():
                 bgcolor="rgba(255,255,255,.86)",
                 bordercolor="rgba(117,169,184,.32)",
                 borderwidth=1,
+                borderpad=4,
+            )
+            fig.add_annotation(
+                xref="paper",
+                yref="paper",
+                x=0,
+                y=1.12,
+                text="Lectura: ahorro eólico y excedentes reducen el costo anual; O&M muestra el costo operativo incremental.",
+                showarrow=False,
+                align="left",
+                font=dict(color="#64748b", size=11),
             )
             fig.update_layout(
                 height=height,
-                margin=dict(l=10, r=18, t=30, b=48),
+                margin=dict(l=10, r=18, t=52, b=56),
                 yaxis=dict(title="MM CLP/año", gridcolor="rgba(148,163,184,.22)", rangemode="tozero"),
-                xaxis=dict(tickfont=dict(size=11)),
+                xaxis=dict(tickfont=dict(size=11), title=None),
                 showlegend=False,
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
@@ -12315,25 +12471,89 @@ def render_telecom_tower_eval_analysis():
             )
             return fig
 
-        def telecom_decision_map_chart(map_df: pd.DataFrame, height: int = 390) -> go.Figure:
+        def telecom_decision_map_chart(map_df: pd.DataFrame, selected_turbine: str, height: int = 390) -> go.Figure:
             fig_quad = px.scatter(
                 map_df,
                 x="CAPEX MM CLP",
                 y="Payback híbrido años",
                 size="Energía útil anual kWh",
-                color="Score técnico",
+                color="Score técnico-económico",
                 text="Alternativa",
                 color_continuous_scale=[blue_1, blue_2, blue_5],
                 custom_data=["LCOE CLP/kWh", "CO2 evitado t/año"],
             )
             fig_quad.update_traces(
-                textposition="top center",
-                textfont=dict(size=11, color=blue_text),
+                textposition=["top left", "bottom right", "top right", "bottom left", "top center"][: len(map_df)],
+                textfont=dict(size=1, color="rgba(0,0,0,0)"),
                 marker=dict(line=dict(color="#ffffff", width=2), sizemin=10),
                 hovertemplate="<b>%{text}</b><br>CAPEX: %{x:.1f} MM CLP<br>Payback: %{y:.1f} años<br>LCOE: %{customdata[0]:,.0f} CLP/kWh<br>CO2: %{customdata[1]:.1f} t/año<extra></extra>",
             )
+            label_offsets = [(-30, -28), (28, -34), (34, 24), (-34, 28), (0, -34)]
+            for idx, (_, point) in enumerate(map_df.reset_index(drop=True).iterrows()):
+                x_shift, y_shift = label_offsets[idx % len(label_offsets)]
+                fig_quad.add_annotation(
+                    x=float(point["CAPEX MM CLP"]),
+                    y=float(point["Payback híbrido años"]),
+                    text=html.escape(str(point["Alternativa"])),
+                    showarrow=False,
+                    xshift=x_shift,
+                    yshift=y_shift,
+                    font=dict(color=blue_text, size=11),
+                    bgcolor="rgba(255,255,255,.92)",
+                    bordercolor="rgba(117,169,184,.34)",
+                    borderwidth=1,
+                    borderpad=4,
+                )
+            selected_df = map_df[map_df["Alternativa"].astype(str) == str(selected_turbine)]
+            if not selected_df.empty:
+                fig_quad.add_trace(
+                    go.Scatter(
+                        x=selected_df["CAPEX MM CLP"],
+                        y=selected_df["Payback híbrido años"],
+                        name="Recomendada",
+                        mode="markers",
+                        marker=dict(
+                            size=34,
+                            color="rgba(255,255,255,0)",
+                            line=dict(color="#EA6400", width=4),
+                            symbol="circle-open",
+                        ),
+                        hoverinfo="skip",
+                        showlegend=False,
+                    )
+                )
+                selected_point = selected_df.iloc[0]
+                fig_quad.add_annotation(
+                    x=float(selected_point["CAPEX MM CLP"]),
+                    y=float(selected_point["Payback híbrido años"]),
+                    text="RECOMENDADA",
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowcolor="#EA6400",
+                    ax=0,
+                    ay=-52,
+                    font=dict(color="#EA6400", size=11),
+                    bgcolor="#ffffff",
+                    bordercolor="#EA6400",
+                    borderwidth=1,
+                    borderpad=4,
+                )
             fig_quad.add_vline(x=float(map_df["CAPEX MM CLP"].median()), line=dict(color=blue_3, width=1.8, dash="dot"))
             fig_quad.add_hline(y=float(map_df["Payback híbrido años"].median()), line=dict(color=blue_3, width=1.8, dash="dot"))
+            fig_quad.add_annotation(
+                xref="paper",
+                yref="paper",
+                x=0.02,
+                y=0.98,
+                text="Zona óptima = menor CAPEX y menor payback",
+                showarrow=False,
+                align="left",
+                font=dict(color=blue_text, size=12),
+                bgcolor="rgba(255,255,255,.88)",
+                bordercolor="rgba(117,169,184,.35)",
+                borderwidth=1,
+                borderpad=5,
+            )
             fig_quad.update_layout(
                 xaxis=dict(title="CAPEX total (MM CLP)", rangemode="tozero"),
                 yaxis=dict(title="Payback híbrido (años)", rangemode="tozero"),
@@ -12341,22 +12561,50 @@ def render_telecom_tower_eval_analysis():
             )
             return tune_dashboard_chart(fig_quad, height)
 
-        cumulative_source = wind_df[wind_df["Alternativa"].astype(str) == str(summary["tecnologia_recomendada"])]
+        cumulative_source = wind_df[wind_df["Alternativa"].astype(str) == dashboard_rec_name]
         if cumulative_source.empty:
             cumulative_source = wind_df.sort_values("Payback híbrido años", na_position="last").head(1)
         cumulative_row = cumulative_source.iloc[0]
+        dashboard_capex_reference = float(dashboard_rec_capex or cumulative_row.get("CAPEX total $", 0.0) or 0.0)
+        dashboard_payback_reference = float(dashboard_rec_payback or 0.0)
+        dashboard_total_annual = float(cumulative_row.get("Beneficio total híbrido $", cumulative_row.get("Beneficio neto híbrido $", 0.0)) or 0.0)
+        if dashboard_payback_reference > 0 and dashboard_capex_reference > 0:
+            dashboard_recovery_annual = dashboard_capex_reference / dashboard_payback_reference
+        else:
+            dashboard_recovery_annual = dashboard_total_annual
+        dashboard_net_benefit_20 = dashboard_recovery_annual * 20.0 - dashboard_capex_reference
+        dashboard_gross_savings_20 = float(cumulative_row.get("Ahorro anual híbrido $", summary["ahorro_anual_hibrido"]) or 0.0) * 20.0
+        robustness_points = []
+        rec_base_fp = float(cumulative_row.get("Factor planta", 0.0) or 0.0)
+        rec_annual_saving = float(cumulative_row.get("Ahorro anual híbrido $", 0.0) or 0.0)
+        rec_surplus_income = float(cumulative_row.get("Ingreso venta excedente $", 0.0) or 0.0)
+        rec_om_cost = float(cumulative_row.get("O&M anual $", 0.0) or 0.0)
+        for robustness_factor in [0.70, 0.85, 1.00]:
+            benefit_case = max((rec_annual_saving + rec_surplus_income) * robustness_factor - rec_om_cost, 0.0)
+            payback_case = dashboard_capex_reference / benefit_case if benefit_case > 0 else np.nan
+            robustness_points.append((rec_base_fp * robustness_factor, payback_case))
+        robust_under_5 = [fp for fp, pb in robustness_points if np.isfinite(pb) and pb < 5.0]
+        if len(robust_under_5) >= 2:
+            robustness_title = "Alta robustez"
+            robustness_detail = f"Payback < 5 años entre FP {min(robust_under_5):.0f}% y {max(robust_under_5):.0f}%."
+        elif robust_under_5:
+            robustness_title = "Robustez media"
+            robustness_detail = f"Payback < 5 años desde FP {min(robust_under_5):.0f}%."
+        else:
+            robustness_title = "Revisar viento"
+            robustness_detail = "El payback supera 5 años en escenarios conservadores."
 
         st.markdown(
-            f'<p class="telecom-panel-title">Ahorro acumulado · {html.escape(str(cumulative_row["Alternativa"]))}</p>'
-            '<p class="telecom-panel-sub">Evolución del ahorro bruto, ahorro neto operativo y recuperación acumulada descontando CAPEX.</p>',
+            f'<p class="telecom-panel-title">Recuperación de inversión y ahorro acumulado · {html.escape(str(cumulative_row["Alternativa"]))}</p>'
+            '<p class="telecom-panel-sub">Beneficio acumulado frente al neto después de CAPEX. El marcador indica el año de recuperación.</p>',
             unsafe_allow_html=True,
         )
         st.plotly_chart(
             telecom_cumulative_savings_chart(
                 cumulative_row,
-                370,
-                published_payback=float(summary["payback_hibrido"]),
-                published_capex=float(summary["capex_recomendado"]),
+                330,
+                published_payback=dashboard_rec_payback,
+                published_capex=dashboard_rec_capex,
             ),
             use_container_width=True,
             config={"displaylogo": False},
@@ -12371,19 +12619,32 @@ def render_telecom_tower_eval_analysis():
             telecom_coverage_by_turbine_chart(
                 wind_df,
                 float(summary["consumo_mensual"]),
-                str(summary["tecnologia_recomendada"]),
-                390,
+                dashboard_rec_name,
+                380,
             ),
             use_container_width=True,
             config={"displaylogo": False},
         )
 
-        coverage_left, coverage_right = st.columns([0.94, 1.06])
+        st.markdown('<p class="telecom-panel-title">Lectura ejecutiva de decisión</p><p class="telecom-panel-sub">Por qué gana la alternativa recomendada sin repetir KPI del resumen superior.</p>', unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="telecom-dash-message">
+              <b>Mensaje ejecutivo:</b> {html.escape(dynamic_dashboard_message)}<br>
+              <b>Score:</b> 32% CAPEX, 32% payback, 18% LCOE, 10% cobertura y 8% impacto superficial.
+              La alternativa seleccionada combina retorno, costo nivelado y menor intervención física del sitio.
+            </div>
+            """.replace(",", "."),
+            unsafe_allow_html=True,
+        )
+
+        coverage_left, coverage_right = st.columns([1.08, 0.92])
         with coverage_left:
-            st.markdown(telecom_remnant_summary_table(wind_df), unsafe_allow_html=True)
+            st.markdown('<p class="telecom-panel-title">Beneficio marginal por alternativa</p><p class="telecom-panel-sub">Diferencia económica anual obtenida por cada alternativa evaluada. La decisión se define por CAPEX, LCOE, payback e impacto superficial.</p>', unsafe_allow_html=True)
+            st.plotly_chart(telecom_remnant_value_chart(wind_df, 390), use_container_width=True, config={"displaylogo": False})
         with coverage_right:
-            st.markdown('<p class="telecom-panel-title">Mapa de decisión CAPEX vs retorno</p><p class="telecom-panel-sub">Menor payback y menor CAPEX se ubican hacia la zona inferior izquierda.</p>', unsafe_allow_html=True)
-            st.plotly_chart(telecom_decision_map_chart(alternatives, 390), use_container_width=True, config={"displaylogo": False})
+            st.markdown('<p class="telecom-panel-title">Mapa de decisión CAPEX vs retorno</p><p class="telecom-panel-sub">Zona óptima = menor CAPEX y menor payback. La burbuja recomendada se destaca automáticamente.</p>', unsafe_allow_html=True)
+            st.plotly_chart(telecom_decision_map_chart(alternatives, dashboard_rec_name, 390), use_container_width=True, config={"displaylogo": False})
 
         st.markdown(
             f'<p class="telecom-panel-title">Waterfall económico · {html.escape(str(cumulative_row["Alternativa"]))}</p>'
@@ -12401,24 +12662,6 @@ def render_telecom_tower_eval_analysis():
             config={"displaylogo": False},
         )
 
-        dash_left, dash_right = st.columns([1.08, 0.92])
-        with dash_left:
-            st.markdown('<p class="telecom-panel-title">Beneficio marginal por alternativa</p><p class="telecom-panel-sub">Barras: beneficio neto e ingreso por excedentes. Línea: beneficio total anual. Una sola escala económica para lectura ejecutiva.</p>', unsafe_allow_html=True)
-            st.plotly_chart(telecom_remnant_value_chart(wind_df, 390), use_container_width=True, config={"displaylogo": False})
-        with dash_right:
-            st.markdown('<p class="telecom-panel-title">Resumen de valor publicado</p><p class="telecom-panel-sub">Indicadores clave que conectan ahorro, operación e impacto ambiental.</p>', unsafe_allow_html=True)
-            st.markdown(
-                f"""
-                <div class="telecom-grid-4" style="grid-template-columns:1fr 1fr;">
-                  <div class="telecom-card"><p class="telecom-card-k">Ahorro anual híbrido</p><p class="telecom-card-v">{format_clp(float(summary["ahorro_anual_hibrido"]))}</p><p class="telecom-card-s">Ahorro publicado por la hoja.</p></div>
-                  <div class="telecom-card"><p class="telecom-card-k">Diésel evitado</p><p class="telecom-card-v">{float(summary["diesel_evitado_l_anio"]):,.0f} L/año</p><p class="telecom-card-s">Impacto operacional.</p></div>
-                  <div class="telecom-card"><p class="telecom-card-k">CO2 evitado</p><p class="telecom-card-v">{float(summary["co2_evitado_t_anio"]):.1f} t/año</p><p class="telecom-card-s">Impacto ambiental.</p></div>
-                  <div class="telecom-card"><p class="telecom-card-k">Energía útil anual</p><p class="telecom-card-v">{float(alternatives["Energía útil anual kWh"].median()):,.0f} kWh</p><p class="telecom-card-s">Base comparativa del Dashboard.</p></div>
-                </div>
-                <div class="telecom-dash-message"><b>Mensaje ejecutivo:</b> {html.escape(dashboard_message)}</div>
-                """.replace(",", "."),
-                unsafe_allow_html=True,
-        )
         st.markdown('<p class="telecom-panel-title">Panorama económico integral por turbina</p><p class="telecom-panel-sub">Vista simplificada: barras de CAPEX, línea de LCOE y etiqueta de payback para comparar inversión, costo nivelado y retorno sin sobrecargar la lectura.</p>', unsafe_allow_html=True)
         fig_integral = go.Figure()
         fig_integral.add_trace(
@@ -12426,12 +12669,12 @@ def render_telecom_tower_eval_analysis():
                 x=alternatives["Alternativa"],
                 y=alternatives["CAPEX MM CLP"],
                 name="CAPEX total",
-                marker_color=[blue_5 if str(name) == str(summary["tecnologia_recomendada"]) else blue_2 for name in alternatives["Alternativa"]],
+                marker_color=[blue_5 if str(name) == dashboard_rec_name else blue_2 for name in alternatives["Alternativa"]],
                 customdata=np.stack(
                     [
                         alternatives["LCOE CLP/kWh"].apply(format_clp),
                         alternatives["Payback híbrido años"].apply(years_label),
-                        alternatives["Score técnico"],
+                        alternatives["Score técnico-económico"],
                     ],
                     axis=-1,
                 ),
@@ -12469,9 +12712,21 @@ def render_telecom_tower_eval_analysis():
                 hovertemplate="<b>%{x}</b><br>Payback: %{text}<extra></extra>",
             )
         )
-        best_integral = alternatives.sort_values("Score técnico", ascending=False).iloc[0]
+        best_integral = recommended
         for _, row in alternatives.reset_index(drop=True).iterrows():
             capex_bar = float(row["CAPEX MM CLP"])
+            row_coverage = float(dashboard_coverage_lookup.get(str(row["Alternativa"]), {}).get("Cobertura real", 0.0) or 0.0)
+            fig_integral.add_annotation(
+                x=str(row["Alternativa"]),
+                y=capex_bar * 0.43,
+                text=f'Cobertura {row_coverage:.0f}%',
+                showarrow=False,
+                font=dict(color="#ffffff", size=11),
+                bgcolor="rgba(15,23,42,.16)",
+                bordercolor="rgba(255,255,255,.24)",
+                borderwidth=1,
+                borderpad=3,
+            )
             fig_integral.add_annotation(
                 x=str(row["Alternativa"]),
                 y=capex_bar * 0.30,
@@ -12513,39 +12768,9 @@ def render_telecom_tower_eval_analysis():
             hovermode="x unified",
         )
         st.plotly_chart(tune_dashboard_chart(fig_integral, 440), use_container_width=True, config={"displaylogo": False})
-        st.markdown('<p class="telecom-panel-title">Sensibilidad de viento real</p><p class="telecom-panel-sub">Pregunta crítica para Entel: qué pasa si el factor planta real queda bajo el caso base publicado.</p>', unsafe_allow_html=True)
-        wind_sens_rows = []
-        wind_base = wind_df.copy()
-        wind_base["Alternativa"] = wind_base["Alternativa"].astype(str)
-        wind_scenarios = [
-            ("Bajo", 0.70),
-            ("Conservador", 0.85),
-            ("Base", 1.00),
-            ("Alto", 1.15),
-        ]
-        for _, row in wind_base.iterrows():
-            base_fp = float(row.get("Factor planta", 0.0) or 0.0)
-            capex = float(row.get("CAPEX total $", 0.0) or 0.0)
-            annual_saving = float(row.get("Ahorro anual híbrido $", 0.0) or 0.0)
-            surplus_income = float(row.get("Ingreso venta excedente $", 0.0) or 0.0)
-            om_cost = float(row.get("O&M anual $", 0.0) or 0.0)
-            base_coverage = float(row.get("Cobertura real", 0.0) or 0.0)
-            for scenario_name, factor in wind_scenarios:
-                adjusted_fp = base_fp * factor
-                adjusted_benefit = max((annual_saving + surplus_income) * factor - om_cost, 0.0)
-                adjusted_payback = capex / adjusted_benefit if adjusted_benefit > 0 else np.nan
-                adjusted_coverage = base_coverage * factor
-                wind_sens_rows.append(
-                    {
-                        "Alternativa": str(row["Alternativa"]),
-                        "Escenario": scenario_name,
-                        "Factor planta real": adjusted_fp,
-                        "Payback ajustado": adjusted_payback,
-                        "Cobertura estimada": adjusted_coverage,
-                    }
-                )
-        wind_sens_df = pd.DataFrame(wind_sens_rows)
-        focus_turbine = "VAWT 3 kW" if "VAWT 3 kW" in set(wind_sens_df["Alternativa"].astype(str)) else str(summary["tecnologia_recomendada"])
+        audit_detail = sensitivity_detail_df.copy()
+        audit_velocity = sensitivity_velocity_detail_df.copy()
+        focus_turbine = dashboard_rec_name
         sensitivity_palette = {
             "VAWT 1 kW": "#B8D2E8",
             "VAWT 3 kW": blue_5,
@@ -12553,130 +12778,235 @@ def render_telecom_tower_eval_analysis():
             "VAWT 10 kW": "#EA6400",
             "VAWT 80 kW": "#A46339",
         }
-        fig_wind_sens = go.Figure()
-        for idx, turbine_name in enumerate(turbine_order):
-            turbine_df = wind_sens_df[wind_sens_df["Alternativa"] == turbine_name]
-            if turbine_df.empty:
-                continue
-            is_focus = turbine_name == focus_turbine
-            line_color = sensitivity_palette.get(turbine_name, blue_3)
-            fig_wind_sens.add_trace(
-                go.Scatter(
-                    x=turbine_df["Factor planta real"],
-                    y=turbine_df["Payback ajustado"],
-                    name=turbine_name,
-                    mode="lines+markers+text",
-                    line=dict(color=line_color, width=4 if is_focus else 2.2),
-                    marker=dict(size=11 if is_focus else 8, color="#ffffff", line=dict(color=line_color, width=2 if is_focus else 1.4)),
-                    opacity=1.0 if is_focus else 0.62,
-                    text=[years_label(v) if scenario == "Base" and is_focus else "" for v, scenario in zip(turbine_df["Payback ajustado"], turbine_df["Escenario"])],
-                    textposition="top center",
-                    customdata=np.stack([turbine_df["Escenario"], turbine_df["Cobertura estimada"]], axis=-1),
-                    hovertemplate="<b>%{fullData.name}</b><br>Escenario: %{customdata[0]}<br>Factor planta real: %{x:.1f}%<br>Payback ajustado: %{y:.1f} años<br>Cobertura estimada: %{customdata[1]:.0f}%<extra></extra>",
-                )
-            )
-        base_fp_ref = float(wind_base["Factor planta"].replace(0, np.nan).dropna().median() or 0.0)
-        if base_fp_ref > 0:
-            fig_wind_sens.add_vline(x=base_fp_ref, line=dict(color="#EA6400", width=2, dash="dash"), annotation_text=f"Base {base_fp_ref:.0f}%", annotation_position="top")
-        fig_wind_sens.update_layout(
-            xaxis=dict(title="Factor planta real (%)", rangemode="tozero"),
-            yaxis=dict(title="Payback ajustado (años)", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"),
-            legend=dict(orientation="h", y=1.18, x=0, title=None),
-            hovermode="x unified",
+        st.markdown('<p class="telecom-panel-title">Sensibilidad de viento real</p><p class="telecom-panel-sub">Payback sin remanente tomado exclusivamente desde la tabla auditable de 06_Sensibilidad, columna P o equivalente publicado.</p>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="telecom-dash-message">Este análisis no usa el payback base de 04_Modelo_Eolico: cruza velocidad de viento, factor planta y payback s/remanente desde la tabla auditable publicada.</div>',
+            unsafe_allow_html=True,
         )
-        st.plotly_chart(tune_dashboard_chart(fig_wind_sens, 390), use_container_width=True, config={"displaylogo": False})
-
-        audit_detail = sensitivity_detail_df.copy()
-        audit_velocity = sensitivity_velocity_detail_df.copy()
-        sens_audit_left, sens_audit_right = st.columns(2)
-        with sens_audit_left:
-            st.markdown('<p class="telecom-panel-title">Sensibilidad auditable: payback por cobertura</p><p class="telecom-panel-sub">Detalle A:Q de 06_Sensibilidad: payback con remanente según cobertura objetivo.</p>', unsafe_allow_html=True)
-            if not audit_detail.empty and {"Cobertura %", "Tecnología", "Payback c/remanente años num"}.issubset(audit_detail.columns):
-                cov_detail = audit_detail.dropna(subset=["Cobertura %", "Payback c/remanente años num"]).copy()
-                cov_detail["Tecnología"] = cov_detail["Tecnología"].astype(str)
-                fig_audit_cov = go.Figure()
-                for tech in turbine_order:
-                    tech_df = cov_detail[cov_detail["Tecnología"].str.contains(tech.replace("VAWT ", ""), case=False, regex=False)].sort_values("Cobertura %")
-                    if tech_df.empty:
-                        tech_df = cov_detail[cov_detail["Tecnología"] == tech].sort_values("Cobertura %")
-                    if tech_df.empty:
-                        continue
-                    is_focus = tech == focus_turbine or tech.replace("VAWT ", "") in focus_turbine
-                    color = sensitivity_palette.get(tech, blue_3)
-                    fig_audit_cov.add_trace(go.Scatter(
-                        x=tech_df["Cobertura %"],
-                        y=tech_df["Payback c/remanente años num"],
-                        name=tech,
-                        mode="lines+markers+text",
-                        line=dict(color=color, width=3.8 if is_focus else 2.1),
-                        marker=dict(size=10 if is_focus else 7, color="#ffffff", line=dict(color=color, width=2 if is_focus else 1.35)),
-                        opacity=1.0 if is_focus else 0.62,
-                        text=[years_label(v) if is_focus else "" for v in tech_df["Payback c/remanente años num"]],
-                        textposition="top center",
-                        hovertemplate="<b>%{fullData.name}</b><br>Cobertura: %{x:.0f}%<br>Payback c/remanente: %{y:.1f} años<extra></extra>",
-                    ))
-                fig_audit_cov.update_layout(xaxis=dict(title="Cobertura objetivo (%)", rangemode="tozero"), yaxis=dict(title="Payback c/remanente (años)", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), legend=dict(orientation="h", y=1.18, x=0, title=None), hovermode="x unified")
-                st.plotly_chart(tune_dashboard_chart(fig_audit_cov, 360), use_container_width=True, config={"displaylogo": False})
+        wind_audit_required = {"Velocidad m/s num", "FP ajustado %", "Tecnología", "Payback s/remanente años num"}
+        if not audit_velocity.empty and wind_audit_required.issubset(audit_velocity.columns):
+            selected_wind_audit = audit_velocity.dropna(subset=["Velocidad m/s num", "Payback s/remanente años num"]).copy()
+            selected_wind_audit["Tecnología"] = selected_wind_audit["Tecnología"].astype(str)
+            if "Cobertura %" in selected_wind_audit.columns:
+                coverage_reference = float(cobertura_pct or 0.0)
+                nearest_idx = (selected_wind_audit["Cobertura %"].astype(float) - coverage_reference).abs().idxmin()
+                nearest_coverage = float(selected_wind_audit.loc[nearest_idx, "Cobertura %"])
+                selected_wind_audit = selected_wind_audit[np.isclose(selected_wind_audit["Cobertura %"].astype(float), nearest_coverage, atol=0.001)].copy()
+                nearest_suffix = " Sensibilidad calculada con cobertura más cercana disponible." if abs(nearest_coverage - coverage_reference) > 0.001 else ""
+                coverage_note = f"Cobertura seleccionada: <b>{coverage_reference:.0f}%</b> · Cobertura usada desde tabla auditable: <b>{nearest_coverage:.0f}%</b>.{nearest_suffix}"
             else:
-                st.info("La tabla auditable de cobertura no está disponible en la lectura actual del URL.")
-        with sens_audit_right:
-            st.markdown('<p class="telecom-panel-title">Sensibilidad auditable: viento, FP y payback</p><p class="telecom-panel-sub">Detalle auditable por velocidad de viento: factor planta ajustado y payback con remanente.</p>', unsafe_allow_html=True)
-            if not audit_velocity.empty and {"Velocidad m/s num", "FP ajustado %", "Tecnología", "Payback c/remanente años num"}.issubset(audit_velocity.columns):
-                vel_detail = audit_velocity.dropna(subset=["Velocidad m/s num", "Payback c/remanente años num"]).copy()
-                vel_detail["Tecnología"] = vel_detail["Tecnología"].astype(str)
-                fig_audit_wind = go.Figure()
-                for tech in turbine_order:
-                    tech_df = vel_detail[vel_detail["Tecnología"].str.contains(tech.replace("VAWT ", ""), case=False, regex=False)].sort_values("Velocidad m/s num")
-                    if tech_df.empty:
-                        tech_df = vel_detail[vel_detail["Tecnología"] == tech].sort_values("Velocidad m/s num")
-                    if tech_df.empty:
+                coverage_note = f"Cobertura seleccionada: <b>{float(cobertura_pct or 0.0):.0f}%</b> · La tabla de viento publicada no trae columna de cobertura; se usa el escenario actualmente publicado en 06_Sensibilidad."
+            selected_wind_audit = selected_wind_audit[selected_wind_audit["Tecnología"].isin(["VAWT 1 kW", "VAWT 3 kW", "VAWT 5 kW", "VAWT 10 kW"])].copy()
+            selected_wind_audit["Payback auditado"] = selected_wind_audit["Payback s/remanente años num"].apply(parse_model_number)
+            selected_wind_audit["FP auditado"] = selected_wind_audit["FP ajustado %"].apply(parse_model_number)
+            selected_wind_audit["Velocidad auditada"] = selected_wind_audit["Velocidad m/s num"].apply(parse_model_number)
+            selected_wind_audit = selected_wind_audit.dropna(subset=["Velocidad auditada", "Payback auditado"]).sort_values(["Tecnología", "Velocidad auditada"])
+            if not selected_wind_audit.empty:
+                st.markdown(
+                    f'<div class="telecom-note">{coverage_note} Payback leído desde <b>Payback s/remanente</b>.</div>',
+                    unsafe_allow_html=True,
+                )
+                fig_wind_sens = go.Figure()
+                visible_turbines = ["VAWT 1 kW", "VAWT 3 kW", "VAWT 5 kW", "VAWT 10 kW"]
+                for turbine_name in visible_turbines:
+                    turbine_df = selected_wind_audit[selected_wind_audit["Tecnología"] == turbine_name].sort_values("Velocidad auditada")
+                    if turbine_df.empty:
                         continue
-                    is_focus = tech == focus_turbine or tech.replace("VAWT ", "") in focus_turbine
-                    color = sensitivity_palette.get(tech, blue_3)
-                    fig_audit_wind.add_trace(go.Scatter(
-                        x=tech_df["Velocidad m/s num"],
-                        y=tech_df["Payback c/remanente años num"],
-                        name=tech,
-                        mode="lines+markers+text",
-                        line=dict(color=color, width=3.8 if is_focus else 2.1),
-                        marker=dict(size=10 if is_focus else 7, color="#ffffff", line=dict(color=color, width=2 if is_focus else 1.35)),
-                        opacity=1.0 if is_focus else 0.62,
-                        text=[f'{fp:.0f}% FP' if is_focus else "" for fp in tech_df.get("FP ajustado %", pd.Series([np.nan] * len(tech_df)))],
-                        textposition="top center",
-                        customdata=np.stack([tech_df.get("FP ajustado %", pd.Series([np.nan] * len(tech_df)))], axis=-1),
-                        hovertemplate="<b>%{fullData.name}</b><br>Viento: %{x:.1f} m/s<br>FP ajustado: %{customdata[0]:.1f}%<br>Payback c/remanente: %{y:.1f} años<extra></extra>",
-                    ))
-                fig_audit_wind.update_layout(xaxis=dict(title="Velocidad de viento (m/s)", rangemode="tozero"), yaxis=dict(title="Payback c/remanente (años)", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), legend=dict(orientation="h", y=1.18, x=0, title=None), hovermode="x unified")
-                st.plotly_chart(tune_dashboard_chart(fig_audit_wind, 360), use_container_width=True, config={"displaylogo": False})
+                    is_focus = turbine_name == focus_turbine
+                    line_color = sensitivity_palette.get(turbine_name, blue_3)
+                    fig_wind_sens.add_trace(
+                        go.Scatter(
+                            x=turbine_df["FP auditado"],
+                            y=turbine_df["Payback auditado"],
+                            name=turbine_name,
+                            mode="lines+markers+text",
+                            line=dict(color=line_color, width=4 if is_focus else 2.2),
+                            marker=dict(size=11 if is_focus else 8, color="#ffffff", line=dict(color=line_color, width=2 if is_focus else 1.3)),
+                            opacity=1.0 if is_focus else 0.68,
+                            text=[years_label(v) if is_focus else "" for v in turbine_df["Payback auditado"]],
+                            textposition="top center",
+                            customdata=np.stack(
+                                [
+                                    turbine_df["Velocidad auditada"],
+                                    turbine_df.get("Nº turbinas num", pd.Series([np.nan] * len(turbine_df))),
+                                    turbine_df.get("Gen mensual total kWh num", pd.Series([np.nan] * len(turbine_df))),
+                                    turbine_df.get("Remanente mensual kWh num", pd.Series([np.nan] * len(turbine_df))),
+                                ],
+                                axis=-1,
+                            ),
+                            hovertemplate="<b>%{fullData.name}</b><br>Factor planta real: %{x:.1f}%<br>Velocidad: %{customdata[0]:.1f} m/s<br>Payback s/remanente: %{y:.1f} años<br>Nº turbinas: %{customdata[1]:.0f}<br>Generación mensual: %{customdata[2]:,.0f} kWh<br>Remanente mensual: %{customdata[3]:,.0f} kWh<extra></extra>",
+                        )
+                    )
+                if focus_turbine in set(selected_wind_audit["Tecnología"]):
+                    focus_rows = selected_wind_audit[selected_wind_audit["Tecnología"] == focus_turbine]
+                    best_focus = focus_rows.loc[focus_rows["Payback auditado"].idxmin()]
+                    fig_wind_sens.add_annotation(
+                        x=float(best_focus["FP auditado"]),
+                        y=float(best_focus["Payback auditado"]),
+                        text="RECOMENDADA",
+                        showarrow=True,
+                        arrowhead=2,
+                        arrowcolor=blue_5,
+                        bgcolor="#ffffff",
+                        bordercolor=blue_5,
+                        borderwidth=1.4,
+                        borderpad=4,
+                        font=dict(color=blue_5, size=11),
+                    )
+                max_payback = float(selected_wind_audit["Payback auditado"].max())
+                fig_wind_sens.update_layout(
+                    xaxis=dict(title="Factor planta real (%)", rangemode="tozero"),
+                    yaxis=dict(title="Payback s/remanente (años)", range=[0, max(1.0, max_payback * 1.18)], gridcolor="rgba(148,163,184,.22)"),
+                    legend=dict(orientation="h", y=1.18, x=0, title=None),
+                    hovermode="x unified",
+                )
+                st.plotly_chart(tune_dashboard_chart(fig_wind_sens, 390), use_container_width=True, config={"displaylogo": False})
             else:
-                st.info("La tabla auditable de viento no está disponible en la lectura actual del URL.")
-        source_table = alternatives[["Alternativa", "CAPEX CLP", "Payback híbrido años", "LCOE CLP/kWh", "Energía útil anual kWh", "CO2 evitado t/año"]].copy()
+                st.info("La tabla auditable de viento no contiene registros válidos para VAWT 1, 3, 5 y 10 kW.")
+        else:
+            st.info("La tabla auditable de viento de 06_Sensibilidad no contiene Velocidad, FP, Tecnología y Payback s/remanente para graficar.")
+        with st.expander("Análisis técnico avanzado", expanded=False):
+            sens_audit_left, sens_audit_right = st.columns(2)
+            with sens_audit_left:
+                st.markdown('<p class="telecom-panel-title">Sensibilidad auditable: payback por cobertura</p><p class="telecom-panel-sub">Detalle A:Q de 06_Sensibilidad: payback con remanente según cobertura objetivo.</p>', unsafe_allow_html=True)
+                if not audit_detail.empty and {"Cobertura %", "Tecnología", "Payback c/remanente años num"}.issubset(audit_detail.columns):
+                    cov_detail = audit_detail.dropna(subset=["Cobertura %", "Payback c/remanente años num"]).copy()
+                    cov_detail["Tecnología"] = cov_detail["Tecnología"].astype(str)
+                    fig_audit_cov = go.Figure()
+                    for tech in turbine_order:
+                        tech_df = cov_detail[cov_detail["Tecnología"].str.contains(tech.replace("VAWT ", ""), case=False, regex=False)].sort_values("Cobertura %")
+                        if tech_df.empty:
+                            tech_df = cov_detail[cov_detail["Tecnología"] == tech].sort_values("Cobertura %")
+                        if tech_df.empty:
+                            continue
+                        is_focus = tech == focus_turbine or tech.replace("VAWT ", "") in focus_turbine
+                        color = sensitivity_palette.get(tech, blue_3)
+                        fig_audit_cov.add_trace(go.Scatter(
+                            x=tech_df["Cobertura %"],
+                            y=tech_df["Payback c/remanente años num"],
+                            name=tech,
+                            mode="lines+markers+text",
+                            line=dict(color=color, width=3.8 if is_focus else 2.1),
+                            marker=dict(size=10 if is_focus else 7, color="#ffffff", line=dict(color=color, width=2 if is_focus else 1.35)),
+                            opacity=1.0 if is_focus else 0.62,
+                            text=[years_label(v) if is_focus else "" for v in tech_df["Payback c/remanente años num"]],
+                            textposition="top center",
+                            hovertemplate="<b>%{fullData.name}</b><br>Cobertura: %{x:.0f}%<br>Payback c/remanente: %{y:.1f} años<extra></extra>",
+                        ))
+                    fig_audit_cov.update_layout(xaxis=dict(title="Cobertura objetivo (%)", rangemode="tozero"), yaxis=dict(title="Payback c/remanente (años)", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), legend=dict(orientation="h", y=1.18, x=0, title=None), hovermode="x unified")
+                    st.plotly_chart(tune_dashboard_chart(fig_audit_cov, 360), use_container_width=True, config={"displaylogo": False})
+                else:
+                    st.info("La tabla auditable de cobertura no está disponible en la lectura actual del URL.")
+            with sens_audit_right:
+                st.markdown('<p class="telecom-panel-title">Sensibilidad auditable: viento, FP y payback</p><p class="telecom-panel-sub">Detalle auditable por velocidad de viento: factor planta ajustado y payback con remanente.</p>', unsafe_allow_html=True)
+                if not audit_velocity.empty and {"Velocidad m/s num", "FP ajustado %", "Tecnología", "Payback c/remanente años num"}.issubset(audit_velocity.columns):
+                    vel_detail = audit_velocity.dropna(subset=["Velocidad m/s num", "Payback c/remanente años num"]).copy()
+                    vel_detail["Tecnología"] = vel_detail["Tecnología"].astype(str)
+                    fig_audit_wind = go.Figure()
+                    for tech in turbine_order:
+                        tech_df = vel_detail[vel_detail["Tecnología"].str.contains(tech.replace("VAWT ", ""), case=False, regex=False)].sort_values("Velocidad m/s num")
+                        if tech_df.empty:
+                            tech_df = vel_detail[vel_detail["Tecnología"] == tech].sort_values("Velocidad m/s num")
+                        if tech_df.empty:
+                            continue
+                        is_focus = tech == focus_turbine or tech.replace("VAWT ", "") in focus_turbine
+                        color = sensitivity_palette.get(tech, blue_3)
+                        fig_audit_wind.add_trace(go.Scatter(
+                            x=tech_df["Velocidad m/s num"],
+                            y=tech_df["Payback c/remanente años num"],
+                            name=tech,
+                            mode="lines+markers+text",
+                            line=dict(color=color, width=3.8 if is_focus else 2.1),
+                            marker=dict(size=10 if is_focus else 7, color="#ffffff", line=dict(color=color, width=2 if is_focus else 1.35)),
+                            opacity=1.0 if is_focus else 0.62,
+                            text=[f'{fp:.0f}% FP' if is_focus else "" for fp in tech_df.get("FP ajustado %", pd.Series([np.nan] * len(tech_df)))],
+                            textposition="top center",
+                            customdata=np.stack([tech_df.get("FP ajustado %", pd.Series([np.nan] * len(tech_df)))], axis=-1),
+                            hovertemplate="<b>%{fullData.name}</b><br>Viento: %{x:.1f} m/s<br>FP ajustado: %{customdata[0]:.1f}%<br>Payback c/remanente: %{y:.1f} años<extra></extra>",
+                        ))
+                    fig_audit_wind.update_layout(xaxis=dict(title="Velocidad de viento (m/s)", rangemode="tozero"), yaxis=dict(title="Payback c/remanente (años)", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), legend=dict(orientation="h", y=1.18, x=0, title=None), hovermode="x unified")
+                    st.plotly_chart(tune_dashboard_chart(fig_audit_wind, 360), use_container_width=True, config={"displaylogo": False})
+                else:
+                    st.info("La tabla auditable de viento no está disponible en la lectura actual del URL.")
+        source_table = alternatives[["Alternativa", "CAPEX CLP", "Payback híbrido años", "LCOE CLP/kWh"]].copy()
+        source_table["Alternativa key"] = source_table["Alternativa"].astype(str)
+        coverage_real_lookup = dashboard_coverage_metrics.set_index(dashboard_coverage_metrics["Alternativa"].astype(str))["Cobertura real"].to_dict()
+        coverage_useful_lookup = dashboard_coverage_metrics.set_index(dashboard_coverage_metrics["Alternativa"].astype(str))["Cobertura aprovechada"].to_dict()
+        diesel_lookup = wind_df.set_index(wind_df["Alternativa"].astype(str))["Diésel evitado L/año"].to_dict() if "Diésel evitado L/año" in wind_df.columns else {}
+        co2_lookup = wind_df.set_index(wind_df["Alternativa"].astype(str))["CO₂ evitado t/año"].to_dict() if "CO₂ evitado t/año" in wind_df.columns else {}
+        source_table["Cobertura real"] = source_table["Alternativa key"].map(coverage_real_lookup).fillna(0.0)
+        source_table["Cobertura aprovechada"] = source_table["Alternativa key"].map(coverage_useful_lookup).fillna(0.0)
+        source_table["Diésel evitado L/año"] = source_table["Alternativa key"].map(diesel_lookup).fillna(float(summary["diesel_evitado_l_anio"] or 0.0))
+        source_table["CO₂ evitado t/año"] = source_table["Alternativa key"].map(co2_lookup).fillna(float(summary["co2_evitado_t_anio"] or 0.0))
         table_rows = []
         for _, row in source_table.iterrows():
-            is_rec = str(row["Alternativa"]) == str(summary["tecnologia_recomendada"])
+            is_rec = str(row["Alternativa"]) == dashboard_rec_name
             row_class = ' class="recommended"' if is_rec else ""
             label = '<br><span class="telecom-badge">Recomendada</span>' if is_rec else '<br><span class="telecom-muted">Alternativa evaluada</span>'
             table_rows.append(
                 f"<tr{row_class}>"
                 f'<td><b>{html.escape(str(row["Alternativa"]))}</b>{label}</td>'
+                f'<td>{float(row["Cobertura real"]):.0f}%</td>'
+                f'<td>{float(row["Cobertura aprovechada"]):.0f}%</td>'
                 f'<td>{format_clp(float(row["CAPEX CLP"]))}</td>'
                 f'<td>{years_label(row["Payback híbrido años"])}</td>'
                 f'<td>{format_clp(float(row["LCOE CLP/kWh"]))}</td>'
-                f'<td>{float(row["Energía útil anual kWh"]):,.0f} kWh</td>'
-                f'<td>{float(row["CO2 evitado t/año"]):.1f} t/año</td>'
+                f'<td>{float(row["Diésel evitado L/año"]):,.0f} L/año</td>'
+                f'<td>{float(row["CO₂ evitado t/año"]):.1f} t/año</td>'
                 "</tr>"
             )
         st.markdown(
             '<div class="telecom-table-shell">'
             '<div class="telecom-table-head"><div><h3>Tabla ejecutiva del Dashboard</h3>'
             '<p>Fuente publicada: alternativas comparadas con inversión, retorno, costo nivelado, energía e impacto.</p></div>'
-            f'<span class="telecom-badge">{html.escape(str(summary["tecnologia_recomendada"]))}</span></div>'
+            f'<span class="telecom-badge">{html.escape(dashboard_rec_name)}</span></div>'
             '<table class="telecom-table">'
-            '<thead><tr><th>Alternativa</th><th>CAPEX</th><th>Payback híbrido</th><th>LCOE</th><th>Energía útil anual</th><th>CO₂ evitado</th></tr></thead>'
+            '<thead><tr><th>Alternativa</th><th>Cobertura real</th><th>Cobertura aprovechada</th><th>CAPEX</th><th>Payback híbrido</th><th>LCOE</th><th>Diésel evitado</th><th>CO₂ evitado</th></tr></thead>'
             f'<tbody>{"".join(table_rows)}</tbody>'
             '</table>'
             '</div>'.replace(",", "."),
             unsafe_allow_html=True,
+        )
+        recommendation_text = (
+            f"Se recomienda implementar {dashboard_rec_turbines} turbinas {dashboard_rec_name} "
+            f"({dashboard_rec_kw:.1f} kW instalados). Esta configuración alcanza una cobertura real "
+            f"del {dashboard_coverage:.0f}%, permite cubrir el {dashboard_useful_coverage:.0f}% del consumo "
+            f"energético del sitio, mantiene un CAPEX competitivo de {rec_capex_mm:.1f} MM CLP, presenta un "
+            f"LCOE de {rec_lcoe_display}/kWh y recupera la inversión en {years_label(dashboard_rec_payback)}. "
+            f"El beneficio neto acumulado estimado a 20 años alcanza {dashboard_net_benefit_20/1_000_000:.1f} MM CLP, "
+            f"con {dashboard_surface_m2:.0f} m² intervenidos y {dashboard_kwh_m2:,.0f} kWh/año por m². "
+            f"Mantiene {robustness_title.lower()} ante variaciones moderadas del factor de planta."
+        )
+        recommendation_html = f"""
+        <section style="font-family:Inter,Arial,sans-serif;color:#0b1730;padding:28px;border:1px solid #DCECEF;border-radius:16px;">
+          <p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#EA6400;font-weight:900;margin:0 0 10px;">Recomendación para Entel</p>
+          <h1 style="font-size:26px;line-height:1.12;margin:0 0 14px;">{html.escape(dashboard_rec_name)} · Score {dashboard_score:.0f}/100</h1>
+          <p style="font-size:15px;line-height:1.55;margin:0 0 18px;">{html.escape(recommendation_text)}</p>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <tr><td style="padding:8px;border-top:1px solid #DCECEF;font-weight:800;">Cobertura real</td><td style="padding:8px;border-top:1px solid #DCECEF;text-align:right;">{dashboard_coverage:.0f}%</td></tr>
+            <tr><td style="padding:8px;border-top:1px solid #DCECEF;font-weight:800;">CAPEX</td><td style="padding:8px;border-top:1px solid #DCECEF;text-align:right;">{rec_capex_mm:.1f} MM CLP</td></tr>
+            <tr><td style="padding:8px;border-top:1px solid #DCECEF;font-weight:800;">Payback</td><td style="padding:8px;border-top:1px solid #DCECEF;text-align:right;">{years_label(dashboard_rec_payback)}</td></tr>
+            <tr><td style="padding:8px;border-top:1px solid #DCECEF;font-weight:800;">LCOE</td><td style="padding:8px;border-top:1px solid #DCECEF;text-align:right;">{rec_lcoe_display}/kWh</td></tr>
+            <tr><td style="padding:8px;border-top:1px solid #DCECEF;font-weight:800;">Beneficio neto 20 años</td><td style="padding:8px;border-top:1px solid #DCECEF;text-align:right;">{dashboard_net_benefit_20/1_000_000:.1f} MM CLP</td></tr>
+            <tr><td style="padding:8px;border-top:1px solid #DCECEF;font-weight:800;">Impacto superficial</td><td style="padding:8px;border-top:1px solid #DCECEF;text-align:right;">{dashboard_surface_m2:.0f} m²</td></tr>
+          </table>
+        </section>
+        """
+        st.markdown(
+            '<div class="telecom-table-shell">'
+            '<div class="telecom-table-head"><div><h3>Recomendación para Entel</h3>'
+            '<p>Bloque final preparado para comité ejecutivo y exportación.</p></div>'
+            f'<span class="telecom-badge">Score {dashboard_score:.0f}/100</span></div>'
+            f'<div class="telecom-dash-message" style="font-size:13.5px;">{html.escape(recommendation_text)}</div>'
+            '</div>'.replace(",", "."),
+            unsafe_allow_html=True,
+        )
+        st.download_button(
+            "Descargar recomendación para PDF",
+            data=("<!doctype html><html><head><meta charset='utf-8'><title>Recomendación Entel</title></head><body>" + recommendation_html + "<script>window.print()</script></body></html>").encode("utf-8"),
+            file_name="recomendacion_entel_dashboard.html",
+            mime="text/html",
+            use_container_width=True,
         )
 
     with tab_exec:
