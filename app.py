@@ -11859,6 +11859,11 @@ def render_telecom_tower_eval_analysis():
                     working_df = working_df.sort_values("_datetime")
                     st.caption(f"Fecha/hora detectada automáticamente desde `{fallback_col}`.")
                     break
+        datetime_source_note = ""
+        if working_df["_datetime"].notna().mean() < 0.55:
+            selected_datetime = "Eje horario sintético"
+            working_df["_datetime"] = pd.date_range("2000-01-01 00:00:00", periods=len(working_df), freq="h")
+            datetime_source_note = "No se detectó una fecha explícita confiable; se generó un eje horario sintético para mantener serie temporal, promedios mensuales y patrón horario."
 
         analyses = [
             _analyze_column(
@@ -11946,7 +11951,9 @@ def render_telecom_tower_eval_analysis():
         chart_l, chart_r = st.columns(2)
         plot_df = working_df.copy()
         plot_df["_speed_selected"] = speed_selected
-        if selected_datetime and plot_df["_datetime"].notna().any():
+        if datetime_source_note:
+            st.caption(datetime_source_note)
+        if plot_df["_datetime"].notna().any():
             with chart_l:
                 st.markdown('<p class="telecom-panel-title">Serie temporal de velocidad</p><p class="telecom-panel-sub">Lectura operativa de variabilidad y eventos extremos.</p>', unsafe_allow_html=True)
                 fig_ts = px.line(plot_df.dropna(subset=["_datetime", "_speed_selected"]), x="_datetime", y="_speed_selected", labels={"_datetime": "Fecha/hora", "_speed_selected": "m/s"})
@@ -11969,8 +11976,6 @@ def render_telecom_tower_eval_analysis():
             fig_hour.update_layout(height=300, margin=dict(l=10, r=10, t=18, b=38), xaxis=dict(dtick=1), yaxis=dict(rangemode="tozero", gridcolor="rgba(148,163,184,.22)"))
             st.markdown('<p class="telecom-panel-title">Promedio horario</p><p class="telecom-panel-sub">Identifica ventanas de mayor generación potencial durante el día.</p>', unsafe_allow_html=True)
             st.plotly_chart(fig_hour, use_container_width=True, config={"displaylogo": False})
-        else:
-            st.info("No hay una columna fecha/hora válida. Se omiten gráficos mensual, diario, horario y serie temporal.")
 
         hist_col, weib_col = st.columns(2)
         clean_speed = speed_selected.dropna()
