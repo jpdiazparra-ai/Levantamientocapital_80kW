@@ -12730,6 +12730,188 @@ def render_telecom_tower_eval_analysis():
         )
         if dashboard_message and not dashboard_coverage:
             dynamic_dashboard_message = dashboard_message
+        site_fp_default = site_percent_value("Factor planta ficha sitio", rec_base_fp if rec_base_fp > 0 else 35.0)
+        site_grid_cost_default = site_numeric("Tarifa red modelo", 182.0)
+        site_diesel_cost_default = site_numeric("Costo electrógeno base", 800.0)
+        site_solar_cost_default = site_numeric("Costo solar referencia", 120.0)
+        site_battery_cost_default = site_numeric("Costo batería referencia", 180.0)
+        site_mix_grid_default = site_percent_value("Mix Red", 60.0)
+        site_mix_diesel_default = site_percent_value("Mix Electrógeno", 40.0)
+        site_mix_bess_default = site_percent_value("Mix Batería/Solar", 0.0)
+        site_om_default = site_percent_value("O&M anual", 2.0)
+        site_surplus_price_default = site_numeric("Precio venta excedente", 0.0)
+        site_surplus_factor_default = site_numeric("Factor valorización excedente", 1.0)
+
+        st.markdown(
+            """
+            <div class="telecom-site-block" style="margin:12px 0 16px;">
+              <div class="telecom-site-block-h">
+                <div>
+                  <h4>Inputs estratégicos de escenario</h4>
+                  <p>Panel ejecutivo para iterar supuestos críticos durante la conversación: recurso eólico, costo evitado, mix energético, monetización y operación.</p>
+                </div>
+                <span class="telecom-site-mini">Escenario activo</span>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        input_a, input_b, input_c, input_d = st.columns(4)
+        with input_a:
+            scenario_fp_pct = st.slider(
+                "Factor planta esperado (%)",
+                min_value=10.0,
+                max_value=60.0,
+                value=float(np.clip(site_fp_default if site_fp_default > 0 else 35.0, 10.0, 60.0)),
+                step=0.5,
+                key="telecom_dash_scenario_fp",
+                help="Ajusta generación esperada. Se aplica proporcionalmente a la generación publicada de la alternativa recomendada.",
+            )
+            scenario_coverage_target = st.slider(
+                "Cobertura objetivo (%)",
+                min_value=50.0,
+                max_value=160.0,
+                value=float(np.clip(dashboard_target_coverage if dashboard_target_coverage > 0 else 100.0, 50.0, 160.0)),
+                step=5.0,
+                key="telecom_dash_scenario_coverage",
+            )
+        with input_b:
+            scenario_grid_cost = st.number_input(
+                "Costo red (CLP/kWh)",
+                min_value=0.0,
+                value=float(max(site_grid_cost_default, 0.0)),
+                step=10.0,
+                key="telecom_dash_scenario_grid_cost",
+            )
+            scenario_diesel_cost = st.number_input(
+                "Costo electrógeno (CLP/kWh)",
+                min_value=0.0,
+                value=float(max(site_diesel_cost_default, 0.0)),
+                step=25.0,
+                key="telecom_dash_scenario_diesel_cost",
+            )
+        with input_c:
+            scenario_mix_grid = st.slider(
+                "Mix red (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=float(np.clip(site_mix_grid_default, 0.0, 100.0)),
+                step=5.0,
+                key="telecom_dash_scenario_mix_grid",
+            )
+            scenario_mix_diesel = st.slider(
+                "Mix electrógeno (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=float(np.clip(site_mix_diesel_default, 0.0, 100.0)),
+                step=5.0,
+                key="telecom_dash_scenario_mix_diesel",
+            )
+        with input_d:
+            scenario_mix_bess = st.slider(
+                "Mix FV/BESS (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=float(np.clip(site_mix_bess_default, 0.0, 100.0)),
+                step=5.0,
+                key="telecom_dash_scenario_mix_bess",
+            )
+            scenario_surplus_price = st.number_input(
+                "Monetización excedente (CLP/kWh)",
+                min_value=0.0,
+                value=float(max(site_surplus_price_default, 0.0)),
+                step=10.0,
+                key="telecom_dash_scenario_surplus_price",
+            )
+
+        adv_a, adv_b, adv_c, adv_d = st.columns(4)
+        with adv_a:
+            scenario_safety_margin = st.slider(
+                "Margen seguridad cobertura (%)",
+                min_value=0.0,
+                max_value=40.0,
+                value=0.0,
+                step=2.5,
+                key="telecom_dash_scenario_safety_margin",
+            )
+        with adv_b:
+            scenario_om_pct = st.number_input(
+                "O&M anual sobre CAPEX (%)",
+                min_value=0.0,
+                max_value=12.0,
+                value=float(np.clip(site_om_default, 0.0, 12.0)),
+                step=0.25,
+                key="telecom_dash_scenario_om_pct",
+            )
+        with adv_c:
+            scenario_bess_cost = st.number_input(
+                "Costo FV/BESS ref. (CLP/kWh)",
+                min_value=0.0,
+                value=float(max((site_solar_cost_default + site_battery_cost_default) / 2.0, 0.0)),
+                step=10.0,
+                key="telecom_dash_scenario_bess_cost",
+            )
+        with adv_d:
+            scenario_surplus_factor = st.number_input(
+                "Factor valorización excedente",
+                min_value=0.0,
+                max_value=2.0,
+                value=float(np.clip(site_surplus_factor_default if site_surplus_factor_default > 0 else 1.0, 0.0, 2.0)),
+                step=0.05,
+                key="telecom_dash_scenario_surplus_factor",
+            )
+
+        mix_total = scenario_mix_grid + scenario_mix_diesel + scenario_mix_bess
+        if mix_total <= 0:
+            mix_grid_norm, mix_diesel_norm, mix_bess_norm = 0.0, 0.0, 0.0
+            scenario_weighted_cost = 0.0
+        else:
+            mix_grid_norm = scenario_mix_grid / mix_total
+            mix_diesel_norm = scenario_mix_diesel / mix_total
+            mix_bess_norm = scenario_mix_bess / mix_total
+            scenario_weighted_cost = (
+                mix_grid_norm * scenario_grid_cost
+                + mix_diesel_norm * scenario_diesel_cost
+                + mix_bess_norm * scenario_bess_cost
+            )
+        if abs(mix_total - 100.0) > 0.01:
+            st.caption(f"Mix ingresado suma {mix_total:.0f}%; para cálculo se normaliza internamente a 100%.")
+
+        base_generation_monthly = float(dashboard_rec_row.get("Generación mensual total kWh", 0.0) or 0.0)
+        if base_generation_monthly <= 0 and dashboard_rec_kw > 0:
+            base_generation_monthly = dashboard_rec_kw * 8760.0 * max(site_fp_default, 0.0) / 100.0 / 12.0
+        fp_reference = max(float(rec_base_fp or site_fp_default or scenario_fp_pct or 1.0), 1.0)
+        scenario_generation_monthly = base_generation_monthly * (scenario_fp_pct / fp_reference)
+        scenario_required_monthly = dashboard_demand * (scenario_coverage_target + scenario_safety_margin) / 100.0
+        scenario_useful_monthly = min(scenario_generation_monthly, dashboard_demand) if dashboard_demand > 0 else scenario_generation_monthly
+        scenario_surplus_monthly = max(scenario_generation_monthly - dashboard_demand, 0.0)
+        scenario_coverage_real = scenario_generation_monthly / dashboard_demand * 100.0 if dashboard_demand > 0 else 0.0
+        scenario_gap_monthly = max(scenario_required_monthly - scenario_generation_monthly, 0.0)
+        scenario_annual_gross_value = scenario_useful_monthly * 12.0 * scenario_weighted_cost
+        scenario_surplus_value = scenario_surplus_monthly * 12.0 * scenario_surplus_price * scenario_surplus_factor
+        scenario_om_value = dashboard_rec_capex * scenario_om_pct / 100.0
+        scenario_net_benefit = max(scenario_annual_gross_value + scenario_surplus_value - scenario_om_value, 0.0)
+        scenario_payback = dashboard_rec_capex / scenario_net_benefit if scenario_net_benefit > 0 and dashboard_rec_capex > 0 else np.nan
+        scenario_benefit_20 = scenario_net_benefit * 20.0 - dashboard_rec_capex
+        scenario_delta_payback = scenario_payback - dashboard_rec_payback if np.isfinite(scenario_payback) else np.nan
+        scenario_reading = (
+            "Escenario holgado" if scenario_gap_monthly <= 0 and np.isfinite(scenario_payback) and scenario_payback <= dashboard_rec_payback + 0.5
+            else "Escenario sensible" if scenario_gap_monthly <= 0
+            else "Requiere más cobertura"
+        )
+        scenario_delta_label = f"{scenario_delta_payback:+.1f} años vs publicado" if np.isfinite(scenario_delta_payback) else "Sin payback calculable"
+        scenario_cards = f"""
+        <div class="telecom-grid" style="margin:8px 0 18px;">
+          <div class="telecom-card"><p class="telecom-card-k">Costo ponderado escenario</p><p class="telecom-card-v">{format_clp(scenario_weighted_cost)}</p><p class="telecom-card-s">Red {mix_grid_norm*100:.0f}% · Diésel {mix_diesel_norm*100:.0f}% · FV/BESS {mix_bess_norm*100:.0f}%</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">Cobertura real simulada</p><p class="telecom-card-v">{scenario_coverage_real:.0f}%</p><p class="telecom-card-s">Brecha objetivo: {scenario_gap_monthly:,.0f} kWh/mes</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">Beneficio neto anual</p><p class="telecom-card-v">{scenario_net_benefit/1_000_000:.1f} MM</p><p class="telecom-card-s">Incluye excedente y O&M</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">Payback escenario</p><p class="telecom-card-v">{years_label(scenario_payback)}</p><p class="telecom-card-s">{html.escape(scenario_delta_label)}</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">Valor 20 años</p><p class="telecom-card-v">{scenario_benefit_20/1_000_000:.1f} MM</p><p class="telecom-card-s">Neto post CAPEX</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">Lectura ejecutiva</p><p class="telecom-card-v">{html.escape(scenario_reading)}</p><p class="telecom-card-s">Supuesto temporal, no reemplaza hoja base</p></div>
+        </div>
+        """.replace(",", ".")
+        st.markdown(scenario_cards, unsafe_allow_html=True)
+
         st.markdown(
             f"""
             <div class="telecom-dash-shell">
