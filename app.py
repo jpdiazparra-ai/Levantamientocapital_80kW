@@ -14434,6 +14434,96 @@ def render_telecom_scenario_simulator():
         "copper": "#A9673B",
         "text": "#20384F",
     }
+    source_badge = "Manual"
+    source_detail = "Inputs editables"
+    site_data = pd.DataFrame()
+    wind_defaults = pd.DataFrame()
+    sensitivity_detail = pd.DataFrame()
+    try:
+        site_url = telecom_published_csv_url("02_Datos_Sitio", EVALUACION_TELECOM_SITE_CSV_URL_DEFAULT, data_refresh_nonce)
+        wind_url = telecom_published_csv_url("04_Modelo_Eolico", EVALUACION_TELECOM_WIND_MODEL_CSV_URL_DEFAULT, data_refresh_nonce)
+        sensitivity_url = telecom_published_csv_url("06_Sensibilidad", EVALUACION_TELECOM_SENSITIVITY_CSV_URL_DEFAULT, data_refresh_nonce)
+        site_model = load_telecom_site_inputs_model(site_url, refresh_nonce=data_refresh_nonce)
+        wind_model = load_telecom_wind_model(wind_url, refresh_nonce=data_refresh_nonce)
+        sensitivity_model = load_telecom_sensitivity_model(sensitivity_url, refresh_nonce=data_refresh_nonce)
+        site_data = site_model.get("data", pd.DataFrame()).copy()
+        wind_defaults = wind_model.get("data", pd.DataFrame()).copy()
+        sensitivity_detail = sensitivity_model.get("detail", pd.DataFrame()).copy()
+        if not site_data.empty or not wind_defaults.empty:
+            source_badge = "URL + manual"
+            source_detail = "Defaults Google Sheets"
+    except Exception:
+        site_data = pd.DataFrame()
+        wind_defaults = pd.DataFrame()
+        sensitivity_detail = pd.DataFrame()
+
+    def site_value(variable: str, default: str = "") -> str:
+        if site_data.empty or "Variable" not in site_data.columns:
+            return default
+        matches = site_data[site_data["Variable"].astype(str).str.casefold() == variable.casefold()]
+        if matches.empty:
+            return default
+        value = str(matches.iloc[0].get("Valor", "")).strip()
+        return value if value else default
+
+    def site_numeric(variable: str, default: float = 0.0) -> float:
+        value = site_value(variable, "")
+        money = parse_money_clp_robusto(value)
+        if money is not None:
+            return float(money)
+        return parse_float_local(value, default)
+
+    def site_percent_value(variable: str, default_pct: float = 0.0) -> float:
+        value = site_value(variable, "")
+        if "%" in value:
+            return parse_percent_local(value, default_pct / 100.0) * 100.0
+        return parse_float_local(value, default_pct)
+
+    wind_by_alt = {}
+    if not wind_defaults.empty and "Alternativa" in wind_defaults.columns:
+        wind_by_alt = {
+            str(row["Alternativa"]): row
+            for _, row in wind_defaults.iterrows()
+            if str(row.get("Alternativa", "")).strip()
+        }
+
+    def wind_default(name: str, column: str, default: float) -> float:
+        if name in wind_by_alt and column in wind_by_alt[name].index:
+            value = pd.to_numeric(pd.Series([wind_by_alt[name].get(column)]), errors="coerce").iloc[0]
+            if pd.notna(value):
+                return float(value)
+        return float(default)
+
+    default_monthly_consumption = site_numeric("Consumo mensual modelo", 1602.0)
+    default_target_coverage = site_percent_value("Cobertura objetivo", 100.0)
+    default_project_life = int(max(5, min(30, round(site_numeric("Vida útil", 20.0)))))
+    default_plant_factor = site_percent_value("Factor planta ficha sitio", 35.0)
+    if not wind_defaults.empty and "Factor planta" in wind_defaults.columns:
+        default_plant_factor = float(pd.to_numeric(wind_defaults["Factor planta"], errors="coerce").dropna().median() or default_plant_factor)
+    default_availability = site_percent_value("Disponibilidad", 95.0)
+    default_electrical_losses = site_percent_value("Pérdidas eléctricas", 3.0)
+    default_additional_losses = site_percent_value("Pérdidas adicionales", 2.0)
+    default_grid_cost = site_numeric("Tarifa red modelo", 182.0)
+    default_diesel_cost = site_numeric("Costo electrógeno base", 800.0)
+    default_bess_cost = site_numeric("Costo batería referencia", 150.0)
+    default_mix_grid = site_percent_value("Mix Red", 60.0)
+    default_mix_diesel = site_percent_value("Mix Electrógeno", 40.0)
+    default_mix_bess = site_percent_value("Mix Batería/Solar", 0.0)
+    default_surplus_price = site_numeric("Precio venta excedente", 90.0)
+    default_surplus_factor = site_numeric("Factor valorización excedente", 1.0)
+    default_bos_pct = 25.0
+    if not wind_defaults.empty and "BoS/instalación %" in wind_defaults.columns:
+        default_bos_pct = float(pd.to_numeric(wind_defaults["BoS/instalación %"], errors="coerce").dropna().median() or default_bos_pct)
+    default_om_pct = site_percent_value("O&M anual", 2.0)
+    default_diesel_l_kwh = site_numeric("Consumo específico diésel", 0.30)
+    default_co2_kg_l = site_numeric("Factor emisión diésel", 2.68)
+    default_surface_per_kw = 4.0
+    if not wind_defaults.empty and {"Impacto superficial", "Potencia instalada kW"}.issubset(wind_defaults.columns):
+        impact = pd.to_numeric(wind_defaults["Impacto superficial"], errors="coerce")
+        installed = pd.to_numeric(wind_defaults["Potencia instalada kW"], errors="coerce").replace(0, np.nan)
+        surface_ratio = (impact / installed).replace([np.inf, -np.inf], np.nan).dropna()
+        if not surface_ratio.empty:
+            default_surface_per_kw = float(surface_ratio.median())
 
     def years_label(value) -> str:
         if pd.isna(value) or not np.isfinite(float(value)):
@@ -14469,12 +14559,12 @@ def render_telecom_scenario_simulator():
             <div>
               <p class="telecom-site-k">Sub bloque 6 · Simulador ejecutivo autónomo</p>
               <h3 class="telecom-site-t">Modelo interactivo para torres telecom</h3>
-              <p class="telecom-site-s">Ingrese supuestos técnicos, energéticos y económicos. El sistema recalcula en vivo la recomendación, cobertura, CAPEX, LCOE, payback, impacto y tabla ejecutiva sin depender del Google Sheet.</p>
+              <p class="telecom-site-s">Ingrese supuestos técnicos, energéticos y económicos. El sistema recalcula en vivo la recomendación, cobertura, CAPEX, LCOE, payback, impacto y tabla ejecutiva, usando el Google Sheet solo como respaldo de defaults.</p>
             </div>
             <div class="telecom-site-status">
-              <div class="telecom-site-pill"><strong>INPUT</strong><span>Manual</span></div>
+              <div class="telecom-site-pill"><strong>INPUT</strong><span>{html.escape(source_badge)}</span></div>
               <div class="telecom-site-pill"><strong>5</strong><span>Alternativas</span></div>
-              <div class="telecom-site-pill"><strong>LIVE</strong><span>Escenario</span></div>
+              <div class="telecom-site-pill"><strong>LIVE</strong><span>{html.escape(source_detail)}</span></div>
             </div>
           </div>
         </div>
@@ -14486,25 +14576,25 @@ def render_telecom_scenario_simulator():
         st.markdown("##### Demanda y continuidad")
         d1, d2, d3, d4 = st.columns(4)
         with d1:
-            monthly_consumption = st.number_input("Consumo mensual sitio (kWh/mes)", min_value=100.0, value=1602.0, step=50.0, key="sim6_monthly_consumption")
+            monthly_consumption = st.number_input("Consumo mensual sitio (kWh/mes)", min_value=100.0, value=float(default_monthly_consumption), step=50.0, key="sim6_monthly_consumption")
         with d2:
-            target_coverage = st.slider("Cobertura objetivo (%)", min_value=20.0, max_value=160.0, value=100.0, step=5.0, key="sim6_target_coverage")
+            target_coverage = st.slider("Cobertura objetivo (%)", min_value=20.0, max_value=160.0, value=float(max(20.0, min(160.0, default_target_coverage))), step=5.0, key="sim6_target_coverage")
         with d3:
             safety_margin = st.slider("Margen de seguridad (%)", min_value=0.0, max_value=40.0, value=10.0, step=2.5, key="sim6_safety_margin")
         with d4:
-            project_life = st.number_input("Vida útil análisis (años)", min_value=5, max_value=30, value=20, step=1, key="sim6_project_life")
+            project_life = st.number_input("Vida útil análisis (años)", min_value=5, max_value=30, value=int(default_project_life), step=1, key="sim6_project_life")
 
     with st.container(border=True):
         st.markdown("##### Recurso eólico y operación")
         e1, e2, e3, e4, e5 = st.columns(5)
         with e1:
-            plant_factor = st.slider("Factor planta base (%)", min_value=10.0, max_value=60.0, value=35.0, step=0.5, key="sim6_plant_factor")
+            plant_factor = st.slider("Factor planta base (%)", min_value=10.0, max_value=60.0, value=float(max(10.0, min(60.0, default_plant_factor))), step=0.5, key="sim6_plant_factor")
         with e2:
-            availability = st.slider("Disponibilidad (%)", min_value=70.0, max_value=100.0, value=95.0, step=1.0, key="sim6_availability")
+            availability = st.slider("Disponibilidad (%)", min_value=70.0, max_value=100.0, value=float(max(70.0, min(100.0, default_availability))), step=1.0, key="sim6_availability")
         with e3:
-            electrical_losses = st.slider("Pérdidas eléctricas (%)", min_value=0.0, max_value=25.0, value=3.0, step=0.5, key="sim6_electrical_losses")
+            electrical_losses = st.slider("Pérdidas eléctricas (%)", min_value=0.0, max_value=25.0, value=float(max(0.0, min(25.0, default_electrical_losses))), step=0.5, key="sim6_electrical_losses")
         with e4:
-            additional_losses = st.slider("Pérdidas adicionales (%)", min_value=0.0, max_value=25.0, value=2.0, step=0.5, key="sim6_additional_losses")
+            additional_losses = st.slider("Pérdidas adicionales (%)", min_value=0.0, max_value=25.0, value=float(max(0.0, min(25.0, default_additional_losses))), step=0.5, key="sim6_additional_losses")
         with e5:
             degradation = st.slider("Degradación anual (%)", min_value=0.0, max_value=3.0, value=0.5, step=0.1, key="sim6_degradation")
 
@@ -14512,37 +14602,37 @@ def render_telecom_scenario_simulator():
         st.markdown("##### Economía energética")
         c1, c2, c3, c4 = st.columns(4)
         with c1:
-            grid_cost = st.number_input("Costo red (CLP/kWh)", min_value=0.0, value=182.0, step=10.0, key="sim6_grid_cost")
-            mix_grid = st.slider("Mix red (%)", min_value=0.0, max_value=100.0, value=60.0, step=5.0, key="sim6_mix_grid")
+            grid_cost = st.number_input("Costo red (CLP/kWh)", min_value=0.0, value=float(default_grid_cost), step=10.0, key="sim6_grid_cost")
+            mix_grid = st.slider("Mix red (%)", min_value=0.0, max_value=100.0, value=float(max(0.0, min(100.0, default_mix_grid))), step=5.0, key="sim6_mix_grid")
         with c2:
-            diesel_cost = st.number_input("Costo electrógeno (CLP/kWh)", min_value=0.0, value=800.0, step=25.0, key="sim6_diesel_cost")
-            mix_diesel = st.slider("Mix electrógeno (%)", min_value=0.0, max_value=100.0, value=40.0, step=5.0, key="sim6_mix_diesel")
+            diesel_cost = st.number_input("Costo electrógeno (CLP/kWh)", min_value=0.0, value=float(default_diesel_cost), step=25.0, key="sim6_diesel_cost")
+            mix_diesel = st.slider("Mix electrógeno (%)", min_value=0.0, max_value=100.0, value=float(max(0.0, min(100.0, default_mix_diesel))), step=5.0, key="sim6_mix_diesel")
         with c3:
-            bess_cost = st.number_input("Costo FV/BESS ref. (CLP/kWh)", min_value=0.0, value=150.0, step=10.0, key="sim6_bess_cost")
-            mix_bess = st.slider("Mix FV/BESS (%)", min_value=0.0, max_value=100.0, value=0.0, step=5.0, key="sim6_mix_bess")
+            bess_cost = st.number_input("Costo FV/BESS ref. (CLP/kWh)", min_value=0.0, value=float(default_bess_cost), step=10.0, key="sim6_bess_cost")
+            mix_bess = st.slider("Mix FV/BESS (%)", min_value=0.0, max_value=100.0, value=float(max(0.0, min(100.0, default_mix_bess))), step=5.0, key="sim6_mix_bess")
         with c4:
-            surplus_price = st.number_input("Monetización excedente (CLP/kWh)", min_value=0.0, value=90.0, step=10.0, key="sim6_surplus_price")
-            surplus_factor = st.slider("Factor valorización excedente", min_value=0.0, max_value=2.0, value=1.0, step=0.05, key="sim6_surplus_factor")
+            surplus_price = st.number_input("Monetización excedente (CLP/kWh)", min_value=0.0, value=float(default_surplus_price), step=10.0, key="sim6_surplus_price")
+            surplus_factor = st.slider("Factor valorización excedente", min_value=0.0, max_value=2.0, value=float(max(0.0, min(2.0, default_surplus_factor))), step=0.05, key="sim6_surplus_factor")
 
     with st.container(border=True):
         st.markdown("##### CAPEX, O&M e impacto")
         k1, k2, k3, k4, k5 = st.columns(5)
         with k1:
-            bos_pct = st.slider("BOS / instalación (%)", min_value=0.0, max_value=80.0, value=25.0, step=2.5, key="sim6_bos_pct")
+            bos_pct = st.slider("BOS / instalación (%)", min_value=0.0, max_value=80.0, value=float(max(0.0, min(80.0, default_bos_pct))), step=2.5, key="sim6_bos_pct")
         with k2:
-            om_pct = st.slider("O&M anual sobre CAPEX (%)", min_value=0.0, max_value=12.0, value=2.0, step=0.25, key="sim6_om_pct")
+            om_pct = st.slider("O&M anual sobre CAPEX (%)", min_value=0.0, max_value=12.0, value=float(max(0.0, min(12.0, default_om_pct))), step=0.25, key="sim6_om_pct")
         with k3:
-            diesel_l_kwh = st.number_input("Consumo diésel evitado (L/kWh)", min_value=0.0, value=0.30, step=0.01, key="sim6_diesel_l_kwh")
+            diesel_l_kwh = st.number_input("Consumo diésel evitado (L/kWh)", min_value=0.0, value=float(default_diesel_l_kwh), step=0.01, key="sim6_diesel_l_kwh")
         with k4:
-            co2_kg_l = st.number_input("Factor emisión diésel (kgCO2/L)", min_value=0.0, value=2.68, step=0.01, key="sim6_co2_kg_l")
+            co2_kg_l = st.number_input("Factor emisión diésel (kgCO2/L)", min_value=0.0, value=float(default_co2_kg_l), step=0.01, key="sim6_co2_kg_l")
         with k5:
-            surface_per_kw = st.number_input("Impacto superficial (m²/kW)", min_value=0.0, value=4.0, step=0.5, key="sim6_surface_per_kw")
+            surface_per_kw = st.number_input("Impacto superficial (m²/kW)", min_value=0.0, value=float(default_surface_per_kw), step=0.5, key="sim6_surface_per_kw")
 
         capex_cols = st.columns(5)
         unit_capex = {}
         for idx, name in enumerate(turbine_order):
             with capex_cols[idx]:
-                unit_capex[name] = st.number_input(f"CAPEX {name}", min_value=0.0, value=float(default_unit_capex[name]), step=500_000.0, key=f"sim6_capex_{name}")
+                unit_capex[name] = st.number_input(f"CAPEX {name}", min_value=0.0, value=float(wind_default(name, "CAPEX unitario $", default_unit_capex[name])), step=500_000.0, key=f"sim6_capex_{name}")
 
     mix_total = mix_grid + mix_diesel + mix_bess
     if mix_total <= 0:
@@ -14617,6 +14707,213 @@ def render_telecom_scenario_simulator():
         + _telecom_score(sim_df["CO2 evitado t/año"], higher_is_better=True) * 0.06
     ) * 100.0
     recommended = sim_df.sort_values("Score", ascending=False, na_position="last").iloc[0]
+    current_annual_energy_cost = monthly_consumption * 12.0 * weighted_cost
+
+    def cumulative_savings_chart(row: pd.Series, height: int = 360) -> go.Figure:
+        years_axis = np.arange(0, int(project_life) + 1)
+        annual_benefit = max(float(row.get("Beneficio neto anual CLP", 0.0) or 0.0), 0.0)
+        capex_value = max(float(row.get("CAPEX CLP", 0.0) or 0.0), 0.0)
+        cumulative = np.array([
+            sum(annual_benefit * ((1.0 - degradation / 100.0) ** y) for y in range(int(year)))
+            for year in years_axis
+        ])
+        after_capex = cumulative - capex_value
+        payback_value = float(row.get("Payback años", np.nan))
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=years_axis,
+                y=cumulative / 1_000_000,
+                name="Beneficio acumulado",
+                mode="lines+markers",
+                line=dict(color=palette["orange"], width=3.6),
+                marker=dict(size=7, color=palette["orange"], line=dict(color="#ffffff", width=1.4)),
+                hovertemplate="Año %{x}<br>Beneficio acumulado: %{y:.1f} MM CLP<extra></extra>",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=years_axis,
+                y=after_capex / 1_000_000,
+                name="Neto después CAPEX",
+                mode="lines+markers",
+                line=dict(color=palette["ink"], width=3.8),
+                marker=dict(size=7, color=palette["ink"], line=dict(color="#ffffff", width=1.4)),
+                fill="tozeroy",
+                fillcolor="rgba(117,169,184,.16)",
+                hovertemplate="Año %{x}<br>Neto post CAPEX: %{y:.1f} MM CLP<extra></extra>",
+            )
+        )
+        fig.add_hline(y=0, line_color=palette["text"], line_width=1, opacity=0.55)
+        if np.isfinite(payback_value) and payback_value > 0:
+            payback_x = max(0.0, min(payback_value, float(project_life)))
+            fig.add_vline(x=payback_x, line_color=palette["orange"], line_dash="dash", annotation_text=f"Payback {years_label(payback_value)}", annotation_position="top right")
+            fig.add_trace(
+                go.Scatter(
+                    x=[payback_x],
+                    y=[0],
+                    name="Payback",
+                    mode="markers+text",
+                    marker=dict(size=18, color="#ffffff", line=dict(color=palette["orange"], width=4)),
+                    text=[years_label(payback_value)],
+                    textposition="bottom right",
+                    textfont=dict(color=palette["text"], size=12),
+                    hovertemplate=f"Payback: {years_label(payback_value)}<extra></extra>",
+                )
+            )
+        fig.update_layout(xaxis=dict(title="Año de operación", range=[0, project_life]), yaxis=dict(title="MM CLP"))
+        return tune_fig(fig, height)
+
+    def decision_map_chart(map_df: pd.DataFrame, selected_turbine: str, height: int = 370) -> go.Figure:
+        fig = go.Figure()
+        sizes = np.clip(pd.to_numeric(map_df["Cobertura real %"], errors="coerce").fillna(0.0) / 4.0, 18, 44)
+        fig.add_trace(
+            go.Scatter(
+                x=map_df["CAPEX MM CLP"],
+                y=map_df["Payback años"],
+                mode="markers+text",
+                text=map_df["Alternativa"],
+                textposition=["top left", "bottom right", "top right", "bottom left", "top center"][: len(map_df)],
+                marker=dict(
+                    size=sizes,
+                    color=map_df["Score"],
+                    colorscale=[[0, palette["pale"]], [0.55, palette["sky"]], [1, palette["ink"]]],
+                    showscale=True,
+                    colorbar=dict(title="Score"),
+                    line=dict(color="#ffffff", width=2),
+                ),
+                customdata=np.stack([map_df["LCOE CLP/kWh"], map_df["Cobertura real %"]], axis=-1),
+                hovertemplate="<b>%{text}</b><br>CAPEX: %{x:.1f} MM CLP<br>Payback: %{y:.1f} años<br>LCOE: %{customdata[0]:,.0f} CLP/kWh<br>Cobertura: %{customdata[1]:.0f}%<extra></extra>",
+            )
+        )
+        selected_df = map_df[map_df["Alternativa"].astype(str) == str(selected_turbine)]
+        if not selected_df.empty:
+            selected_point = selected_df.iloc[0]
+            fig.add_trace(
+                go.Scatter(
+                    x=[selected_point["CAPEX MM CLP"]],
+                    y=[selected_point["Payback años"]],
+                    mode="markers",
+                    marker=dict(size=54, color="rgba(255,255,255,0)", line=dict(color=palette["orange"], width=4)),
+                    hoverinfo="skip",
+                    showlegend=False,
+                )
+            )
+            fig.add_annotation(
+                x=float(selected_point["CAPEX MM CLP"]),
+                y=float(selected_point["Payback años"]),
+                text="RECOMENDADA",
+                showarrow=True,
+                arrowhead=2,
+                arrowcolor=palette["orange"],
+                ax=0,
+                ay=-48,
+                font=dict(color=palette["orange"], size=11),
+                bgcolor="#ffffff",
+                bordercolor=palette["orange"],
+                borderwidth=1,
+                borderpad=4,
+            )
+        fig.add_vline(x=float(map_df["CAPEX MM CLP"].median()), line=dict(color=palette["sky"], width=1.8, dash="dot"))
+        fig.add_hline(y=float(map_df["Payback años"].median()), line=dict(color=palette["sky"], width=1.8, dash="dot"))
+        fig.add_annotation(
+            xref="paper",
+            yref="paper",
+            x=0.02,
+            y=0.98,
+            text="Zona óptima = menor CAPEX y menor payback",
+            showarrow=False,
+            align="left",
+            font=dict(color=palette["text"], size=12),
+            bgcolor="rgba(255,255,255,.88)",
+            bordercolor="rgba(117,169,184,.35)",
+            borderwidth=1,
+            borderpad=5,
+        )
+        fig.update_layout(xaxis=dict(title="CAPEX total (MM CLP)", rangemode="tozero"), yaxis=dict(title="Payback (años)", rangemode="tozero"))
+        return tune_fig(fig, height)
+
+    def waterfall_chart(row: pd.Series, height: int = 360) -> go.Figure:
+        current_cost = max(float(current_annual_energy_cost or 0.0), 0.0)
+        wind_saving = max(float(row.get("Ahorro bruto anual CLP", 0.0) or 0.0), 0.0)
+        surplus_income = max(float(row.get("Ingreso excedente anual CLP", 0.0) or 0.0), 0.0)
+        om_cost = max(float(row.get("O&M anual CLP", 0.0) or 0.0), 0.0)
+        show_surplus = (wind_saving + surplus_income) > 0 and surplus_income / (wind_saving + surplus_income) >= 0.05
+        net_final = max(current_cost - wind_saving - surplus_income + om_cost, 0.0)
+        labels = ["Costo actual", "Ahorro eólico"]
+        values = [current_cost / 1_000_000, -wind_saving / 1_000_000]
+        measures = ["absolute", "relative"]
+        text = [f"{current_cost/1_000_000:.1f} MM", f"-{wind_saving/1_000_000:.1f} MM"]
+        if show_surplus:
+            labels.append("Ingreso excedentes")
+            values.append(-surplus_income / 1_000_000)
+            measures.append("relative")
+            text.append(f"-{surplus_income/1_000_000:.1f} MM")
+        labels.extend(["O&M anual", "Costo neto final"])
+        values.extend([om_cost / 1_000_000, net_final / 1_000_000])
+        measures.extend(["relative", "total"])
+        text.extend([f"+{om_cost/1_000_000:.1f} MM", f"{net_final/1_000_000:.1f} MM"])
+        fig = go.Figure(
+            go.Waterfall(
+                name="Waterfall económico",
+                measure=measures,
+                x=labels,
+                y=values,
+                text=text,
+                textposition="outside",
+                connector={"line": {"color": "rgba(100,116,139,.35)", "width": 1.2, "dash": "dot"}},
+                increasing={"marker": {"color": palette["copper"], "line": {"color": "#ffffff", "width": 1.2}}},
+                decreasing={"marker": {"color": palette["sky"], "line": {"color": "#ffffff", "width": 1.2}}},
+                totals={"marker": {"color": palette["ink"], "line": {"color": "#ffffff", "width": 1.4}}},
+                hovertemplate="<b>%{x}</b><br>Impacto: %{y:.1f} MM CLP/año<extra></extra>",
+            )
+        )
+        fig.add_hline(y=0, line_color="rgba(32,56,79,.45)", line_width=1)
+        fig.update_layout(yaxis=dict(title="MM CLP/año", rangemode="tozero"), xaxis=dict(title=None), showlegend=False)
+        return tune_fig(fig, height)
+
+    def wind_sensitivity_chart(height: int = 350) -> go.Figure:
+        fp_range = np.array([
+            max(5.0, plant_factor - 15),
+            max(5.0, plant_factor - 10),
+            max(5.0, plant_factor - 5),
+            plant_factor,
+            min(65.0, plant_factor + 5),
+            min(65.0, plant_factor + 10),
+        ])
+        fig = go.Figure()
+        rec_name = str(recommended["Alternativa"])
+        for _, base_row in sim_df.iterrows():
+            name = str(base_row["Alternativa"])
+            kw = turbine_kw[name]
+            turbines = int(base_row["Nº turbinas"])
+            capex_value = float(base_row["CAPEX CLP"])
+            om_value = float(base_row["O&M anual CLP"])
+            y_values = []
+            for fp in fp_range:
+                eff = fp / 100.0 * net_factor
+                gen_m = kw * 8760.0 * eff / 12.0 * turbines
+                useful_m = min(gen_m, monthly_consumption)
+                surplus_m = max(gen_m - monthly_consumption, 0.0)
+                benefit = max(useful_m * 12.0 * weighted_cost + surplus_m * 12.0 * surplus_price * surplus_factor - om_value, 0.0)
+                y_values.append(capex_value / benefit if benefit > 0 else np.nan)
+            is_rec = name == rec_name
+            fig.add_trace(
+                go.Scatter(
+                    x=fp_range,
+                    y=y_values,
+                    mode="lines+markers+text" if is_rec else "lines+markers",
+                    name=name,
+                    line=dict(color=palette["orange"] if is_rec else "rgba(148,163,184,.45)", width=4 if is_rec else 2),
+                    marker=dict(size=10 if is_rec else 6, color="#ffffff" if is_rec else "rgba(148,163,184,.75)", line=dict(color=palette["orange"] if is_rec else "rgba(148,163,184,.45)", width=2 if is_rec else 1)),
+                    text=[years_label(v) if is_rec else "" for v in y_values],
+                    textposition="top center",
+                    hovertemplate="<b>%{fullData.name}</b><br>FP: %{x:.1f}%<br>Payback: %{y:.1f} años<extra></extra>",
+                )
+            )
+        fig.add_vline(x=plant_factor, line_dash="dash", line_color=palette["ink"], annotation_text="Escenario base")
+        fig.update_layout(xaxis=dict(title="Factor planta real (%)"), yaxis=dict(title="Payback (años)", rangemode="tozero"))
+        return tune_fig(fig, height)
 
     st.markdown(
         f"""
@@ -14648,9 +14945,16 @@ def render_telecom_scenario_simulator():
         unsafe_allow_html=True,
     )
 
+    st.markdown(
+        f'<p class="telecom-panel-title">Recuperación de inversión y ahorro acumulado · {html.escape(str(recommended["Alternativa"]))}</p>'
+        '<p class="telecom-panel-sub">Beneficio acumulado frente al neto después de CAPEX. El marcador indica cuándo se recupera la inversión.</p>',
+        unsafe_allow_html=True,
+    )
+    st.plotly_chart(cumulative_savings_chart(recommended, 350), use_container_width=True, config={"displaylogo": False})
+
     chart_a, chart_b = st.columns(2)
     with chart_a:
-        st.markdown('<p class="telecom-panel-title">Panorama económico integral</p><p class="telecom-panel-sub">Barras: CAPEX. Línea: LCOE. Etiqueta: payback.</p>', unsafe_allow_html=True)
+        st.markdown('<p class="telecom-panel-title">Panorama económico integral por turbina</p><p class="telecom-panel-sub">Barras: CAPEX. Línea: LCOE. Etiqueta: payback.</p>', unsafe_allow_html=True)
         fig_econ = go.Figure()
         fig_econ.add_trace(go.Bar(x=sim_df["Alternativa"], y=sim_df["CAPEX MM CLP"], name="CAPEX", marker_color=palette["ink"], text=[f'{v:.1f} MM<br>{years_label(pb)}' for v, pb in zip(sim_df["CAPEX MM CLP"], sim_df["Payback años"])], textposition="inside", textfont=dict(color="#fff", size=11)))
         fig_econ.add_trace(go.Scatter(x=sim_df["Alternativa"], y=sim_df["LCOE CLP/kWh"], name="LCOE", yaxis="y2", mode="lines+markers+text", line=dict(color=palette["orange"], width=3), marker=dict(size=10, color="#fff", line=dict(color=palette["orange"], width=2)), text=[format_clp(v) for v in sim_df["LCOE CLP/kWh"]], textposition="top center"))
@@ -14675,25 +14979,20 @@ def render_telecom_scenario_simulator():
         fig_benefit.update_layout(xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="MM CLP/año", rangemode="tozero"))
         st.plotly_chart(tune_fig(fig_benefit, 350), use_container_width=True, config={"displaylogo": False})
     with chart_d:
-        st.markdown('<p class="telecom-panel-title">Sensibilidad rápida de viento</p><p class="telecom-panel-sub">Payback de la alternativa recomendada según factor planta.</p>', unsafe_allow_html=True)
-        fp_range = np.array([max(5.0, plant_factor - 10), plant_factor - 5, plant_factor, plant_factor + 5, min(65.0, plant_factor + 10)])
-        sensitivity_rows = []
-        rec_name = str(recommended["Alternativa"])
-        rec_kw = turbine_kw[rec_name]
-        for fp in fp_range:
-            eff = fp / 100.0 * net_factor
-            gen_m = rec_kw * 8760.0 * eff / 12.0 * int(recommended["Nº turbinas"])
-            useful_m = min(gen_m, monthly_consumption)
-            surplus_m = max(gen_m - monthly_consumption, 0.0)
-            benefit = max(useful_m * 12.0 * weighted_cost + surplus_m * 12.0 * surplus_price * surplus_factor - float(recommended["O&M anual CLP"]), 0.0)
-            pb = float(recommended["CAPEX CLP"]) / benefit if benefit > 0 else np.nan
-            sensitivity_rows.append({"FP": fp, "Payback": pb})
-        sens_df = pd.DataFrame(sensitivity_rows)
-        fig_sens = go.Figure()
-        fig_sens.add_trace(go.Scatter(x=sens_df["FP"], y=sens_df["Payback"], mode="lines+markers+text", name=rec_name, line=dict(color=palette["orange"], width=3), marker=dict(size=10, color="#fff", line=dict(color=palette["orange"], width=2)), text=[years_label(v) for v in sens_df["Payback"]], textposition="top center"))
-        fig_sens.add_vline(x=plant_factor, line_dash="dash", line_color=palette["ink"], annotation_text="Base")
-        fig_sens.update_layout(xaxis=dict(title="Factor planta (%)"), yaxis=dict(title="Payback (años)", rangemode="tozero"))
-        st.plotly_chart(tune_fig(fig_sens, 350), use_container_width=True, config={"displaylogo": False})
+        st.markdown('<p class="telecom-panel-title">Sensibilidad de viento real</p><p class="telecom-panel-sub">Payback según factor planta real. La alternativa recomendada se destaca y el resto queda como contexto.</p>', unsafe_allow_html=True)
+        st.plotly_chart(wind_sensitivity_chart(350), use_container_width=True, config={"displaylogo": False})
+
+    chart_e, chart_f = st.columns(2)
+    with chart_e:
+        st.markdown('<p class="telecom-panel-title">Mapa de decisión CAPEX vs retorno</p><p class="telecom-panel-sub">Zona óptima = menor CAPEX y menor payback. La burbuja recomendada se destaca automáticamente.</p>', unsafe_allow_html=True)
+        st.plotly_chart(decision_map_chart(sim_df, str(recommended["Alternativa"]), 360), use_container_width=True, config={"displaylogo": False})
+    with chart_f:
+        st.markdown(
+            f'<p class="telecom-panel-title">Waterfall económico · {html.escape(str(recommended["Alternativa"]))}</p>'
+            '<p class="telecom-panel-sub">Muestra cómo el costo actual se reduce por ahorro eólico, excedentes y O&M operativo.</p>',
+            unsafe_allow_html=True,
+        )
+        st.plotly_chart(waterfall_chart(recommended, 360), use_container_width=True, config={"displaylogo": False})
 
     table_df = sim_df.copy()
     table_show = pd.DataFrame(
