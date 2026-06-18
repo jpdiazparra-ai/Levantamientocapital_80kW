@@ -11608,7 +11608,8 @@ def render_telecom_tower_eval_analysis():
             candidates = []
             for col in df.columns:
                 name = str(col).casefold()
-                if not any(token in name for token in ["fecha", "date", "hora", "time", "timestamp", "datetime"]):
+                unnamed_date_candidate = name.startswith("unnamed") or name in {"", "nan", "none"}
+                if not unnamed_date_candidate and not any(token in name for token in ["fecha", "date", "hora", "time", "timestamp", "datetime"]):
                     if pd.api.types.is_numeric_dtype(df[col]):
                         continue
                 parsed = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
@@ -11616,6 +11617,17 @@ def render_telecom_tower_eval_analysis():
                 if valid_ratio >= 0.55:
                     candidates.append((col, valid_ratio))
             return [col for col, _ in sorted(candidates, key=lambda item: item[1], reverse=True)]
+
+        def _normalize_datetime_column_name(df: pd.DataFrame) -> pd.DataFrame:
+            if df.empty:
+                return df
+            renamed = df.copy()
+            first_col = renamed.columns[0]
+            first_name = str(first_col).strip().casefold()
+            first_parsed = pd.to_datetime(renamed[first_col], errors="coerce", dayfirst=True)
+            if first_parsed.notna().mean() >= 0.55 and (first_name.startswith("unnamed") or first_name in {"", "nan", "none"}):
+                renamed = renamed.rename(columns={first_col: "Fecha/hora"})
+            return renamed
 
         def _detect_wind_columns(df: pd.DataFrame, date_cols: list[str]) -> list[str]:
             wind_cols = []
@@ -11791,6 +11803,7 @@ def render_telecom_tower_eval_analysis():
             st.dataframe(sample_df, use_container_width=True, hide_index=True)
             return
 
+        raw_df = _normalize_datetime_column_name(raw_df)
         raw_df.columns = [str(col).strip() for col in raw_df.columns]
         date_candidates = _detect_datetime_columns(raw_df)
         wind_candidates = _detect_wind_columns(raw_df, date_candidates)
@@ -11801,9 +11814,12 @@ def render_telecom_tower_eval_analysis():
 
         config_a, config_b, config_c, config_d = st.columns(4)
         with config_a:
-            datetime_options = ["Sin fecha/hora"] + date_candidates
-            selected_datetime = st.selectbox("Columna fecha/hora", datetime_options, index=1 if date_candidates else 0, key="telecom_09_datetime_col")
-            selected_datetime = None if selected_datetime == "Sin fecha/hora" else selected_datetime
+            datetime_options = date_candidates + ["Sin fecha/hora"]
+            selected_datetime_choice = st.selectbox("Columna fecha/hora", datetime_options, index=0 if date_candidates else 0, key="telecom_09_datetime_col")
+            selected_datetime = None if selected_datetime_choice == "Sin fecha/hora" else selected_datetime_choice
+            if selected_datetime is None and date_candidates:
+                selected_datetime = date_candidates[0]
+                st.caption(f"Usando automáticamente `{selected_datetime}` como fecha/hora.")
         with config_b:
             selected_wind_col = st.selectbox("Altura / columna a analizar", wind_candidates, index=0, key="telecom_09_wind_col")
         with config_c:
