@@ -10081,7 +10081,7 @@ def render_client_sensitivity_analysis():
             )
     heat_df = pd.DataFrame(heat_records)
     heat_matrix = (
-        heat_df.pivot(index="Cobertura", columns="Turbina", values="Payback híbrido")
+        heat_df.pivot_table(index="Cobertura", columns="Turbina", values="Payback híbrido", aggfunc="min")
         .reindex([f"{c * 100:.0f}%" for c in coverage_options])
         .reindex(columns=turbine_order)
     )
@@ -13464,7 +13464,12 @@ def render_telecom_tower_eval_analysis():
         with s1:
             st.markdown('<p class="telecom-panel-title">Matriz de payback por cobertura</p><p class="telecom-panel-sub">Menor valor indica recuperación más rápida con remanente valorizado.</p>', unsafe_allow_html=True)
             if not coverage_long.empty:
-                coverage_heat = coverage_long.pivot(index="Cobertura %", columns="Turbina", values="Payback años").sort_index()
+                coverage_heat = coverage_long.pivot_table(
+                    index="Cobertura %",
+                    columns="Turbina",
+                    values="Payback años",
+                    aggfunc="min",
+                ).sort_index()
                 coverage_heat = coverage_heat[[col for col in ["1 kW", "3 kW", "5 kW", "10 kW", "80 kW"] if col in coverage_heat.columns]]
                 fig_cov = go.Figure(
                     go.Heatmap(
@@ -13484,7 +13489,12 @@ def render_telecom_tower_eval_analysis():
         with s2:
             st.markdown('<p class="telecom-panel-title">Matriz de payback por velocidad de viento</p><p class="telecom-panel-sub">Sensibilidad técnica: muestra cuánto depende la decisión del recurso eólico.</p>', unsafe_allow_html=True)
             if not wind_long.empty:
-                wind_heat = wind_long.pivot(index="Velocidad m/s", columns="Turbina", values="Payback años").sort_index()
+                wind_heat = wind_long.pivot_table(
+                    index="Velocidad m/s",
+                    columns="Turbina",
+                    values="Payback años",
+                    aggfunc="min",
+                ).sort_index()
                 wind_heat = wind_heat[[col for col in ["1 kW", "3 kW", "5 kW", "10 kW", "80 kW"] if col in wind_heat.columns]]
                 fig_wind_heat = go.Figure(
                     go.Heatmap(
