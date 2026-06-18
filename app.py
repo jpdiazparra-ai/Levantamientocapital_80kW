@@ -11604,32 +11604,82 @@ def render_telecom_tower_eval_analysis():
             )
             return pd.to_numeric(cleaned, errors="coerce")
 
+        def _datetime_candidate_quality(series: pd.Series) -> tuple[pd.Series, float, float]:
+            parsed = pd.to_datetime(series, errors="coerce")
+            valid_ratio = float(parsed.notna().mean() or 0.0)
+            valid = parsed.dropna()
+            if len(valid) >= 2:
+                span_hours = float((valid.max() - valid.min()).total_seconds() / 3600.0)
+            else:
+                span_hours = 0.0
+            return parsed, valid_ratio, span_hours
+
+        def _detect_best_datetime_column(df: pd.DataFrame, min_ratio: float = 0.70) -> tuple[str | None, pd.Series | None, float, float]:
+            if df.empty:
+                return None, None, 0.0, 0.0
+            ordered_cols = list(df.columns)
+            first_col = ordered_cols[0]
+            first_name = str(first_col).strip().casefold()
+            first_is_unnamed = first_name.startswith("unnamed") or first_name in {"", "nan", "none"}
+            candidates = []
+            for col in ordered_cols:
+                name = str(col).strip().casefold()
+                is_first = col == first_col
+                is_named_as_date = any(token in name for token in ["fecha", "date", "hora", "time", "timestamp", "datetime"])
+                is_unnamed = name.startswith("unnamed") or name in {"", "nan", "none"}
+                if pd.api.types.is_numeric_dtype(df[col]) and not is_named_as_date:
+                    continue
+                parsed, valid_ratio, span_hours = _datetime_candidate_quality(df[col])
+                if valid_ratio < min_ratio:
+                    continue
+                if len(df) > 24 and span_hours < 12:
+                    continue
+                priority = 0
+                if is_first and first_is_unnamed:
+                    priority = 3
+                elif is_named_as_date:
+                    priority = 2
+                elif is_unnamed:
+                    priority = 1
+                candidates.append((priority, valid_ratio, span_hours, col, parsed))
+            if not candidates:
+                return None, None, 0.0, 0.0
+            priority, valid_ratio, span_hours, col, parsed = sorted(candidates, key=lambda item: (item[0], item[1], item[2]), reverse=True)[0]
+            return col, parsed, float(valid_ratio), float(span_hours)
+
         def _detect_datetime_columns(df: pd.DataFrame) -> list[str]:
             candidates = []
             for col in df.columns:
-                name = str(col).casefold()
-                unnamed_date_candidate = name.startswith("unnamed") or name in {"", "nan", "none"}
-                if not unnamed_date_candidate and not any(token in name for token in ["fecha", "date", "hora", "time", "timestamp", "datetime"]):
-                    if pd.api.types.is_numeric_dtype(df[col]):
-                        continue
-                parsed = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
-                valid_ratio = float(parsed.notna().mean() or 0.0)
-                if valid_ratio >= 0.55:
-                    candidates.append((col, valid_ratio))
-            return [col for col, _ in sorted(candidates, key=lambda item: item[1], reverse=True)]
+                name = str(col).strip().casefold()
+                is_named_as_date = any(token in name for token in ["fecha", "date", "hora", "time", "timestamp", "datetime"])
+                if pd.api.types.is_numeric_dtype(df[col]) and not is_named_as_date:
+                    continue
+                parsed, valid_ratio, span_hours = _datetime_candidate_quality(df[col])
+                if valid_ratio >= 0.70 and (len(df) <= 24 or span_hours >= 12):
+                    candidates.append((col, valid_ratio, span_hours))
+            return [col for col, _, _ in sorted(candidates, key=lambda item: (item[1], item[2]), reverse=True)]
 
-        def _normalize_csv_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+        def _normalize_csv_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
             if df.empty:
-                return df, ""
+                return df, {}
             renamed = df.copy()
-            first_col = renamed.columns[0]
-            first_name = str(first_col).strip().casefold()
-            first_parsed = pd.to_datetime(renamed[first_col], errors="coerce", dayfirst=True)
-            first_is_unnamed = first_name.startswith("unnamed") or first_name in {"", "nan", "none"}
-            detection_note = ""
-            if first_is_unnamed and first_parsed.notna().mean() >= 0.80:
-                renamed = renamed.rename(columns={first_col: "Fecha/hora"})
-                detection_note = "Fecha/hora detectada correctamente desde la primera columna del CSV."
+            detected_col, parsed, valid_ratio, span_hours = _detect_best_datetime_column(renamed)
+            detection_meta = {
+                "detected_col_original": detected_col,
+                "valid_ratio": valid_ratio,
+                "span_hours": span_hours,
+                "message": "",
+            }
+            if detected_col is not None:
+                renamed["Fecha/hora"] = parsed
+                if detected_col != "Fecha/hora":
+                    renamed = renamed.drop(columns=[detected_col])
+                original_name = str(detected_col).strip().casefold()
+                first_name = str(df.columns[0]).strip().casefold()
+                if detected_col == df.columns[0] and (first_name.startswith("unnamed") or first_name in {"", "nan", "none"}):
+                    detection_meta["message"] = "Fecha/hora detectada correctamente desde la primera columna del CSV."
+                else:
+                    detection_meta["message"] = f"Fecha/hora detectada correctamente desde `{detected_col}`."
 
             wind_renames = {}
             used_names = {str(col).strip() for col in renamed.columns}
@@ -11655,7 +11705,7 @@ def render_telecom_tower_eval_analysis():
                 used_names.add(unique_name)
             if wind_renames:
                 renamed = renamed.rename(columns=wind_renames)
-            return renamed, detection_note
+            return renamed, detection_meta
 
         def _datetime_quality_summary(datetimes: pd.Series) -> dict:
             clean_dt = pd.to_datetime(datetimes, errors="coerce").dropna().sort_values()
@@ -11858,7 +11908,7 @@ def render_telecom_tower_eval_analysis():
             st.dataframe(sample_df, use_container_width=True, hide_index=True)
             return
 
-        raw_df, first_column_datetime_note = _normalize_csv_columns(raw_df)
+        raw_df, datetime_detection_meta = _normalize_csv_columns(raw_df)
         raw_df.columns = [str(col).strip() for col in raw_df.columns]
         date_candidates = _detect_datetime_columns(raw_df)
         wind_candidates = _detect_wind_columns(raw_df, date_candidates)
@@ -11872,7 +11922,10 @@ def render_telecom_tower_eval_analysis():
             datetime_options = date_candidates + ["Sin fecha/hora"]
             selected_datetime_choice = st.selectbox("Columna fecha/hora", datetime_options, index=0 if date_candidates else 0, key="telecom_09_datetime_col")
             selected_datetime = None if selected_datetime_choice == "Sin fecha/hora" else selected_datetime_choice
-            if selected_datetime is None and date_candidates:
+            if "Fecha/hora" in raw_df.columns and datetime_detection_meta.get("valid_ratio", 0.0) >= 0.70:
+                selected_datetime = "Fecha/hora"
+                st.caption("Usando fecha/hora detectada automáticamente por contenido del CSV.")
+            elif selected_datetime is None and date_candidates:
                 selected_datetime = date_candidates[0]
                 st.caption(f"Usando automáticamente `{selected_datetime}` como fecha/hora.")
         with config_b:
@@ -11907,8 +11960,8 @@ def render_telecom_tower_eval_analysis():
         if working_df["_datetime"].notna().mean() < 0.55:
             datetime_fallbacks = _detect_datetime_columns(raw_df)
             for fallback_col in datetime_fallbacks:
-                fallback_parsed = pd.to_datetime(raw_df[fallback_col], errors="coerce", dayfirst=True)
-                if fallback_parsed.notna().mean() >= 0.55:
+                fallback_parsed, fallback_ratio, fallback_span = _datetime_candidate_quality(raw_df[fallback_col])
+                if fallback_ratio >= 0.70 and (len(raw_df) <= 24 or fallback_span >= 12):
                     selected_datetime = fallback_col
                     working_df["_datetime"] = fallback_parsed
                     working_df = working_df.sort_values("_datetime")
@@ -11918,12 +11971,18 @@ def render_telecom_tower_eval_analysis():
         datetime_audit = None
         if working_df["_datetime"].notna().mean() >= 0.80:
             datetime_audit = _datetime_quality_summary(working_df["_datetime"])
+            if datetime_detection_meta.get("detected_col_original") is not None:
+                datetime_audit = {
+                    "Columna detectada": str(datetime_detection_meta["detected_col_original"]),
+                    "% fechas válidas": f"{float(datetime_detection_meta.get('valid_ratio', 0.0)) * 100:.1f}%",
+                    **datetime_audit,
+                }
         if working_df["_datetime"].notna().mean() < 0.55:
             selected_datetime = "Eje horario sintético"
             working_df["_datetime"] = pd.date_range("2000-01-01 00:00:00", periods=len(working_df), freq="h")
             datetime_source_note = "No se detectó una fecha explícita confiable; se generó un eje horario sintético para mantener serie temporal, promedios mensuales y patrón horario."
-        elif first_column_datetime_note and selected_datetime == "Fecha/hora":
-            datetime_source_note = first_column_datetime_note
+        elif datetime_detection_meta.get("message") and selected_datetime == "Fecha/hora":
+            datetime_source_note = str(datetime_detection_meta["message"])
 
         analyses = [
             _analyze_column(
@@ -11981,18 +12040,20 @@ def render_telecom_tower_eval_analysis():
                 st.success(datetime_source_note)
 
         if datetime_audit:
-            audit_cols = st.columns(6)
-            for idx, (label, value) in enumerate(datetime_audit.items()):
-                with audit_cols[idx]:
-                    st.markdown(
-                        f"""
-                        <div class="telecom-card" style="padding:14px 14px;min-height:92px;">
-                          <p class="telecom-card-k">{html.escape(str(label))}</p>
-                          <p class="telecom-card-v" style="font-size:18px;">{html.escape(str(value))}</p>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+            audit_items = list(datetime_audit.items())
+            for start_idx in range(0, len(audit_items), 4):
+                audit_cols = st.columns(4)
+                for col_idx, (label, value) in enumerate(audit_items[start_idx:start_idx + 4]):
+                    with audit_cols[col_idx]:
+                        st.markdown(
+                            f"""
+                            <div class="telecom-card" style="padding:14px 14px;min-height:92px;">
+                              <p class="telecom-card-k">{html.escape(str(label))}</p>
+                              <p class="telecom-card-v" style="font-size:18px;">{html.escape(str(value))}</p>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
 
         speed_selected = selected_analysis["_speed"]
         stat_df = pd.DataFrame(
