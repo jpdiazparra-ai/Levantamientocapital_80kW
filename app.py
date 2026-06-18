@@ -14410,6 +14410,328 @@ def render_telecom_tower_eval_analysis():
         render_wind_csv_analysis_tab()
 
 
+def render_telecom_scenario_simulator():
+    turbine_order = ["VAWT 1 kW", "VAWT 3 kW", "VAWT 5 kW", "VAWT 10 kW", "VAWT 80 kW"]
+    turbine_kw = {
+        "VAWT 1 kW": 1.0,
+        "VAWT 3 kW": 3.0,
+        "VAWT 5 kW": 5.0,
+        "VAWT 10 kW": 10.0,
+        "VAWT 80 kW": 80.0,
+    }
+    default_unit_capex = {
+        "VAWT 1 kW": 7_600_000.0,
+        "VAWT 3 kW": 13_500_000.0,
+        "VAWT 5 kW": 25_500_000.0,
+        "VAWT 10 kW": 56_500_000.0,
+        "VAWT 80 kW": 105_000_000.0,
+    }
+    palette = {
+        "ink": "#284763",
+        "sky": "#75A9B8",
+        "pale": "#DCECEF",
+        "orange": "#EA6400",
+        "copper": "#A9673B",
+        "text": "#20384F",
+    }
+
+    def years_label(value) -> str:
+        if pd.isna(value) or not np.isfinite(float(value)):
+            return "N/A"
+        months_total = max(1, int(round(float(value) * 12)))
+        years = months_total // 12
+        months = months_total % 12
+        if years == 0:
+            return f"{months} meses"
+        if months == 0:
+            return f"{years} año" if years == 1 else f"{years} años"
+        return f"{years} años {months} meses"
+
+    def tune_fig(fig: go.Figure, height: int = 380) -> go.Figure:
+        fig.update_layout(
+            height=height,
+            margin=dict(l=12, r=28, t=38, b=48),
+            font=dict(family="Inter, Arial, sans-serif", color=palette["text"], size=11),
+            legend=dict(orientation="h", y=1.16, x=0, title=None),
+            hoverlabel=dict(bgcolor="#ffffff", bordercolor=palette["pale"], font=dict(color="#0f172a")),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            hovermode="x unified",
+        )
+        fig.update_xaxes(showline=False, zeroline=False, gridcolor="rgba(148,163,184,.18)")
+        fig.update_yaxes(showline=False, zeroline=False, gridcolor="rgba(148,163,184,.18)")
+        return fig
+
+    st.markdown(
+        """
+        <div class="telecom-site-shell">
+          <div class="telecom-site-head">
+            <div>
+              <p class="telecom-site-k">Sub bloque 6 · Simulador ejecutivo autónomo</p>
+              <h3 class="telecom-site-t">Modelo interactivo para torres telecom</h3>
+              <p class="telecom-site-s">Ingrese supuestos técnicos, energéticos y económicos. El sistema recalcula en vivo la recomendación, cobertura, CAPEX, LCOE, payback, impacto y tabla ejecutiva sin depender del Google Sheet.</p>
+            </div>
+            <div class="telecom-site-status">
+              <div class="telecom-site-pill"><strong>INPUT</strong><span>Manual</span></div>
+              <div class="telecom-site-pill"><strong>5</strong><span>Alternativas</span></div>
+              <div class="telecom-site-pill"><strong>LIVE</strong><span>Escenario</span></div>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.container(border=True):
+        st.markdown("##### Demanda y continuidad")
+        d1, d2, d3, d4 = st.columns(4)
+        with d1:
+            monthly_consumption = st.number_input("Consumo mensual sitio (kWh/mes)", min_value=100.0, value=1602.0, step=50.0, key="sim6_monthly_consumption")
+        with d2:
+            target_coverage = st.slider("Cobertura objetivo (%)", min_value=20.0, max_value=160.0, value=100.0, step=5.0, key="sim6_target_coverage")
+        with d3:
+            safety_margin = st.slider("Margen de seguridad (%)", min_value=0.0, max_value=40.0, value=10.0, step=2.5, key="sim6_safety_margin")
+        with d4:
+            project_life = st.number_input("Vida útil análisis (años)", min_value=5, max_value=30, value=20, step=1, key="sim6_project_life")
+
+    with st.container(border=True):
+        st.markdown("##### Recurso eólico y operación")
+        e1, e2, e3, e4, e5 = st.columns(5)
+        with e1:
+            plant_factor = st.slider("Factor planta base (%)", min_value=10.0, max_value=60.0, value=35.0, step=0.5, key="sim6_plant_factor")
+        with e2:
+            availability = st.slider("Disponibilidad (%)", min_value=70.0, max_value=100.0, value=95.0, step=1.0, key="sim6_availability")
+        with e3:
+            electrical_losses = st.slider("Pérdidas eléctricas (%)", min_value=0.0, max_value=25.0, value=3.0, step=0.5, key="sim6_electrical_losses")
+        with e4:
+            additional_losses = st.slider("Pérdidas adicionales (%)", min_value=0.0, max_value=25.0, value=2.0, step=0.5, key="sim6_additional_losses")
+        with e5:
+            degradation = st.slider("Degradación anual (%)", min_value=0.0, max_value=3.0, value=0.5, step=0.1, key="sim6_degradation")
+
+    with st.container(border=True):
+        st.markdown("##### Economía energética")
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            grid_cost = st.number_input("Costo red (CLP/kWh)", min_value=0.0, value=182.0, step=10.0, key="sim6_grid_cost")
+            mix_grid = st.slider("Mix red (%)", min_value=0.0, max_value=100.0, value=60.0, step=5.0, key="sim6_mix_grid")
+        with c2:
+            diesel_cost = st.number_input("Costo electrógeno (CLP/kWh)", min_value=0.0, value=800.0, step=25.0, key="sim6_diesel_cost")
+            mix_diesel = st.slider("Mix electrógeno (%)", min_value=0.0, max_value=100.0, value=40.0, step=5.0, key="sim6_mix_diesel")
+        with c3:
+            bess_cost = st.number_input("Costo FV/BESS ref. (CLP/kWh)", min_value=0.0, value=150.0, step=10.0, key="sim6_bess_cost")
+            mix_bess = st.slider("Mix FV/BESS (%)", min_value=0.0, max_value=100.0, value=0.0, step=5.0, key="sim6_mix_bess")
+        with c4:
+            surplus_price = st.number_input("Monetización excedente (CLP/kWh)", min_value=0.0, value=90.0, step=10.0, key="sim6_surplus_price")
+            surplus_factor = st.slider("Factor valorización excedente", min_value=0.0, max_value=2.0, value=1.0, step=0.05, key="sim6_surplus_factor")
+
+    with st.container(border=True):
+        st.markdown("##### CAPEX, O&M e impacto")
+        k1, k2, k3, k4, k5 = st.columns(5)
+        with k1:
+            bos_pct = st.slider("BOS / instalación (%)", min_value=0.0, max_value=80.0, value=25.0, step=2.5, key="sim6_bos_pct")
+        with k2:
+            om_pct = st.slider("O&M anual sobre CAPEX (%)", min_value=0.0, max_value=12.0, value=2.0, step=0.25, key="sim6_om_pct")
+        with k3:
+            diesel_l_kwh = st.number_input("Consumo diésel evitado (L/kWh)", min_value=0.0, value=0.30, step=0.01, key="sim6_diesel_l_kwh")
+        with k4:
+            co2_kg_l = st.number_input("Factor emisión diésel (kgCO2/L)", min_value=0.0, value=2.68, step=0.01, key="sim6_co2_kg_l")
+        with k5:
+            surface_per_kw = st.number_input("Impacto superficial (m²/kW)", min_value=0.0, value=4.0, step=0.5, key="sim6_surface_per_kw")
+
+        capex_cols = st.columns(5)
+        unit_capex = {}
+        for idx, name in enumerate(turbine_order):
+            with capex_cols[idx]:
+                unit_capex[name] = st.number_input(f"CAPEX {name}", min_value=0.0, value=float(default_unit_capex[name]), step=500_000.0, key=f"sim6_capex_{name}")
+
+    mix_total = mix_grid + mix_diesel + mix_bess
+    if mix_total <= 0:
+        grid_share = diesel_share = bess_share = 0.0
+        weighted_cost = 0.0
+    else:
+        grid_share = mix_grid / mix_total
+        diesel_share = mix_diesel / mix_total
+        bess_share = mix_bess / mix_total
+        weighted_cost = grid_share * grid_cost + diesel_share * diesel_cost + bess_share * bess_cost
+    if abs(mix_total - 100.0) > 0.01:
+        st.caption(f"Mix ingresado suma {mix_total:.0f}%; el cálculo lo normaliza internamente a 100%.")
+
+    net_factor = max(0.0, (availability / 100.0) * (1.0 - electrical_losses / 100.0) * (1.0 - additional_losses / 100.0))
+    effective_pf = plant_factor / 100.0 * net_factor
+    required_monthly = monthly_consumption * (target_coverage + safety_margin) / 100.0
+    rows = []
+    for name in turbine_order:
+        kw = turbine_kw[name]
+        gen_month_turbine = kw * 8760.0 * effective_pf / 12.0
+        turbines = int(max(1, math.ceil(required_monthly / gen_month_turbine))) if gen_month_turbine > 0 else 0
+        installed_kw = turbines * kw
+        gen_month_total = gen_month_turbine * turbines
+        gen_year_total = gen_month_total * 12.0
+        useful_monthly = min(gen_month_total, monthly_consumption)
+        surplus_monthly = max(gen_month_total - monthly_consumption, 0.0)
+        coverage_real = gen_month_total / monthly_consumption * 100.0 if monthly_consumption > 0 else 0.0
+        useful_coverage = useful_monthly / monthly_consumption * 100.0 if monthly_consumption > 0 else 0.0
+        capex_turbines = turbines * unit_capex[name]
+        capex_total = capex_turbines * (1.0 + bos_pct / 100.0)
+        om_annual = capex_total * om_pct / 100.0
+        gross_saving = useful_monthly * 12.0 * weighted_cost
+        surplus_income = surplus_monthly * 12.0 * surplus_price * surplus_factor
+        benefit_net = max(gross_saving + surplus_income - om_annual, 0.0)
+        payback = capex_total / benefit_net if benefit_net > 0 else np.nan
+        lcoe = ((capex_total / project_life) + om_annual) / gen_year_total if gen_year_total > 0 and project_life > 0 else np.nan
+        diesel_avoided = useful_monthly * 12.0 * diesel_share * diesel_l_kwh
+        co2_avoided = diesel_avoided * co2_kg_l / 1000.0
+        benefit_20 = sum(benefit_net * ((1.0 - degradation / 100.0) ** year) for year in range(int(project_life))) - capex_total
+        surface = installed_kw * surface_per_kw
+        rows.append(
+            {
+                "Alternativa": name,
+                "Potencia unitaria kW": kw,
+                "Nº turbinas": turbines,
+                "Potencia instalada kW": installed_kw,
+                "Generación mensual kWh": gen_month_total,
+                "Generación anual kWh": gen_year_total,
+                "Cobertura real %": coverage_real,
+                "Cobertura útil %": useful_coverage,
+                "Excedente mensual kWh": surplus_monthly,
+                "CAPEX CLP": capex_total,
+                "CAPEX MM CLP": capex_total / 1_000_000,
+                "LCOE CLP/kWh": lcoe,
+                "Ahorro bruto anual CLP": gross_saving,
+                "Ingreso excedente anual CLP": surplus_income,
+                "O&M anual CLP": om_annual,
+                "Beneficio neto anual CLP": benefit_net,
+                "Payback años": payback,
+                "Beneficio neto periodo CLP": benefit_20,
+                "Diésel evitado L/año": diesel_avoided,
+                "CO2 evitado t/año": co2_avoided,
+                "Impacto superficial m2": surface,
+            }
+        )
+    sim_df = pd.DataFrame(rows)
+    sim_df["Score"] = (
+        _telecom_score(sim_df["CAPEX CLP"]) * 0.30
+        + _telecom_score(sim_df["Payback años"]) * 0.34
+        + _telecom_score(sim_df["LCOE CLP/kWh"]) * 0.20
+        + _telecom_score(sim_df["Cobertura útil %"], higher_is_better=True) * 0.10
+        + _telecom_score(sim_df["CO2 evitado t/año"], higher_is_better=True) * 0.06
+    ) * 100.0
+    recommended = sim_df.sort_values("Score", ascending=False, na_position="last").iloc[0]
+
+    st.markdown(
+        f"""
+        <div class="telecom-dash-shell">
+          <div class="telecom-dash-head">
+            <div>
+              <p class="telecom-dash-k">Resultado ejecutivo del simulador</p>
+              <h3 class="telecom-dash-t">Recomendación: {html.escape(str(recommended["Alternativa"]))}</h3>
+              <p class="telecom-dash-s">El score combina CAPEX, payback, LCOE, cobertura útil e impacto ambiental. El modelo recalcula cada cambio de input.</p>
+            </div>
+            <div class="telecom-dash-rec">
+              <p class="telecom-dash-rec-k">Score técnico-económico</p>
+              <p class="telecom-dash-rec-v">{float(recommended["Score"]):.0f}/100</p>
+              <p class="telecom-dash-s">{int(recommended["Nº turbinas"])} turbinas · {float(recommended["Potencia instalada kW"]):.1f} kW instalados</p>
+            </div>
+          </div>
+          <div class="telecom-dash-body">
+            <div class="telecom-grid">
+              <div class="telecom-card"><p class="telecom-card-k">Costo ponderado</p><p class="telecom-card-v">{format_clp(weighted_cost)}</p><p class="telecom-card-s">Mix normalizado del sitio</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">Cobertura real</p><p class="telecom-card-v">{float(recommended["Cobertura real %"]):.0f}%</p><p class="telecom-card-s">Generación vs consumo</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">CAPEX</p><p class="telecom-card-v">{float(recommended["CAPEX MM CLP"]):.1f} MM</p><p class="telecom-card-s">Turbinas + BOS</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">Payback</p><p class="telecom-card-v">{years_label(recommended["Payback años"])}</p><p class="telecom-card-s">Beneficio neto anual</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">LCOE</p><p class="telecom-card-v">{format_clp(float(recommended["LCOE CLP/kWh"]))}</p><p class="telecom-card-s">CLP/kWh generado</p></div>
+              <div class="telecom-card"><p class="telecom-card-k">Valor periodo</p><p class="telecom-card-v">{float(recommended["Beneficio neto periodo CLP"])/1_000_000:.1f} MM</p><p class="telecom-card-s">Neto post CAPEX</p></div>
+            </div>
+          </div>
+        </div>
+        """.replace(",", "."),
+        unsafe_allow_html=True,
+    )
+
+    chart_a, chart_b = st.columns(2)
+    with chart_a:
+        st.markdown('<p class="telecom-panel-title">Panorama económico integral</p><p class="telecom-panel-sub">Barras: CAPEX. Línea: LCOE. Etiqueta: payback.</p>', unsafe_allow_html=True)
+        fig_econ = go.Figure()
+        fig_econ.add_trace(go.Bar(x=sim_df["Alternativa"], y=sim_df["CAPEX MM CLP"], name="CAPEX", marker_color=palette["ink"], text=[f'{v:.1f} MM<br>{years_label(pb)}' for v, pb in zip(sim_df["CAPEX MM CLP"], sim_df["Payback años"])], textposition="inside", textfont=dict(color="#fff", size=11)))
+        fig_econ.add_trace(go.Scatter(x=sim_df["Alternativa"], y=sim_df["LCOE CLP/kWh"], name="LCOE", yaxis="y2", mode="lines+markers+text", line=dict(color=palette["orange"], width=3), marker=dict(size=10, color="#fff", line=dict(color=palette["orange"], width=2)), text=[format_clp(v) for v in sim_df["LCOE CLP/kWh"]], textposition="top center"))
+        fig_econ.update_layout(xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="CAPEX (MM CLP)", rangemode="tozero"), yaxis2=dict(title="LCOE (CLP/kWh)", overlaying="y", side="right", showgrid=False))
+        st.plotly_chart(tune_fig(fig_econ), use_container_width=True, config={"displaylogo": False})
+    with chart_b:
+        st.markdown('<p class="telecom-panel-title">Cobertura mensual por turbina</p><p class="telecom-panel-sub">Generación útil, excedente y brecha frente a consumo mensual.</p>', unsafe_allow_html=True)
+        fig_cov = go.Figure()
+        fig_cov.add_trace(go.Bar(x=sim_df["Alternativa"], y=np.minimum(sim_df["Generación mensual kWh"], monthly_consumption), name="Consumo cubierto", marker_color=palette["sky"]))
+        fig_cov.add_trace(go.Bar(x=sim_df["Alternativa"], y=sim_df["Excedente mensual kWh"], name="Excedente", marker_color=palette["orange"]))
+        fig_cov.add_trace(go.Scatter(x=sim_df["Alternativa"], y=[monthly_consumption] * len(sim_df), name="Consumo sitio", mode="lines", line=dict(color=palette["ink"], width=2, dash="dash")))
+        fig_cov.add_trace(go.Scatter(x=sim_df["Alternativa"], y=sim_df["Generación mensual kWh"], name="Cobertura", mode="markers+text", marker=dict(size=12, color="#fff", line=dict(color=palette["ink"], width=2)), text=[f'{v:.0f}%' for v in sim_df["Cobertura real %"]], textposition="top center"))
+        fig_cov.update_layout(barmode="stack", xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="kWh/mes", rangemode="tozero"))
+        st.plotly_chart(tune_fig(fig_cov), use_container_width=True, config={"displaylogo": False})
+
+    chart_c, chart_d = st.columns(2)
+    with chart_c:
+        st.markdown('<p class="telecom-panel-title">Beneficio marginal por alternativa</p><p class="telecom-panel-sub">Valor anual neto, ingreso por excedentes y O&M.</p>', unsafe_allow_html=True)
+        fig_benefit = go.Figure()
+        fig_benefit.add_trace(go.Bar(x=sim_df["Alternativa"], y=sim_df["Beneficio neto anual CLP"] / 1_000_000, name="Beneficio neto", marker_color=palette["ink"], text=[f'{v/1_000_000:.1f} MM' for v in sim_df["Beneficio neto anual CLP"]], textposition="outside"))
+        fig_benefit.add_trace(go.Bar(x=sim_df["Alternativa"], y=sim_df["Ingreso excedente anual CLP"] / 1_000_000, name="Ingreso excedente", marker_color=palette["orange"]))
+        fig_benefit.update_layout(xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="MM CLP/año", rangemode="tozero"))
+        st.plotly_chart(tune_fig(fig_benefit, 350), use_container_width=True, config={"displaylogo": False})
+    with chart_d:
+        st.markdown('<p class="telecom-panel-title">Sensibilidad rápida de viento</p><p class="telecom-panel-sub">Payback de la alternativa recomendada según factor planta.</p>', unsafe_allow_html=True)
+        fp_range = np.array([max(5.0, plant_factor - 10), plant_factor - 5, plant_factor, plant_factor + 5, min(65.0, plant_factor + 10)])
+        sensitivity_rows = []
+        rec_name = str(recommended["Alternativa"])
+        rec_kw = turbine_kw[rec_name]
+        for fp in fp_range:
+            eff = fp / 100.0 * net_factor
+            gen_m = rec_kw * 8760.0 * eff / 12.0 * int(recommended["Nº turbinas"])
+            useful_m = min(gen_m, monthly_consumption)
+            surplus_m = max(gen_m - monthly_consumption, 0.0)
+            benefit = max(useful_m * 12.0 * weighted_cost + surplus_m * 12.0 * surplus_price * surplus_factor - float(recommended["O&M anual CLP"]), 0.0)
+            pb = float(recommended["CAPEX CLP"]) / benefit if benefit > 0 else np.nan
+            sensitivity_rows.append({"FP": fp, "Payback": pb})
+        sens_df = pd.DataFrame(sensitivity_rows)
+        fig_sens = go.Figure()
+        fig_sens.add_trace(go.Scatter(x=sens_df["FP"], y=sens_df["Payback"], mode="lines+markers+text", name=rec_name, line=dict(color=palette["orange"], width=3), marker=dict(size=10, color="#fff", line=dict(color=palette["orange"], width=2)), text=[years_label(v) for v in sens_df["Payback"]], textposition="top center"))
+        fig_sens.add_vline(x=plant_factor, line_dash="dash", line_color=palette["ink"], annotation_text="Base")
+        fig_sens.update_layout(xaxis=dict(title="Factor planta (%)"), yaxis=dict(title="Payback (años)", rangemode="tozero"))
+        st.plotly_chart(tune_fig(fig_sens, 350), use_container_width=True, config={"displaylogo": False})
+
+    table_df = sim_df.copy()
+    table_show = pd.DataFrame(
+        {
+            "Alternativa": table_df["Alternativa"],
+            "Nº turbinas": table_df["Nº turbinas"].astype(int),
+            "Potencia kW": table_df["Potencia instalada kW"].map(lambda v: f"{v:.1f}"),
+            "Cobertura": table_df["Cobertura real %"].map(lambda v: f"{v:.0f}%"),
+            "CAPEX": table_df["CAPEX CLP"].apply(format_clp),
+            "Payback": table_df["Payback años"].apply(years_label),
+            "LCOE": table_df["LCOE CLP/kWh"].apply(format_clp),
+            "Beneficio anual": table_df["Beneficio neto anual CLP"].apply(format_clp),
+            "CO2 evitado": table_df["CO2 evitado t/año"].map(lambda v: f"{v:.1f} t/año"),
+            "Score": table_df["Score"].map(lambda v: f"{v:.0f}/100"),
+        }
+    )
+    st.markdown('<p class="telecom-panel-title">Tabla ejecutiva del simulador</p><p class="telecom-panel-sub">Resultados calculados exclusivamente desde los inputs del Sub bloque 6.</p>', unsafe_allow_html=True)
+    st.dataframe(table_show, use_container_width=True, hide_index=True)
+
+    recommendation_text = (
+        f"Se recomienda evaluar {int(recommended['Nº turbinas'])} turbinas {recommended['Alternativa']} "
+        f"({float(recommended['Potencia instalada kW']):.1f} kW instalados). El escenario alcanza "
+        f"{float(recommended['Cobertura real %']):.0f}% de cobertura, CAPEX de {float(recommended['CAPEX MM CLP']):.1f} MM CLP, "
+        f"LCOE {format_clp(float(recommended['LCOE CLP/kWh']))}/kWh y recuperación en {years_label(recommended['Payback años'])}."
+    )
+    st.markdown(f'<div class="telecom-note"><b>Lectura ejecutiva:</b> {html.escape(recommendation_text)}</div>', unsafe_allow_html=True)
+
+    export_df = sim_df.drop(columns=[]).copy()
+    st.download_button(
+        "Descargar escenario simulado CSV",
+        data=export_df.to_csv(index=False).encode("utf-8-sig"),
+        file_name="simulador_telecom_sub_bloque_6.csv",
+        mime="text/csv",
+        use_container_width=True,
+        key="download_sim6_csv",
+    )
+
+
 def render_inputs_capex_10kw_detail():
     try:
         df_10kw = build_restante_piloto_10kw_view(RESTANTE_PILOTO_10KW_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
@@ -14526,7 +14848,7 @@ def render_inputs_capex_10kw_detail():
             ):
                 st.session_state.pop(gantt_key, None)
 
-    valid_capex10_subblocks = {"control_fondos", "vista_integrada", "control_cost", "sensibilidad_clientes", "evaluacion_telecom"}
+    valid_capex10_subblocks = {"control_fondos", "vista_integrada", "control_cost", "sensibilidad_clientes", "evaluacion_telecom", "simulador_telecom"}
     if capex10_subblock_key not in st.session_state:
         st.session_state[capex10_subblock_key] = "control_fondos"
     elif st.session_state[capex10_subblock_key] not in valid_capex10_subblocks:
@@ -14558,8 +14880,13 @@ def render_inputs_capex_10kw_detail():
             "Evaluación eólica torres telecom",
             "Ocho bloques ejecutivos conectados al CSV Entel para ranking, impacto, CAPEX, LCOE y retorno.",
         ),
+        (
+            "simulador_telecom",
+            "Simulador ejecutivo telecom",
+            "Inputs manuales segmentados para calcular en vivo recomendación, CAPEX, LCOE, payback, cobertura e impacto.",
+        ),
     ]
-    sub_cols = st.columns(5)
+    sub_cols = st.columns(6)
     for idx, (sub_value, sub_title, sub_copy) in enumerate(capex10_subblocks):
         is_active = st.session_state.get(capex10_subblock_key) == sub_value
         with sub_cols[idx]:
@@ -14610,6 +14937,10 @@ def render_inputs_capex_10kw_detail():
 
     if selected_capex10_subblock == "evaluacion_telecom":
         render_telecom_tower_eval_analysis()
+        return
+
+    if selected_capex10_subblock == "simulador_telecom":
+        render_telecom_scenario_simulator()
         return
 
     render_pilotos_ana_embedded_view()
