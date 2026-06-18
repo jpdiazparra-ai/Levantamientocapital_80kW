@@ -11618,16 +11618,71 @@ def render_telecom_tower_eval_analysis():
                     candidates.append((col, valid_ratio))
             return [col for col, _ in sorted(candidates, key=lambda item: item[1], reverse=True)]
 
-        def _normalize_datetime_column_name(df: pd.DataFrame) -> pd.DataFrame:
+        def _normalize_csv_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
             if df.empty:
-                return df
+                return df, ""
             renamed = df.copy()
             first_col = renamed.columns[0]
             first_name = str(first_col).strip().casefold()
             first_parsed = pd.to_datetime(renamed[first_col], errors="coerce", dayfirst=True)
-            if first_parsed.notna().mean() >= 0.55 and (first_name.startswith("unnamed") or first_name in {"", "nan", "none"}):
+            first_is_unnamed = first_name.startswith("unnamed") or first_name in {"", "nan", "none"}
+            detection_note = ""
+            if first_is_unnamed and first_parsed.notna().mean() >= 0.80:
                 renamed = renamed.rename(columns={first_col: "Fecha/hora"})
-            return renamed
+                detection_note = "Fecha/hora detectada correctamente desde la primera columna del CSV."
+
+            wind_renames = {}
+            used_names = {str(col).strip() for col in renamed.columns}
+            for col in renamed.columns:
+                if col == "Fecha/hora":
+                    continue
+                col_text = str(col).strip()
+                try:
+                    height = float(col_text.replace(",", "."))
+                except ValueError:
+                    continue
+                numeric = _clean_numeric_series(renamed[col])
+                if float(numeric.notna().mean() or 0.0) < 0.50:
+                    continue
+                height_label = f"{height:g}".replace(",", ".")
+                new_name = f"Viento_{height_label}m"
+                suffix = 2
+                unique_name = new_name
+                while unique_name in used_names:
+                    unique_name = f"{new_name}_{suffix}"
+                    suffix += 1
+                wind_renames[col] = unique_name
+                used_names.add(unique_name)
+            if wind_renames:
+                renamed = renamed.rename(columns=wind_renames)
+            return renamed, detection_note
+
+        def _datetime_quality_summary(datetimes: pd.Series) -> dict:
+            clean_dt = pd.to_datetime(datetimes, errors="coerce").dropna().sort_values()
+            unique_dt = clean_dt.drop_duplicates()
+            if unique_dt.empty:
+                return {
+                    "Inicio": "Sin fecha",
+                    "Término": "Sin fecha",
+                    "Registros con fecha": 0,
+                    "Horas esperadas": 0,
+                    "Horas faltantes": 0,
+                    "Frecuencia": "No disponible",
+                }
+            start = unique_dt.iloc[0]
+            end = unique_dt.iloc[-1]
+            expected_hours = int(((end - start).total_seconds() / 3600.0) + 1) if end >= start else int(len(unique_dt))
+            missing_hours = max(0, expected_hours - int(len(unique_dt)))
+            diffs = unique_dt.diff().dropna()
+            hourly_ratio = float((diffs == pd.Timedelta(hours=1)).mean() or 0.0) if not diffs.empty else 1.0
+            return {
+                "Inicio": start.strftime("%Y-%m-%d %H:%M"),
+                "Término": end.strftime("%Y-%m-%d %H:%M"),
+                "Registros con fecha": int(len(clean_dt)),
+                "Horas esperadas": int(expected_hours),
+                "Horas faltantes": int(missing_hours),
+                "Frecuencia": "Horaria" if hourly_ratio >= 0.80 else "Irregular",
+            }
 
         def _detect_wind_columns(df: pd.DataFrame, date_cols: list[str]) -> list[str]:
             wind_cols = []
@@ -11803,7 +11858,7 @@ def render_telecom_tower_eval_analysis():
             st.dataframe(sample_df, use_container_width=True, hide_index=True)
             return
 
-        raw_df = _normalize_datetime_column_name(raw_df)
+        raw_df, first_column_datetime_note = _normalize_csv_columns(raw_df)
         raw_df.columns = [str(col).strip() for col in raw_df.columns]
         date_candidates = _detect_datetime_columns(raw_df)
         wind_candidates = _detect_wind_columns(raw_df, date_candidates)
@@ -11860,10 +11915,15 @@ def render_telecom_tower_eval_analysis():
                     st.caption(f"Fecha/hora detectada automáticamente desde `{fallback_col}`.")
                     break
         datetime_source_note = ""
+        datetime_audit = None
+        if working_df["_datetime"].notna().mean() >= 0.80:
+            datetime_audit = _datetime_quality_summary(working_df["_datetime"])
         if working_df["_datetime"].notna().mean() < 0.55:
             selected_datetime = "Eje horario sintético"
             working_df["_datetime"] = pd.date_range("2000-01-01 00:00:00", periods=len(working_df), freq="h")
             datetime_source_note = "No se detectó una fecha explícita confiable; se generó un eje horario sintético para mantener serie temporal, promedios mensuales y patrón horario."
+        elif first_column_datetime_note and selected_datetime == "Fecha/hora":
+            datetime_source_note = first_column_datetime_note
 
         analyses = [
             _analyze_column(
@@ -11914,6 +11974,26 @@ def render_telecom_tower_eval_analysis():
         """.replace(",", ".")
         st.markdown(kpi_html, unsafe_allow_html=True)
 
+        if datetime_source_note:
+            if selected_datetime == "Eje horario sintético":
+                st.warning(datetime_source_note)
+            else:
+                st.success(datetime_source_note)
+
+        if datetime_audit:
+            audit_cols = st.columns(6)
+            for idx, (label, value) in enumerate(datetime_audit.items()):
+                with audit_cols[idx]:
+                    st.markdown(
+                        f"""
+                        <div class="telecom-card" style="padding:14px 14px;min-height:92px;">
+                          <p class="telecom-card-k">{html.escape(str(label))}</p>
+                          <p class="telecom-card-v" style="font-size:18px;">{html.escape(str(value))}</p>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
         speed_selected = selected_analysis["_speed"]
         stat_df = pd.DataFrame(
             [
@@ -11951,8 +12031,6 @@ def render_telecom_tower_eval_analysis():
         chart_l, chart_r = st.columns(2)
         plot_df = working_df.copy()
         plot_df["_speed_selected"] = speed_selected
-        if datetime_source_note:
-            st.caption(datetime_source_note)
         if plot_df["_datetime"].notna().any():
             with chart_l:
                 st.markdown('<p class="telecom-panel-title">Serie temporal de velocidad</p><p class="telecom-panel-sub">Lectura operativa de variabilidad y eventos extremos.</p>', unsafe_allow_html=True)
