@@ -11849,6 +11849,16 @@ def render_telecom_tower_eval_analysis():
             working_df = working_df.sort_values("_datetime")
         else:
             working_df["_datetime"] = pd.NaT
+        if working_df["_datetime"].notna().mean() < 0.55:
+            datetime_fallbacks = _detect_datetime_columns(raw_df)
+            for fallback_col in datetime_fallbacks:
+                fallback_parsed = pd.to_datetime(raw_df[fallback_col], errors="coerce", dayfirst=True)
+                if fallback_parsed.notna().mean() >= 0.55:
+                    selected_datetime = fallback_col
+                    working_df["_datetime"] = fallback_parsed
+                    working_df = working_df.sort_values("_datetime")
+                    st.caption(f"Fecha/hora detectada automáticamente desde `{fallback_col}`.")
+                    break
 
         analyses = [
             _analyze_column(
