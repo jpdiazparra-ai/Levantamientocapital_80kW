@@ -7,7 +7,7 @@ import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from io import BytesIO
+from io import BytesIO, StringIO
 import base64
 import plotly.io as pio
 import re
@@ -11581,7 +11581,7 @@ def render_telecom_tower_eval_analysis():
         <div class="telecom-hero">
           <p class="telecom-k">Sub bloque 5 · Modelo ejecutivo telecom</p>
           <h2 class="telecom-t">Evaluación eólica para torres telecom</h2>
-          <p class="telecom-s">{html.escape(str(summary["title"]))}. Ocho bloques para replicar la información del URL, analizarla y convertirla en una recomendación técnica para cliente.</p>
+          <p class="telecom-s">{html.escape(str(summary["title"]))}. Nueve bloques para replicar la información del URL, cargar viento real, analizarlo y convertirlo en una recomendación técnica para cliente.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -11590,6 +11590,420 @@ def render_telecom_tower_eval_analysis():
         st.warning(
             "Google Sheets no respondió a tiempo. El Sub bloque 5 está usando una copia base de los últimos valores analizados "
             "para mantener operativo el tablero. Usa el botón de refrescar datos para reintentar la lectura online."
+        )
+
+    def render_wind_csv_analysis_tab() -> None:
+        def _clean_numeric_series(series: pd.Series) -> pd.Series:
+            if pd.api.types.is_numeric_dtype(series):
+                return pd.to_numeric(series, errors="coerce")
+            cleaned = (
+                series.astype(str)
+                .str.replace("\u00a0", "", regex=False)
+                .str.replace(" ", "", regex=False)
+                .str.replace(",", ".", regex=False)
+            )
+            return pd.to_numeric(cleaned, errors="coerce")
+
+        def _detect_datetime_columns(df: pd.DataFrame) -> list[str]:
+            candidates = []
+            for col in df.columns:
+                name = str(col).casefold()
+                if not any(token in name for token in ["fecha", "date", "hora", "time", "timestamp", "datetime"]):
+                    if pd.api.types.is_numeric_dtype(df[col]):
+                        continue
+                parsed = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
+                valid_ratio = float(parsed.notna().mean() or 0.0)
+                if valid_ratio >= 0.55:
+                    candidates.append((col, valid_ratio))
+            return [col for col, _ in sorted(candidates, key=lambda item: item[1], reverse=True)]
+
+        def _detect_wind_columns(df: pd.DataFrame, date_cols: list[str]) -> list[str]:
+            wind_cols = []
+            for col in df.columns:
+                if col in date_cols:
+                    continue
+                numeric = _clean_numeric_series(df[col])
+                valid_ratio = float(numeric.notna().mean() or 0.0)
+                if valid_ratio < 0.50:
+                    continue
+                positive_ratio = float((numeric > 0).mean() or 0.0)
+                name = str(col).casefold()
+                named_as_wind = any(token in name for token in ["viento", "wind", "vel", "ws", "m/s", "ms", "speed"])
+                plausible_speed = numeric.quantile(0.95) <= 80 and numeric.quantile(0.50) <= 40
+                if named_as_wind or (positive_ratio >= 0.40 and plausible_speed):
+                    wind_cols.append(col)
+            return wind_cols
+
+        def _weibull_params(values: pd.Series) -> tuple[float, float]:
+            clean = pd.to_numeric(values, errors="coerce").dropna()
+            clean = clean[clean > 0]
+            if clean.empty:
+                return np.nan, np.nan
+            mean = float(clean.mean())
+            std = float(clean.std(ddof=1) or 0.0)
+            if mean <= 0 or std <= 0:
+                return np.nan, np.nan
+            cv = std / mean
+            k = max(0.35, min(12.0, cv ** -1.086))
+            c = mean / math.gamma(1.0 + 1.0 / k)
+            return float(k), float(c)
+
+        def _weibull_pdf(x: np.ndarray, k: float, c: float) -> np.ndarray:
+            if not np.isfinite(k) or not np.isfinite(c) or k <= 0 or c <= 0:
+                return np.zeros_like(x, dtype=float)
+            x_safe = np.clip(x, 0, None)
+            return (k / c) * ((x_safe / c) ** (k - 1.0)) * np.exp(-((x_safe / c) ** k))
+
+        def _power_curve(speed: pd.Series, rated_kw: float, cut_in: float, rated_speed: float, cut_out: float) -> pd.Series:
+            v = pd.to_numeric(speed, errors="coerce").fillna(0.0).clip(lower=0.0)
+            power = pd.Series(np.zeros(len(v)), index=v.index, dtype=float)
+            ramp_mask = (v >= cut_in) & (v < rated_speed)
+            if rated_speed > cut_in:
+                numerator = (v[ramp_mask] ** 3) - (cut_in ** 3)
+                denominator = (rated_speed ** 3) - (cut_in ** 3)
+                power.loc[ramp_mask] = rated_kw * (numerator / denominator).clip(lower=0.0, upper=1.0)
+            rated_mask = (v >= rated_speed) & (v <= cut_out)
+            power.loc[rated_mask] = rated_kw
+            return power.clip(lower=0.0, upper=max(rated_kw, 0.0))
+
+        def _resource_label(mean_speed: float, cf_net: float) -> str:
+            if cf_net >= 0.35 or mean_speed >= 7.0:
+                return "Muy atractivo"
+            if cf_net >= 0.25 or mean_speed >= 5.5:
+                return "Útil"
+            if cf_net >= 0.15 or mean_speed >= 4.0:
+                return "Inicial"
+            return "Bajo"
+
+        def _analyze_column(
+            df: pd.DataFrame,
+            speed_col: str,
+            dt_col: str | None,
+            outlier_limit: float,
+            rated_kw: float,
+            cut_in: float,
+            rated_speed: float,
+            cut_out: float,
+            electrical_losses: float,
+            availability: float,
+            additional_losses: float,
+        ) -> dict:
+            speed_raw = _clean_numeric_series(df[speed_col])
+            valid_mask = speed_raw.notna() & (speed_raw > 0) & (speed_raw <= outlier_limit)
+            clean_speed = speed_raw.where(valid_mask)
+            power_bruta = _power_curve(clean_speed, rated_kw, cut_in, rated_speed, cut_out)
+            net_multiplier = max(0.0, (1.0 - electrical_losses / 100.0) * (availability / 100.0) * (1.0 - additional_losses / 100.0))
+            power_neta = power_bruta * net_multiplier
+            annual_gross = float(power_bruta.mean(skipna=True) * 8760.0) if power_bruta.notna().any() else 0.0
+            annual_net = float(power_neta.mean(skipna=True) * 8760.0) if power_neta.notna().any() else 0.0
+            cf_gross = annual_gross / (rated_kw * 8760.0) if rated_kw > 0 else np.nan
+            cf_net = annual_net / (rated_kw * 8760.0) if rated_kw > 0 else np.nan
+            k, c = _weibull_params(clean_speed)
+            valid_count = int(valid_mask.sum())
+            total_count = int(len(speed_raw))
+            return {
+                "Columna": str(speed_col),
+                "Registros": total_count,
+                "Válidos": valid_count,
+                "% válido": valid_count / total_count * 100.0 if total_count else 0.0,
+                "Nulos": int(speed_raw.isna().sum()),
+                "Ceros/negativos": int(((speed_raw <= 0) & speed_raw.notna()).sum()),
+                "Outliers": int((speed_raw > outlier_limit).sum()),
+                "Velocidad media": float(clean_speed.mean(skipna=True) or 0.0),
+                "Mediana": float(clean_speed.median(skipna=True) or 0.0),
+                "Mínimo": float(clean_speed.min(skipna=True) or 0.0),
+                "Máximo": float(clean_speed.max(skipna=True) or 0.0),
+                "Desv. estándar": float(clean_speed.std(skipna=True) or 0.0),
+                "P10": float(clean_speed.quantile(.10) or 0.0),
+                "P25": float(clean_speed.quantile(.25) or 0.0),
+                "P50": float(clean_speed.quantile(.50) or 0.0),
+                "P75": float(clean_speed.quantile(.75) or 0.0),
+                "P90": float(clean_speed.quantile(.90) or 0.0),
+                "CV": float((clean_speed.std(skipna=True) / clean_speed.mean(skipna=True)) if clean_speed.mean(skipna=True) else np.nan),
+                "Weibull k": k,
+                "Weibull c": c,
+                "Energía anual bruta kWh": annual_gross,
+                "Energía anual neta kWh": annual_net,
+                "FP bruto": cf_gross * 100.0 if np.isfinite(cf_gross) else np.nan,
+                "FP neto": cf_net * 100.0 if np.isfinite(cf_net) else np.nan,
+                "Horas equivalentes": annual_net / rated_kw if rated_kw > 0 else np.nan,
+                "Clasificación": _resource_label(float(clean_speed.mean(skipna=True) or 0.0), float(cf_net or 0.0)),
+                "_speed": clean_speed,
+                "_power_bruta": power_bruta,
+                "_power_neta": power_neta,
+            }
+
+        st.markdown(
+            """
+            <div class="telecom-site-shell">
+              <div class="telecom-site-head">
+                <div>
+                  <p class="telecom-site-k">Pestaña 09_Viento · CSV externo</p>
+                  <h3 class="telecom-site-t">Análisis automático de recurso eólico</h3>
+                  <p class="telecom-site-s">Carga o pega una base CSV con fecha/hora y una o más columnas de velocidad. La pestaña valida datos, ajusta Weibull, estima factor de planta y genera salidas vinculables al modelo.</p>
+                </div>
+                <div class="telecom-site-status">
+                  <div class="telecom-site-pill"><strong>CSV</strong><span>Carga flexible</span></div>
+                  <div class="telecom-site-pill"><strong>k/c</strong><span>Weibull</span></div>
+                  <div class="telecom-site-pill"><strong>FP</strong><span>Factor planta</span></div>
+                </div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        upload_col, paste_col = st.columns([0.72, 1.28])
+        with upload_col:
+            uploaded_file = st.file_uploader("Cargar CSV de viento", type=["csv"], key="telecom_09_wind_csv_file")
+            delimiter_mode = st.selectbox("Separador", ["Automático", ",", ";", "\\t"], index=0, key="telecom_09_wind_sep")
+        with paste_col:
+            pasted_csv = st.text_area(
+                "Pegar CSV de viento",
+                height=126,
+                placeholder="fecha_hora,viento_30m,viento_50m\n2026-01-01 00:00,5.2,6.1\n2026-01-01 01:00,4.8,5.7",
+                key="telecom_09_wind_csv_text",
+            )
+
+        raw_df = pd.DataFrame()
+        source_label = ""
+        sep_arg = None if delimiter_mode == "Automático" else ("\t" if delimiter_mode == "\\t" else delimiter_mode)
+        try:
+            if uploaded_file is not None:
+                uploaded_file.seek(0)
+                raw_df = pd.read_csv(uploaded_file, sep=sep_arg, engine="python")
+                source_label = uploaded_file.name
+            elif pasted_csv.strip():
+                raw_df = pd.read_csv(StringIO(pasted_csv), sep=sep_arg, engine="python")
+                source_label = "CSV pegado"
+        except Exception as exc:
+            st.error(f"No se pudo leer el CSV de viento: {exc}")
+            raw_df = pd.DataFrame()
+
+        if raw_df.empty:
+            st.info("Carga o pega un CSV para activar el análisis. El archivo puede incluir varias alturas, por ejemplo viento_20m, viento_40m y viento_60m.")
+            sample_df = pd.DataFrame(
+                {
+                    "fecha_hora": pd.date_range("2026-01-01", periods=6, freq="h"),
+                    "viento_30m": [4.8, 5.1, 6.0, 7.2, 4.4, 3.9],
+                    "viento_50m": [5.5, 5.9, 6.8, 8.0, 5.0, 4.6],
+                }
+            )
+            st.dataframe(sample_df, use_container_width=True, hide_index=True)
+            return
+
+        raw_df.columns = [str(col).strip() for col in raw_df.columns]
+        date_candidates = _detect_datetime_columns(raw_df)
+        wind_candidates = _detect_wind_columns(raw_df, date_candidates)
+        if not wind_candidates:
+            st.error("No se detectaron columnas numéricas de velocidad de viento. Revisa que las velocidades estén en m/s y con formato numérico.")
+            st.dataframe(raw_df.head(20), use_container_width=True, hide_index=True)
+            return
+
+        config_a, config_b, config_c, config_d = st.columns(4)
+        with config_a:
+            datetime_options = ["Sin fecha/hora"] + date_candidates
+            selected_datetime = st.selectbox("Columna fecha/hora", datetime_options, index=1 if date_candidates else 0, key="telecom_09_datetime_col")
+            selected_datetime = None if selected_datetime == "Sin fecha/hora" else selected_datetime
+        with config_b:
+            selected_wind_col = st.selectbox("Altura / columna a analizar", wind_candidates, index=0, key="telecom_09_wind_col")
+        with config_c:
+            outlier_limit = st.number_input("Límite outlier velocidad (m/s)", min_value=12.0, max_value=80.0, value=35.0, step=1.0, key="telecom_09_outlier_limit")
+        with config_d:
+            ranking_mode = st.selectbox("Ranking técnico", ["Mayor FP neto", "Mayor energía neta", "Mayor velocidad media"], index=0, key="telecom_09_ranking")
+
+        pc1, pc2, pc3, pc4, pc5, pc6, pc7 = st.columns(7)
+        with pc1:
+            rated_kw = st.number_input("Potencia nominal (kW)", min_value=0.1, value=3.0, step=0.5, key="telecom_09_rated_kw")
+        with pc2:
+            cut_in = st.number_input("Cut-in (m/s)", min_value=0.0, value=3.0, step=0.1, key="telecom_09_cutin")
+        with pc3:
+            rated_speed = st.number_input("Velocidad nominal (m/s)", min_value=0.1, value=11.0, step=0.1, key="telecom_09_rated_speed")
+        with pc4:
+            cut_out = st.number_input("Cut-out (m/s)", min_value=0.1, value=25.0, step=0.5, key="telecom_09_cutout")
+        with pc5:
+            electrical_losses = st.number_input("Pérdidas eléctricas (%)", min_value=0.0, max_value=60.0, value=3.0, step=0.5, key="telecom_09_electrical_losses")
+        with pc6:
+            availability = st.number_input("Disponibilidad (%)", min_value=0.0, max_value=100.0, value=95.0, step=1.0, key="telecom_09_availability")
+        with pc7:
+            additional_losses = st.number_input("Pérdidas adicionales (%)", min_value=0.0, max_value=60.0, value=2.0, step=0.5, key="telecom_09_additional_losses")
+
+        working_df = raw_df.copy()
+        if selected_datetime:
+            working_df["_datetime"] = pd.to_datetime(working_df[selected_datetime], errors="coerce", dayfirst=True)
+            working_df = working_df.sort_values("_datetime")
+        else:
+            working_df["_datetime"] = pd.NaT
+
+        analyses = [
+            _analyze_column(
+                working_df,
+                col,
+                selected_datetime,
+                outlier_limit,
+                rated_kw,
+                cut_in,
+                rated_speed,
+                cut_out,
+                electrical_losses,
+                availability,
+                additional_losses,
+            )
+            for col in wind_candidates
+        ]
+        comparison = pd.DataFrame([{k: v for k, v in item.items() if not k.startswith("_")} for item in analyses])
+        if ranking_mode == "Mayor energía neta":
+            comparison = comparison.sort_values("Energía anual neta kWh", ascending=False)
+        elif ranking_mode == "Mayor velocidad media":
+            comparison = comparison.sort_values("Velocidad media", ascending=False)
+        else:
+            comparison = comparison.sort_values("FP neto", ascending=False)
+        comparison["Ranking técnico"] = range(1, len(comparison) + 1)
+        selected_analysis = next(item for item in analyses if item["Columna"] == selected_wind_col)
+        recommended = comparison.iloc[0]
+        st.session_state["telecom_09_viento_outputs"] = {
+            "velocidad_media_recomendada": float(recommended["Velocidad media"]),
+            "factor_planta_recomendado": float(recommended["FP neto"]),
+            "energia_anual_neta_por_turbina": float(recommended["Energía anual neta kWh"]),
+            "horas_equivalentes": float(recommended["Horas equivalentes"]),
+            "altura_columna_recomendada": str(recommended["Columna"]),
+            "clasificacion_recurso": str(recommended["Clasificación"]),
+            "weibull_k": float(recommended["Weibull k"]),
+            "weibull_c": float(recommended["Weibull c"]),
+        }
+
+        kpi_html = f"""
+        <div class="telecom-grid">
+          <div class="telecom-card"><p class="telecom-card-k">Registros</p><p class="telecom-card-v">{int(selected_analysis["Registros"]):,}</p><p class="telecom-card-s">{html.escape(source_label)}</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">Datos válidos</p><p class="telecom-card-v">{selected_analysis["% válido"]:.1f}%</p><p class="telecom-card-s">{int(selected_analysis["Válidos"]):,} registros usados</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">Velocidad media</p><p class="telecom-card-v">{selected_analysis["Velocidad media"]:.2f} m/s</p><p class="telecom-card-s">Mediana {selected_analysis["Mediana"]:.2f} m/s</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">Weibull</p><p class="telecom-card-v">k {selected_analysis["Weibull k"]:.2f}</p><p class="telecom-card-s">c {selected_analysis["Weibull c"]:.2f} m/s</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">FP neto</p><p class="telecom-card-v">{selected_analysis["FP neto"]:.1f}%</p><p class="telecom-card-s">Bruto {selected_analysis["FP bruto"]:.1f}%</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">Energía neta</p><p class="telecom-card-v">{selected_analysis["Energía anual neta kWh"]:,.0f}</p><p class="telecom-card-s">kWh/año por turbina</p></div>
+        </div>
+        """.replace(",", ".")
+        st.markdown(kpi_html, unsafe_allow_html=True)
+
+        speed_selected = selected_analysis["_speed"]
+        stat_df = pd.DataFrame(
+            [
+                ("Media", selected_analysis["Velocidad media"], "m/s"),
+                ("Mediana", selected_analysis["Mediana"], "m/s"),
+                ("Mínimo", selected_analysis["Mínimo"], "m/s"),
+                ("Máximo", selected_analysis["Máximo"], "m/s"),
+                ("Desv. estándar", selected_analysis["Desv. estándar"], "m/s"),
+                ("P10", selected_analysis["P10"], "m/s"),
+                ("P25", selected_analysis["P25"], "m/s"),
+                ("P50", selected_analysis["P50"], "m/s"),
+                ("P75", selected_analysis["P75"], "m/s"),
+                ("P90", selected_analysis["P90"], "m/s"),
+                ("Coef. variación", selected_analysis["CV"], "ratio"),
+            ],
+            columns=["Indicador", "Valor", "Unidad"],
+        )
+        class_bins = [0, 3, 5, 7, 9, 12, np.inf]
+        class_labels = ["0-3 bajo", "3-5 inicial", "5-7 útil", "7-9 bueno", "9-12 alto", ">12 muy alto"]
+        class_df = pd.cut(speed_selected.dropna(), bins=class_bins, labels=class_labels, right=False).value_counts(sort=False).reset_index()
+        class_df.columns = ["Rango", "Horas/registros"]
+        total_class = float(class_df["Horas/registros"].sum() or 0.0)
+        class_df["% ocurrencia"] = np.where(total_class > 0, class_df["Horas/registros"] / total_class * 100.0, 0.0)
+
+        st.markdown('<p class="telecom-panel-title">Análisis estadístico y clasificación</p><p class="telecom-panel-sub">Resumen auditable de velocidad, percentiles y distribución por tipo de viento.</p>', unsafe_allow_html=True)
+        stats_col, class_col = st.columns([0.9, 1.1])
+        with stats_col:
+            st.dataframe(stat_df, use_container_width=True, hide_index=True)
+        with class_col:
+            fig_class = px.bar(class_df, x="Rango", y="% ocurrencia", text=[f"{v:.1f}%" for v in class_df["% ocurrencia"]], color="Rango", color_discrete_sequence=[blue_1, blue_2, "#8BBBC5", blue_5, blue_3, blue_4])
+            fig_class.update_traces(textposition="outside", marker_line_color="#ffffff", marker_line_width=1.2)
+            fig_class.update_layout(height=310, showlegend=False, margin=dict(l=10, r=10, t=12, b=38), yaxis=dict(title="% ocurrencia", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), xaxis=dict(title=None))
+            st.plotly_chart(fig_class, use_container_width=True, config={"displaylogo": False})
+
+        chart_l, chart_r = st.columns(2)
+        plot_df = working_df.copy()
+        plot_df["_speed_selected"] = speed_selected
+        if selected_datetime and plot_df["_datetime"].notna().any():
+            with chart_l:
+                st.markdown('<p class="telecom-panel-title">Serie temporal de velocidad</p><p class="telecom-panel-sub">Lectura operativa de variabilidad y eventos extremos.</p>', unsafe_allow_html=True)
+                fig_ts = px.line(plot_df.dropna(subset=["_datetime", "_speed_selected"]), x="_datetime", y="_speed_selected", labels={"_datetime": "Fecha/hora", "_speed_selected": "m/s"})
+                fig_ts.update_traces(line=dict(color=blue_5, width=1.7))
+                fig_ts.update_layout(height=330, margin=dict(l=10, r=10, t=12, b=38), yaxis=dict(rangemode="tozero", gridcolor="rgba(148,163,184,.22)"))
+                st.plotly_chart(fig_ts, use_container_width=True, config={"displaylogo": False})
+            with chart_r:
+                st.markdown('<p class="telecom-panel-title">Promedio mensual y horario</p><p class="telecom-panel-sub">Estacionalidad y patrón diario para operación telecom.</p>', unsafe_allow_html=True)
+                plot_df["_month"] = plot_df["_datetime"].dt.to_period("M").astype(str)
+                monthly = plot_df.groupby("_month", as_index=False)["_speed_selected"].mean()
+                fig_month = px.bar(monthly, x="_month", y="_speed_selected", text=[f"{v:.1f}" for v in monthly["_speed_selected"]], labels={"_month": "Mes", "_speed_selected": "m/s"}, color_discrete_sequence=[blue_2])
+                fig_month.update_traces(textposition="outside", marker_line_color="#ffffff", marker_line_width=1)
+                fig_month.update_layout(height=330, margin=dict(l=10, r=10, t=12, b=38), yaxis=dict(rangemode="tozero", gridcolor="rgba(148,163,184,.22)"))
+                st.plotly_chart(fig_month, use_container_width=True, config={"displaylogo": False})
+            hour_df = plot_df.dropna(subset=["_datetime"]).copy()
+            hour_df["_hour"] = hour_df["_datetime"].dt.hour
+            hourly = hour_df.groupby("_hour", as_index=False)["_speed_selected"].mean()
+            fig_hour = px.line(hourly, x="_hour", y="_speed_selected", markers=True, labels={"_hour": "Hora", "_speed_selected": "m/s"})
+            fig_hour.update_traces(line=dict(color=blue_4, width=3), marker=dict(size=8, color="#ffffff", line=dict(color=blue_4, width=2)))
+            fig_hour.update_layout(height=300, margin=dict(l=10, r=10, t=18, b=38), xaxis=dict(dtick=1), yaxis=dict(rangemode="tozero", gridcolor="rgba(148,163,184,.22)"))
+            st.markdown('<p class="telecom-panel-title">Promedio horario</p><p class="telecom-panel-sub">Identifica ventanas de mayor generación potencial durante el día.</p>', unsafe_allow_html=True)
+            st.plotly_chart(fig_hour, use_container_width=True, config={"displaylogo": False})
+        else:
+            st.info("No hay una columna fecha/hora válida. Se omiten gráficos mensual, diario, horario y serie temporal.")
+
+        hist_col, weib_col = st.columns(2)
+        clean_speed = speed_selected.dropna()
+        with hist_col:
+            st.markdown('<p class="telecom-panel-title">Histograma de velocidad</p><p class="telecom-panel-sub">Distribución real de viento validado.</p>', unsafe_allow_html=True)
+            fig_hist = px.histogram(clean_speed, nbins=36, histnorm="probability density", labels={"value": "Velocidad (m/s)", "count": "Densidad"}, color_discrete_sequence=[blue_2])
+            fig_hist.update_layout(height=340, showlegend=False, margin=dict(l=10, r=10, t=12, b=38), yaxis=dict(gridcolor="rgba(148,163,184,.22)"))
+            st.plotly_chart(fig_hist, use_container_width=True, config={"displaylogo": False})
+        with weib_col:
+            st.markdown('<p class="telecom-panel-title">Weibull versus datos reales</p><p class="telecom-panel-sub">Ajuste paramétrico para extrapolar producción y riesgo del recurso.</p>', unsafe_allow_html=True)
+            x_grid = np.linspace(0, max(float(clean_speed.max() or 1.0), 1.0), 120)
+            fig_weib = go.Figure()
+            fig_weib.add_trace(go.Histogram(x=clean_speed, histnorm="probability density", nbinsx=36, name="Datos reales", marker_color=blue_2, opacity=.72))
+            fig_weib.add_trace(go.Scatter(x=x_grid, y=_weibull_pdf(x_grid, selected_analysis["Weibull k"], selected_analysis["Weibull c"]), mode="lines", name="Weibull estimada", line=dict(color=blue_4, width=3)))
+            fig_weib.update_layout(height=340, barmode="overlay", margin=dict(l=10, r=10, t=12, b=38), xaxis=dict(title="Velocidad (m/s)"), yaxis=dict(title="Densidad", gridcolor="rgba(148,163,184,.22)"), legend=dict(orientation="h", y=1.16, x=0))
+            st.plotly_chart(fig_weib, use_container_width=True, config={"displaylogo": False})
+
+        st.markdown('<p class="telecom-panel-title">Comparativo por columnas o alturas</p><p class="telecom-panel-sub">Ranking técnico calculado para cada columna de viento detectada en el CSV.</p>', unsafe_allow_html=True)
+        comp_display = comparison[["Ranking técnico", "Columna", "Velocidad media", "Weibull k", "Weibull c", "Energía anual neta kWh", "FP neto", "Clasificación", "% válido"]].copy()
+        st.dataframe(comp_display, use_container_width=True, hide_index=True)
+        comp_l, comp_r = st.columns(2)
+        with comp_l:
+            fig_fp = px.bar(comparison, x="Columna", y="FP neto", text=[f"{v:.1f}%" for v in comparison["FP neto"]], color="Clasificación", color_discrete_sequence=[blue_5, blue_2, blue_3, blue_4])
+            fig_fp.update_traces(textposition="outside", marker_line_color="#ffffff", marker_line_width=1.2)
+            fig_fp.update_layout(height=330, margin=dict(l=10, r=10, t=12, b=56), yaxis=dict(title="FP neto (%)", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), xaxis=dict(title=None))
+            st.plotly_chart(fig_fp, use_container_width=True, config={"displaylogo": False})
+        with comp_r:
+            fig_energy = px.bar(comparison, x="Columna", y="Energía anual neta kWh", text=[f"{v:,.0f}" for v in comparison["Energía anual neta kWh"]], color="Clasificación", color_discrete_sequence=[blue_5, blue_2, blue_3, blue_4])
+            fig_energy.update_traces(textposition="outside", marker_line_color="#ffffff", marker_line_width=1.2)
+            fig_energy.update_layout(height=330, margin=dict(l=10, r=10, t=12, b=56), yaxis=dict(title="kWh/año netos", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), xaxis=dict(title=None))
+            st.plotly_chart(fig_energy, use_container_width=True, config={"displaylogo": False})
+
+        audit_params = pd.DataFrame(
+            [
+                ("Columna seleccionada", selected_wind_col, ""),
+                ("Potencia nominal", rated_kw, "kW"),
+                ("Cut-in", cut_in, "m/s"),
+                ("Velocidad nominal", rated_speed, "m/s"),
+                ("Cut-out", cut_out, "m/s"),
+                ("Pérdidas eléctricas", electrical_losses, "%"),
+                ("Disponibilidad", availability, "%"),
+                ("Pérdidas adicionales", additional_losses, "%"),
+                ("Weibull k", selected_analysis["Weibull k"], "factor"),
+                ("Weibull c", selected_analysis["Weibull c"], "m/s"),
+                ("FP neto", selected_analysis["FP neto"], "%"),
+                ("Horas equivalentes", selected_analysis["Horas equivalentes"], "h/año"),
+            ],
+            columns=["Parámetro", "Valor", "Unidad"],
+        )
+        st.markdown('<p class="telecom-panel-title">Tabla auditable de parámetros y salidas vinculables</p><p class="telecom-panel-sub">Estos valores quedan disponibles para conectar con dimensionamiento, sensibilidad y recomendación.</p>', unsafe_allow_html=True)
+        st.dataframe(audit_params, use_container_width=True, hide_index=True)
+        conclusion = (
+            f"La columna recomendada es {recommended['Columna']} con velocidad media de {recommended['Velocidad media']:.2f} m/s, "
+            f"factor de planta neto de {recommended['FP neto']:.1f}% y energía anual neta estimada de {recommended['Energía anual neta kWh']:,.0f} kWh por turbina. "
+            f"El recurso se clasifica como {recommended['Clasificación']} y presenta parámetros Weibull k={recommended['Weibull k']:.2f}, c={recommended['Weibull c']:.2f} m/s."
+        )
+        st.markdown(
+            f'<div class="telecom-note"><b>Conclusión técnica del recurso eólico:</b> {html.escape(conclusion)}</div>'.replace(",", "."),
+            unsafe_allow_html=True,
         )
 
     (
@@ -11601,6 +12015,7 @@ def render_telecom_tower_eval_analysis():
         tab_savings,
         tab_economics,
         tab_impact,
+        tab_wind,
     ) = st.tabs(
         [
             "01 Dashboard",
@@ -11611,6 +12026,7 @@ def render_telecom_tower_eval_analysis():
             "06_Sensibilidad",
             "07 Economía",
             "08 Cierre",
+            "09_Viento",
         ]
     )
 
@@ -13637,6 +14053,9 @@ def render_telecom_tower_eval_analysis():
             use_container_width=True,
             key="download_telecom_eval_csv",
         )
+
+    with tab_wind:
+        render_wind_csv_analysis_tab()
 
 
 def render_inputs_capex_10kw_detail():
