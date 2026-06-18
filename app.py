@@ -14554,6 +14554,39 @@ def render_telecom_scenario_simulator():
 
     st.markdown(
         """
+        <style>
+        .sim6-result-shell{border:1px solid rgba(117,169,184,.28);border-radius:18px;background:#ffffff;box-shadow:0 18px 44px rgba(40,71,99,.10);overflow:hidden;margin:18px 0 18px;}
+        .sim6-result-head{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(260px,.55fr);gap:22px;align-items:stretch;background:linear-gradient(125deg,#284763 0%,#75A9B8 58%,#A9673B 100%);padding:24px 26px;color:#fff;}
+        .sim6-eyebrow{margin:0 0 10px;font-size:11px;line-height:1;letter-spacing:.18em;text-transform:uppercase;font-weight:950;color:rgba(255,255,255,.78);}
+        .sim6-title{margin:0 0 9px;font-size:clamp(28px,2.2vw,40px);line-height:1.02;font-weight:950;letter-spacing:-.02em;color:#fff;}
+        .sim6-sub{margin:0;max-width:850px;font-size:13px;line-height:1.45;font-weight:780;color:rgba(255,255,255,.88);}
+        .sim6-rec-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;}
+        .sim6-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(255,255,255,.25);border-radius:999px;background:rgba(255,255,255,.14);padding:7px 10px;font-size:11px;font-weight:900;color:#fff;backdrop-filter:blur(6px);}
+        .sim6-score-card{border:1px solid rgba(255,255,255,.28);border-radius:16px;background:rgba(255,255,255,.14);padding:17px 18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.16);backdrop-filter:blur(8px);display:flex;flex-direction:column;justify-content:space-between;min-height:168px;}
+        .sim6-score-k{font-size:10px;letter-spacing:.13em;text-transform:uppercase;font-weight:950;color:rgba(255,255,255,.78);margin:0 0 8px;}
+        .sim6-score-v{font-size:42px;line-height:.92;font-weight:950;color:#fff;margin:0;}
+        .sim6-score-s{font-size:12px;line-height:1.3;font-weight:800;color:rgba(255,255,255,.86);margin:7px 0 13px;}
+        .sim6-score-track{height:9px;border-radius:999px;background:rgba(255,255,255,.24);overflow:hidden;}
+        .sim6-score-fill{height:100%;border-radius:999px;background:#fff;width:var(--score-width);}
+        .sim6-result-body{padding:18px 20px 20px;background:linear-gradient(180deg,#ffffff 0%,#F8FBFC 100%);}
+        .sim6-kpi-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin:0;}
+        .sim6-kpi{position:relative;border:1px solid rgba(117,169,184,.26);border-radius:14px;background:#ffffff;padding:14px 14px 13px;min-height:104px;box-shadow:0 10px 24px rgba(40,71,99,.055);overflow:hidden;}
+        .sim6-kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent);}
+        .sim6-kpi-k{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:#284763;font-weight:950;margin:0 0 8px;line-height:1.12;}
+        .sim6-kpi-v{font-size:clamp(17px,1.25vw,23px);line-height:1.02;font-weight:950;color:#0b1730;margin:0 0 7px;overflow-wrap:anywhere;}
+        .sim6-kpi-s{font-size:10.5px;line-height:1.23;color:#64748b;font-weight:760;margin:0;}
+        .sim6-engineering-note{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;margin-top:14px;border:1px solid rgba(117,169,184,.25);border-radius:13px;background:#fff;padding:12px 14px;}
+        .sim6-note-main{font-size:12px;line-height:1.35;color:#20384F;font-weight:780;margin:0;}
+        .sim6-note-tag{border-radius:999px;background:#DCECEF;color:#284763;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;padding:7px 10px;white-space:nowrap;}
+        @media (max-width: 1300px){.sim6-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));}.sim6-result-head{grid-template-columns:1fr;}}
+        @media (max-width: 760px){.sim6-kpi-grid{grid-template-columns:1fr;}.sim6-result-head{padding:20px 18px}.sim6-result-body{padding:16px}.sim6-engineering-note{grid-template-columns:1fr}.sim6-title{font-size:28px;}}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
         <div class="telecom-site-shell">
           <div class="telecom-site-head">
             <div>
@@ -14915,29 +14948,48 @@ def render_telecom_scenario_simulator():
         fig.update_layout(xaxis=dict(title="Factor planta real (%)"), yaxis=dict(title="Payback (años)", rangemode="tozero"))
         return tune_fig(fig, height)
 
+    score_width = max(0, min(100, float(recommended["Score"])))
+    rec_generation = float(recommended["Generación mensual kWh"])
+    rec_surplus = float(recommended["Excedente mensual kWh"])
+    rec_benefit = float(recommended["Beneficio neto anual CLP"])
+    rec_capex = float(recommended["CAPEX MM CLP"])
+    rec_coverage = float(recommended["Cobertura real %"])
     st.markdown(
         f"""
-        <div class="telecom-dash-shell">
-          <div class="telecom-dash-head">
+        <div class="sim6-result-shell">
+          <div class="sim6-result-head">
             <div>
-              <p class="telecom-dash-k">Resultado ejecutivo del simulador</p>
-              <h3 class="telecom-dash-t">Recomendación: {html.escape(str(recommended["Alternativa"]))}</h3>
-              <p class="telecom-dash-s">El score combina CAPEX, payback, LCOE, cobertura útil e impacto ambiental. El modelo recalcula cada cambio de input.</p>
+              <p class="sim6-eyebrow">Resultado ejecutivo del simulador</p>
+              <h3 class="sim6-title">Recomendación: {html.escape(str(recommended["Alternativa"]))}</h3>
+              <p class="sim6-sub">Selección dinámica basada en score técnico-económico: CAPEX, payback, LCOE, cobertura útil e impacto ambiental. Cada input modifica la recomendación, sus KPI y los gráficos posteriores.</p>
+              <div class="sim6-rec-meta">
+                <span class="sim6-pill">{int(recommended["Nº turbinas"])} turbinas</span>
+                <span class="sim6-pill">{float(recommended["Potencia instalada kW"]):.1f} kW instalados</span>
+                <span class="sim6-pill">{rec_generation:,.0f} kWh/mes generados</span>
+                <span class="sim6-pill">Excedente {rec_surplus:,.0f} kWh/mes</span>
+              </div>
             </div>
-            <div class="telecom-dash-rec">
-              <p class="telecom-dash-rec-k">Score técnico-económico</p>
-              <p class="telecom-dash-rec-v">{float(recommended["Score"]):.0f}/100</p>
-              <p class="telecom-dash-s">{int(recommended["Nº turbinas"])} turbinas · {float(recommended["Potencia instalada kW"]):.1f} kW instalados</p>
+            <div class="sim6-score-card">
+              <div>
+                <p class="sim6-score-k">Score técnico-económico</p>
+                <p class="sim6-score-v">{float(recommended["Score"]):.0f}/100</p>
+                <p class="sim6-score-s">Prioriza menor inversión, menor retorno, menor LCOE y cobertura suficiente.</p>
+              </div>
+              <div class="sim6-score-track"><div class="sim6-score-fill" style="--score-width:{score_width:.0f}%;"></div></div>
             </div>
           </div>
-          <div class="telecom-dash-body">
-            <div class="telecom-grid">
-              <div class="telecom-card"><p class="telecom-card-k">Costo ponderado</p><p class="telecom-card-v">{format_clp(weighted_cost)}</p><p class="telecom-card-s">Mix normalizado del sitio</p></div>
-              <div class="telecom-card"><p class="telecom-card-k">Cobertura real</p><p class="telecom-card-v">{float(recommended["Cobertura real %"]):.0f}%</p><p class="telecom-card-s">Generación vs consumo</p></div>
-              <div class="telecom-card"><p class="telecom-card-k">CAPEX</p><p class="telecom-card-v">{float(recommended["CAPEX MM CLP"]):.1f} MM</p><p class="telecom-card-s">Turbinas + BOS</p></div>
-              <div class="telecom-card"><p class="telecom-card-k">Payback</p><p class="telecom-card-v">{years_label(recommended["Payback años"])}</p><p class="telecom-card-s">Beneficio neto anual</p></div>
-              <div class="telecom-card"><p class="telecom-card-k">LCOE</p><p class="telecom-card-v">{format_clp(float(recommended["LCOE CLP/kWh"]))}</p><p class="telecom-card-s">CLP/kWh generado</p></div>
-              <div class="telecom-card"><p class="telecom-card-k">Valor periodo</p><p class="telecom-card-v">{float(recommended["Beneficio neto periodo CLP"])/1_000_000:.1f} MM</p><p class="telecom-card-s">Neto post CAPEX</p></div>
+          <div class="sim6-result-body">
+            <div class="sim6-kpi-grid">
+              <div class="sim6-kpi" style="--accent:#284763;"><p class="sim6-kpi-k">Costo ponderado</p><p class="sim6-kpi-v">{format_clp(weighted_cost)}</p><p class="sim6-kpi-s">Mix normalizado del sitio</p></div>
+              <div class="sim6-kpi" style="--accent:#75A9B8;"><p class="sim6-kpi-k">Cobertura real</p><p class="sim6-kpi-v">{rec_coverage:.0f}%</p><p class="sim6-kpi-s">Generación vs consumo</p></div>
+              <div class="sim6-kpi" style="--accent:#EA6400;"><p class="sim6-kpi-k">CAPEX total</p><p class="sim6-kpi-v">{rec_capex:.1f} MM</p><p class="sim6-kpi-s">Turbinas + BOS</p></div>
+              <div class="sim6-kpi" style="--accent:#A9673B;"><p class="sim6-kpi-k">Payback</p><p class="sim6-kpi-v">{years_label(recommended["Payback años"])}</p><p class="sim6-kpi-s">Sobre beneficio neto anual</p></div>
+              <div class="sim6-kpi" style="--accent:#284763;"><p class="sim6-kpi-k">LCOE</p><p class="sim6-kpi-v">{format_clp(float(recommended["LCOE CLP/kWh"]))}</p><p class="sim6-kpi-s">CLP/kWh generado</p></div>
+              <div class="sim6-kpi" style="--accent:#75A9B8;"><p class="sim6-kpi-k">Valor periodo</p><p class="sim6-kpi-v">{float(recommended["Beneficio neto periodo CLP"])/1_000_000:.1f} MM</p><p class="sim6-kpi-s">Neto post CAPEX</p></div>
+            </div>
+            <div class="sim6-engineering-note">
+              <p class="sim6-note-main"><b>Lectura técnica:</b> la alternativa recomendada cubre {rec_coverage:.0f}% de la demanda mensual, genera {rec_benefit/1_000_000:.1f} MM CLP/año netos y mantiene una relación inversión-retorno competitiva para simulación comercial.</p>
+              <span class="sim6-note-tag">Escenario recalculado</span>
             </div>
           </div>
         </div>
