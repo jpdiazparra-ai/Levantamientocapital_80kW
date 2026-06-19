@@ -12156,22 +12156,6 @@ def render_telecom_tower_eval_analysis():
             else:
                 st.success(datetime_source_note)
 
-        if datetime_audit:
-            audit_items = list(datetime_audit.items())
-            for start_idx in range(0, len(audit_items), 4):
-                audit_cols = st.columns(4)
-                for col_idx, (label, value) in enumerate(audit_items[start_idx:start_idx + 4]):
-                    with audit_cols[col_idx]:
-                        st.markdown(
-                            f"""
-                            <div class="telecom-card" style="padding:14px 14px;min-height:92px;">
-                              <p class="telecom-card-k">{html.escape(str(label))}</p>
-                              <p class="telecom-card-v" style="font-size:18px;">{html.escape(str(value))}</p>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-
         speed_selected = selected_analysis["_speed"]
         stat_df = pd.DataFrame(
             [
@@ -13992,21 +13976,7 @@ def render_telecom_tower_eval_analysis():
         st.dataframe(full_table, use_container_width=True, hide_index=True)
 
     with tab_risk:
-        section("05 · Recurso eólico", "Validación energética del sitio", "Replica 05_Recurso_Eolico usando columnas A:J desde la fila 4. El objetivo es validar si el factor planta y la velocidad de diseño son defendibles antes de ingeniería de detalle.")
-        if wind_csv_bridge_active and isinstance(wind_csv_outputs, dict) and wind_csv_outputs:
-            st.markdown(
-                f"""
-                <div class="telecom-note">
-                  <b>Fuente activa 09_Viento:</b> esta pestaña está usando el CSV guardado como referencia técnica.
-                  FP neto <b>{float(wind_csv_outputs.get("factor_planta_recomendado", 0.0)):.1f}%</b>,
-                  velocidad media <b>{float(wind_csv_outputs.get("velocidad_media_recomendada", 0.0)):.2f} m/s</b>,
-                  generación mensual <b>{float(wind_csv_outputs.get("generacion_mensual_neta_por_turbina", 0.0)):,.0f} kWh/turbina</b>.
-                  Fuente: <b>{html.escape(str(wind_csv_outputs.get("fuente_csv", "CSV 09_Viento")))}</b>.
-                </div>
-                """.replace(",", "."),
-                unsafe_allow_html=True,
-            )
-
+        section("05 · Recurso eólico", "Validación energética del sitio", "Lectura técnica del recurso: si existe CSV procesado en 09_Viento, esta pestaña usa esa fuente activa; si no, trabaja con la información publicada en el URL.")
         def resource_row(name: str) -> pd.Series | None:
             matches = resource_df[resource_df["Variable"].astype(str).str.casefold() == name.casefold()]
             return None if matches.empty else matches.iloc[0]
@@ -14044,52 +14014,62 @@ def render_telecom_tower_eval_analysis():
         rotor_gap = rotor_speed_calc - rotor_speed_sheet if pd.notna(rotor_speed_sheet) and pd.notna(rotor_speed_calc) else np.nan
         usable_factor = (availability_pct / 100.0) * (1 - electrical_losses_pct / 100.0) * (1 - additional_losses_pct / 100.0)
         gross_loss_pct = max(0.0, (1 - usable_factor) * 100.0)
-        validation_alert = rotor_speed_sheet < max(1.0, measured_speed * 0.3) if pd.notna(rotor_speed_sheet) else False
+        active_resource_source = "09_Viento" if wind_csv_bridge_active and isinstance(wind_csv_outputs, dict) and wind_csv_outputs else "URL 05_Recurso_Eolico"
+        active_speed = float(wind_csv_outputs.get("velocidad_media_recomendada", measured_speed)) if active_resource_source == "09_Viento" else measured_speed
+        active_fp = float(wind_csv_outputs.get("factor_planta_recomendado", fp_prelim)) if active_resource_source == "09_Viento" else fp_prelim
+        active_energy_monthly = float(wind_csv_outputs.get("generacion_mensual_neta_por_turbina", np.nan)) if active_resource_source == "09_Viento" else np.nan
+        active_source_detail = str(wind_csv_outputs.get("altura_columna_recomendada", wind_csv_outputs.get("fuente_csv", "CSV"))) if active_resource_source == "09_Viento" else str(resource_model.get("source_mode", "remote")).upper()
+        demand_monthly_resource = float(summary.get("consumo_mensual") or site_numeric("Consumo mensual modelo", 0.0) or 0.0)
+        wind_resource_view = wind_df.copy()
+        if "Alternativa" in wind_resource_view.columns:
+            wind_resource_view["Alternativa"] = pd.Categorical(wind_resource_view["Alternativa"].astype(str), categories=turbine_order, ordered=True)
+            wind_resource_view = wind_resource_view.sort_values("Alternativa").copy()
+            wind_resource_view["Alternativa"] = wind_resource_view["Alternativa"].astype(str)
+        if not np.isfinite(active_energy_monthly) and "Generación mensual/turbina kWh" in wind_resource_view.columns:
+            active_energy_monthly = float(pd.to_numeric(wind_resource_view["Generación mensual/turbina kWh"], errors="coerce").dropna().median() or np.nan)
+        active_energy_label = f"{active_energy_monthly:,.0f} kWh" if np.isfinite(active_energy_monthly) else "URL modelo"
 
         st.markdown(
             f"""
             <div class="telecom-site-shell">
               <div class="telecom-site-head">
                 <div>
-                  <p class="telecom-site-k">Pestaña 05_Recurso_Eolico · Fuente Google Sheets</p>
+                  <p class="telecom-site-k">Pestaña 05_Recurso_Eolico · Fuente activa {html.escape(active_resource_source)}</p>
                   <h3 class="telecom-site-t">{html.escape(str(resource_model["title"]))}</h3>
-                  <p class="telecom-site-s">{html.escape(str(resource_model["subtitle"]))}. Esta lectura separa medición, extrapolación, pérdidas y control del factor planta para identificar riesgos técnicos antes de comprometer CAPEX.</p>
+                  <p class="telecom-site-s">Lectura ejecutiva del recurso eólico para dimensionamiento: velocidad, factor planta, pérdidas, generación por alternativa y trazabilidad de variables. Si 09_Viento tiene datos cargados, sus salidas reemplazan la referencia publicada para el análisis visible.</p>
                 </div>
                 <div class="telecom-site-status">
-                  <div class="telecom-site-pill"><strong>{len(resource_df)}</strong><span>Variables</span></div>
-                  <div class="telecom-site-pill"><strong>10</strong><span>Columnas A:J</span></div>
-                  <div class="telecom-site-pill"><strong>{html.escape(str(resource_model.get("source_mode", "remote")).upper())}</strong><span>Fuente</span></div>
+                  <div class="telecom-site-pill"><strong>{html.escape(active_resource_source)}</strong><span>Prioridad datos</span></div>
+                  <div class="telecom-site-pill"><strong>{html.escape(active_source_detail)}</strong><span>Referencia</span></div>
+                  <div class="telecom-site-pill"><strong>{len(resource_df)}</strong><span>Variables auditables</span></div>
                 </div>
               </div>
               <div class="telecom-site-body">
                 <div class="telecom-grid">
-                  <div class="telecom-card"><p class="telecom-card-k">Velocidad medida</p><p class="telecom-card-v">{measured_speed:.2f} m/s</p><p class="telecom-card-s">Base eólica declarada.</p></div>
-                  <div class="telecom-card"><p class="telecom-card-k">Velocidad a rotor hoja</p><p class="telecom-card-v">{rotor_speed_sheet:.2f} m/s</p><p class="telecom-card-s">Valor calculado publicado.</p></div>
-                  <div class="telecom-card"><p class="telecom-card-k">Velocidad extrapolada</p><p class="telecom-card-v">{rotor_speed_calc:.2f} m/s</p><p class="telecom-card-s">Cálculo referencial por ley de potencia.</p></div>
-                  <div class="telecom-card"><p class="telecom-card-k">Factor planta preliminar</p><p class="telecom-card-v">{fp_prelim:.1f}%</p><p class="telecom-card-s">Base usada para comparar con ficha.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Velocidad activa</p><p class="telecom-card-v">{active_speed:.2f} m/s</p><p class="telecom-card-s">{html.escape(active_resource_source)}.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Factor planta activo</p><p class="telecom-card-v">{active_fp:.1f}%</p><p class="telecom-card-s">Usado para lectura técnica.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Generación mensual/turbina</p><p class="telecom-card-v">{active_energy_label}</p><p class="telecom-card-s">09_Viento o mediana del modelo.</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Weibull k</p><p class="telecom-card-v">{weibull_k:.2f}</p><p class="telecom-card-s">Forma de distribución de viento.</p></div>
                   <div class="telecom-card"><p class="telecom-card-k">Pérdida operativa total</p><p class="telecom-card-v">{gross_loss_pct:.1f}%</p><p class="telecom-card-s">Disponibilidad y pérdidas combinadas.</p></div>
                   <div class="telecom-card"><p class="telecom-card-k">Estado</p><p class="telecom-card-v">{html.escape(status)}</p><p class="telecom-card-s">{html.escape(recommendation_resource)}.</p></div>
                 </div>
               </div>
             </div>
-            """,
+            """.replace(",", "."),
             unsafe_allow_html=True,
         )
-        if validation_alert:
-            st.markdown(
-                f'<div class="telecom-note"><b>Alerta técnica:</b> la hoja publica velocidad a rotor de <b>{rotor_speed_sheet:.2f} m/s</b>, pero con {measured_speed:.2f} m/s a {measurement_height:.0f} m y rotor a {rotor_height:.0f} m, la extrapolación referencial entrega cerca de <b>{rotor_speed_calc:.2f} m/s</b>. Conviene revisar fórmula, unidad o referencia de celda antes de usar este valor en ingeniería.</div>',
-                unsafe_allow_html=True,
-            )
         r1, r2 = st.columns([1, 1])
         with r1:
-            st.markdown('<p class="telecom-panel-title">Extrapolación de velocidad</p><p class="telecom-panel-sub">Compara la medición base, el valor publicado a rotor y una extrapolación referencial.</p>', unsafe_allow_html=True)
+            st.markdown('<p class="telecom-panel-title">Lectura de velocidad y referencia de altura</p><p class="telecom-panel-sub">Compara la fuente activa con la medición publicada, la extrapolación referencial y el valor de rotor publicado.</p>', unsafe_allow_html=True)
             speed_df = pd.DataFrame(
                 [
-                    {"Concepto": "Medición", "Velocidad m/s": measured_speed, "Color": blue_2},
-                    {"Concepto": "A rotor hoja", "Velocidad m/s": rotor_speed_sheet, "Color": blue_4 if validation_alert else blue_3},
+                    {"Concepto": "Fuente activa", "Velocidad m/s": active_speed, "Color": blue_5},
+                    {"Concepto": "Medición URL", "Velocidad m/s": measured_speed, "Color": blue_2},
                     {"Concepto": "A rotor ref.", "Velocidad m/s": rotor_speed_calc, "Color": blue_5},
+                    {"Concepto": "A rotor URL", "Velocidad m/s": rotor_speed_sheet, "Color": blue_3},
                 ]
             )
+            speed_df = speed_df.replace([np.inf, -np.inf], np.nan).dropna(subset=["Velocidad m/s"])
             fig_speed = go.Figure(
                 go.Bar(
                     x=speed_df["Concepto"],
@@ -14104,18 +14084,73 @@ def render_telecom_tower_eval_analysis():
             fig_speed.update_layout(height=350, margin=dict(l=10, r=20, t=20, b=38), yaxis=dict(title="m/s", gridcolor="rgba(148,163,184,.22)"), xaxis=dict(title=None), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig_speed, use_container_width=True, config={"displaylogo": False})
         with r2:
-            st.markdown('<p class="telecom-panel-title">Factor planta y control</p><p class="telecom-panel-sub">Valida coherencia entre factor preliminar, ficha y diferencia informada.</p>', unsafe_allow_html=True)
+            st.markdown('<p class="telecom-panel-title">Factor planta y control de pérdidas</p><p class="telecom-panel-sub">Muestra el FP activo y el ajuste operacional que transforma viento en energía útil.</p>', unsafe_allow_html=True)
             fp_df = pd.DataFrame(
                 [
-                    {"Concepto": "FP preliminar", "Valor": fp_prelim},
-                    {"Concepto": "FP ficha", "Valor": fp_sheet},
-                    {"Concepto": "Diferencia", "Valor": fp_delta},
+                    {"Concepto": "FP activo", "Valor": active_fp, "Color": blue_5},
+                    {"Concepto": "FP preliminar URL", "Valor": fp_prelim, "Color": blue_2},
+                    {"Concepto": "FP ficha URL", "Valor": fp_sheet, "Color": blue_3},
+                    {"Concepto": "Pérdida operativa", "Valor": gross_loss_pct, "Color": blue_4},
                 ]
             )
             fig_fp = go.Figure()
-            fig_fp.add_trace(go.Bar(x=fp_df["Concepto"], y=fp_df["Valor"], marker_color=[blue_5, blue_2, blue_4], text=[f"{v:.1f}%" for v in fp_df["Valor"]], textposition="outside", cliponaxis=False, hovertemplate="<b>%{x}</b><br>Valor: %{y:.1f}%<extra></extra>"))
+            fig_fp.add_trace(go.Bar(x=fp_df["Concepto"], y=fp_df["Valor"], marker_color=fp_df["Color"], text=[f"{v:.1f}%" for v in fp_df["Valor"]], textposition="outside", cliponaxis=False, hovertemplate="<b>%{x}</b><br>Valor: %{y:.1f}%<extra></extra>"))
             fig_fp.update_layout(height=350, margin=dict(l=10, r=20, t=20, b=38), yaxis=dict(title="%", gridcolor="rgba(148,163,184,.22)"), xaxis=dict(title=None), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig_fp, use_container_width=True, config={"displaylogo": False})
+        g1, g2 = st.columns([1.05, 0.95])
+        with g1:
+            st.markdown('<p class="telecom-panel-title">Generación mensual por alternativa</p><p class="telecom-panel-sub">Usa 09_Viento si está activo; en caso contrario usa el URL del modelo eólico publicado.</p>', unsafe_allow_html=True)
+            gen_col = "Generación mensual total kWh"
+            turbine_col = "Nº turbinas requerido"
+            fig_gen = go.Figure()
+            fig_gen.add_trace(
+                go.Bar(
+                    x=wind_resource_view["Alternativa"],
+                    y=wind_resource_view[gen_col] / 1000.0,
+                    name="Generación mensual",
+                    marker_color=blue_5,
+                    text=[f"{v/1000.0:.1f} MWh" for v in wind_resource_view[gen_col]],
+                    textposition="outside",
+                    cliponaxis=False,
+                    hovertemplate="<b>%{x}</b><br>Generación: %{y:.1f} MWh/mes<extra></extra>",
+                )
+            )
+            if turbine_col in wind_resource_view.columns:
+                fig_gen.add_trace(
+                    go.Scatter(
+                        x=wind_resource_view["Alternativa"],
+                        y=wind_resource_view[turbine_col],
+                        name="N° turbinas",
+                        yaxis="y2",
+                        mode="lines+markers+text",
+                        line=dict(color=blue_4, width=3),
+                        marker=dict(size=9, color="#ffffff", line=dict(color=blue_4, width=2)),
+                        text=[f"{v:.0f}" for v in wind_resource_view[turbine_col]],
+                        textposition="top center",
+                        hovertemplate="<b>%{x}</b><br>Turbinas: %{y:.0f}<extra></extra>",
+                    )
+                )
+            fig_gen.update_layout(height=360, margin=dict(l=10, r=50, t=30, b=44), legend=dict(orientation="h", y=1.14, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="MWh/mes", gridcolor="rgba(148,163,184,.22)", rangemode="tozero"), yaxis2=dict(title="N°", overlaying="y", side="right", showgrid=False, rangemode="tozero"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
+            st.plotly_chart(fig_gen, use_container_width=True, config={"displaylogo": False})
+        with g2:
+            st.markdown('<p class="telecom-panel-title">Cobertura estimada del consumo</p><p class="telecom-panel-sub">Compara generación mensual con demanda base del sitio.</p>', unsafe_allow_html=True)
+            coverage_resource_df = wind_resource_view[["Alternativa", gen_col]].copy()
+            coverage_resource_df["Cobertura %"] = np.where(demand_monthly_resource > 0, coverage_resource_df[gen_col] / demand_monthly_resource * 100.0, np.nan)
+            fig_cov_resource = go.Figure()
+            fig_cov_resource.add_trace(
+                go.Bar(
+                    x=coverage_resource_df["Alternativa"],
+                    y=coverage_resource_df["Cobertura %"],
+                    marker_color=[blue_2 if v < 100 else blue_5 if v <= 120 else blue_4 for v in coverage_resource_df["Cobertura %"].fillna(0)],
+                    text=[f"{v:.0f}%" if np.isfinite(v) else "N/A" for v in coverage_resource_df["Cobertura %"]],
+                    textposition="outside",
+                    cliponaxis=False,
+                    hovertemplate="<b>%{x}</b><br>Cobertura: %{y:.0f}%<extra></extra>",
+                )
+            )
+            fig_cov_resource.add_hline(y=100, line=dict(color=blue_3, width=2, dash="dash"), annotation_text="Consumo mensual", annotation_position="top left")
+            fig_cov_resource.update_layout(height=360, margin=dict(l=10, r=20, t=30, b=44), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="Cobertura (%)", gridcolor="rgba(148,163,184,.22)", rangemode="tozero"), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_cov_resource, use_container_width=True, config={"displaylogo": False})
         l1, l2 = st.columns([1, 1])
         with l1:
             st.markdown('<p class="telecom-panel-title">Pérdidas y disponibilidad</p><p class="telecom-panel-sub">Lectura operativa para convertir recurso bruto en energía útil.</p>', unsafe_allow_html=True)
