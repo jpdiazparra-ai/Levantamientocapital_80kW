@@ -14537,6 +14537,18 @@ def render_telecom_scenario_simulator():
             return f"{years} año" if years == 1 else f"{years} años"
         return f"{years} años {months} meses"
 
+    def money_text_input(label: str, default_value: float, key: str, help_text: str = "") -> float:
+        text_value = st.text_input(
+            label,
+            value=format_clp(float(default_value or 0.0)),
+            key=key,
+            help=help_text or None,
+        )
+        parsed = parse_money_clp_robusto(text_value)
+        if parsed is None:
+            parsed = parse_float_local(text_value, default_value)
+        return float(parsed or 0.0)
+
     def tune_fig(fig: go.Figure, height: int = 380) -> go.Figure:
         fig.update_layout(
             height=height,
@@ -14578,26 +14590,39 @@ def render_telecom_scenario_simulator():
         .sim6-engineering-note{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;margin-top:14px;border:1px solid rgba(117,169,184,.25);border-radius:13px;background:#fff;padding:12px 14px;}
         .sim6-note-main{font-size:12px;line-height:1.35;color:#20384F;font-weight:780;margin:0;}
         .sim6-note-tag{border-radius:999px;background:#DCECEF;color:#284763;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;padding:7px 10px;white-space:nowrap;}
+        .sim6-hero{border:1px solid rgba(117,169,184,.30);border-radius:18px;background:linear-gradient(135deg,#ffffff 0%,#F7FBFC 48%,#DCECEF 100%);box-shadow:0 16px 38px rgba(40,71,99,.08);padding:20px 22px;margin:10px 0 18px;overflow:hidden;}
+        .sim6-hero-grid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;}
+        .sim6-hero-k{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#A9673B;font-weight:950;margin:0 0 8px;}
+        .sim6-hero-t{font-size:clamp(24px,2vw,34px);line-height:1.04;font-weight:950;color:#0b1730;margin:0 0 8px;letter-spacing:-.02em;}
+        .sim6-hero-s{font-size:13px;line-height:1.42;color:#475569;font-weight:760;margin:0;max-width:850px;}
+        .sim6-hero-status{display:grid;grid-template-columns:repeat(3,minmax(112px,1fr));gap:9px;}
+        .sim6-hero-pill{border:1px solid rgba(117,169,184,.34);border-radius:13px;background:#ffffff;padding:12px 13px;box-shadow:0 8px 18px rgba(40,71,99,.055);}
+        .sim6-hero-pill strong{display:block;font-size:10px;letter-spacing:.11em;text-transform:uppercase;color:#284763;font-weight:950;margin:0 0 5px;}
+        .sim6-hero-pill span{display:block;font-size:13px;line-height:1.15;color:#0b1730;font-weight:900;}
+        .sim6-input-note{border:1px solid rgba(117,169,184,.28);border-radius:13px;background:linear-gradient(180deg,#ffffff,#F8FBFC);padding:12px 14px;margin:2px 0 14px;color:#20384F;font-size:12px;line-height:1.35;font-weight:760;}
+        div[data-testid="stExpander"] details{border:1px solid rgba(117,169,184,.34);border-radius:16px;background:#fff;box-shadow:0 12px 30px rgba(40,71,99,.065);}
+        div[data-testid="stExpander"] summary{font-weight:900;color:#20384F;}
         @media (max-width: 1300px){.sim6-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));}.sim6-result-head{grid-template-columns:1fr;}}
-        @media (max-width: 760px){.sim6-kpi-grid{grid-template-columns:1fr;}.sim6-result-head{padding:20px 18px}.sim6-result-body{padding:16px}.sim6-engineering-note{grid-template-columns:1fr}.sim6-title{font-size:28px;}}
+        @media (max-width: 1100px){.sim6-hero-grid{grid-template-columns:1fr}.sim6-hero-status{grid-template-columns:repeat(3,minmax(0,1fr));}}
+        @media (max-width: 760px){.sim6-kpi-grid{grid-template-columns:1fr;}.sim6-result-head{padding:20px 18px}.sim6-result-body{padding:16px}.sim6-engineering-note{grid-template-columns:1fr}.sim6-title{font-size:28px;}.sim6-hero-status{grid-template-columns:1fr;}}
         </style>
         """,
         unsafe_allow_html=True,
     )
 
     st.markdown(
-        """
-        <div class="telecom-site-shell">
-          <div class="telecom-site-head">
+        f"""
+        <div class="sim6-hero">
+          <div class="sim6-hero-grid">
             <div>
-              <p class="telecom-site-k">Sub bloque 6 · Simulador ejecutivo autónomo</p>
-              <h3 class="telecom-site-t">Modelo interactivo para torres telecom</h3>
-              <p class="telecom-site-s">Ingrese supuestos técnicos, energéticos y económicos. El sistema recalcula en vivo la recomendación, cobertura, CAPEX, LCOE, payback, impacto y tabla ejecutiva, usando el Google Sheet solo como respaldo de defaults.</p>
+              <p class="sim6-hero-k">Sub bloque 6 · Simulador ejecutivo autónomo</p>
+              <h3 class="sim6-hero-t">Modelo interactivo para torres telecom</h3>
+              <p class="sim6-hero-s">Ingrese supuestos técnicos, energéticos y económicos. El sistema recalcula en vivo la recomendación, cobertura, CAPEX, LCOE, payback, impacto y tabla ejecutiva. Los valores iniciales se alimentan desde Google Sheets cuando están disponibles.</p>
             </div>
-            <div class="telecom-site-status">
-              <div class="telecom-site-pill"><strong>INPUT</strong><span>{html.escape(source_badge)}</span></div>
-              <div class="telecom-site-pill"><strong>5</strong><span>Alternativas</span></div>
-              <div class="telecom-site-pill"><strong>LIVE</strong><span>{html.escape(source_detail)}</span></div>
+            <div class="sim6-hero-status">
+              <div class="sim6-hero-pill"><strong>Input</strong><span>{html.escape(source_badge)}</span></div>
+              <div class="sim6-hero-pill"><strong>Portafolio</strong><span>5 alternativas</span></div>
+              <div class="sim6-hero-pill"><strong>Estado</strong><span>{html.escape(source_detail)}</span></div>
             </div>
           </div>
         </div>
@@ -14605,67 +14630,78 @@ def render_telecom_scenario_simulator():
         unsafe_allow_html=True,
     )
 
-    with st.container(border=True):
-        st.markdown("##### Demanda y continuidad")
-        d1, d2, d3, d4 = st.columns(4)
-        with d1:
-            monthly_consumption = st.number_input("Consumo mensual sitio (kWh/mes)", min_value=100.0, value=float(default_monthly_consumption), step=50.0, key="sim6_monthly_consumption")
-        with d2:
-            target_coverage = st.slider("Cobertura objetivo (%)", min_value=20.0, max_value=160.0, value=float(max(20.0, min(160.0, default_target_coverage))), step=5.0, key="sim6_target_coverage")
-        with d3:
-            safety_margin = st.slider("Margen de seguridad (%)", min_value=0.0, max_value=40.0, value=10.0, step=2.5, key="sim6_safety_margin")
-        with d4:
-            project_life = st.number_input("Vida útil análisis (años)", min_value=5, max_value=30, value=int(default_project_life), step=1, key="sim6_project_life")
+    with st.expander("Parámetros de simulación técnica, económica y CAPEX", expanded=True):
+        st.markdown(
+            '<div class="sim6-input-note">Los campos CAPEX por turbina se muestran en CLP con signo peso y separador de miles. Puede editar el monto directamente; el modelo lo interpreta y recalcula los resultados.</div>',
+            unsafe_allow_html=True,
+        )
+        with st.container(border=True):
+            st.markdown("##### Demanda y continuidad")
+            d1, d2, d3, d4 = st.columns(4)
+            with d1:
+                monthly_consumption = st.number_input("Consumo mensual sitio (kWh/mes)", min_value=100.0, value=float(default_monthly_consumption), step=50.0, key="sim6_monthly_consumption")
+            with d2:
+                target_coverage = st.slider("Cobertura objetivo (%)", min_value=20.0, max_value=160.0, value=float(max(20.0, min(160.0, default_target_coverage))), step=5.0, key="sim6_target_coverage")
+            with d3:
+                safety_margin = st.slider("Margen de seguridad (%)", min_value=0.0, max_value=40.0, value=10.0, step=2.5, key="sim6_safety_margin")
+            with d4:
+                project_life = st.number_input("Vida útil análisis (años)", min_value=5, max_value=30, value=int(default_project_life), step=1, key="sim6_project_life")
 
-    with st.container(border=True):
-        st.markdown("##### Recurso eólico y operación")
-        e1, e2, e3, e4, e5 = st.columns(5)
-        with e1:
-            plant_factor = st.slider("Factor planta base (%)", min_value=10.0, max_value=60.0, value=float(max(10.0, min(60.0, default_plant_factor))), step=0.5, key="sim6_plant_factor")
-        with e2:
-            availability = st.slider("Disponibilidad (%)", min_value=70.0, max_value=100.0, value=float(max(70.0, min(100.0, default_availability))), step=1.0, key="sim6_availability")
-        with e3:
-            electrical_losses = st.slider("Pérdidas eléctricas (%)", min_value=0.0, max_value=25.0, value=float(max(0.0, min(25.0, default_electrical_losses))), step=0.5, key="sim6_electrical_losses")
-        with e4:
-            additional_losses = st.slider("Pérdidas adicionales (%)", min_value=0.0, max_value=25.0, value=float(max(0.0, min(25.0, default_additional_losses))), step=0.5, key="sim6_additional_losses")
-        with e5:
-            degradation = st.slider("Degradación anual (%)", min_value=0.0, max_value=3.0, value=0.5, step=0.1, key="sim6_degradation")
+        with st.container(border=True):
+            st.markdown("##### Recurso eólico y operación")
+            e1, e2, e3, e4, e5 = st.columns(5)
+            with e1:
+                plant_factor = st.slider("Factor planta base (%)", min_value=10.0, max_value=60.0, value=float(max(10.0, min(60.0, default_plant_factor))), step=0.5, key="sim6_plant_factor")
+            with e2:
+                availability = st.slider("Disponibilidad (%)", min_value=70.0, max_value=100.0, value=float(max(70.0, min(100.0, default_availability))), step=1.0, key="sim6_availability")
+            with e3:
+                electrical_losses = st.slider("Pérdidas eléctricas (%)", min_value=0.0, max_value=25.0, value=float(max(0.0, min(25.0, default_electrical_losses))), step=0.5, key="sim6_electrical_losses")
+            with e4:
+                additional_losses = st.slider("Pérdidas adicionales (%)", min_value=0.0, max_value=25.0, value=float(max(0.0, min(25.0, default_additional_losses))), step=0.5, key="sim6_additional_losses")
+            with e5:
+                degradation = st.slider("Degradación anual (%)", min_value=0.0, max_value=3.0, value=0.5, step=0.1, key="sim6_degradation")
 
-    with st.container(border=True):
-        st.markdown("##### Economía energética")
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            grid_cost = st.number_input("Costo red (CLP/kWh)", min_value=0.0, value=float(default_grid_cost), step=10.0, key="sim6_grid_cost")
-            mix_grid = st.slider("Mix red (%)", min_value=0.0, max_value=100.0, value=float(max(0.0, min(100.0, default_mix_grid))), step=5.0, key="sim6_mix_grid")
-        with c2:
-            diesel_cost = st.number_input("Costo electrógeno (CLP/kWh)", min_value=0.0, value=float(default_diesel_cost), step=25.0, key="sim6_diesel_cost")
-            mix_diesel = st.slider("Mix electrógeno (%)", min_value=0.0, max_value=100.0, value=float(max(0.0, min(100.0, default_mix_diesel))), step=5.0, key="sim6_mix_diesel")
-        with c3:
-            bess_cost = st.number_input("Costo FV/BESS ref. (CLP/kWh)", min_value=0.0, value=float(default_bess_cost), step=10.0, key="sim6_bess_cost")
-            mix_bess = st.slider("Mix FV/BESS (%)", min_value=0.0, max_value=100.0, value=float(max(0.0, min(100.0, default_mix_bess))), step=5.0, key="sim6_mix_bess")
-        with c4:
-            surplus_price = st.number_input("Monetización excedente (CLP/kWh)", min_value=0.0, value=float(default_surplus_price), step=10.0, key="sim6_surplus_price")
-            surplus_factor = st.slider("Factor valorización excedente", min_value=0.0, max_value=2.0, value=float(max(0.0, min(2.0, default_surplus_factor))), step=0.05, key="sim6_surplus_factor")
+        with st.container(border=True):
+            st.markdown("##### Economía energética")
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                grid_cost = st.number_input("Costo red (CLP/kWh)", min_value=0.0, value=float(default_grid_cost), step=10.0, key="sim6_grid_cost")
+                mix_grid = st.slider("Mix red (%)", min_value=0.0, max_value=100.0, value=float(max(0.0, min(100.0, default_mix_grid))), step=5.0, key="sim6_mix_grid")
+            with c2:
+                diesel_cost = st.number_input("Costo electrógeno (CLP/kWh)", min_value=0.0, value=float(default_diesel_cost), step=25.0, key="sim6_diesel_cost")
+                mix_diesel = st.slider("Mix electrógeno (%)", min_value=0.0, max_value=100.0, value=float(max(0.0, min(100.0, default_mix_diesel))), step=5.0, key="sim6_mix_diesel")
+            with c3:
+                bess_cost = st.number_input("Costo FV/BESS ref. (CLP/kWh)", min_value=0.0, value=float(default_bess_cost), step=10.0, key="sim6_bess_cost")
+                mix_bess = st.slider("Mix FV/BESS (%)", min_value=0.0, max_value=100.0, value=float(max(0.0, min(100.0, default_mix_bess))), step=5.0, key="sim6_mix_bess")
+            with c4:
+                surplus_price = st.number_input("Monetización excedente (CLP/kWh)", min_value=0.0, value=float(default_surplus_price), step=10.0, key="sim6_surplus_price")
+                surplus_factor = st.slider("Factor valorización excedente", min_value=0.0, max_value=2.0, value=float(max(0.0, min(2.0, default_surplus_factor))), step=0.05, key="sim6_surplus_factor")
 
-    with st.container(border=True):
-        st.markdown("##### CAPEX, O&M e impacto")
-        k1, k2, k3, k4, k5 = st.columns(5)
-        with k1:
-            bos_pct = st.slider("BOS / instalación (%)", min_value=0.0, max_value=80.0, value=float(max(0.0, min(80.0, default_bos_pct))), step=2.5, key="sim6_bos_pct")
-        with k2:
-            om_pct = st.slider("O&M anual sobre CAPEX (%)", min_value=0.0, max_value=12.0, value=float(max(0.0, min(12.0, default_om_pct))), step=0.25, key="sim6_om_pct")
-        with k3:
-            diesel_l_kwh = st.number_input("Consumo diésel evitado (L/kWh)", min_value=0.0, value=float(default_diesel_l_kwh), step=0.01, key="sim6_diesel_l_kwh")
-        with k4:
-            co2_kg_l = st.number_input("Factor emisión diésel (kgCO2/L)", min_value=0.0, value=float(default_co2_kg_l), step=0.01, key="sim6_co2_kg_l")
-        with k5:
-            surface_per_kw = st.number_input("Impacto superficial (m²/kW)", min_value=0.0, value=float(default_surface_per_kw), step=0.5, key="sim6_surface_per_kw")
+        with st.container(border=True):
+            st.markdown("##### CAPEX, O&M e impacto")
+            k1, k2, k3, k4, k5 = st.columns(5)
+            with k1:
+                bos_pct = st.slider("BOS / instalación (%)", min_value=0.0, max_value=80.0, value=float(max(0.0, min(80.0, default_bos_pct))), step=2.5, key="sim6_bos_pct")
+            with k2:
+                om_pct = st.slider("O&M anual sobre CAPEX (%)", min_value=0.0, max_value=12.0, value=float(max(0.0, min(12.0, default_om_pct))), step=0.25, key="sim6_om_pct")
+            with k3:
+                diesel_l_kwh = st.number_input("Consumo diésel evitado (L/kWh)", min_value=0.0, value=float(default_diesel_l_kwh), step=0.01, key="sim6_diesel_l_kwh")
+            with k4:
+                co2_kg_l = st.number_input("Factor emisión diésel (kgCO2/L)", min_value=0.0, value=float(default_co2_kg_l), step=0.01, key="sim6_co2_kg_l")
+            with k5:
+                surface_per_kw = st.number_input("Impacto superficial (m²/kW)", min_value=0.0, value=float(default_surface_per_kw), step=0.5, key="sim6_surface_per_kw")
 
-        capex_cols = st.columns(5)
-        unit_capex = {}
-        for idx, name in enumerate(turbine_order):
-            with capex_cols[idx]:
-                unit_capex[name] = st.number_input(f"CAPEX {name}", min_value=0.0, value=float(wind_default(name, "CAPEX unitario $", default_unit_capex[name])), step=500_000.0, key=f"sim6_capex_{name}")
+            capex_cols = st.columns(5)
+            unit_capex = {}
+            for idx, name in enumerate(turbine_order):
+                with capex_cols[idx]:
+                    capex_default = float(wind_default(name, "CAPEX unitario $", default_unit_capex[name]))
+                    unit_capex[name] = money_text_input(
+                        f"CAPEX unitario {name}",
+                        capex_default,
+                        key=f"sim6_capex_text_{name}",
+                        help_text="Valor inicial desde 04_Modelo_Eolico > CAPEX unitario, editable en CLP.",
+                    )
 
     mix_total = mix_grid + mix_diesel + mix_bess
     if mix_total <= 0:
