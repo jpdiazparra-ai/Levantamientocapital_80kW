@@ -10990,11 +10990,10 @@ def load_telecom_wind_model(url: str, refresh_nonce: int = 0) -> dict:
 
     def fallback_model(error: Exception | None = None) -> dict:
         rows = [
-            ["VAWT 1 kW", 1, 7500000, 20, 9000000, 35, 227.6, 3237.5, 15, 15, 3413.6, 38850.5, 100, 135000000, 2700000, 7051371, 31080425, 16662993, 4351371, 28380425, 13962993, 31.0, 4.8, 9.7, 243, 4662.1, 12.5, -16125170, 60.5, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", 144, 2113, 190145, 14153138, 9.5, 3802903, "Excedente valorizable"],
-            ["VAWT 3 kW", 3, 14500000, 15, 16675000, 35, 682.7, 3237.5, 5, 15, 3413.6, 38850.5, 100, 83375000, 1667500, 7051371, 31080425, 16662993, 5383871, 29412925, 14995493, 15.5, 2.8, 5.6, 150, 4662.1, 12.5, 44290084, 67.6, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", 75, 2113, 190145, 15185638, 5.5, 3802903, "Excedente valorizable"],
-            ["VAWT 5 kW", 5, 24000000, 12, 26880000, 35, 1137.9, 3237.5, 3, 15, 3413.6, 38850.5, 100, 80640000, 1612800, 7051371, 31080425, 16662993, 5438571, 29467625, 15050193, 14.8, 2.7, 5.4, 145, 4662.1, 12.5, 47490776, 68.3, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", 72, 2113, 190145, 15240338, 5.3, 3802903, "Excedente valorizable"],
-            ["VAWT 10 kW", 10, 58000000, 10, 63800000, 35, 2275.7, 3237.5, 2, 20, 4551.5, 38850.5, 100, 127600000, 2552000, 7051371, 31080425, 16662993, 4499371, 28528425, 14110993, 28.4, 4.5, 9.0, 230, 4662.1, 12.5, -7465163, 61.2, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", 75, 15767, 1419043, 15530036, 8.2, 28380856, "Excedente valorizable"],
-            ["VAWT 80 kW", 80, 104000000, 8, 112320000, 35, 18205.9, 3237.5, 1, 80, 18205.9, 38850.5, 100, 112320000, 2246400, 7051371, 31080425, 16662993, 4804971, 28834025, 14416593, 23.4, 3.9, 7.8, 202, 4662.1, 12.5, 10416582, 62.8, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", 100, 179620, 16165815, 30582408, 3.7, 323316293, "Excedente valorizable"],
+            ["VAWT 1 kW", 1, 25482800, 100, 50965600, 35, 227.6, 3237.5, 15, 15, 3413.6, 38850.5, 100, 764484000, 15289680, 7051371, 31080425, 16662993, -8238310, 15790745, 1373313, 108.4, 26.2, 556.7, 1375, 4662.1, 12.5, -317499783, 25.0, "Rojo", "Evaluar solo si baja CAPEX", "Factor planta, consumo real y costo kWh actual", 144, 2113, 190145, 1563458, 489.0, 3802903, "Excedente valorizable"],
+            ["VAWT 3 kW", 3, 33928300, 100, 67856600, 35, 682.7, 3237.5, 5, 15, 3413.6, 38850.5, 100, 339283000, 6785660, 7051371, 31080425, 16662993, 265711, 24294765, 9877333, 1276.9, 14.0, 34.4, 610, 4662.1, 12.5, -91870872, 82.0, "Verde", "Priorizar piloto", "Factor planta, consumo real y costo kWh actual", 75, 2113, 190145, 10067478, 33.7, 3802903, "Excedente valorizable"],
+            ["VAWT 5 kW", 5, 45605700, 100, 91211400, 35, 1137.9, 3237.5, 3, 15, 3413.6, 38850.5, 100, 273634200, 5472684, 7051371, 31080425, 16662993, 1578687, 25607741, 11190309, 173.3, 10.7, 24.5, 492, 4662.1, 12.5, -33108798, 80.0, "Verde", "Alternativa competitiva", "Factor planta, consumo real y costo kWh actual", 72, 2113, 190145, 11380454, 24.0, 3802903, "Excedente valorizable"],
+            ["VAWT 10 kW", 10, 58000000, 100, 116000000, 35, 2275.7, 3237.5, 2, 20, 4551.5, 38850.5, 100, 232000000, 4640000, 7051371, 31080425, 16662993, 2411371, 26440425, 12022993, 96.2, 8.8, 19.3, 417, 4662.1, 12.5, 5661113, 61.2, "Verde", "Alternativa competitiva", "Factor planta, consumo real y costo kWh actual", 75, 15767, 1419043, 13442036, 17.3, 28380856, "Excedente valorizable"],
         ]
         columns = [
             "Alternativa", "Potencia unitaria kW", "CAPEX unitario $", "BoS/instalación %", "CAPEX total unitario $", "Factor planta",
@@ -11009,7 +11008,7 @@ def load_telecom_wind_model(url: str, refresh_nonce: int = 0) -> dict:
         ]
         data = pd.DataFrame(rows, columns=columns)
         return {
-            "title": "Modelo eólico 1 kW / 3 kW / 5 kW / 10 kW / 80 kW",
+            "title": "Modelo eólico 1 kW / 3 kW / 5 kW / 10 kW",
             "subtitle": "Comparación técnica-económica por alternativa",
             "data": data,
             "source_warning": "" if error is None else str(error),
@@ -11021,11 +11020,26 @@ def load_telecom_wind_model(url: str, refresh_nonce: int = 0) -> dict:
     except Exception as exc:
         return fallback_model(exc)
 
-    if raw.shape[0] < 5 or raw.shape[1] < 38:
+    if raw.shape[0] < 5 or raw.shape[1] < 3:
         return fallback_model()
 
-    wind_model_cols = min(raw.shape[1], 38)
+    expected_columns = [
+        "Alternativa", "Potencia unitaria kW", "CAPEX unitario $", "BoS/instalación %", "CAPEX total unitario $", "Factor planta",
+        "Generación mensual/turbina kWh", "Cobertura objetivo kWh/mes", "Nº turbinas requerido", "Potencia instalada kW",
+        "Generación mensual total kWh", "Energía útil anual kWh", "Cobertura real", "CAPEX total $", "O&M anual $",
+        "Ahorro anual red $", "Ahorro anual electrógeno $", "Ahorro anual híbrido $", "Beneficio neto red $",
+        "Beneficio neto electrógeno $", "Beneficio neto híbrido $", "Payback red años", "Payback electrógeno años",
+        "Payback híbrido años", "LCOE $/kWh", "Diésel evitado L/año", "CO₂ evitado t/año", "VAN híbrido $",
+        "Índice decisión", "Estado payback híbrido", "Recomendación", "Dato crítico a validar",
+        "Impacto superficial", "Remanente anual kWh", "Ingreso venta excedente $", "Beneficio total híbrido $", "Payback híbrido c/remanente",
+        "Remanente acumulado 20 años $", "Comentario remanente",
+    ]
+    wind_model_cols = min(raw.shape[1], len(expected_columns))
     headers = [str(value).strip() for value in raw.iloc[3, :wind_model_cols].tolist()]
+    headers = [
+        header if header else expected_columns[idx]
+        for idx, header in enumerate(headers)
+    ]
     rows = []
     for row_idx in range(4, raw.shape[0]):
         first = str(raw.iat[row_idx, 0]).strip()
@@ -11040,8 +11054,11 @@ def load_telecom_wind_model(url: str, refresh_nonce: int = 0) -> dict:
         return fallback_model()
 
     data = pd.DataFrame(rows)
+    for column in expected_columns:
+        if column not in data.columns:
+            data[column] = 0.0 if column in numeric_columns else ""
     return {
-        "title": str(raw.iat[0, 0]).strip() or "Modelo eólico 1 kW / 3 kW / 5 kW / 10 kW / 80 kW",
+        "title": str(raw.iat[0, 0]).strip() or "Modelo eólico 1 kW / 3 kW / 5 kW / 10 kW",
         "subtitle": str(raw.iat[2, 0]).strip() or "Comparación técnica-económica por alternativa",
         "data": data,
         "source_warning": "",
@@ -14494,6 +14511,17 @@ def render_telecom_scenario_simulator():
                 return float(value)
         return float(default)
 
+    if wind_by_alt:
+        ordered_from_url = [name for name in turbine_order if name in wind_by_alt]
+        ordered_from_url.extend([name for name in wind_by_alt if name not in ordered_from_url])
+        if ordered_from_url:
+            turbine_order = ordered_from_url
+            source_detail = f"{len(turbine_order)} alternativas desde 04_Modelo_Eolico"
+            for name in turbine_order:
+                default_kw = turbine_kw.get(name, parse_float_local(str(name).replace("VAWT", "").replace("kW", ""), 0.0))
+                turbine_kw[name] = wind_default(name, "Potencia unitaria kW", default_kw)
+                default_unit_capex[name] = wind_default(name, "CAPEX unitario $", default_unit_capex.get(name, 0.0))
+
     default_monthly_consumption = site_numeric("Consumo mensual modelo", 1602.0)
     default_target_coverage = site_percent_value("Cobertura objetivo", 100.0)
     default_project_life = int(max(5, min(30, round(site_numeric("Vida útil", 20.0)))))
@@ -14621,7 +14649,7 @@ def render_telecom_scenario_simulator():
             </div>
             <div class="sim6-hero-status">
               <div class="sim6-hero-pill"><strong>Input</strong><span>{html.escape(source_badge)}</span></div>
-              <div class="sim6-hero-pill"><strong>Portafolio</strong><span>5 alternativas</span></div>
+              <div class="sim6-hero-pill"><strong>Portafolio</strong><span>{len(turbine_order)} alternativas</span></div>
               <div class="sim6-hero-pill"><strong>Estado</strong><span>{html.escape(source_detail)}</span></div>
             </div>
           </div>
@@ -14691,15 +14719,16 @@ def render_telecom_scenario_simulator():
             with k5:
                 surface_per_kw = st.number_input("Impacto superficial (m²/kW)", min_value=0.0, value=float(default_surface_per_kw), step=0.5, key="sim6_surface_per_kw")
 
-            capex_cols = st.columns(5)
+            capex_cols = st.columns(max(1, len(turbine_order)))
             unit_capex = {}
             for idx, name in enumerate(turbine_order):
                 with capex_cols[idx]:
                     capex_default = float(wind_default(name, "CAPEX unitario $", default_unit_capex[name]))
+                    capex_key_name = re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_")
                     unit_capex[name] = money_text_input(
                         f"CAPEX unitario {name}",
                         capex_default,
-                        key=f"sim6_capex_text_{name}",
+                        key=f"sim6_capex_text_{capex_key_name}_{int(round(capex_default))}",
                         help_text="Valor inicial desde 04_Modelo_Eolico > CAPEX unitario, editable en CLP.",
                     )
 
