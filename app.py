@@ -11519,6 +11519,137 @@ def render_telecom_tower_eval_analysis():
     blue_5 = "#284763"
     blue_text = "#20384F"
     turbine_order = ["VAWT 1 kW", "VAWT 3 kW", "VAWT 5 kW", "VAWT 10 kW", "VAWT 80 kW"]
+    fallback_turbine_characteristics = pd.DataFrame(
+        [
+            ["VAWT 1 kW", 1.0, 12_182_800.0, 9.0, 2.65, 1.8, 4.77, 9.54],
+            ["VAWT 3 kW", 3.0, 20_628_300.0, 10.0, 3.65, 2.3, 8.395, 16.79],
+            ["VAWT 5 kW", 5.0, 32_305_700.0, 11.0, 4.5, 3.0, 13.5, 27.0],
+            ["VAWT 10 kW", 10.0, 58_000_000.0, 14.0, 7.0, 5.0, 35.0, 70.0],
+        ],
+        columns=[
+            "Alternativa",
+            "Potencia unitaria kW",
+            "CAPEX unitario $",
+            "Altura total",
+            "Altura rotor",
+            "Diámetro rotor",
+            "Área rotor",
+            "Impacto superficial",
+        ],
+    )
+
+    def normalize_turbine_characteristics(df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return fallback_turbine_characteristics.copy()
+        normalized = df.copy()
+        normalized.columns = [str(col).strip() for col in normalized.columns]
+        if "Alternativa" not in normalized.columns:
+            header_row = None
+            for idx in range(min(6, len(normalized))):
+                values = [str(value).strip().casefold() for value in normalized.iloc[idx].tolist()]
+                if any("alternativa" in value for value in values):
+                    header_row = idx
+                    break
+            if header_row is not None:
+                normalized.columns = [str(value).strip() for value in normalized.iloc[header_row].tolist()]
+                normalized = normalized.iloc[header_row + 1 :].reset_index(drop=True)
+        rename_map = {}
+        for col in normalized.columns:
+            key = str(col).strip().casefold()
+            if "alternativa" in key:
+                rename_map[col] = "Alternativa"
+            elif "potencia" in key and "kw" in key:
+                rename_map[col] = "Potencia unitaria kW"
+            elif "capex" in key:
+                rename_map[col] = "CAPEX unitario $"
+            elif "altura" in key and "total" in key:
+                rename_map[col] = "Altura total"
+            elif "altura" in key and "rotor" in key:
+                rename_map[col] = "Altura rotor"
+            elif ("diametro" in key or "diámetro" in key) and "rotor" in key:
+                rename_map[col] = "Diámetro rotor"
+            elif ("area" in key or "área" in key) and "rotor" in key:
+                rename_map[col] = "Área rotor"
+            elif "impacto" in key and "superficial" in key:
+                rename_map[col] = "Impacto superficial"
+        normalized = normalized.rename(columns=rename_map)
+        required_cols = list(fallback_turbine_characteristics.columns)
+        for col in required_cols:
+            if col not in normalized.columns:
+                normalized[col] = np.nan
+        normalized = normalized[required_cols].copy()
+        normalized["Alternativa"] = normalized["Alternativa"].astype(str).str.strip()
+        normalized = normalized[normalized["Alternativa"].str.contains("VAWT", case=False, na=False)].copy()
+        for col in required_cols[1:]:
+            if col == "CAPEX unitario $":
+                normalized[col] = normalized[col].map(
+                    lambda value: parse_money_clp_robusto(str(value))
+                    if parse_money_clp_robusto(str(value)) is not None
+                    else parse_float_local(value, np.nan)
+                )
+            else:
+                normalized[col] = normalized[col].map(lambda value: parse_float_local(value, np.nan))
+        if normalized.empty:
+            return fallback_turbine_characteristics.copy()
+        fallback_by_alt = fallback_turbine_characteristics.set_index("Alternativa")
+        for idx, row in normalized.iterrows():
+            alt = str(row.get("Alternativa", "")).strip()
+            if alt in fallback_by_alt.index:
+                for col in required_cols[1:]:
+                    value = pd.to_numeric(pd.Series([row.get(col)]), errors="coerce").iloc[0]
+                    if pd.isna(value) or not np.isfinite(float(value)):
+                        normalized.loc[idx, col] = fallback_by_alt.loc[alt, col]
+        return normalized.reset_index(drop=True)
+
+    def load_turbine_characteristics_table() -> pd.DataFrame:
+        try:
+            gid_map = load_google_pubhtml_sheet_gids(EVALUACION_TELECOM_PUBHTML_URL, refresh_nonce=data_refresh_nonce)
+            characteristic_gid = None
+            for sheet_name, gid in gid_map.items():
+                normalized_name = str(sheet_name).strip().casefold()
+                if "caracter" in normalized_name or "turbina" in normalized_name:
+                    characteristic_gid = gid
+                    break
+            if characteristic_gid:
+                characteristic_url = f"{EVALUACION_TELECOM_PUB_BASE_URL}?gid={characteristic_gid}&single=true&output=csv"
+                return normalize_turbine_characteristics(
+                    read_remote_csv(characteristic_url, refresh_nonce=data_refresh_nonce, dtype=str).fillna("")
+                )
+        except Exception:
+            pass
+        return fallback_turbine_characteristics.copy()
+
+    turbine_characteristics_df = load_turbine_characteristics_table()
+
+    def current_wind_height_profile() -> pd.DataFrame:
+        profile = pd.DataFrame(st.session_state.get("telecom_09_viento_outputs", {}).get("perfil_alturas", []))
+        if profile.empty:
+            return pd.DataFrame()
+        for col in ["Altura m", "FP neto", "Velocidad media", "Energía anual neta kWh", "Horas equivalentes"]:
+            if col in profile.columns:
+                profile[col] = pd.to_numeric(profile[col], errors="coerce")
+        if not {"Altura m", "FP neto"}.issubset(profile.columns):
+            return pd.DataFrame()
+        return profile.dropna(subset=["Altura m", "FP neto"]).sort_values("Altura m").reset_index(drop=True)
+
+    def interpolate_wind_profile_value(profile: pd.DataFrame, target_height: float, value_col: str) -> tuple[float, str]:
+        if profile.empty or value_col not in profile.columns or not np.isfinite(float(target_height)):
+            return np.nan, ""
+        heights = profile["Altura m"].to_numpy(dtype=float)
+        values = pd.to_numeric(profile[value_col], errors="coerce").to_numpy(dtype=float)
+        valid = np.isfinite(heights) & np.isfinite(values)
+        heights = heights[valid]
+        values = values[valid]
+        if len(heights) == 0:
+            return np.nan, ""
+        if len(heights) == 1:
+            nearest_col = str(profile.iloc[0].get("Columna", ""))
+            return float(values[0]), nearest_col
+        interpolated = float(np.interp(float(target_height), heights, values, left=values[0], right=values[-1]))
+        nearest_height = heights[int(np.argmin(np.abs(heights - float(target_height))))]
+        nearest_rows = profile[np.isclose(profile["Altura m"], nearest_height)]
+        nearest_col = str(nearest_rows.iloc[0].get("Columna", "")) if not nearest_rows.empty else ""
+        return interpolated, nearest_col
 
     def years_label(value) -> str:
         if pd.isna(value) or not np.isfinite(float(value)):
@@ -11929,123 +12060,134 @@ def render_telecom_tower_eval_analysis():
             """,
             unsafe_allow_html=True,
         )
-        upload_col, paste_col = st.columns([0.72, 1.28])
-        with upload_col:
-            uploaded_file = st.file_uploader("Cargar CSV de viento", type=["csv"], key="telecom_09_wind_csv_file")
-            delimiter_mode = st.selectbox("Separador", ["Automático", ",", ";", "\\t"], index=0, key="telecom_09_wind_sep")
-        with paste_col:
-            pasted_csv = st.text_area(
-                "Pegar CSV de viento",
-                height=126,
-                placeholder="fecha_hora,viento_30m,viento_50m\n2026-01-01 00:00,5.2,6.1\n2026-01-01 01:00,4.8,5.7",
-                key="telecom_09_wind_csv_text",
+        with st.expander("Centro de control del recurso eólico", expanded=True):
+            st.markdown(
+                '<div class="sim6-input-note">Carga, columna de análisis, limpieza de outliers y curva de potencia quedan agrupados aquí. Estos inputs siguen alimentando el puente automático hacia las demás pestañas cuando el CSV es válido.</div>',
+                unsafe_allow_html=True,
             )
-        bridge_cols = st.columns([0.48, 0.32, 0.20])
-        with bridge_cols[0]:
-            st.caption("Puente automático: si el CSV entrega FP, velocidad y generación válidos, alimenta las demás pestañas del Sub bloque 5.")
-        with bridge_cols[1]:
-            saved_source = str(st.session_state.get("telecom_09_wind_saved_source", "") or "")
-            saved_rows = int(st.session_state.get("telecom_09_wind_saved_rows", 0) or 0)
-            status_text = f"CSV guardado: {saved_source} · {saved_rows:,} filas" if saved_source else "Sin CSV guardado"
-            st.caption(status_text.replace(",", "."))
-        with bridge_cols[2]:
-            if st.button("Limpiar CSV guardado", key="telecom_09_clear_saved_wind"):
-                for key in [
-                    "telecom_09_wind_saved_bytes",
-                    "telecom_09_wind_saved_text",
-                    "telecom_09_wind_saved_source",
-                    "telecom_09_wind_saved_rows",
-                    "telecom_09_viento_outputs",
-                    "telecom_09_viento_output_signature",
-                ]:
-                    st.session_state.pop(key, None)
-                st.rerun()
+            with st.container(border=True):
+                st.markdown("##### Carga de datos y persistencia")
+                upload_col, paste_col = st.columns([0.72, 1.28])
+                with upload_col:
+                    uploaded_file = st.file_uploader("Cargar CSV de viento", type=["csv"], key="telecom_09_wind_csv_file")
+                    delimiter_mode = st.selectbox("Separador", ["Automático", ",", ";", "\\t"], index=0, key="telecom_09_wind_sep")
+                with paste_col:
+                    pasted_csv = st.text_area(
+                        "Pegar CSV de viento",
+                        height=126,
+                        placeholder="fecha_hora,viento_30m,viento_50m\n2026-01-01 00:00,5.2,6.1\n2026-01-01 01:00,4.8,5.7",
+                        key="telecom_09_wind_csv_text",
+                    )
+                bridge_cols = st.columns([0.48, 0.32, 0.20])
+                with bridge_cols[0]:
+                    st.caption("Puente automático: si el CSV entrega FP, velocidad y generación válidos, alimenta las demás pestañas del Sub bloque 5.")
+                with bridge_cols[1]:
+                    saved_source = str(st.session_state.get("telecom_09_wind_saved_source", "") or "")
+                    saved_rows = int(st.session_state.get("telecom_09_wind_saved_rows", 0) or 0)
+                    status_text = f"CSV guardado: {saved_source} · {saved_rows:,} filas" if saved_source else "Sin CSV guardado"
+                    st.caption(status_text.replace(",", "."))
+                with bridge_cols[2]:
+                    if st.button("Limpiar CSV guardado", key="telecom_09_clear_saved_wind"):
+                        for key in [
+                            "telecom_09_wind_saved_bytes",
+                            "telecom_09_wind_saved_text",
+                            "telecom_09_wind_saved_source",
+                            "telecom_09_wind_saved_rows",
+                            "telecom_09_viento_outputs",
+                            "telecom_09_viento_output_signature",
+                        ]:
+                            st.session_state.pop(key, None)
+                        st.rerun()
 
-        raw_df = pd.DataFrame()
-        source_label = ""
-        sep_arg = None if delimiter_mode == "Automático" else ("\t" if delimiter_mode == "\\t" else delimiter_mode)
-        try:
-            if uploaded_file is not None:
-                uploaded_bytes = uploaded_file.getvalue()
-                st.session_state["telecom_09_wind_saved_bytes"] = uploaded_bytes
-                st.session_state["telecom_09_wind_saved_text"] = ""
-                st.session_state["telecom_09_wind_saved_source"] = uploaded_file.name
-                raw_df = pd.read_csv(BytesIO(uploaded_bytes), sep=sep_arg, engine="python")
-                source_label = uploaded_file.name
-            elif pasted_csv.strip():
-                st.session_state["telecom_09_wind_saved_text"] = pasted_csv
-                st.session_state["telecom_09_wind_saved_bytes"] = b""
-                st.session_state["telecom_09_wind_saved_source"] = "CSV pegado"
-                raw_df = pd.read_csv(StringIO(pasted_csv), sep=sep_arg, engine="python")
-                source_label = "CSV pegado"
-            elif st.session_state.get("telecom_09_wind_saved_bytes"):
-                saved_bytes = st.session_state["telecom_09_wind_saved_bytes"]
-                raw_df = pd.read_csv(BytesIO(saved_bytes), sep=sep_arg, engine="python")
-                source_label = str(st.session_state.get("telecom_09_wind_saved_source", "CSV guardado"))
-            elif st.session_state.get("telecom_09_wind_saved_text"):
-                saved_text = str(st.session_state.get("telecom_09_wind_saved_text", ""))
-                raw_df = pd.read_csv(StringIO(saved_text), sep=sep_arg, engine="python")
-                source_label = str(st.session_state.get("telecom_09_wind_saved_source", "CSV guardado"))
-            if not raw_df.empty:
-                st.session_state["telecom_09_wind_saved_rows"] = int(len(raw_df))
-        except Exception as exc:
-            st.error(f"No se pudo leer el CSV de viento: {exc}")
             raw_df = pd.DataFrame()
+            source_label = ""
+            sep_arg = None if delimiter_mode == "Automático" else ("\t" if delimiter_mode == "\\t" else delimiter_mode)
+            try:
+                if uploaded_file is not None:
+                    uploaded_bytes = uploaded_file.getvalue()
+                    st.session_state["telecom_09_wind_saved_bytes"] = uploaded_bytes
+                    st.session_state["telecom_09_wind_saved_text"] = ""
+                    st.session_state["telecom_09_wind_saved_source"] = uploaded_file.name
+                    raw_df = pd.read_csv(BytesIO(uploaded_bytes), sep=sep_arg, engine="python")
+                    source_label = uploaded_file.name
+                elif pasted_csv.strip():
+                    st.session_state["telecom_09_wind_saved_text"] = pasted_csv
+                    st.session_state["telecom_09_wind_saved_bytes"] = b""
+                    st.session_state["telecom_09_wind_saved_source"] = "CSV pegado"
+                    raw_df = pd.read_csv(StringIO(pasted_csv), sep=sep_arg, engine="python")
+                    source_label = "CSV pegado"
+                elif st.session_state.get("telecom_09_wind_saved_bytes"):
+                    saved_bytes = st.session_state["telecom_09_wind_saved_bytes"]
+                    raw_df = pd.read_csv(BytesIO(saved_bytes), sep=sep_arg, engine="python")
+                    source_label = str(st.session_state.get("telecom_09_wind_saved_source", "CSV guardado"))
+                elif st.session_state.get("telecom_09_wind_saved_text"):
+                    saved_text = str(st.session_state.get("telecom_09_wind_saved_text", ""))
+                    raw_df = pd.read_csv(StringIO(saved_text), sep=sep_arg, engine="python")
+                    source_label = str(st.session_state.get("telecom_09_wind_saved_source", "CSV guardado"))
+                if not raw_df.empty:
+                    st.session_state["telecom_09_wind_saved_rows"] = int(len(raw_df))
+            except Exception as exc:
+                st.error(f"No se pudo leer el CSV de viento: {exc}")
+                raw_df = pd.DataFrame()
 
-        if raw_df.empty:
-            st.info("Carga o pega un CSV para activar el análisis. El archivo puede incluir varias alturas, por ejemplo viento_20m, viento_40m y viento_60m.")
-            sample_df = pd.DataFrame(
-                {
-                    "fecha_hora": pd.date_range("2026-01-01", periods=6, freq="h"),
-                    "viento_30m": [4.8, 5.1, 6.0, 7.2, 4.4, 3.9],
-                    "viento_50m": [5.5, 5.9, 6.8, 8.0, 5.0, 4.6],
-                }
-            )
-            st.dataframe(sample_df, use_container_width=True, hide_index=True)
-            return
+            if raw_df.empty:
+                st.info("Carga o pega un CSV para activar el análisis. El archivo puede incluir varias alturas, por ejemplo viento_20m, viento_40m y viento_60m.")
+                sample_df = pd.DataFrame(
+                    {
+                        "fecha_hora": pd.date_range("2026-01-01", periods=6, freq="h"),
+                        "viento_30m": [4.8, 5.1, 6.0, 7.2, 4.4, 3.9],
+                        "viento_50m": [5.5, 5.9, 6.8, 8.0, 5.0, 4.6],
+                    }
+                )
+                st.dataframe(sample_df, use_container_width=True, hide_index=True)
+                return
 
-        raw_df, datetime_detection_meta = _normalize_csv_columns(raw_df)
-        raw_df.columns = [str(col).strip() for col in raw_df.columns]
-        date_candidates = _detect_datetime_columns(raw_df)
-        wind_candidates = _detect_wind_columns(raw_df, date_candidates)
-        if not wind_candidates:
-            st.error("No se detectaron columnas numéricas de velocidad de viento. Revisa que las velocidades estén en m/s y con formato numérico.")
-            st.dataframe(raw_df.head(20), use_container_width=True, hide_index=True)
-            return
+            raw_df, datetime_detection_meta = _normalize_csv_columns(raw_df)
+            raw_df.columns = [str(col).strip() for col in raw_df.columns]
+            date_candidates = _detect_datetime_columns(raw_df)
+            wind_candidates = _detect_wind_columns(raw_df, date_candidates)
+            if not wind_candidates:
+                st.error("No se detectaron columnas numéricas de velocidad de viento. Revisa que las velocidades estén en m/s y con formato numérico.")
+                st.dataframe(raw_df.head(20), use_container_width=True, hide_index=True)
+                return
 
-        config_a, config_b, config_c, config_d = st.columns(4)
-        with config_a:
-            datetime_options = date_candidates + ["Sin fecha/hora"]
-            selected_datetime_choice = st.selectbox("Columna fecha/hora", datetime_options, index=0 if date_candidates else 0, key="telecom_09_datetime_col")
-            selected_datetime = None if selected_datetime_choice == "Sin fecha/hora" else selected_datetime_choice
-            if "Fecha/hora" in raw_df.columns and datetime_detection_meta.get("valid_ratio", 0.0) >= 0.70:
-                selected_datetime = "Fecha/hora"
-                st.caption("Usando fecha/hora detectada automáticamente por contenido del CSV.")
-            elif selected_datetime is None and date_candidates:
-                selected_datetime = date_candidates[0]
-                st.caption(f"Usando automáticamente `{selected_datetime}` como fecha/hora.")
-        with config_b:
-            selected_wind_col = st.selectbox("Altura / columna a analizar", wind_candidates, index=0, key="telecom_09_wind_col")
-        with config_c:
-            outlier_limit = st.number_input("Límite outlier velocidad (m/s)", min_value=12.0, max_value=80.0, value=35.0, step=1.0, key="telecom_09_outlier_limit")
-        with config_d:
-            ranking_mode = st.selectbox("Ranking técnico", ["Mayor FP neto", "Mayor energía neta", "Mayor velocidad media"], index=0, key="telecom_09_ranking")
+            with st.container(border=True):
+                st.markdown("##### Selección técnica y validación")
+                config_a, config_b, config_c, config_d = st.columns(4)
+                with config_a:
+                    datetime_options = date_candidates + ["Sin fecha/hora"]
+                    selected_datetime_choice = st.selectbox("Columna fecha/hora", datetime_options, index=0 if date_candidates else 0, key="telecom_09_datetime_col")
+                    selected_datetime = None if selected_datetime_choice == "Sin fecha/hora" else selected_datetime_choice
+                    if "Fecha/hora" in raw_df.columns and datetime_detection_meta.get("valid_ratio", 0.0) >= 0.70:
+                        selected_datetime = "Fecha/hora"
+                        st.caption("Usando fecha/hora detectada automáticamente por contenido del CSV.")
+                    elif selected_datetime is None and date_candidates:
+                        selected_datetime = date_candidates[0]
+                        st.caption(f"Usando automáticamente `{selected_datetime}` como fecha/hora.")
+                with config_b:
+                    selected_wind_col = st.selectbox("Altura / columna a analizar", wind_candidates, index=0, key="telecom_09_wind_col")
+                with config_c:
+                    outlier_limit = st.number_input("Límite outlier velocidad (m/s)", min_value=12.0, max_value=80.0, value=35.0, step=1.0, key="telecom_09_outlier_limit")
+                with config_d:
+                    ranking_mode = st.selectbox("Ranking técnico", ["Mayor FP neto", "Mayor energía neta", "Mayor velocidad media"], index=0, key="telecom_09_ranking")
 
-        pc1, pc2, pc3, pc4, pc5, pc6, pc7 = st.columns(7)
-        with pc1:
-            rated_kw = st.number_input("Potencia nominal (kW)", min_value=0.1, value=3.0, step=0.5, key="telecom_09_rated_kw")
-        with pc2:
-            cut_in = st.number_input("Cut-in (m/s)", min_value=0.0, value=3.0, step=0.1, key="telecom_09_cutin")
-        with pc3:
-            rated_speed = st.number_input("Velocidad nominal (m/s)", min_value=0.1, value=11.0, step=0.1, key="telecom_09_rated_speed")
-        with pc4:
-            cut_out = st.number_input("Cut-out (m/s)", min_value=0.1, value=25.0, step=0.5, key="telecom_09_cutout")
-        with pc5:
-            electrical_losses = st.number_input("Pérdidas eléctricas (%)", min_value=0.0, max_value=60.0, value=3.0, step=0.5, key="telecom_09_electrical_losses")
-        with pc6:
-            availability = st.number_input("Disponibilidad (%)", min_value=0.0, max_value=100.0, value=95.0, step=1.0, key="telecom_09_availability")
-        with pc7:
-            additional_losses = st.number_input("Pérdidas adicionales (%)", min_value=0.0, max_value=60.0, value=2.0, step=0.5, key="telecom_09_additional_losses")
+            with st.container(border=True):
+                st.markdown("##### Curva de potencia, pérdidas y disponibilidad")
+                pc1, pc2, pc3, pc4, pc5, pc6, pc7 = st.columns(7)
+                with pc1:
+                    rated_kw = st.number_input("Potencia nominal (kW)", min_value=0.1, value=3.0, step=0.5, key="telecom_09_rated_kw")
+                with pc2:
+                    cut_in = st.number_input("Cut-in (m/s)", min_value=0.0, value=3.0, step=0.1, key="telecom_09_cutin")
+                with pc3:
+                    rated_speed = st.number_input("Velocidad nominal (m/s)", min_value=0.1, value=11.0, step=0.1, key="telecom_09_rated_speed")
+                with pc4:
+                    cut_out = st.number_input("Cut-out (m/s)", min_value=0.1, value=25.0, step=0.5, key="telecom_09_cutout")
+                with pc5:
+                    electrical_losses = st.number_input("Pérdidas eléctricas (%)", min_value=0.0, max_value=60.0, value=3.0, step=0.5, key="telecom_09_electrical_losses")
+                with pc6:
+                    availability = st.number_input("Disponibilidad (%)", min_value=0.0, max_value=100.0, value=95.0, step=1.0, key="telecom_09_availability")
+                with pc7:
+                    additional_losses = st.number_input("Pérdidas adicionales (%)", min_value=0.0, max_value=60.0, value=2.0, step=0.5, key="telecom_09_additional_losses")
 
         working_df = raw_df.copy()
         if selected_datetime:
@@ -12106,6 +12248,24 @@ def render_telecom_tower_eval_analysis():
         comparison["Ranking técnico"] = range(1, len(comparison) + 1)
         selected_analysis = next(item for item in analyses if item["Columna"] == selected_wind_col)
         recommended = comparison.iloc[0]
+        def _wind_output_height(col_name: str) -> float:
+            match = re.search(r"(\d+(?:[.,]\d+)?)", str(col_name))
+            return parse_float_local(match.group(1), np.nan) if match else np.nan
+        wind_profile_records = []
+        for _, profile_row in comparison.iterrows():
+            height_value = _wind_output_height(str(profile_row.get("Columna", "")))
+            if not np.isfinite(height_value):
+                continue
+            wind_profile_records.append(
+                {
+                    "Columna": str(profile_row.get("Columna", "")),
+                    "Altura m": float(height_value),
+                    "Velocidad media": float(profile_row.get("Velocidad media", np.nan)),
+                    "FP neto": float(profile_row.get("FP neto", np.nan)),
+                    "Energía anual neta kWh": float(profile_row.get("Energía anual neta kWh", np.nan)),
+                    "Horas equivalentes": float(profile_row.get("Horas equivalentes", np.nan)),
+                }
+            )
         wind_outputs = {
             "velocidad_media_recomendada": float(selected_analysis["Velocidad media"]),
             "factor_planta_recomendado": float(selected_analysis["FP neto"]),
@@ -12118,6 +12278,7 @@ def render_telecom_tower_eval_analysis():
             "weibull_c": float(selected_analysis["Weibull c"]),
             "fuente_csv": source_label,
             "filas_csv": int(len(raw_df)),
+            "perfil_alturas": wind_profile_records,
         }
         st.session_state["telecom_09_viento_outputs"] = wind_outputs
         output_signature = "|".join(
@@ -12138,6 +12299,31 @@ def render_telecom_tower_eval_analysis():
             f"{selected_analysis['Energía anual neta kWh'] / 12.0:,.0f} kWh/turbina.".replace(",", ".")
         )
 
+        speed_selected = selected_analysis["_speed"]
+        clean_speed = speed_selected.dropna()
+        speed_positive = clean_speed[clean_speed > 0]
+        selected_density_wm2 = float(0.5 * 1.225 * speed_positive.pow(3).mean()) if not speed_positive.empty else np.nan
+        selected_hours_gt7 = float((speed_positive > 7).mean() * 100.0) if not speed_positive.empty else np.nan
+        selected_p90 = float(selected_analysis["Energía anual neta kWh"])
+        selected_quality_score = (
+            min(max((float(selected_analysis["Velocidad media"]) - 3.0) / 6.0, 0.0), 1.0) * 0.32
+            + min(max(selected_density_wm2 / 700.0 if np.isfinite(selected_density_wm2) else 0.0, 0.0), 1.0) * 0.28
+            + min(max(float(selected_analysis["FP neto"]) / 50.0, 0.0), 1.0) * 0.22
+            + (0.90 if np.isfinite(float(selected_analysis["Weibull k"])) and np.isfinite(float(selected_analysis["Weibull c"])) else 0.0) * 0.13
+            + 0.70 * 0.05
+        ) * 100.0
+        if selected_quality_score >= 82:
+            selected_quality_label = "Excelente"
+        elif selected_quality_score >= 68:
+            selected_quality_label = "Muy atractivo"
+        elif selected_quality_score >= 54:
+            selected_quality_label = "Atractivo"
+        elif selected_quality_score >= 38:
+            selected_quality_label = "Medio"
+        else:
+            selected_quality_label = "Bajo"
+
+        st.markdown('<p class="telecom-panel-title">Bloque 1 · Resumen ejecutivo del recurso</p><p class="telecom-panel-sub">Lectura inmediata del archivo cargado, calidad de datos, recurso eólico, producción e incertidumbre.</p>', unsafe_allow_html=True)
         kpi_html = f"""
         <div class="telecom-grid">
           <div class="telecom-card"><p class="telecom-card-k">Registros</p><p class="telecom-card-v">{int(selected_analysis["Registros"]):,}</p><p class="telecom-card-s">{html.escape(source_label)}</p></div>
@@ -12146,9 +12332,19 @@ def render_telecom_tower_eval_analysis():
           <div class="telecom-card"><p class="telecom-card-k">Weibull</p><p class="telecom-card-v">k {selected_analysis["Weibull k"]:.2f}</p><p class="telecom-card-s">c {selected_analysis["Weibull c"]:.2f} m/s</p></div>
           <div class="telecom-card"><p class="telecom-card-k">FP neto</p><p class="telecom-card-v">{selected_analysis["FP neto"]:.1f}%</p><p class="telecom-card-s">Bruto {selected_analysis["FP bruto"]:.1f}%</p></div>
           <div class="telecom-card"><p class="telecom-card-k">Energía neta</p><p class="telecom-card-v">{selected_analysis["Energía anual neta kWh"]:,.0f}</p><p class="telecom-card-s">kWh/año por turbina</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">Densidad energética</p><p class="telecom-card-v">{selected_density_wm2:.0f} W/m²</p><p class="telecom-card-s">{selected_density_wm2 * 8760 / 1000:,.0f} kWh/m²-año</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">Horas > 7 m/s</p><p class="telecom-card-v">{selected_hours_gt7:.0f}%</p><p class="telecom-card-s">Viento bueno o superior</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">P90 producción</p><p class="telecom-card-v">{selected_p90:,.0f}</p><p class="telecom-card-s">Estimación base inicial</p></div>
+          <div class="telecom-card"><p class="telecom-card-k">Calidad recurso</p><p class="telecom-card-v">{html.escape(selected_quality_label)}</p><p class="telecom-card-s">Score {selected_quality_score:.0f}/100</p></div>
         </div>
         """.replace(",", ".")
         st.markdown(kpi_html, unsafe_allow_html=True)
+        summary_line = (
+            f"La columna {selected_wind_col} muestra {selected_analysis['Velocidad media']:.2f} m/s promedio, "
+            f"FP neto {selected_analysis['FP neto']:.1f}%, densidad {selected_density_wm2:.0f} W/m² y "
+            f"{selected_hours_gt7:.0f}% de horas sobre 7 m/s. La clasificación preliminar del recurso es {selected_quality_label}."
+        )
+        st.markdown(f'<div class="telecom-note"><b>Conclusión resumida:</b> {html.escape(summary_line)}</div>'.replace(",", "."), unsafe_allow_html=True)
 
         if datetime_source_note:
             if selected_datetime == "Eje horario sintético":
@@ -12156,7 +12352,6 @@ def render_telecom_tower_eval_analysis():
             else:
                 st.success(datetime_source_note)
 
-        speed_selected = selected_analysis["_speed"]
         stat_df = pd.DataFrame(
             [
                 ("Media", selected_analysis["Velocidad media"], "m/s"),
@@ -12190,9 +12385,34 @@ def render_telecom_tower_eval_analysis():
             fig_class.update_layout(height=310, showlegend=False, margin=dict(l=10, r=10, t=12, b=38), yaxis=dict(title="% ocurrencia", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), xaxis=dict(title=None))
             st.plotly_chart(fig_class, use_container_width=True, config={"displaylogo": False})
 
-        chart_l, chart_r = st.columns(2)
         plot_df = working_df.copy()
         plot_df["_speed_selected"] = speed_selected
+
+        st.markdown('<p class="telecom-panel-title">Bloque 2 · Calidad estadística del recurso</p><p class="telecom-panel-sub">Histograma, Weibull y curva de duración para caracterizar disponibilidad, dispersión y probabilidad del viento.</p>', unsafe_allow_html=True)
+        hist_col, weib_col, dur_col = st.columns(3)
+        with hist_col:
+            st.markdown('<p class="telecom-panel-title">Histograma de velocidad</p><p class="telecom-panel-sub">Distribución real de viento validado.</p>', unsafe_allow_html=True)
+            fig_hist = px.histogram(clean_speed, nbins=36, histnorm="probability density", labels={"value": "Velocidad (m/s)", "count": "Densidad"}, color_discrete_sequence=[blue_2])
+            fig_hist.update_layout(height=340, showlegend=False, margin=dict(l=10, r=10, t=12, b=38), yaxis=dict(gridcolor="rgba(148,163,184,.22)"))
+            st.plotly_chart(fig_hist, use_container_width=True, config={"displaylogo": False})
+        with weib_col:
+            st.markdown('<p class="telecom-panel-title">Weibull versus datos reales</p><p class="telecom-panel-sub">Ajuste paramétrico para extrapolar producción y riesgo del recurso.</p>', unsafe_allow_html=True)
+            x_grid = np.linspace(0, max(float(clean_speed.max() or 1.0), 1.0), 120)
+            fig_weib = go.Figure()
+            fig_weib.add_trace(go.Histogram(x=clean_speed, histnorm="probability density", nbinsx=36, name="Datos reales", marker_color=blue_2, opacity=.72))
+            fig_weib.add_trace(go.Scatter(x=x_grid, y=_weibull_pdf(x_grid, selected_analysis["Weibull k"], selected_analysis["Weibull c"]), mode="lines", name="Weibull estimada", line=dict(color=blue_4, width=3)))
+            fig_weib.update_layout(height=340, barmode="overlay", margin=dict(l=10, r=10, t=12, b=38), xaxis=dict(title="Velocidad (m/s)"), yaxis=dict(title="Densidad", gridcolor="rgba(148,163,184,.22)"), legend=dict(orientation="h", y=1.16, x=0))
+            st.plotly_chart(fig_weib, use_container_width=True, config={"displaylogo": False})
+        with dur_col:
+            st.markdown('<p class="telecom-panel-title">Curva de duración</p><p class="telecom-panel-sub">Velocidades ordenadas de mayor a menor.</p>', unsafe_allow_html=True)
+            duration_speed = np.sort(clean_speed.to_numpy())[::-1]
+            duration_x = np.arange(1, len(duration_speed) + 1) / max(len(duration_speed), 1) * 100.0
+            fig_duration_top = go.Figure(go.Scatter(x=duration_x, y=duration_speed, mode="lines", line=dict(color=blue_5, width=3), hovertemplate="Horas acumuladas: %{x:.1f}%<br>Velocidad: %{y:.2f} m/s<extra></extra>"))
+            fig_duration_top.update_layout(height=340, margin=dict(l=10, r=10, t=12, b=38), xaxis=dict(title="% horas acumuladas", range=[0, 100]), yaxis=dict(title="m/s", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_duration_top, use_container_width=True, config={"displaylogo": False})
+
+        st.markdown('<p class="telecom-panel-title">Bloque 3 · Comportamiento temporal</p><p class="telecom-panel-sub">Serie temporal, estacionalidad mensual y patrón horario para operación del recurso.</p>', unsafe_allow_html=True)
+        chart_l, chart_r = st.columns(2)
         if plot_df["_datetime"].notna().any():
             with chart_l:
                 st.markdown('<p class="telecom-panel-title">Serie temporal de velocidad</p><p class="telecom-panel-sub">Lectura operativa de variabilidad y eventos extremos.</p>', unsafe_allow_html=True)
@@ -12201,7 +12421,7 @@ def render_telecom_tower_eval_analysis():
                 fig_ts.update_layout(height=330, margin=dict(l=10, r=10, t=12, b=38), yaxis=dict(rangemode="tozero", gridcolor="rgba(148,163,184,.22)"))
                 st.plotly_chart(fig_ts, use_container_width=True, config={"displaylogo": False})
             with chart_r:
-                st.markdown('<p class="telecom-panel-title">Promedio mensual y horario</p><p class="telecom-panel-sub">Estacionalidad y patrón diario para operación telecom.</p>', unsafe_allow_html=True)
+                st.markdown('<p class="telecom-panel-title">Promedio mensual</p><p class="telecom-panel-sub">Estacionalidad para operación telecom.</p>', unsafe_allow_html=True)
                 plot_df["_month"] = plot_df["_datetime"].dt.to_period("M").astype(str)
                 monthly = plot_df.groupby("_month", as_index=False)["_speed_selected"].mean()
                 fig_month = px.bar(monthly, x="_month", y="_speed_selected", text=[f"{v:.1f}" for v in monthly["_speed_selected"]], labels={"_month": "Mes", "_speed_selected": "m/s"}, color_discrete_sequence=[blue_2])
@@ -12216,22 +12436,13 @@ def render_telecom_tower_eval_analysis():
             fig_hour.update_layout(height=300, margin=dict(l=10, r=10, t=18, b=38), xaxis=dict(dtick=1), yaxis=dict(rangemode="tozero", gridcolor="rgba(148,163,184,.22)"))
             st.markdown('<p class="telecom-panel-title">Promedio horario</p><p class="telecom-panel-sub">Identifica ventanas de mayor generación potencial durante el día.</p>', unsafe_allow_html=True)
             st.plotly_chart(fig_hour, use_container_width=True, config={"displaylogo": False})
-
-        hist_col, weib_col = st.columns(2)
-        clean_speed = speed_selected.dropna()
-        with hist_col:
-            st.markdown('<p class="telecom-panel-title">Histograma de velocidad</p><p class="telecom-panel-sub">Distribución real de viento validado.</p>', unsafe_allow_html=True)
-            fig_hist = px.histogram(clean_speed, nbins=36, histnorm="probability density", labels={"value": "Velocidad (m/s)", "count": "Densidad"}, color_discrete_sequence=[blue_2])
-            fig_hist.update_layout(height=340, showlegend=False, margin=dict(l=10, r=10, t=12, b=38), yaxis=dict(gridcolor="rgba(148,163,184,.22)"))
-            st.plotly_chart(fig_hist, use_container_width=True, config={"displaylogo": False})
-        with weib_col:
-            st.markdown('<p class="telecom-panel-title">Weibull versus datos reales</p><p class="telecom-panel-sub">Ajuste paramétrico para extrapolar producción y riesgo del recurso.</p>', unsafe_allow_html=True)
-            x_grid = np.linspace(0, max(float(clean_speed.max() or 1.0), 1.0), 120)
-            fig_weib = go.Figure()
-            fig_weib.add_trace(go.Histogram(x=clean_speed, histnorm="probability density", nbinsx=36, name="Datos reales", marker_color=blue_2, opacity=.72))
-            fig_weib.add_trace(go.Scatter(x=x_grid, y=_weibull_pdf(x_grid, selected_analysis["Weibull k"], selected_analysis["Weibull c"]), mode="lines", name="Weibull estimada", line=dict(color=blue_4, width=3)))
-            fig_weib.update_layout(height=340, barmode="overlay", margin=dict(l=10, r=10, t=12, b=38), xaxis=dict(title="Velocidad (m/s)"), yaxis=dict(title="Densidad", gridcolor="rgba(148,163,184,.22)"), legend=dict(orientation="h", y=1.16, x=0))
-            st.plotly_chart(fig_weib, use_container_width=True, config={"displaylogo": False})
+            heat_df = hour_df.copy()
+            heat_df["_month_num"] = heat_df["_datetime"].dt.month
+            heat = heat_df.pivot_table(index="_month_num", columns="_hour", values="_speed_selected", aggfunc="mean")
+            st.markdown('<p class="telecom-panel-title">Heatmap Mes-Hora</p><p class="telecom-panel-sub">Velocidad promedio por mes y hora para identificar patrones operacionales.</p>', unsafe_allow_html=True)
+            fig_heat_main = go.Figure(go.Heatmap(z=heat.values, x=heat.columns, y=heat.index, colorscale=[[0, blue_1], [0.45, blue_2], [0.75, blue_5], [1, blue_4]], colorbar=dict(title="m/s"), hovertemplate="Mes %{y}<br>Hora %{x}:00<br>%{z:.2f} m/s<extra></extra>"))
+            fig_heat_main.update_layout(height=340, margin=dict(l=10, r=10, t=18, b=42), xaxis=dict(title="Hora"), yaxis=dict(title="Mes", autorange="reversed"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_heat_main, use_container_width=True, config={"displaylogo": False})
 
         st.markdown('<p class="telecom-panel-title">Comparativo por columnas o alturas</p><p class="telecom-panel-sub">Ranking técnico calculado para cada columna de viento detectada en el CSV.</p>', unsafe_allow_html=True)
         comp_display = comparison[["Ranking técnico", "Columna", "Velocidad media", "Weibull k", "Weibull c", "Energía anual neta kWh", "FP neto", "Clasificación", "% válido"]].copy()
@@ -12307,13 +12518,13 @@ def render_telecom_tower_eval_analysis():
             return "Deficiente"
 
         def _class_resource(score_value: float) -> str:
-            if score_value >= 85:
+            if score_value >= 82:
                 return "Excelente"
-            if score_value >= 72:
+            if score_value >= 68:
                 return "Muy atractivo"
-            if score_value >= 58:
+            if score_value >= 54:
                 return "Atractivo"
-            if score_value >= 42:
+            if score_value >= 38:
                 return "Medio"
             return "Bajo"
 
@@ -12406,16 +12617,12 @@ def render_telecom_tower_eval_analysis():
                     advanced_df.loc[idx, "Alpha tramo"] = math.log(curr["Velocidad media"] / prev["Velocidad media"]) / math.log(curr["Altura m"] / prev["Altura m"])
             alpha_avg = float(advanced_df["Alpha tramo"].dropna().mean()) if advanced_df["Alpha tramo"].notna().any() else np.nan
             advanced_df["Clasificación alpha"] = advanced_df["Alpha tramo"].apply(_class_shear)
-            score_components = pd.DataFrame(
-                {
-                    "vel": _telecom_score(advanced_df["Velocidad media"], higher_is_better=True),
-                    "dens": _telecom_score(advanced_df["Densidad W/m²"], higher_is_better=True),
-                    "fp": _telecom_score(advanced_df["FP neto"], higher_is_better=True),
-                    "weibull": pd.to_numeric(advanced_df["R² Weibull"], errors="coerce").clip(lower=0, upper=1).fillna(0),
-                    "ti": _telecom_score(advanced_df["TI"], higher_is_better=False),
-                }
-            )
-            advanced_df["Score recurso"] = (score_components["vel"] * 0.30 + score_components["dens"] * 0.25 + score_components["fp"] * 0.20 + score_components["weibull"] * 0.15 + score_components["ti"] * 0.10) * 100.0
+            vel_score = ((pd.to_numeric(advanced_df["Velocidad media"], errors="coerce") - 3.0) / 6.0).clip(lower=0, upper=1).fillna(0)
+            dens_score = (pd.to_numeric(advanced_df["Densidad W/m²"], errors="coerce") / 700.0).clip(lower=0, upper=1).fillna(0)
+            fp_score = (pd.to_numeric(advanced_df["FP neto"], errors="coerce") / 50.0).clip(lower=0, upper=1).fillna(0)
+            weibull_score = pd.to_numeric(advanced_df["R² Weibull"], errors="coerce").clip(lower=0, upper=1).fillna(0)
+            ti_score = (1.0 - ((pd.to_numeric(advanced_df["TI"], errors="coerce") - 0.08) / 0.32)).clip(lower=0, upper=1).fillna(0.55)
+            advanced_df["Score recurso"] = (vel_score * 0.32 + dens_score * 0.28 + fp_score * 0.22 + weibull_score * 0.13 + ti_score * 0.05) * 100.0
             advanced_df["Calidad recurso"] = advanced_df["Score recurso"].apply(_class_resource)
             selected_adv = advanced_df[advanced_df["Columna"].astype(str) == str(selected_wind_col)]
             selected_adv_row = selected_adv.iloc[0] if not selected_adv.empty else advanced_df.sort_values("Score recurso", ascending=False).iloc[0]
@@ -12434,6 +12641,7 @@ def render_telecom_tower_eval_analysis():
                 unsafe_allow_html=True,
             )
 
+            st.markdown('<p class="telecom-panel-title">Bloque 4 · Escalamiento vertical</p><p class="telecom-panel-sub">Ranking por alturas, perfil vertical, alpha, densidad energética e incremento marginal de producción.</p>', unsafe_allow_html=True)
             st.markdown('<p class="telecom-panel-title">Perfil vertical del viento</p><p class="telecom-panel-sub">Velocidad media por altura, incremento relativo y exponente de cizalladura por tramo.</p>', unsafe_allow_html=True)
             pv_l, pv_r = st.columns([1.05, 0.95])
             with pv_l:
@@ -12456,12 +12664,14 @@ def render_telecom_tower_eval_analysis():
                 fig_density.update_layout(height=340, margin=dict(l=10, r=10, t=18, b=56), yaxis=dict(title="W/m²", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), xaxis=dict(title=None), coloraxis_showscale=False)
                 st.plotly_chart(fig_density, use_container_width=True, config={"displaylogo": False})
             with dens_r:
-                st.markdown('<p class="telecom-panel-title">EPF y turbulencia</p><p class="telecom-panel-sub">EPF alto indica viento más variable; TI compara desviación estándar sobre velocidad media.</p>', unsafe_allow_html=True)
-                fig_epf = go.Figure()
-                fig_epf.add_trace(go.Bar(x=advanced_df["Columna"], y=advanced_df["EPF"], name="EPF", marker_color=blue_2, text=[f"{v:.2f}" for v in advanced_df["EPF"]], textposition="outside"))
-                fig_epf.add_trace(go.Scatter(x=advanced_df["Columna"], y=advanced_df["TI"], name="TI", yaxis="y2", mode="lines+markers+text", line=dict(color=blue_4, width=3), marker=dict(size=8, color="#ffffff", line=dict(color=blue_4, width=2)), text=[f"{v:.2f}" for v in advanced_df["TI"]], textposition="top center"))
-                fig_epf.update_layout(height=340, margin=dict(l=10, r=48, t=18, b=56), legend=dict(orientation="h", y=1.14, x=0), yaxis=dict(title="EPF", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), yaxis2=dict(title="TI", overlaying="y", side="right", showgrid=False, rangemode="tozero"), xaxis=dict(title=None), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-                st.plotly_chart(fig_epf, use_container_width=True, config={"displaylogo": False})
+                st.markdown('<p class="telecom-panel-title">Incremento marginal por altura</p><p class="telecom-panel-sub">Energía neta anual y mejora porcentual frente a la altura inferior.</p>', unsafe_allow_html=True)
+                marginal_df = advanced_df.dropna(subset=["Altura m"]).copy()
+                marginal_df["Incremento energía %"] = pd.to_numeric(marginal_df["P50 kWh/año"], errors="coerce").pct_change() * 100.0
+                fig_marginal = go.Figure()
+                fig_marginal.add_trace(go.Bar(x=marginal_df["Columna"], y=marginal_df["P50 kWh/año"], name="Energía", marker_color=blue_2, text=[f"{v:,.0f}" for v in marginal_df["P50 kWh/año"]], textposition="outside"))
+                fig_marginal.add_trace(go.Scatter(x=marginal_df["Columna"], y=marginal_df["Incremento energía %"], name="Incremento %", yaxis="y2", mode="lines+markers+text", line=dict(color=blue_4, width=3), marker=dict(size=8, color="#ffffff", line=dict(color=blue_4, width=2)), text=[("" if pd.isna(v) else f"+{v:.0f}%") for v in marginal_df["Incremento energía %"]], textposition="top center"))
+                fig_marginal.update_layout(height=340, margin=dict(l=10, r=54, t=18, b=56), legend=dict(orientation="h", y=1.14, x=0), yaxis=dict(title="kWh/año", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), yaxis2=dict(title="Incremento", overlaying="y", side="right", showgrid=False, ticksuffix="%"), xaxis=dict(title=None), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_marginal, use_container_width=True, config={"displaylogo": False})
 
             thresholds = [3, 5, 7, 9, 11, 15, 20]
             exceed_df = pd.DataFrame(
@@ -12472,12 +12682,17 @@ def render_telecom_tower_eval_analysis():
                 st.markdown('<p class="telecom-panel-title">Excedencia de velocidad</p><p class="telecom-panel-sub">Porcentaje de horas sobre umbrales estándar de operación eólica.</p>', unsafe_allow_html=True)
                 st.dataframe(exceed_df, use_container_width=True, hide_index=True)
             with dur_r:
-                st.markdown('<p class="telecom-panel-title">Curva de duración del viento</p><p class="telecom-panel-sub">Ordena las velocidades de mayor a menor para identificar disponibilidad del recurso.</p>', unsafe_allow_html=True)
-                duration_speed = np.sort(clean_speed.to_numpy())[::-1]
-                duration_x = np.arange(1, len(duration_speed) + 1) / max(len(duration_speed), 1) * 100.0
-                fig_duration = go.Figure(go.Scatter(x=duration_x, y=duration_speed, mode="lines", line=dict(color=blue_5, width=3), hovertemplate="Horas acumuladas: %{x:.1f}%<br>Velocidad: %{y:.2f} m/s<extra></extra>"))
-                fig_duration.update_layout(height=310, margin=dict(l=10, r=10, t=18, b=42), xaxis=dict(title="% horas acumuladas", range=[0, 100]), yaxis=dict(title="m/s", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-                st.plotly_chart(fig_duration, use_container_width=True, config={"displaylogo": False})
+                st.markdown('<p class="telecom-panel-title">Indicadores avanzados compactos</p><p class="telecom-panel-sub">EPF, turbulencia y horas útiles sin gráficos redundantes.</p>', unsafe_allow_html=True)
+                st.markdown(
+                    f"""
+                    <div class="telecom-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));">
+                      <div class="telecom-card"><p class="telecom-card-k">EPF</p><p class="telecom-card-v">{float(selected_adv_row["EPF"]):.2f}</p><p class="telecom-card-s">Cercano a 1 = estable</p></div>
+                      <div class="telecom-card"><p class="telecom-card-k">Turbulencia</p><p class="telecom-card-v">{float(selected_adv_row["TI"]):.2f}</p><p class="telecom-card-s">{html.escape(str(selected_adv_row["Turbulencia"]))}</p></div>
+                      <div class="telecom-card"><p class="telecom-card-k">Horas útiles</p><p class="telecom-card-v">{float(selected_adv_row["Horas >5 m/s %"]):.0f}%</p><p class="telecom-card-s">{float(selected_adv_row["Horas >7 m/s %"]):.0f}% sobre 7 m/s</p></div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
             energy_power = pd.to_numeric(selected_analysis["_power_neta"], errors="coerce").fillna(0.0)
             energy_sorted = np.sort(energy_power.to_numpy())[::-1]
@@ -12503,6 +12718,7 @@ def render_telecom_tower_eval_analysis():
             weibull_quality["RMSE Weibull"] = pd.to_numeric(weibull_quality["RMSE Weibull"], errors="coerce").round(4)
             weibull_quality["MAPE Weibull %"] = pd.to_numeric(weibull_quality["MAPE Weibull %"], errors="coerce").round(1)
             weibull_quality["R² Weibull"] = pd.to_numeric(weibull_quality["R² Weibull"], errors="coerce").round(3)
+            st.markdown('<p class="telecom-panel-title">Bloque 5 · Confiabilidad e incertidumbre</p><p class="telecom-panel-sub">P50, P75, P90 y calidad Weibull para validar la robustez técnica por altura.</p>', unsafe_allow_html=True)
             st.markdown('<p class="telecom-panel-title">Calidad del ajuste Weibull</p><p class="telecom-panel-sub">Métricas de ajuste por columna para validar confiabilidad estadística del recurso.</p>', unsafe_allow_html=True)
             st.dataframe(weibull_quality, use_container_width=True, hide_index=True)
 
@@ -12532,20 +12748,41 @@ def render_telecom_tower_eval_analysis():
                     st.markdown('<p class="telecom-panel-title">Análisis mensual avanzado</p><p class="telecom-panel-sub">Media, variabilidad, Weibull y horas útiles por mes.</p>', unsafe_allow_html=True)
                     st.dataframe(monthly_advanced, use_container_width=True, hide_index=True)
                 with hm_r:
-                    st.markdown('<p class="telecom-panel-title">Heatmap Mes-Hora</p><p class="telecom-panel-sub">Velocidad promedio por mes y hora para identificar patrones operacionales.</p>', unsafe_allow_html=True)
-                    heat = advanced_time.pivot_table(index="_month_num", columns="_hour", values="_speed_selected", aggfunc="mean")
-                    fig_heat = go.Figure(go.Heatmap(z=heat.values, x=heat.columns, y=heat.index, colorscale=[[0, blue_1], [0.45, blue_2], [0.75, blue_5], [1, blue_4]], colorbar=dict(title="m/s"), hovertemplate="Mes %{y}<br>Hora %{x}:00<br>%{z:.2f} m/s<extra></extra>"))
-                    fig_heat.update_layout(height=360, margin=dict(l=10, r=10, t=18, b=42), xaxis=dict(title="Hora"), yaxis=dict(title="Mes", autorange="reversed"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-                    st.plotly_chart(fig_heat, use_container_width=True, config={"displaylogo": False})
-                st.markdown('<p class="telecom-panel-title">Rosa temporal sin dirección</p><p class="telecom-panel-sub">Heatmap Hora-Día del año para visualizar ciclos temporales del recurso sin requerir dirección de viento.</p>', unsafe_allow_html=True)
-                temporal_heat = advanced_time.pivot_table(index="_hour", columns="_doy", values="_speed_selected", aggfunc="mean")
-                fig_temporal = go.Figure(go.Heatmap(z=temporal_heat.values, x=temporal_heat.columns, y=temporal_heat.index, colorscale=[[0, blue_1], [0.5, blue_2], [0.8, blue_5], [1, blue_4]], colorbar=dict(title="m/s"), hovertemplate="Día %{x}<br>Hora %{y}:00<br>%{z:.2f} m/s<extra></extra>"))
-                fig_temporal.update_layout(height=380, margin=dict(l=10, r=10, t=18, b=42), xaxis=dict(title="Día del año"), yaxis=dict(title="Hora", autorange="reversed"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-                st.plotly_chart(fig_temporal, use_container_width=True, config={"displaylogo": False})
+                    compact_month = monthly_advanced.copy()
+                    compact_month["Horas >5 m/s %"] = (compact_month["Horas >5 m/s"] / compact_month[["Horas >5 m/s", "Horas >7 m/s"]].max(axis=1).replace(0, np.nan) * 100.0).fillna(0)
+                    st.markdown('<p class="telecom-panel-title">Meses críticos</p><p class="telecom-panel-sub">Tabla compacta para detectar meses con menor media y menor ventana útil.</p>', unsafe_allow_html=True)
+                    st.dataframe(compact_month.sort_values("Media").head(6), use_container_width=True, hide_index=True)
+                with st.expander("Rosa temporal sin dirección · análisis avanzado", expanded=False):
+                    st.markdown('<p class="telecom-panel-sub">Heatmap Hora-Día del año para visualizar ciclos temporales del recurso sin requerir dirección de viento.</p>', unsafe_allow_html=True)
+                    temporal_heat = advanced_time.pivot_table(index="_hour", columns="_doy", values="_speed_selected", aggfunc="mean")
+                    fig_temporal = go.Figure(go.Heatmap(z=temporal_heat.values, x=temporal_heat.columns, y=temporal_heat.index, colorscale=[[0, blue_1], [0.5, blue_2], [0.8, blue_5], [1, blue_4]], colorbar=dict(title="m/s"), hovertemplate="Día %{x}<br>Hora %{y}:00<br>%{z:.2f} m/s<extra></extra>"))
+                    fig_temporal.update_layout(height=380, margin=dict(l=10, r=10, t=18, b=42), xaxis=dict(title="Día del año"), yaxis=dict(title="Hora", autorange="reversed"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                    st.plotly_chart(fig_temporal, use_container_width=True, config={"displaylogo": False})
 
-            score_table = advanced_df[["Columna", "Altura m", "Velocidad media", "Densidad W/m²", "EPF", "TI", "FP neto", "P50 kWh/año", "P75 kWh/año", "P90 kWh/año", "Score recurso", "Calidad recurso"]].copy()
-            st.markdown('<p class="telecom-panel-title">Índice de calidad del recurso e incertidumbre P50-P75-P90</p><p class="telecom-panel-sub">Score técnico sin economía: velocidad, densidad energética, FP teórico, estabilidad Weibull y turbulencia.</p>', unsafe_allow_html=True)
-            st.dataframe(score_table, use_container_width=True, hide_index=True)
+            height_options = advanced_df["Columna"].astype(str).tolist()
+            selected_conf_col = st.selectbox(
+                "Altura para revisión de confiabilidad",
+                height_options,
+                index=height_options.index(str(selected_wind_col)) if str(selected_wind_col) in height_options else 0,
+                key="telecom_09_conf_height",
+            )
+            conf_row = advanced_df[advanced_df["Columna"].astype(str) == selected_conf_col].iloc[0]
+            conf_df = pd.DataFrame(
+                [
+                    ("Velocidad media", f"{float(conf_row['Velocidad media']):.2f}", "m/s"),
+                    ("Weibull", f"k {float(conf_row['Weibull k']):.2f} · c {float(conf_row['Weibull c']):.2f}", "m/s"),
+                    ("FP neto", f"{float(conf_row['FP neto']):.1f}", "%"),
+                    ("Energía P50", f"{float(conf_row['P50 kWh/año']):,.0f}", "kWh/año"),
+                    ("P75", f"{float(conf_row['P75 kWh/año']):,.0f}", "kWh/año"),
+                    ("P90", f"{float(conf_row['P90 kWh/año']):,.0f}", "kWh/año"),
+                    ("Densidad energética", f"{float(conf_row['Densidad W/m²']):.0f}", "W/m²"),
+                    ("Turbulencia", f"{float(conf_row['TI']):.2f}", str(conf_row["Turbulencia"])),
+                    ("Calidad recurso", f"{float(conf_row['Score recurso']):.0f}/100", str(conf_row["Calidad recurso"])),
+                ],
+                columns=["Indicador", "Valor", "Unidad / lectura"],
+            )
+            st.markdown('<p class="telecom-panel-title">Selector de confiabilidad por altura</p><p class="telecom-panel-sub">Resumen técnico focalizado para la altura seleccionada.</p>', unsafe_allow_html=True)
+            st.dataframe(conf_df, use_container_width=True, hide_index=True)
 
         conclusion_col = str(recommended["Columna"])
         conclusion_quality = str(recommended["Clasificación"])
@@ -12580,8 +12817,6 @@ def render_telecom_tower_eval_analysis():
         tab_dimension,
         tab_risk,
         tab_savings,
-        tab_economics,
-        tab_impact,
         tab_wind,
     ) = st.tabs(
         [
@@ -12592,8 +12827,6 @@ def render_telecom_tower_eval_analysis():
             "04_Modelo_Eolico",
             "05_Recurso_Eolico",
             "06_Sensibilidad",
-            "07 Economía",
-            "08 Cierre",
             "09_Viento",
         ]
     )
@@ -14527,6 +14760,181 @@ def render_telecom_tower_eval_analysis():
             unsafe_allow_html=True,
         )
 
+        wind_height_profile = current_wind_height_profile()
+        st.markdown(
+            '<p class="telecom-panel-title">Sensibilidad técnica por altura de turbina</p>'
+            '<p class="telecom-panel-sub">Cruza la altura total publicada en Características con el perfil filtrado de 09_Viento. Si no hay CSV cargado, se conserva la sensibilidad publicada desde Google Sheets.</p>',
+            unsafe_allow_html=True,
+        )
+        if wind_height_profile.empty:
+            st.markdown(
+                '<div class="telecom-note"><b>Puente 09_Viento inactivo:</b> carga y procesa un CSV en 09_Viento para que esta sensibilidad use FP interpolado por altura de cada turbina. Mientras tanto, las matrices inferiores siguen usando la información publicada en 06_Sensibilidad.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            bos_pct_sens = 25.0
+            if not wind_df.empty and "BoS/instalación %" in wind_df.columns:
+                bos_series = pd.to_numeric(wind_df["BoS/instalación %"], errors="coerce").dropna()
+                if not bos_series.empty:
+                    bos_pct_sens = float(bos_series.median())
+            om_pct_sens = site_percent_value("O&M anual", 2.0)
+            surplus_price_sens = site_numeric("Precio venta excedente", 90.0)
+            surplus_factor_sens = site_numeric("Factor valorización excedente", 1.0)
+            required_monthly_sens = consumo_mensual * cobertura_pct / 100.0
+            height_rows = []
+            for _, char_row in turbine_characteristics_df.iterrows():
+                alt_name = str(char_row.get("Alternativa", "")).strip()
+                kw = float(pd.to_numeric(pd.Series([char_row.get("Potencia unitaria kW")]), errors="coerce").iloc[0] or 0.0)
+                height_total = float(pd.to_numeric(pd.Series([char_row.get("Altura total")]), errors="coerce").iloc[0] or np.nan)
+                unit_capex_value = float(pd.to_numeric(pd.Series([char_row.get("CAPEX unitario $")]), errors="coerce").iloc[0] or 0.0)
+                fp_height, nearest_col = interpolate_wind_profile_value(wind_height_profile, height_total, "FP neto")
+                speed_height, _ = interpolate_wind_profile_value(wind_height_profile, height_total, "Velocidad media")
+                energy_height, _ = interpolate_wind_profile_value(wind_height_profile, height_total, "Energía anual neta kWh")
+                if not np.isfinite(fp_height) or fp_height <= 0 or kw <= 0:
+                    continue
+                generation_month_per_turbine = kw * 8760.0 * (fp_height / 100.0) / 12.0
+                turbines_needed = int(max(1, math.ceil(required_monthly_sens / generation_month_per_turbine))) if generation_month_per_turbine > 0 else 0
+                generation_month_total = generation_month_per_turbine * turbines_needed
+                useful_monthly = min(generation_month_total, consumo_mensual)
+                surplus_monthly = max(generation_month_total - consumo_mensual, 0.0)
+                capex_total = turbines_needed * unit_capex_value * (1.0 + bos_pct_sens / 100.0)
+                om_annual = capex_total * om_pct_sens / 100.0
+                gross_saving = useful_monthly * 12.0 * costo_ponderado
+                surplus_income = surplus_monthly * 12.0 * surplus_price_sens * surplus_factor_sens
+                net_benefit = gross_saving + surplus_income - om_annual
+                payback_height = capex_total / net_benefit if net_benefit > 0 else np.nan
+                height_rows.append(
+                    {
+                        "Alternativa": alt_name,
+                        "Altura total m": height_total,
+                        "Columna viento cercana": nearest_col,
+                        "Velocidad media m/s": speed_height,
+                        "FP 09_Viento %": fp_height,
+                        "Energía anual/turbina kWh": energy_height,
+                        "Nº turbinas": turbines_needed,
+                        "Generación mensual total kWh": generation_month_total,
+                        "Cobertura real %": generation_month_total / consumo_mensual * 100.0 if consumo_mensual > 0 else np.nan,
+                        "Excedente mensual kWh": surplus_monthly,
+                        "CAPEX total CLP": capex_total,
+                        "Beneficio neto anual CLP": net_benefit,
+                        "Payback referencial años": payback_height,
+                    }
+                )
+            sensitivity_height_df = pd.DataFrame(height_rows)
+            if sensitivity_height_df.empty:
+                st.markdown(
+                    '<div class="telecom-note"><b>Perfil insuficiente:</b> 09_Viento tiene datos cargados, pero no se pudieron cruzar alturas y FP neto con las alternativas de turbina.</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                best_height_row = sensitivity_height_df.sort_values("Payback referencial años", na_position="last").iloc[0]
+                st.markdown(
+                    f"""
+                    <div class="telecom-grid-4">
+                      <div class="telecom-card"><p class="telecom-card-k">Mejor sensibilidad por altura</p><p class="telecom-card-v">{html.escape(str(best_height_row["Alternativa"]))}</p><p class="telecom-card-s">Payback {years_label(best_height_row["Payback referencial años"])} con FP interpolado.</p></div>
+                      <div class="telecom-card"><p class="telecom-card-k">FP aplicado</p><p class="telecom-card-v">{float(best_height_row["FP 09_Viento %"]):.1f}%</p><p class="telecom-card-s">Desde altura {float(best_height_row["Altura total m"]):.1f} m y columna cercana {html.escape(str(best_height_row["Columna viento cercana"]))}.</p></div>
+                      <div class="telecom-card"><p class="telecom-card-k">Cobertura real</p><p class="telecom-card-v">{float(best_height_row["Cobertura real %"]):.0f}%</p><p class="telecom-card-s">Calculada con consumo publicado y cobertura objetivo activa.</p></div>
+                      <div class="telecom-card"><p class="telecom-card-k">Beneficio neto anual</p><p class="telecom-card-v">{format_clp(float(best_height_row["Beneficio neto anual CLP"]))}</p><p class="telecom-card-s">Ahorro + excedente - O&M.</p></div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                h1, h2 = st.columns([1, 1])
+                with h1:
+                    fig_height_fp = go.Figure()
+                    fig_height_fp.add_trace(
+                        go.Bar(
+                            x=sensitivity_height_df["Alternativa"],
+                            y=sensitivity_height_df["FP 09_Viento %"],
+                            name="FP interpolado",
+                            marker_color=blue_2,
+                            text=[f"{value:.1f}%" for value in sensitivity_height_df["FP 09_Viento %"]],
+                            textposition="outside",
+                            cliponaxis=False,
+                            hovertemplate="<b>%{x}</b><br>FP: %{y:.1f}%<extra></extra>",
+                        )
+                    )
+                    fig_height_fp.add_trace(
+                        go.Scatter(
+                            x=sensitivity_height_df["Alternativa"],
+                            y=sensitivity_height_df["Payback referencial años"],
+                            name="Payback ref.",
+                            yaxis="y2",
+                            mode="lines+markers+text",
+                            line=dict(color=blue_4, width=3),
+                            marker=dict(size=10, color="#ffffff", line=dict(color=blue_4, width=2)),
+                            text=[years_label(value) for value in sensitivity_height_df["Payback referencial años"]],
+                            textposition="top center",
+                            hovertemplate="<b>%{x}</b><br>Payback: %{text}<extra></extra>",
+                        )
+                    )
+                    fig_height_fp.update_layout(
+                        height=360,
+                        margin=dict(l=10, r=52, t=26, b=42),
+                        legend=dict(orientation="h", y=1.15, x=0, title=None),
+                        xaxis=dict(title=None),
+                        yaxis=dict(title="FP neto (%)", gridcolor="rgba(148,163,184,.22)", rangemode="tozero"),
+                        yaxis2=dict(title="Payback", overlaying="y", side="right", showgrid=False, rangemode="tozero"),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        hovermode="x unified",
+                    )
+                    st.plotly_chart(fig_height_fp, use_container_width=True, config={"displaylogo": False})
+                with h2:
+                    fig_height_gen = go.Figure()
+                    fig_height_gen.add_trace(
+                        go.Bar(
+                            x=sensitivity_height_df["Alternativa"],
+                            y=sensitivity_height_df["Generación mensual total kWh"],
+                            name="Generación mensual",
+                            marker_color=blue_5,
+                            text=[f"{value:,.0f} kWh".replace(",", ".") for value in sensitivity_height_df["Generación mensual total kWh"]],
+                            textposition="outside",
+                            cliponaxis=False,
+                            hovertemplate="<b>%{x}</b><br>Generación: %{y:,.0f} kWh/mes<extra></extra>",
+                        )
+                    )
+                    fig_height_gen.add_hline(
+                        y=consumo_mensual,
+                        line=dict(color=blue_4, width=2, dash="dash"),
+                        annotation_text="Consumo mensual",
+                        annotation_position="top left",
+                    )
+                    fig_height_gen.update_layout(
+                        height=360,
+                        margin=dict(l=10, r=24, t=26, b=42),
+                        xaxis=dict(title=None),
+                        yaxis=dict(title="kWh/mes", gridcolor="rgba(148,163,184,.22)", rangemode="tozero"),
+                        showlegend=False,
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                    )
+                    st.plotly_chart(fig_height_gen, use_container_width=True, config={"displaylogo": False})
+                sensitivity_height_view = sensitivity_height_df.copy()
+                sensitivity_height_view["FP 09_Viento %"] = sensitivity_height_view["FP 09_Viento %"].map(lambda value: f"{value:.1f}%")
+                sensitivity_height_view["Cobertura real %"] = sensitivity_height_view["Cobertura real %"].map(lambda value: f"{value:.0f}%")
+                sensitivity_height_view["CAPEX total CLP"] = sensitivity_height_view["CAPEX total CLP"].map(format_clp)
+                sensitivity_height_view["Beneficio neto anual CLP"] = sensitivity_height_view["Beneficio neto anual CLP"].map(format_clp)
+                sensitivity_height_view["Payback referencial años"] = sensitivity_height_view["Payback referencial años"].map(years_label)
+                st.dataframe(
+                    sensitivity_height_view[
+                        [
+                            "Alternativa",
+                            "Altura total m",
+                            "Columna viento cercana",
+                            "Velocidad media m/s",
+                            "FP 09_Viento %",
+                            "Nº turbinas",
+                            "Cobertura real %",
+                            "CAPEX total CLP",
+                            "Beneficio neto anual CLP",
+                            "Payback referencial años",
+                        ]
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
         s1, s2 = st.columns([1, 1])
         with s1:
             st.markdown('<p class="telecom-panel-title">Matriz de payback por cobertura</p><p class="telecom-panel-sub">Menor valor indica recuperación más rápida con remanente valorizado.</p>', unsafe_allow_html=True)
@@ -14625,7 +15033,7 @@ def render_telecom_tower_eval_analysis():
         elif not sensitivity_velocity_detail_df.empty:
             st.dataframe(sensitivity_velocity_detail_df, use_container_width=True, hide_index=True)
 
-    with tab_economics:
+    if False:
         section("07 · Comparación económica", "CAPEX, LCOE y retorno", "La comparación separa inversión inicial, costo nivelado y plazo de recuperación para defender la recomendación.")
         e1, e2 = st.columns([1, 1])
         with e1:
@@ -14641,7 +15049,7 @@ def render_telecom_tower_eval_analysis():
             fig_capex_payback.update_layout(height=360, margin=dict(l=10, r=42, t=28, b=24), legend=dict(orientation="h", y=1.14, x=0, title=None), xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="CAPEX (MM CLP)", gridcolor="rgba(148,163,184,.22)"), yaxis2=dict(title="Años", overlaying="y", side="right", showgrid=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
             st.plotly_chart(fig_capex_payback, use_container_width=True, config={"displaylogo": False})
 
-    with tab_impact:
+    if False:
         section("08 · Impacto y cierre ejecutivo", "Valor en el tiempo, tabla final y mensaje ejecutivo", "El cierre consolida impacto, valor acumulado, ranking y el mensaje publicado en el URL.")
         st.markdown(
             f"""
@@ -14655,7 +15063,7 @@ def render_telecom_tower_eval_analysis():
             unsafe_allow_html=True,
         )
 
-    with tab_impact:
+    if False:
         table_rows = []
         for _, row in alternatives.sort_values("Score técnico", ascending=False).iterrows():
             is_rec = str(row["Alternativa"]) == str(recommended["Alternativa"])
@@ -14742,6 +15150,7 @@ def render_telecom_scenario_simulator(
     site_data = pd.DataFrame()
     wind_defaults = pd.DataFrame()
     sensitivity_detail = pd.DataFrame()
+    turbine_characteristics = pd.DataFrame()
     try:
         site_url = telecom_published_csv_url("02_Datos_Sitio", EVALUACION_TELECOM_SITE_CSV_URL_DEFAULT, data_refresh_nonce)
         wind_url = telecom_published_csv_url("04_Modelo_Eolico", EVALUACION_TELECOM_WIND_MODEL_CSV_URL_DEFAULT, data_refresh_nonce)
@@ -14755,10 +15164,94 @@ def render_telecom_scenario_simulator(
         if not site_data.empty or not wind_defaults.empty:
             source_badge = "URL + manual"
             source_detail = "Defaults Google Sheets"
+        try:
+            gid_map = load_google_pubhtml_sheet_gids(EVALUACION_TELECOM_PUBHTML_URL, refresh_nonce=data_refresh_nonce)
+            characteristic_gid = None
+            for sheet_name, gid in gid_map.items():
+                normalized_name = str(sheet_name).strip().casefold()
+                if "caracter" in normalized_name or "turbina" in normalized_name:
+                    characteristic_gid = gid
+                    break
+            if characteristic_gid:
+                characteristic_url = f"{EVALUACION_TELECOM_PUB_BASE_URL}?gid={characteristic_gid}&single=true&output=csv"
+                turbine_characteristics = read_remote_csv(characteristic_url, refresh_nonce=data_refresh_nonce, dtype=str).fillna("")
+        except Exception:
+            turbine_characteristics = pd.DataFrame()
     except Exception:
         site_data = pd.DataFrame()
         wind_defaults = pd.DataFrame()
         sensitivity_detail = pd.DataFrame()
+        turbine_characteristics = pd.DataFrame()
+
+    fallback_characteristics = pd.DataFrame(
+        [
+            ["VAWT 1 kW", 1.0, 12_182_800.0, 9.0, 2.65, 1.8, 4.77, 9.54],
+            ["VAWT 3 kW", 3.0, 20_628_300.0, 10.0, 3.65, 2.3, 8.395, 16.79],
+            ["VAWT 5 kW", 5.0, 32_305_700.0, 11.0, 4.5, 3.0, 13.5, 27.0],
+            ["VAWT 10 kW", 10.0, 58_000_000.0, 14.0, 7.0, 5.0, 35.0, 70.0],
+        ],
+        columns=["Alternativa", "Potencia unitaria kW", "CAPEX unitario $", "Altura total", "Altura rotor", "Diámetro rotor", "Área rotor", "Impacto superficial"],
+    )
+
+    def normalize_characteristics_table(df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return fallback_characteristics.copy()
+        normalized = df.copy()
+        normalized.columns = [str(col).strip() for col in normalized.columns]
+        if "Alternativa" not in normalized.columns:
+            header_row = None
+            for idx in range(min(5, len(normalized))):
+                values = [str(v).strip().casefold() for v in normalized.iloc[idx].tolist()]
+                if any("alternativa" in value for value in values):
+                    header_row = idx
+                    break
+            if header_row is not None:
+                normalized.columns = [str(v).strip() for v in normalized.iloc[header_row].tolist()]
+                normalized = normalized.iloc[header_row + 1 :].reset_index(drop=True)
+        rename_map = {}
+        for col in normalized.columns:
+            key = str(col).strip().casefold()
+            if "alternativa" in key:
+                rename_map[col] = "Alternativa"
+            elif "potencia" in key and "kw" in key:
+                rename_map[col] = "Potencia unitaria kW"
+            elif "capex" in key:
+                rename_map[col] = "CAPEX unitario $"
+            elif "altura" in key and "total" in key:
+                rename_map[col] = "Altura total"
+            elif "altura" in key and "rotor" in key:
+                rename_map[col] = "Altura rotor"
+            elif ("diametro" in key or "diámetro" in key) and "rotor" in key:
+                rename_map[col] = "Diámetro rotor"
+            elif ("area" in key or "área" in key) and "rotor" in key:
+                rename_map[col] = "Área rotor"
+            elif "impacto" in key and "superficial" in key:
+                rename_map[col] = "Impacto superficial"
+        normalized = normalized.rename(columns=rename_map)
+        required = ["Alternativa", "Potencia unitaria kW", "CAPEX unitario $", "Altura total", "Altura rotor", "Diámetro rotor", "Área rotor", "Impacto superficial"]
+        for col in required:
+            if col not in normalized.columns:
+                normalized[col] = np.nan
+        normalized = normalized[required].copy()
+        normalized["Alternativa"] = normalized["Alternativa"].astype(str).str.strip()
+        normalized = normalized[normalized["Alternativa"].str.contains("VAWT", case=False, na=False)].copy()
+        for col in required[1:]:
+            if col == "CAPEX unitario $":
+                normalized[col] = normalized[col].map(lambda value: parse_money_clp_robusto(str(value)) if parse_money_clp_robusto(str(value)) is not None else parse_float_local(value, np.nan))
+            else:
+                normalized[col] = normalized[col].map(lambda value: parse_float_local(value, np.nan))
+        if normalized.empty:
+            return fallback_characteristics.copy()
+        fallback_by_alt = fallback_characteristics.set_index("Alternativa")
+        for idx, row in normalized.iterrows():
+            alt = row["Alternativa"]
+            if alt in fallback_by_alt.index:
+                for col in required[1:]:
+                    if not np.isfinite(float(row.get(col, np.nan))):
+                        normalized.loc[idx, col] = fallback_by_alt.loc[alt, col]
+        return normalized.reset_index(drop=True)
+
+    turbine_characteristics = normalize_characteristics_table(turbine_characteristics)
 
     def site_value(variable: str, default: str = "") -> str:
         if site_data.empty or "Variable" not in site_data.columns:
@@ -14807,6 +15300,21 @@ def render_telecom_scenario_simulator(
                 default_kw = turbine_kw.get(name, parse_float_local(str(name).replace("VAWT", "").replace("kW", ""), 0.0))
                 turbine_kw[name] = wind_default(name, "Potencia unitaria kW", default_kw)
                 default_unit_capex[name] = wind_default(name, "CAPEX unitario $", default_unit_capex.get(name, 0.0))
+
+    characteristics_by_alt = {}
+    if not turbine_characteristics.empty and "Alternativa" in turbine_characteristics.columns:
+        characteristics_by_alt = {
+            str(row["Alternativa"]).strip(): row
+            for _, row in turbine_characteristics.iterrows()
+            if str(row.get("Alternativa", "")).strip()
+        }
+        ordered_from_characteristics = [name for name in turbine_characteristics["Alternativa"].astype(str).str.strip().tolist() if name]
+        if ordered_from_characteristics:
+            turbine_order = ordered_from_characteristics
+            source_detail = f"{len(turbine_order)} alternativas desde Características"
+        for name, row in characteristics_by_alt.items():
+            turbine_kw[name] = float(row.get("Potencia unitaria kW", turbine_kw.get(name, 0.0)) or turbine_kw.get(name, 0.0))
+            default_unit_capex[name] = float(row.get("CAPEX unitario $", default_unit_capex.get(name, 0.0)) or default_unit_capex.get(name, 0.0))
 
     default_monthly_consumption = site_numeric("Consumo mensual modelo", 1602.0)
     default_target_coverage = site_percent_value("Cobertura objetivo", 100.0)
@@ -14862,6 +15370,10 @@ def render_telecom_scenario_simulator(
         if parsed is None:
             parsed = parse_float_local(text_value, default_value)
         return float(parsed or 0.0)
+
+    def format_meters(value) -> str:
+        numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+        return f"{float(numeric):.1f} m" if pd.notna(numeric) and np.isfinite(float(numeric)) else "N/A"
 
     def tune_fig(fig: go.Figure, height: int = 380) -> go.Figure:
         fig.update_layout(
@@ -15018,25 +15530,91 @@ def render_telecom_scenario_simulator(
                         help_text="Valor inicial desde 04_Modelo_Eolico > CAPEX unitario, editable en CLP.",
                     )
 
-    mix_total = mix_grid + mix_diesel + mix_bess
+    mix_grid_active = mix_grid if mix_grid > 0.0001 else 0.0
+    mix_diesel_active = mix_diesel if mix_diesel > 0.0001 else 0.0
+    mix_bess_active = mix_bess if mix_bess > 0.0001 else 0.0
+    grid_cost_active = grid_cost if mix_grid_active > 0 else 0.0
+    diesel_cost_active = diesel_cost if mix_diesel_active > 0 else 0.0
+    bess_cost_active = bess_cost if mix_bess_active > 0 else 0.0
+    mix_total = mix_grid_active + mix_diesel_active + mix_bess_active
     if mix_total <= 0:
         grid_share = diesel_share = bess_share = 0.0
         weighted_cost = 0.0
     else:
-        grid_share = mix_grid / mix_total
-        diesel_share = mix_diesel / mix_total
-        bess_share = mix_bess / mix_total
-        weighted_cost = grid_share * grid_cost + diesel_share * diesel_cost + bess_share * bess_cost
-    if abs(mix_total - 100.0) > 0.01:
-        st.caption(f"Mix ingresado suma {mix_total:.0f}%; el cálculo lo normaliza internamente a 100%.")
+        grid_share = mix_grid_active / mix_total
+        diesel_share = mix_diesel_active / mix_total
+        bess_share = mix_bess_active / mix_total
+        weighted_cost = grid_share * grid_cost_active + diesel_share * diesel_cost_active + bess_share * bess_cost_active
+    original_mix_total = mix_grid + mix_diesel + mix_bess
+    if abs(original_mix_total - 100.0) > 0.01:
+        st.caption(f"Mix ingresado suma {original_mix_total:.0f}%; el cálculo lo normaliza internamente a 100%.")
 
     net_factor = max(0.0, (availability / 100.0) * (1.0 - electrical_losses / 100.0) * (1.0 - additional_losses / 100.0))
     effective_pf = plant_factor / 100.0 * net_factor
+    wind_profile = pd.DataFrame(st.session_state.get("telecom_09_viento_outputs", {}).get("perfil_alturas", []))
+    if not wind_profile.empty:
+        for col in ["Altura m", "FP neto", "Velocidad media", "Energía anual neta kWh", "Horas equivalentes"]:
+            if col in wind_profile.columns:
+                wind_profile[col] = pd.to_numeric(wind_profile[col], errors="coerce")
+        wind_profile = wind_profile.dropna(subset=["Altura m", "FP neto"]).sort_values("Altura m")
+
+    def wind_profile_for_turbine(name: str) -> dict:
+        char_row = characteristics_by_alt.get(name)
+        height_total = np.nan
+        rotor_height = np.nan
+        rotor_diameter = np.nan
+        rotor_area = np.nan
+        impact_surface = np.nan
+        if char_row is not None:
+            height_total = float(char_row.get("Altura total", np.nan))
+            rotor_height = float(char_row.get("Altura rotor", np.nan))
+            rotor_diameter = float(char_row.get("Diámetro rotor", np.nan))
+            rotor_area = float(char_row.get("Área rotor", np.nan))
+            impact_surface = float(char_row.get("Impacto superficial", np.nan))
+        if wind_profile.empty or not np.isfinite(height_total):
+            return {
+                "height_total": height_total,
+                "rotor_height": rotor_height,
+                "rotor_diameter": rotor_diameter,
+                "rotor_area": rotor_area,
+                "impact_surface": impact_surface,
+                "pf": effective_pf,
+                "source": "Input base",
+                "wind_col": "",
+            }
+        heights = wind_profile["Altura m"].to_numpy(dtype=float)
+        fps = (wind_profile["FP neto"].to_numpy(dtype=float) / 100.0)
+        valid = np.isfinite(heights) & np.isfinite(fps)
+        heights = heights[valid]
+        fps = fps[valid]
+        if len(heights) == 0:
+            pf_value = effective_pf
+            wind_col = ""
+        elif len(heights) == 1:
+            pf_value = float(fps[0])
+            wind_col = str(wind_profile.iloc[0].get("Columna", ""))
+        else:
+            pf_value = float(np.interp(height_total, heights, fps, left=fps[0], right=fps[-1]))
+            nearest_idx = int(np.argmin(np.abs(heights - height_total)))
+            wind_col = str(wind_profile.iloc[nearest_idx].get("Columna", ""))
+        return {
+            "height_total": height_total,
+            "rotor_height": rotor_height,
+            "rotor_diameter": rotor_diameter,
+            "rotor_area": rotor_area,
+            "impact_surface": impact_surface,
+            "pf": max(0.0, pf_value),
+            "source": "09_Viento por altura",
+            "wind_col": wind_col,
+        }
+
     required_monthly = monthly_consumption * (target_coverage + safety_margin) / 100.0
     rows = []
     for name in turbine_order:
         kw = turbine_kw[name]
-        gen_month_turbine = kw * 8760.0 * effective_pf / 12.0
+        wind_match = wind_profile_for_turbine(name)
+        pf_for_turbine = float(wind_match["pf"])
+        gen_month_turbine = kw * 8760.0 * pf_for_turbine / 12.0
         turbines = int(max(1, math.ceil(required_monthly / gen_month_turbine))) if gen_month_turbine > 0 else 0
         installed_kw = turbines * kw
         gen_month_total = gen_month_turbine * turbines
@@ -15056,11 +15634,19 @@ def render_telecom_scenario_simulator(
         diesel_avoided = useful_monthly * 12.0 * diesel_share * diesel_l_kwh
         co2_avoided = diesel_avoided * co2_kg_l / 1000.0
         benefit_20 = sum(benefit_net * ((1.0 - degradation / 100.0) ** year) for year in range(int(project_life))) - capex_total
-        surface = installed_kw * surface_per_kw
+        if np.isfinite(float(wind_match.get("impact_surface", np.nan))):
+            surface = turbines * float(wind_match["impact_surface"])
+        else:
+            surface = installed_kw * surface_per_kw
         rows.append(
             {
                 "Alternativa": name,
                 "Potencia unitaria kW": kw,
+                "Altura total m": wind_match["height_total"],
+                "Altura rotor m": wind_match["rotor_height"],
+                "FP aplicado %": pf_for_turbine * 100.0,
+                "Fuente FP": wind_match["source"],
+                "Columna viento": wind_match["wind_col"],
                 "Nº turbinas": turbines,
                 "Potencia instalada kW": installed_kw,
                 "Generación mensual kWh": gen_month_total,
@@ -15257,13 +15843,14 @@ def render_telecom_scenario_simulator(
         return tune_fig(fig, height)
 
     def wind_sensitivity_chart(height: int = 350) -> go.Figure:
+        rec_base_fp = float(recommended.get("FP aplicado %", plant_factor))
         fp_range = np.array([
-            max(5.0, plant_factor - 15),
-            max(5.0, plant_factor - 10),
-            max(5.0, plant_factor - 5),
-            plant_factor,
-            min(65.0, plant_factor + 5),
-            min(65.0, plant_factor + 10),
+            max(5.0, rec_base_fp - 15),
+            max(5.0, rec_base_fp - 10),
+            max(5.0, rec_base_fp - 5),
+            rec_base_fp,
+            min(85.0, rec_base_fp + 5),
+            min(85.0, rec_base_fp + 10),
         ])
         fig = go.Figure()
         rec_name = str(recommended["Alternativa"])
@@ -15275,7 +15862,7 @@ def render_telecom_scenario_simulator(
             om_value = float(base_row["O&M anual CLP"])
             y_values = []
             for fp in fp_range:
-                eff = fp / 100.0 * net_factor
+                eff = fp / 100.0
                 gen_m = kw * 8760.0 * eff / 12.0 * turbines
                 useful_m = min(gen_m, monthly_consumption)
                 surplus_m = max(gen_m - monthly_consumption, 0.0)
@@ -15295,7 +15882,7 @@ def render_telecom_scenario_simulator(
                     hovertemplate="<b>%{fullData.name}</b><br>FP: %{x:.1f}%<br>Payback: %{y:.1f} años<extra></extra>",
                 )
             )
-        fig.add_vline(x=plant_factor, line_dash="dash", line_color=palette["ink"], annotation_text="Escenario base")
+        fig.add_vline(x=rec_base_fp, line_dash="dash", line_color=palette["ink"], annotation_text="Escenario base")
         fig.update_layout(xaxis=dict(title="Factor planta real (%)"), yaxis=dict(title="Payback (años)", rangemode="tozero"))
         return tune_fig(fig, height)
 
@@ -15305,6 +15892,12 @@ def render_telecom_scenario_simulator(
     rec_benefit = float(recommended["Beneficio neto anual CLP"])
     rec_capex = float(recommended["CAPEX MM CLP"])
     rec_coverage = float(recommended["Cobertura real %"])
+    rec_fp = float(recommended.get("FP aplicado %", plant_factor))
+    rec_height = float(recommended.get("Altura total m", np.nan))
+    rec_height_text = f"{rec_height:.1f} m" if np.isfinite(rec_height) else "altura no disponible"
+    rec_fp_source = str(recommended.get("Fuente FP", "Input base"))
+    rec_wind_col = str(recommended.get("Columna viento", "") or "")
+    rec_wind_text = rec_fp_source + (f" · {rec_wind_col}" if rec_wind_col else "")
     st.markdown(
         f"""
         <div class="sim6-result-shell">
@@ -15316,6 +15909,8 @@ def render_telecom_scenario_simulator(
               <div class="sim6-rec-meta">
                 <span class="sim6-pill">{int(recommended["Nº turbinas"])} turbinas</span>
                 <span class="sim6-pill">{float(recommended["Potencia instalada kW"]):.1f} kW instalados</span>
+                <span class="sim6-pill">Altura {rec_height_text}</span>
+                <span class="sim6-pill">FP {rec_fp:.1f}%</span>
                 <span class="sim6-pill">{rec_generation:,.0f} kWh/mes generados</span>
                 <span class="sim6-pill">Excedente {rec_surplus:,.0f} kWh/mes</span>
               </div>
@@ -15339,8 +15934,8 @@ def render_telecom_scenario_simulator(
               <div class="sim6-kpi" style="--accent:#75A9B8;"><p class="sim6-kpi-k">Valor periodo</p><p class="sim6-kpi-v">{float(recommended["Beneficio neto periodo CLP"])/1_000_000:.1f} MM</p><p class="sim6-kpi-s">Neto post CAPEX</p></div>
             </div>
             <div class="sim6-engineering-note">
-              <p class="sim6-note-main"><b>Lectura técnica:</b> la alternativa recomendada cubre {rec_coverage:.0f}% de la demanda mensual, genera {rec_benefit/1_000_000:.1f} MM CLP/año netos y mantiene una relación inversión-retorno competitiva para simulación comercial.</p>
-              <span class="sim6-note-tag">Escenario recalculado</span>
+              <p class="sim6-note-main"><b>Lectura técnica:</b> la alternativa recomendada usa FP {rec_fp:.1f}% desde {html.escape(rec_wind_text)}, cubre {rec_coverage:.0f}% de la demanda mensual, genera {rec_benefit/1_000_000:.1f} MM CLP/año netos y mantiene una relación inversión-retorno competitiva.</p>
+              <span class="sim6-note-tag">Altura integrada</span>
             </div>
           </div>
         </div>
@@ -15403,6 +15998,8 @@ def render_telecom_scenario_simulator(
             "Alternativa": table_df["Alternativa"],
             "Nº turbinas": table_df["Nº turbinas"].astype(int),
             "Potencia kW": table_df["Potencia instalada kW"].map(lambda v: f"{v:.1f}"),
+            "Altura": table_df["Altura total m"].map(format_meters),
+            "FP aplicado": table_df["FP aplicado %"].map(lambda v: f"{v:.1f}%"),
             "Cobertura": table_df["Cobertura real %"].map(lambda v: f"{v:.0f}%"),
             "CAPEX": table_df["CAPEX CLP"].apply(format_clp),
             "Payback": table_df["Payback años"].apply(years_label),
