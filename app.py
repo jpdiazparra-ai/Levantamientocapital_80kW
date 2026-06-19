@@ -12294,6 +12294,7 @@ def render_telecom_tower_eval_analysis():
         )
 
     (
+        tab_analysis,
         tab_url,
         tab_inputs,
         tab_exec,
@@ -12305,6 +12306,7 @@ def render_telecom_tower_eval_analysis():
         tab_wind,
     ) = st.tabs(
         [
+            "00 Análisis",
             "01 Dashboard",
             "02_Datos_Sitio",
             "03_Boleta_Carga",
@@ -12316,6 +12318,13 @@ def render_telecom_tower_eval_analysis():
             "09_Viento",
         ]
     )
+
+    with tab_analysis:
+        render_telecom_scenario_simulator(
+            context_label="00 Análisis · Simulador ejecutivo autónomo",
+            table_context="Resultados calculados desde la pestaña 00 Análisis.",
+            download_filename="simulador_telecom_00_analisis.csv",
+        )
 
     with tab_inputs:
         section("02 · Datos del sitio", "Inputs maestros desde 02_Datos_Sitio", "La pestaña replica la hoja de datos del sitio, separando trazabilidad, energía, costos y supuestos que alimentan la simulación.")
@@ -14370,7 +14379,11 @@ def render_telecom_tower_eval_analysis():
         render_wind_csv_analysis_tab()
 
 
-def render_telecom_scenario_simulator():
+def render_telecom_scenario_simulator(
+    context_label: str = "00 Análisis · Simulador ejecutivo autónomo",
+    table_context: str = "Resultados calculados exclusivamente desde los inputs del simulador.",
+    download_filename: str = "simulador_telecom_00_analisis.csv",
+):
     turbine_order = ["VAWT 1 kW", "VAWT 3 kW", "VAWT 5 kW", "VAWT 10 kW", "VAWT 80 kW"]
     turbine_kw = {
         "VAWT 1 kW": 1.0,
@@ -14586,7 +14599,7 @@ def render_telecom_scenario_simulator():
         <div class="sim6-hero">
           <div class="sim6-hero-grid">
             <div>
-              <p class="sim6-hero-k">Sub bloque 6 · Simulador ejecutivo autónomo</p>
+              <p class="sim6-hero-k">{html.escape(context_label)}</p>
               <h3 class="sim6-hero-t">Modelo interactivo para torres telecom</h3>
               <p class="sim6-hero-s">Ingrese supuestos técnicos, energéticos y económicos. El sistema recalcula en vivo la recomendación, cobertura, CAPEX, LCOE, payback, impacto y tabla ejecutiva. Los valores iniciales se alimentan desde Google Sheets cuando están disponibles.</p>
             </div>
@@ -15069,7 +15082,7 @@ def render_telecom_scenario_simulator():
             "Score": table_df["Score"].map(lambda v: f"{v:.0f}/100"),
         }
     )
-    st.markdown('<p class="telecom-panel-title">Tabla ejecutiva del simulador</p><p class="telecom-panel-sub">Resultados calculados exclusivamente desde los inputs del Sub bloque 6.</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="telecom-panel-title">Tabla ejecutiva del simulador</p><p class="telecom-panel-sub">{html.escape(table_context)}</p>', unsafe_allow_html=True)
     st.dataframe(table_show, use_container_width=True, hide_index=True)
 
     recommendation_text = (
@@ -15084,7 +15097,7 @@ def render_telecom_scenario_simulator():
     st.download_button(
         "Descargar escenario simulado CSV",
         data=export_df.to_csv(index=False).encode("utf-8-sig"),
-        file_name="simulador_telecom_sub_bloque_6.csv",
+        file_name=download_filename,
         mime="text/csv",
         use_container_width=True,
         key="download_sim6_csv",
@@ -15207,52 +15220,46 @@ def render_inputs_capex_10kw_detail():
             ):
                 st.session_state.pop(gantt_key, None)
 
-    valid_capex10_subblocks = {"control_fondos", "vista_integrada", "control_cost", "sensibilidad_clientes", "evaluacion_telecom", "simulador_telecom"}
+    valid_capex10_subblocks = {"control_fondos", "vista_integrada", "control_cost", "evaluacion_telecom"}
     if capex10_subblock_key not in st.session_state:
         st.session_state[capex10_subblock_key] = "control_fondos"
     elif st.session_state[capex10_subblock_key] not in valid_capex10_subblocks:
-        st.session_state[capex10_subblock_key] = "control_fondos"
+        st.session_state[capex10_subblock_key] = "evaluacion_telecom"
 
     capex10_subblocks = [
         (
+            "Sub bloque 1",
             "control_fondos",
             "Control de Fondos y Costos de Liberación",
             "Fondos requeridos, costos pendientes y composición de la brecha para completar la liberación del piloto 10 kW.",
         ),
         (
+            "Sub bloque 2",
             "vista_integrada",
             "Cronograma",
             "Vista Gantt y filtros de avance.",
         ),
         (
+            "Sub bloque 3",
             "control_cost",
             "Control Cost",
             "Gestión de cortes históricos, snapshots EVM y comparación mensual de control PMO.",
         ),
         (
-            "sensibilidad_clientes",
-            "Análisis de sensibilidad para clientes",
-            "Escenarios de variación comercial, precio, demanda y retorno para lectura de cliente.",
-        ),
-        (
+            "Sub bloque 5",
             "evaluacion_telecom",
             "Evaluación eólica torres telecom",
-            "Ocho bloques ejecutivos conectados al CSV Entel para ranking, impacto, CAPEX, LCOE y retorno.",
-        ),
-        (
-            "simulador_telecom",
-            "Simulador ejecutivo telecom",
-            "Inputs manuales segmentados para calcular en vivo recomendación, CAPEX, LCOE, payback, cobertura e impacto.",
+            "Pestañas ejecutivas conectadas al CSV Entel y al análisis 00 para ranking, inputs, viento, CAPEX, LCOE y retorno.",
         ),
     ]
-    sub_cols = st.columns(6)
-    for idx, (sub_value, sub_title, sub_copy) in enumerate(capex10_subblocks):
+    sub_cols = st.columns(len(capex10_subblocks))
+    for idx, (sub_label, sub_value, sub_title, sub_copy) in enumerate(capex10_subblocks):
         is_active = st.session_state.get(capex10_subblock_key) == sub_value
         with sub_cols[idx]:
             st.markdown(
                 f"""
                 <div class="capex10-subcard {'active' if is_active else ''}">
-                  <p class="capex10-sub-k">Sub bloque {idx + 1}</p>
+                  <p class="capex10-sub-k">{html.escape(sub_label)}</p>
                   <p class="capex10-sub-t">{html.escape(sub_title)}</p>
                   <p class="capex10-sub-s">{html.escape(sub_copy)}</p>
                 </div>
@@ -15290,16 +15297,8 @@ def render_inputs_capex_10kw_detail():
             render_control_cost_block(df_control_cost)
         return
 
-    if selected_capex10_subblock == "sensibilidad_clientes":
-        render_client_sensitivity_analysis()
-        return
-
     if selected_capex10_subblock == "evaluacion_telecom":
         render_telecom_tower_eval_analysis()
-        return
-
-    if selected_capex10_subblock == "simulador_telecom":
-        render_telecom_scenario_simulator()
         return
 
     render_pilotos_ana_embedded_view()
