@@ -11469,6 +11469,46 @@ def render_telecom_tower_eval_analysis():
             return parse_percent_local(value, default_pct / 100.0) * 100.0
         return parse_float_local(value, default_pct)
 
+    wind_csv_outputs = st.session_state.get("telecom_09_viento_outputs", {})
+    wind_csv_bridge_active = bool(st.session_state.get("telecom_09_viento_apply_to_model", False))
+    if wind_csv_bridge_active and isinstance(wind_csv_outputs, dict) and wind_csv_outputs:
+        bridge_fp = float(wind_csv_outputs.get("factor_planta_recomendado", np.nan))
+        bridge_speed = float(wind_csv_outputs.get("velocidad_media_recomendada", np.nan))
+        bridge_energy = float(wind_csv_outputs.get("energia_anual_neta_por_turbina", np.nan))
+        bridge_column = str(wind_csv_outputs.get("altura_columna_recomendada", "09_Viento")).strip() or "09_Viento"
+        bridge_class = str(wind_csv_outputs.get("clasificacion_recurso", "")).strip()
+        if np.isfinite(bridge_fp) and bridge_fp > 0 and not wind_df.empty and "Potencia unitaria kW" in wind_df.columns:
+            wind_df = wind_df.copy()
+            potency = pd.to_numeric(wind_df["Potencia unitaria kW"], errors="coerce").fillna(0.0)
+            if "Nº turbinas requerido" in wind_df.columns:
+                turbines = pd.to_numeric(wind_df["Nº turbinas requerido"], errors="coerce").fillna(1.0).clip(lower=1.0)
+            else:
+                turbines = pd.Series(1.0, index=wind_df.index)
+            generation_month_per_turbine = potency * 8760.0 * (bridge_fp / 100.0) / 12.0
+            generation_month_total = generation_month_per_turbine * turbines
+            consumption_month = site_numeric("Consumo mensual modelo", np.nan)
+            wind_df["Factor planta"] = bridge_fp
+            wind_df["Generación mensual/turbina kWh"] = generation_month_per_turbine
+            wind_df["Generación mensual total kWh"] = generation_month_total
+            if np.isfinite(consumption_month) and consumption_month > 0:
+                wind_df["Energía útil anual kWh"] = np.minimum(generation_month_total, consumption_month) * 12.0
+                wind_df["Cobertura real"] = generation_month_total / consumption_month * 100.0
+                wind_df["Remanente anual kWh"] = np.maximum(generation_month_total - consumption_month, 0.0) * 12.0
+            if "Dato crítico a validar" not in wind_df.columns:
+                wind_df["Dato crítico a validar"] = ""
+            wind_df["Dato crítico a validar"] = wind_df["Dato crítico a validar"].astype(str).where(
+                wind_df["Dato crítico a validar"].astype(str).str.strip() != "",
+                f"FP alimentado desde 09_Viento: {bridge_column}",
+            )
+            resource_override_rows = [
+                {"Variable": "Velocidad media medición", "Valor": f"{bridge_speed:.2f}", "Unidad": "m/s", "Fuente requerida": f"09_Viento · {bridge_column}", "Uso": "Medición CSV", "Bloque": "CSV 09_Viento", "Valor numérico": bridge_speed},
+                {"Variable": "Factor planta preliminar", "Valor": f"{bridge_fp:.1f}%", "Unidad": "%", "Fuente requerida": f"09_Viento · {bridge_column}", "Uso": "Modelo eólico", "Bloque": "CSV 09_Viento", "Valor numérico": bridge_fp},
+                {"Variable": "Factor planta ficha", "Valor": f"{bridge_fp:.1f}%", "Unidad": "%", "Fuente requerida": f"09_Viento · {bridge_column}", "Uso": "Control", "Bloque": "CSV 09_Viento", "Valor numérico": bridge_fp},
+                {"Variable": "Energía anual neta por turbina", "Valor": f"{bridge_energy:.0f}", "Unidad": "kWh/año", "Fuente requerida": f"09_Viento · {bridge_column}", "Uso": "Dimensionamiento", "Bloque": "CSV 09_Viento", "Valor numérico": bridge_energy},
+                {"Variable": "Clasificación recurso", "Valor": bridge_class, "Unidad": "", "Fuente requerida": f"09_Viento · {bridge_column}", "Uso": "Riesgo técnico", "Bloque": "CSV 09_Viento", "Valor numérico": np.nan},
+            ]
+            resource_df = pd.concat([pd.DataFrame(resource_override_rows), resource_df], ignore_index=True)
+
     blue_1 = "#DCECEF"
     blue_2 = "#75A9B8"
     blue_3 = "#A9673B"
@@ -11897,18 +11937,59 @@ def render_telecom_tower_eval_analysis():
                 placeholder="fecha_hora,viento_30m,viento_50m\n2026-01-01 00:00,5.2,6.1\n2026-01-01 01:00,4.8,5.7",
                 key="telecom_09_wind_csv_text",
             )
+        bridge_cols = st.columns([0.48, 0.32, 0.20])
+        with bridge_cols[0]:
+            st.checkbox(
+                "Usar salidas de 09_Viento para alimentar 05_Recurso_Eolico y 04_Modelo_Eolico",
+                value=bool(st.session_state.get("telecom_09_viento_apply_to_model", False)),
+                key="telecom_09_viento_apply_to_model",
+                help="Aplica FP, velocidad media y generación mensual calculada desde el CSV a las pestañas del Sub bloque 5 durante esta sesión.",
+            )
+        with bridge_cols[1]:
+            saved_source = str(st.session_state.get("telecom_09_wind_saved_source", "") or "")
+            saved_rows = int(st.session_state.get("telecom_09_wind_saved_rows", 0) or 0)
+            status_text = f"CSV guardado: {saved_source} · {saved_rows:,} filas" if saved_source else "Sin CSV guardado"
+            st.caption(status_text.replace(",", "."))
+        with bridge_cols[2]:
+            if st.button("Limpiar CSV guardado", key="telecom_09_clear_saved_wind"):
+                for key in [
+                    "telecom_09_wind_saved_bytes",
+                    "telecom_09_wind_saved_text",
+                    "telecom_09_wind_saved_source",
+                    "telecom_09_wind_saved_rows",
+                    "telecom_09_viento_outputs",
+                    "telecom_09_viento_output_signature",
+                ]:
+                    st.session_state.pop(key, None)
+                st.rerun()
 
         raw_df = pd.DataFrame()
         source_label = ""
         sep_arg = None if delimiter_mode == "Automático" else ("\t" if delimiter_mode == "\\t" else delimiter_mode)
         try:
             if uploaded_file is not None:
-                uploaded_file.seek(0)
-                raw_df = pd.read_csv(uploaded_file, sep=sep_arg, engine="python")
+                uploaded_bytes = uploaded_file.getvalue()
+                st.session_state["telecom_09_wind_saved_bytes"] = uploaded_bytes
+                st.session_state["telecom_09_wind_saved_text"] = ""
+                st.session_state["telecom_09_wind_saved_source"] = uploaded_file.name
+                raw_df = pd.read_csv(BytesIO(uploaded_bytes), sep=sep_arg, engine="python")
                 source_label = uploaded_file.name
             elif pasted_csv.strip():
+                st.session_state["telecom_09_wind_saved_text"] = pasted_csv
+                st.session_state["telecom_09_wind_saved_bytes"] = b""
+                st.session_state["telecom_09_wind_saved_source"] = "CSV pegado"
                 raw_df = pd.read_csv(StringIO(pasted_csv), sep=sep_arg, engine="python")
                 source_label = "CSV pegado"
+            elif st.session_state.get("telecom_09_wind_saved_bytes"):
+                saved_bytes = st.session_state["telecom_09_wind_saved_bytes"]
+                raw_df = pd.read_csv(BytesIO(saved_bytes), sep=sep_arg, engine="python")
+                source_label = str(st.session_state.get("telecom_09_wind_saved_source", "CSV guardado"))
+            elif st.session_state.get("telecom_09_wind_saved_text"):
+                saved_text = str(st.session_state.get("telecom_09_wind_saved_text", ""))
+                raw_df = pd.read_csv(StringIO(saved_text), sep=sep_arg, engine="python")
+                source_label = str(st.session_state.get("telecom_09_wind_saved_source", "CSV guardado"))
+            if not raw_df.empty:
+                st.session_state["telecom_09_wind_saved_rows"] = int(len(raw_df))
         except Exception as exc:
             st.error(f"No se pudo leer el CSV de viento: {exc}")
             raw_df = pd.DataFrame()
@@ -12027,16 +12108,38 @@ def render_telecom_tower_eval_analysis():
         comparison["Ranking técnico"] = range(1, len(comparison) + 1)
         selected_analysis = next(item for item in analyses if item["Columna"] == selected_wind_col)
         recommended = comparison.iloc[0]
-        st.session_state["telecom_09_viento_outputs"] = {
+        wind_outputs = {
             "velocidad_media_recomendada": float(recommended["Velocidad media"]),
             "factor_planta_recomendado": float(recommended["FP neto"]),
             "energia_anual_neta_por_turbina": float(recommended["Energía anual neta kWh"]),
+            "generacion_mensual_neta_por_turbina": float(recommended["Energía anual neta kWh"]) / 12.0,
             "horas_equivalentes": float(recommended["Horas equivalentes"]),
             "altura_columna_recomendada": str(recommended["Columna"]),
             "clasificacion_recurso": str(recommended["Clasificación"]),
             "weibull_k": float(recommended["Weibull k"]),
             "weibull_c": float(recommended["Weibull c"]),
+            "fuente_csv": source_label,
+            "filas_csv": int(len(raw_df)),
         }
+        st.session_state["telecom_09_viento_outputs"] = wind_outputs
+        output_signature = "|".join(
+            [
+                str(wind_outputs.get("altura_columna_recomendada", "")),
+                f'{float(wind_outputs.get("factor_planta_recomendado", 0.0)):.4f}',
+                f'{float(wind_outputs.get("velocidad_media_recomendada", 0.0)):.4f}',
+                f'{float(wind_outputs.get("energia_anual_neta_por_turbina", 0.0)):.2f}',
+                str(st.session_state.get("telecom_09_viento_apply_to_model", False)),
+            ]
+        )
+        if st.session_state.get("telecom_09_viento_apply_to_model") and st.session_state.get("telecom_09_viento_output_signature") != output_signature:
+            st.session_state["telecom_09_viento_output_signature"] = output_signature
+            st.rerun()
+        if st.session_state.get("telecom_09_viento_apply_to_model"):
+            st.success(
+                f"Puente activo: {recommended['Columna']} alimenta el modelo con FP {recommended['FP neto']:.1f}%, "
+                f"velocidad media {recommended['Velocidad media']:.2f} m/s y generación mensual "
+                f"{recommended['Energía anual neta kWh'] / 12.0:,.0f} kWh/turbina.".replace(",", ".")
+            )
 
         kpi_html = f"""
         <div class="telecom-grid">
@@ -13955,6 +14058,18 @@ def render_telecom_tower_eval_analysis():
 
     with tab_dimension:
         section("04 · Modelo eólico", "Dimensionamiento técnico-económico completo", "Replica 04_Modelo_Eolico usando columnas A:AL desde la fila 4: potencia, generación, inversión, beneficios, payback, LCOE, VAN, excedentes y recomendación.")
+        if wind_csv_bridge_active and isinstance(wind_csv_outputs, dict) and wind_csv_outputs:
+            st.markdown(
+                f"""
+                <div class="telecom-note">
+                  <b>Modelo alimentado por 09_Viento:</b> factor planta y generación mensual fueron recalculados con
+                  <b>{html.escape(str(wind_csv_outputs.get("altura_columna_recomendada", "CSV")))}</b>.
+                  FP <b>{float(wind_csv_outputs.get("factor_planta_recomendado", 0.0)):.1f}%</b>,
+                  velocidad media <b>{float(wind_csv_outputs.get("velocidad_media_recomendada", 0.0)):.2f} m/s</b>.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
         wind_df["Alternativa"] = pd.Categorical(wind_df["Alternativa"].astype(str), categories=turbine_order, ordered=True)
         wind_df = wind_df.sort_values("Alternativa").copy()
         wind_df["Alternativa"] = wind_df["Alternativa"].astype(str)
@@ -13969,7 +14084,7 @@ def render_telecom_tower_eval_analysis():
                 <div>
                   <p class="telecom-site-k">Pestaña 04_Modelo_Eolico · Fuente Google Sheets</p>
                   <h3 class="telecom-site-t">{html.escape(str(wind_model["title"]))}</h3>
-                  <p class="telecom-site-s">{html.escape(str(wind_model["subtitle"]))}. El bloque compara cinco alternativas con la misma demanda objetivo y muestra dónde cambia la decisión al incluir CAPEX, LCOE, excedentes y complejidad de implementación.</p>
+                  <p class="telecom-site-s">{html.escape(str(wind_model["subtitle"]))}. El bloque compara {len(wind_df)} alternativas con la misma demanda objetivo y muestra dónde cambia la decisión al incluir CAPEX, LCOE, excedentes y complejidad de implementación.</p>
                 </div>
                 <div class="telecom-site-status">
                   <div class="telecom-site-pill"><strong>{len(wind_df)}</strong><span>Alternativas</span></div>
@@ -14054,6 +14169,19 @@ def render_telecom_tower_eval_analysis():
 
     with tab_risk:
         section("05 · Recurso eólico", "Validación energética del sitio", "Replica 05_Recurso_Eolico usando columnas A:J desde la fila 4. El objetivo es validar si el factor planta y la velocidad de diseño son defendibles antes de ingeniería de detalle.")
+        if wind_csv_bridge_active and isinstance(wind_csv_outputs, dict) and wind_csv_outputs:
+            st.markdown(
+                f"""
+                <div class="telecom-note">
+                  <b>Fuente activa 09_Viento:</b> esta pestaña está usando el CSV guardado como referencia técnica.
+                  FP neto <b>{float(wind_csv_outputs.get("factor_planta_recomendado", 0.0)):.1f}%</b>,
+                  velocidad media <b>{float(wind_csv_outputs.get("velocidad_media_recomendada", 0.0)):.2f} m/s</b>,
+                  generación mensual <b>{float(wind_csv_outputs.get("generacion_mensual_neta_por_turbina", 0.0)):,.0f} kWh/turbina</b>.
+                  Fuente: <b>{html.escape(str(wind_csv_outputs.get("fuente_csv", "CSV 09_Viento")))}</b>.
+                </div>
+                """.replace(",", "."),
+                unsafe_allow_html=True,
+            )
 
         def resource_row(name: str) -> pd.Series | None:
             matches = resource_df[resource_df["Variable"].astype(str).str.casefold() == name.casefold()]
