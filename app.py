@@ -12107,15 +12107,15 @@ def render_telecom_tower_eval_analysis():
         selected_analysis = next(item for item in analyses if item["Columna"] == selected_wind_col)
         recommended = comparison.iloc[0]
         wind_outputs = {
-            "velocidad_media_recomendada": float(recommended["Velocidad media"]),
-            "factor_planta_recomendado": float(recommended["FP neto"]),
-            "energia_anual_neta_por_turbina": float(recommended["Energía anual neta kWh"]),
-            "generacion_mensual_neta_por_turbina": float(recommended["Energía anual neta kWh"]) / 12.0,
-            "horas_equivalentes": float(recommended["Horas equivalentes"]),
-            "altura_columna_recomendada": str(recommended["Columna"]),
-            "clasificacion_recurso": str(recommended["Clasificación"]),
-            "weibull_k": float(recommended["Weibull k"]),
-            "weibull_c": float(recommended["Weibull c"]),
+            "velocidad_media_recomendada": float(selected_analysis["Velocidad media"]),
+            "factor_planta_recomendado": float(selected_analysis["FP neto"]),
+            "energia_anual_neta_por_turbina": float(selected_analysis["Energía anual neta kWh"]),
+            "generacion_mensual_neta_por_turbina": float(selected_analysis["Energía anual neta kWh"]) / 12.0,
+            "horas_equivalentes": float(selected_analysis["Horas equivalentes"]),
+            "altura_columna_recomendada": str(selected_analysis["Columna"]),
+            "clasificacion_recurso": str(selected_analysis["Clasificación"]),
+            "weibull_k": float(selected_analysis["Weibull k"]),
+            "weibull_c": float(selected_analysis["Weibull c"]),
             "fuente_csv": source_label,
             "filas_csv": int(len(raw_df)),
         }
@@ -12133,9 +12133,9 @@ def render_telecom_tower_eval_analysis():
             st.session_state["telecom_09_viento_output_signature"] = output_signature
             st.rerun()
         st.success(
-            f"Puente automático activo: {recommended['Columna']} alimenta el modelo con FP {recommended['FP neto']:.1f}%, "
-            f"velocidad media {recommended['Velocidad media']:.2f} m/s y generación mensual "
-            f"{recommended['Energía anual neta kWh'] / 12.0:,.0f} kWh/turbina.".replace(",", ".")
+            f"Puente automático activo: {selected_analysis['Columna']} alimenta el modelo con FP {selected_analysis['FP neto']:.1f}%, "
+            f"velocidad media {selected_analysis['Velocidad media']:.2f} m/s y generación mensual "
+            f"{selected_analysis['Energía anual neta kWh'] / 12.0:,.0f} kWh/turbina.".replace(",", ".")
         )
 
         kpi_html = f"""
