@@ -12267,10 +12267,305 @@ def render_telecom_tower_eval_analysis():
         )
         st.markdown('<p class="telecom-panel-title">Tabla auditable de parámetros y salidas vinculables</p><p class="telecom-panel-sub">Estos valores quedan disponibles para conectar con dimensionamiento, sensibilidad y recomendación.</p>', unsafe_allow_html=True)
         st.dataframe(audit_params, use_container_width=True, hide_index=True)
+
+        def _height_from_col(col_name: str) -> float:
+            text = str(col_name)
+            match = re.search(r"(\d+(?:[.,]\d+)?)\s*m?$", text)
+            if not match:
+                match = re.search(r"(\d+(?:[.,]\d+)?)", text)
+            return parse_float_local(match.group(1), np.nan) if match else np.nan
+
+        def _class_shear(alpha_value: float) -> str:
+            if not np.isfinite(alpha_value):
+                return "Sin dato"
+            if alpha_value < 0.10:
+                return "Muy bajo"
+            if alpha_value < 0.15:
+                return "Bajo"
+            if alpha_value <= 0.25:
+                return "Medio"
+            return "Alto"
+
+        def _class_ti(ti_value: float) -> str:
+            if not np.isfinite(ti_value):
+                return "Sin dato"
+            if ti_value < 0.10:
+                return "Baja"
+            if ti_value < 0.18:
+                return "Media"
+            return "Alta"
+
+        def _class_weibull_fit(r2_value: float) -> str:
+            if not np.isfinite(r2_value):
+                return "Sin dato"
+            if r2_value >= 0.95:
+                return "Excelente"
+            if r2_value >= 0.88:
+                return "Buena"
+            if r2_value >= 0.75:
+                return "Aceptable"
+            return "Deficiente"
+
+        def _class_resource(score_value: float) -> str:
+            if score_value >= 85:
+                return "Excelente"
+            if score_value >= 72:
+                return "Muy atractivo"
+            if score_value >= 58:
+                return "Atractivo"
+            if score_value >= 42:
+                return "Medio"
+            return "Bajo"
+
+        def _fit_metrics(speed: pd.Series, k_val: float, c_val: float) -> tuple[float, float, float, str]:
+            clean = pd.to_numeric(speed, errors="coerce").dropna()
+            clean = clean[clean > 0]
+            if len(clean) < 20 or not np.isfinite(k_val) or not np.isfinite(c_val) or c_val <= 0:
+                return np.nan, np.nan, np.nan, "Sin dato"
+            hist, edges = np.histogram(clean, bins=32, density=True)
+            centers = (edges[:-1] + edges[1:]) / 2.0
+            pred = _weibull_pdf(centers, k_val, c_val)
+            mask = np.isfinite(hist) & np.isfinite(pred)
+            if not mask.any():
+                return np.nan, np.nan, np.nan, "Sin dato"
+            rmse = float(np.sqrt(np.mean((hist[mask] - pred[mask]) ** 2)))
+            mape_mask = mask & (hist > 0.002)
+            mape = float(np.mean(np.abs((hist[mape_mask] - pred[mape_mask]) / hist[mape_mask])) * 100.0) if mape_mask.any() else np.nan
+            ss_res = float(np.sum((hist[mask] - pred[mask]) ** 2))
+            ss_tot = float(np.sum((hist[mask] - np.mean(hist[mask])) ** 2))
+            r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else np.nan
+            return rmse, mape, r2, _class_weibull_fit(r2)
+
+        def _energy_uncertainty(power_series: pd.Series, date_series: pd.Series | None) -> tuple[float, float, float]:
+            power = pd.to_numeric(power_series, errors="coerce").dropna()
+            if power.empty:
+                return np.nan, np.nan, np.nan
+            annual_mean = float(power.mean() * 8760.0)
+            annual_samples = pd.Series(dtype=float)
+            if date_series is not None and pd.to_datetime(date_series, errors="coerce").notna().any():
+                tmp = pd.DataFrame({"dt": pd.to_datetime(date_series, errors="coerce"), "p": pd.to_numeric(power_series, errors="coerce")}).dropna()
+                if not tmp.empty:
+                    tmp["month"] = tmp["dt"].dt.to_period("M").astype(str)
+                    monthly_energy = tmp.groupby("month")["p"].sum()
+                    monthly_hours = tmp.groupby("month")["p"].size().replace(0, np.nan)
+                    annual_samples = (monthly_energy / monthly_hours * 8760.0).dropna()
+            if len(annual_samples) < 3:
+                chunks = np.array_split(power.to_numpy(), max(3, min(12, len(power) // 200 or 3)))
+                annual_samples = pd.Series([float(np.mean(chunk) * 8760.0) for chunk in chunks if len(chunk)])
+            sigma = float(annual_samples.std(ddof=1)) if len(annual_samples) > 1 else 0.0
+            p50 = annual_mean
+            p75 = max(0.0, annual_mean - 0.674 * sigma)
+            p90 = max(0.0, annual_mean - 1.282 * sigma)
+            return p50, p75, p90
+
+        advanced_rows = []
+        rho_air = 1.225
+        for item in analyses:
+            speed_item = pd.to_numeric(item["_speed"], errors="coerce").dropna()
+            speed_pos = speed_item[speed_item > 0]
+            mean_v = float(item.get("Velocidad media", np.nan))
+            std_v = float(item.get("Desv. estándar", np.nan))
+            epf = float((speed_pos.pow(3).mean() / (mean_v ** 3)) if mean_v > 0 and not speed_pos.empty else np.nan)
+            ti = float(std_v / mean_v) if mean_v > 0 else np.nan
+            density_wm2 = float(0.5 * rho_air * speed_pos.pow(3).mean()) if not speed_pos.empty else np.nan
+            p50, p75, p90 = _energy_uncertainty(item["_power_neta"], working_df["_datetime"] if "_datetime" in working_df.columns else None)
+            rmse, mape, r2_fit, fit_quality = _fit_metrics(speed_pos, float(item.get("Weibull k", np.nan)), float(item.get("Weibull c", np.nan)))
+            advanced_rows.append(
+                {
+                    "Columna": item["Columna"],
+                    "Altura m": _height_from_col(item["Columna"]),
+                    "Velocidad media": mean_v,
+                    "Densidad W/m²": density_wm2,
+                    "kWh/m²-año": density_wm2 * 8760.0 / 1000.0 if np.isfinite(density_wm2) else np.nan,
+                    "EPF": epf,
+                    "TI": ti,
+                    "Turbulencia": _class_ti(ti),
+                    "FP neto": float(item.get("FP neto", np.nan)),
+                    "P50 kWh/año": p50,
+                    "P75 kWh/año": p75,
+                    "P90 kWh/año": p90,
+                    "Weibull k": float(item.get("Weibull k", np.nan)),
+                    "Weibull c": float(item.get("Weibull c", np.nan)),
+                    "RMSE Weibull": rmse,
+                    "MAPE Weibull %": mape,
+                    "R² Weibull": r2_fit,
+                    "Calidad Weibull": fit_quality,
+                    "Horas >5 m/s %": float((speed_pos > 5).mean() * 100.0) if not speed_pos.empty else np.nan,
+                    "Horas >7 m/s %": float((speed_pos > 7).mean() * 100.0) if not speed_pos.empty else np.nan,
+                }
+            )
+        advanced_df = pd.DataFrame(advanced_rows)
+        if not advanced_df.empty:
+            advanced_df = advanced_df.sort_values(["Altura m", "Columna"], na_position="last").reset_index(drop=True)
+            advanced_df["Incremento vs altura inferior %"] = advanced_df["Velocidad media"].pct_change() * 100.0
+            advanced_df["Alpha tramo"] = np.nan
+            for idx in range(1, len(advanced_df)):
+                prev = advanced_df.iloc[idx - 1]
+                curr = advanced_df.iloc[idx]
+                if prev["Altura m"] > 0 and curr["Altura m"] > 0 and prev["Velocidad media"] > 0 and curr["Velocidad media"] > 0:
+                    advanced_df.loc[idx, "Alpha tramo"] = math.log(curr["Velocidad media"] / prev["Velocidad media"]) / math.log(curr["Altura m"] / prev["Altura m"])
+            alpha_avg = float(advanced_df["Alpha tramo"].dropna().mean()) if advanced_df["Alpha tramo"].notna().any() else np.nan
+            advanced_df["Clasificación alpha"] = advanced_df["Alpha tramo"].apply(_class_shear)
+            score_components = pd.DataFrame(
+                {
+                    "vel": _telecom_score(advanced_df["Velocidad media"], higher_is_better=True),
+                    "dens": _telecom_score(advanced_df["Densidad W/m²"], higher_is_better=True),
+                    "fp": _telecom_score(advanced_df["FP neto"], higher_is_better=True),
+                    "weibull": pd.to_numeric(advanced_df["R² Weibull"], errors="coerce").clip(lower=0, upper=1).fillna(0),
+                    "ti": _telecom_score(advanced_df["TI"], higher_is_better=False),
+                }
+            )
+            advanced_df["Score recurso"] = (score_components["vel"] * 0.30 + score_components["dens"] * 0.25 + score_components["fp"] * 0.20 + score_components["weibull"] * 0.15 + score_components["ti"] * 0.10) * 100.0
+            advanced_df["Calidad recurso"] = advanced_df["Score recurso"].apply(_class_resource)
+            selected_adv = advanced_df[advanced_df["Columna"].astype(str) == str(selected_wind_col)]
+            selected_adv_row = selected_adv.iloc[0] if not selected_adv.empty else advanced_df.sort_values("Score recurso", ascending=False).iloc[0]
+
+            st.markdown(
+                f"""
+                <div class="telecom-grid" style="margin-top:18px;">
+                  <div class="telecom-card"><p class="telecom-card-k">Densidad energética</p><p class="telecom-card-v">{float(selected_adv_row["Densidad W/m²"]):.0f} W/m²</p><p class="telecom-card-s">{float(selected_adv_row["kWh/m²-año"]):,.0f} kWh/m²-año</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Turbulencia</p><p class="telecom-card-v">{float(selected_adv_row["TI"]):.2f}</p><p class="telecom-card-s">{html.escape(str(selected_adv_row["Turbulencia"]))}</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Horas útiles</p><p class="telecom-card-v">{float(selected_adv_row["Horas >5 m/s %"]):.0f}%</p><p class="telecom-card-s">{float(selected_adv_row["Horas >7 m/s %"]):.0f}% sobre 7 m/s</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">P90 producción</p><p class="telecom-card-v">{float(selected_adv_row["P90 kWh/año"]):,.0f}</p><p class="telecom-card-s">kWh/año por turbina</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Weibull ajuste</p><p class="telecom-card-v">{html.escape(str(selected_adv_row["Calidad Weibull"]))}</p><p class="telecom-card-s">R² {float(selected_adv_row["R² Weibull"]):.2f}</p></div>
+                  <div class="telecom-card"><p class="telecom-card-k">Calidad recurso</p><p class="telecom-card-v">{html.escape(str(selected_adv_row["Calidad recurso"]))}</p><p class="telecom-card-s">Score {float(selected_adv_row["Score recurso"]):.0f}/100</p></div>
+                </div>
+                """.replace(",", "."),
+                unsafe_allow_html=True,
+            )
+
+            st.markdown('<p class="telecom-panel-title">Perfil vertical del viento</p><p class="telecom-panel-sub">Velocidad media por altura, incremento relativo y exponente de cizalladura por tramo.</p>', unsafe_allow_html=True)
+            pv_l, pv_r = st.columns([1.05, 0.95])
+            with pv_l:
+                vertical_df = advanced_df.dropna(subset=["Altura m", "Velocidad media"]).copy()
+                fig_vertical = go.Figure()
+                fig_vertical.add_trace(go.Scatter(x=vertical_df["Velocidad media"], y=vertical_df["Altura m"], mode="lines+markers+text", name="Velocidad media", line=dict(color=blue_5, width=3), marker=dict(size=10, color="#ffffff", line=dict(color=blue_5, width=2)), text=[f"{v:.2f} m/s" for v in vertical_df["Velocidad media"]], textposition="middle right"))
+                fig_vertical.update_layout(height=360, margin=dict(l=10, r=20, t=20, b=42), xaxis=dict(title="Velocidad media (m/s)", gridcolor="rgba(148,163,184,.22)"), yaxis=dict(title="Altura (m)", gridcolor="rgba(148,163,184,.22)"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_vertical, use_container_width=True, config={"displaylogo": False})
+            with pv_r:
+                shear_table = advanced_df[["Columna", "Altura m", "Incremento vs altura inferior %", "Alpha tramo", "Clasificación alpha"]].copy()
+                st.markdown(f'<div class="telecom-note"><b>α promedio:</b> {alpha_avg:.3f} · Clasificación {html.escape(_class_shear(alpha_avg))}. La ley de potencia utilizada es Vz = Vref x (Z/Zref)^α.</div>', unsafe_allow_html=True)
+                st.dataframe(shear_table, use_container_width=True, hide_index=True)
+
+            dens_l, dens_r = st.columns(2)
+            with dens_l:
+                st.markdown('<p class="telecom-panel-title">Densidad energética disponible</p><p class="telecom-panel-sub">Potencia específica P = 0,5 x ρ x V³. Ranking técnico por altura.</p>', unsafe_allow_html=True)
+                density_rank = advanced_df.sort_values("Densidad W/m²", ascending=False).copy()
+                fig_density = px.bar(density_rank, x="Columna", y="Densidad W/m²", text=[f"{v:.0f}" for v in density_rank["Densidad W/m²"]], color="Score recurso", color_continuous_scale=[[0, blue_1], [0.5, blue_2], [1, blue_5]])
+                fig_density.update_traces(textposition="outside", marker_line_color="#ffffff", marker_line_width=1)
+                fig_density.update_layout(height=340, margin=dict(l=10, r=10, t=18, b=56), yaxis=dict(title="W/m²", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), xaxis=dict(title=None), coloraxis_showscale=False)
+                st.plotly_chart(fig_density, use_container_width=True, config={"displaylogo": False})
+            with dens_r:
+                st.markdown('<p class="telecom-panel-title">EPF y turbulencia</p><p class="telecom-panel-sub">EPF alto indica viento más variable; TI compara desviación estándar sobre velocidad media.</p>', unsafe_allow_html=True)
+                fig_epf = go.Figure()
+                fig_epf.add_trace(go.Bar(x=advanced_df["Columna"], y=advanced_df["EPF"], name="EPF", marker_color=blue_2, text=[f"{v:.2f}" for v in advanced_df["EPF"]], textposition="outside"))
+                fig_epf.add_trace(go.Scatter(x=advanced_df["Columna"], y=advanced_df["TI"], name="TI", yaxis="y2", mode="lines+markers+text", line=dict(color=blue_4, width=3), marker=dict(size=8, color="#ffffff", line=dict(color=blue_4, width=2)), text=[f"{v:.2f}" for v in advanced_df["TI"]], textposition="top center"))
+                fig_epf.update_layout(height=340, margin=dict(l=10, r=48, t=18, b=56), legend=dict(orientation="h", y=1.14, x=0), yaxis=dict(title="EPF", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), yaxis2=dict(title="TI", overlaying="y", side="right", showgrid=False, rangemode="tozero"), xaxis=dict(title=None), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_epf, use_container_width=True, config={"displaylogo": False})
+
+            thresholds = [3, 5, 7, 9, 11, 15, 20]
+            exceed_df = pd.DataFrame(
+                [{"Velocidad": f">{thr} m/s", "% horas superiores": float((clean_speed > thr).mean() * 100.0)} for thr in thresholds]
+            )
+            dur_l, dur_r = st.columns(2)
+            with dur_l:
+                st.markdown('<p class="telecom-panel-title">Excedencia de velocidad</p><p class="telecom-panel-sub">Porcentaje de horas sobre umbrales estándar de operación eólica.</p>', unsafe_allow_html=True)
+                st.dataframe(exceed_df, use_container_width=True, hide_index=True)
+            with dur_r:
+                st.markdown('<p class="telecom-panel-title">Curva de duración del viento</p><p class="telecom-panel-sub">Ordena las velocidades de mayor a menor para identificar disponibilidad del recurso.</p>', unsafe_allow_html=True)
+                duration_speed = np.sort(clean_speed.to_numpy())[::-1]
+                duration_x = np.arange(1, len(duration_speed) + 1) / max(len(duration_speed), 1) * 100.0
+                fig_duration = go.Figure(go.Scatter(x=duration_x, y=duration_speed, mode="lines", line=dict(color=blue_5, width=3), hovertemplate="Horas acumuladas: %{x:.1f}%<br>Velocidad: %{y:.2f} m/s<extra></extra>"))
+                fig_duration.update_layout(height=310, margin=dict(l=10, r=10, t=18, b=42), xaxis=dict(title="% horas acumuladas", range=[0, 100]), yaxis=dict(title="m/s", rangemode="tozero", gridcolor="rgba(148,163,184,.22)"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_duration, use_container_width=True, config={"displaylogo": False})
+
+            energy_power = pd.to_numeric(selected_analysis["_power_neta"], errors="coerce").fillna(0.0)
+            energy_sorted = np.sort(energy_power.to_numpy())[::-1]
+            energy_cum = np.cumsum(energy_sorted)
+            energy_total = float(energy_cum[-1]) if len(energy_cum) else 0.0
+            energy_x = np.arange(1, len(energy_sorted) + 1) / max(len(energy_sorted), 1) * 100.0
+            energy_y = energy_cum / energy_total * 100.0 if energy_total > 0 else np.zeros_like(energy_x)
+            energy_share = {
+                10: float(np.interp(10, energy_x, energy_y)) if len(energy_x) else 0.0,
+                20: float(np.interp(20, energy_x, energy_y)) if len(energy_x) else 0.0,
+                30: float(np.interp(30, energy_x, energy_y)) if len(energy_x) else 0.0,
+            }
+            st.markdown('<p class="telecom-panel-title">Curva acumulada de energía</p><p class="telecom-panel-sub">Muestra qué proporción de energía proviene de las mejores horas de viento.</p>', unsafe_allow_html=True)
+            fig_energy_cum = go.Figure(go.Scatter(x=energy_x, y=energy_y, mode="lines", fill="tozeroy", line=dict(color=blue_4, width=3), fillcolor="rgba(117,169,184,.18)", hovertemplate="Horas acumuladas: %{x:.1f}%<br>Energía acumulada: %{y:.1f}%<extra></extra>"))
+            for pct, share in energy_share.items():
+                fig_energy_cum.add_vline(x=pct, line_dash="dash", line_color=blue_3, annotation_text=f"{pct}% horas = {share:.0f}% energía")
+            fig_energy_cum.update_layout(height=330, margin=dict(l=10, r=10, t=18, b=42), xaxis=dict(title="% mejores horas", range=[0, 100]), yaxis=dict(title="% energía acumulada", range=[0, 105], gridcolor="rgba(148,163,184,.22)"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_energy_cum, use_container_width=True, config={"displaylogo": False})
+
+            weibull_quality = advanced_df[["Columna", "Weibull k", "Weibull c", "RMSE Weibull", "MAPE Weibull %", "R² Weibull", "Calidad Weibull"]].copy()
+            weibull_quality["Weibull k"] = pd.to_numeric(weibull_quality["Weibull k"], errors="coerce").round(2)
+            weibull_quality["Weibull c"] = pd.to_numeric(weibull_quality["Weibull c"], errors="coerce").round(2)
+            weibull_quality["RMSE Weibull"] = pd.to_numeric(weibull_quality["RMSE Weibull"], errors="coerce").round(4)
+            weibull_quality["MAPE Weibull %"] = pd.to_numeric(weibull_quality["MAPE Weibull %"], errors="coerce").round(1)
+            weibull_quality["R² Weibull"] = pd.to_numeric(weibull_quality["R² Weibull"], errors="coerce").round(3)
+            st.markdown('<p class="telecom-panel-title">Calidad del ajuste Weibull</p><p class="telecom-panel-sub">Métricas de ajuste por columna para validar confiabilidad estadística del recurso.</p>', unsafe_allow_html=True)
+            st.dataframe(weibull_quality, use_container_width=True, hide_index=True)
+
+            if plot_df["_datetime"].notna().any():
+                advanced_time = plot_df.dropna(subset=["_datetime", "_speed_selected"]).copy()
+                advanced_time["_month_num"] = advanced_time["_datetime"].dt.month
+                advanced_time["_hour"] = advanced_time["_datetime"].dt.hour
+                advanced_time["_doy"] = advanced_time["_datetime"].dt.dayofyear
+                month_rows = []
+                for month_num, month_df in advanced_time.groupby("_month_num"):
+                    month_speed = pd.to_numeric(month_df["_speed_selected"], errors="coerce").dropna()
+                    mk, mc = _weibull_params(month_speed)
+                    month_rows.append(
+                        {
+                            "Mes": int(month_num),
+                            "Media": float(month_speed.mean() or 0.0),
+                            "Desv. estándar": float(month_speed.std(ddof=1) or 0.0),
+                            "Weibull k": mk,
+                            "Weibull c": mc,
+                            "Horas >5 m/s": int((month_speed > 5).sum()),
+                            "Horas >7 m/s": int((month_speed > 7).sum()),
+                        }
+                    )
+                monthly_advanced = pd.DataFrame(month_rows)
+                hm_l, hm_r = st.columns(2)
+                with hm_l:
+                    st.markdown('<p class="telecom-panel-title">Análisis mensual avanzado</p><p class="telecom-panel-sub">Media, variabilidad, Weibull y horas útiles por mes.</p>', unsafe_allow_html=True)
+                    st.dataframe(monthly_advanced, use_container_width=True, hide_index=True)
+                with hm_r:
+                    st.markdown('<p class="telecom-panel-title">Heatmap Mes-Hora</p><p class="telecom-panel-sub">Velocidad promedio por mes y hora para identificar patrones operacionales.</p>', unsafe_allow_html=True)
+                    heat = advanced_time.pivot_table(index="_month_num", columns="_hour", values="_speed_selected", aggfunc="mean")
+                    fig_heat = go.Figure(go.Heatmap(z=heat.values, x=heat.columns, y=heat.index, colorscale=[[0, blue_1], [0.45, blue_2], [0.75, blue_5], [1, blue_4]], colorbar=dict(title="m/s"), hovertemplate="Mes %{y}<br>Hora %{x}:00<br>%{z:.2f} m/s<extra></extra>"))
+                    fig_heat.update_layout(height=360, margin=dict(l=10, r=10, t=18, b=42), xaxis=dict(title="Hora"), yaxis=dict(title="Mes", autorange="reversed"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                    st.plotly_chart(fig_heat, use_container_width=True, config={"displaylogo": False})
+                st.markdown('<p class="telecom-panel-title">Rosa temporal sin dirección</p><p class="telecom-panel-sub">Heatmap Hora-Día del año para visualizar ciclos temporales del recurso sin requerir dirección de viento.</p>', unsafe_allow_html=True)
+                temporal_heat = advanced_time.pivot_table(index="_hour", columns="_doy", values="_speed_selected", aggfunc="mean")
+                fig_temporal = go.Figure(go.Heatmap(z=temporal_heat.values, x=temporal_heat.columns, y=temporal_heat.index, colorscale=[[0, blue_1], [0.5, blue_2], [0.8, blue_5], [1, blue_4]], colorbar=dict(title="m/s"), hovertemplate="Día %{x}<br>Hora %{y}:00<br>%{z:.2f} m/s<extra></extra>"))
+                fig_temporal.update_layout(height=380, margin=dict(l=10, r=10, t=18, b=42), xaxis=dict(title="Día del año"), yaxis=dict(title="Hora", autorange="reversed"), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_temporal, use_container_width=True, config={"displaylogo": False})
+
+            score_table = advanced_df[["Columna", "Altura m", "Velocidad media", "Densidad W/m²", "EPF", "TI", "FP neto", "P50 kWh/año", "P75 kWh/año", "P90 kWh/año", "Score recurso", "Calidad recurso"]].copy()
+            st.markdown('<p class="telecom-panel-title">Índice de calidad del recurso e incertidumbre P50-P75-P90</p><p class="telecom-panel-sub">Score técnico sin economía: velocidad, densidad energética, FP teórico, estabilidad Weibull y turbulencia.</p>', unsafe_allow_html=True)
+            st.dataframe(score_table, use_container_width=True, hide_index=True)
+
+        conclusion_col = str(recommended["Columna"])
+        conclusion_quality = str(recommended["Clasificación"])
+        conclusion_fit = "calculada"
+        conclusion_ti = "evaluada"
+        conclusion_density = np.nan
+        if "selected_adv_row" in locals():
+            conclusion_col = str(selected_adv_row["Columna"])
+            conclusion_quality = str(selected_adv_row["Calidad recurso"])
+            conclusion_fit = str(selected_adv_row["Calidad Weibull"])
+            conclusion_ti = str(selected_adv_row["Turbulencia"])
+            conclusion_density = float(selected_adv_row["Densidad W/m²"])
+        density_text = f"{conclusion_density:.0f} W/m²" if np.isfinite(conclusion_density) else "sin dato suficiente"
         conclusion = (
-            f"La columna recomendada es {recommended['Columna']} con velocidad media de {recommended['Velocidad media']:.2f} m/s, "
-            f"factor de planta neto de {recommended['FP neto']:.1f}% y energía anual neta estimada de {recommended['Energía anual neta kWh']:,.0f} kWh por turbina. "
-            f"El recurso se clasifica como {recommended['Clasificación']} y presenta parámetros Weibull k={recommended['Weibull k']:.2f}, c={recommended['Weibull c']:.2f} m/s."
+            f"La altura/columna óptima técnica es {conclusion_col}. "
+            f"El recurso se clasifica como {conclusion_quality}, "
+            f"con velocidad media {recommended['Velocidad media']:.2f} m/s, Weibull k={recommended['Weibull k']:.2f}, c={recommended['Weibull c']:.2f} m/s. "
+            f"La estabilidad estadística del ajuste Weibull es {conclusion_fit}, "
+            f"la turbulencia es {conclusion_ti} y la densidad energética alcanza {density_text}. "
+            f"Recomendación técnica: usar esta caracterización para dimensionamiento energético y validación de incertidumbre, sin mezclarla con análisis económico."
         )
         st.markdown(
             f'<div class="telecom-note"><b>Conclusión técnica del recurso eólico:</b> {html.escape(conclusion)}</div>'.replace(",", "."),
