@@ -16270,7 +16270,7 @@ def render_inputs_capex_10kw_detail():
         .capex10-foot-ico{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eef4ff;color:#315d9b;font-size:20px;}
         .capex10-foot-k{font-size:11px;color:#587093;margin:0 0 4px 0;}
         .capex10-foot-v{font-size:12px;color:#18345c;margin:0;font-weight:600;}
-        .capex10-subnav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:0 0 16px 0;}
+        .capex10-subnav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 16px 0;}
         .capex10-subcard{border:1px solid #d9e2ee;border-radius:13px;background:linear-gradient(180deg,#fff,#f8fbff);padding:15px 16px;min-height:98px;box-shadow:0 10px 24px rgba(15,23,42,.045);}
         .capex10-subcard.active{border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.10),0 12px 28px rgba(15,23,42,.06);}
         .capex10-sub-k{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:0 0 7px 0;}
@@ -16304,11 +16304,11 @@ def render_inputs_capex_10kw_detail():
             ):
                 st.session_state.pop(gantt_key, None)
 
-    valid_capex10_subblocks = {"control_fondos", "vista_integrada", "control_cost", "evaluacion_telecom"}
+    valid_capex10_subblocks = {"control_fondos", "vista_integrada", "control_cost"}
     if capex10_subblock_key not in st.session_state:
         st.session_state[capex10_subblock_key] = "control_fondos"
     elif st.session_state[capex10_subblock_key] not in valid_capex10_subblocks:
-        st.session_state[capex10_subblock_key] = "evaluacion_telecom"
+        st.session_state[capex10_subblock_key] = "control_fondos"
 
     capex10_subblocks = [
         (
@@ -16328,12 +16328,6 @@ def render_inputs_capex_10kw_detail():
             "control_cost",
             "Control Cost",
             "Gestión de cortes históricos, snapshots EVM y comparación mensual de control PMO.",
-        ),
-        (
-            "Sub bloque 5",
-            "evaluacion_telecom",
-            "Evaluación eólica torres telecom",
-            "Pestañas ejecutivas conectadas al CSV Entel y al análisis 00 para ranking, inputs, viento, CAPEX, LCOE y retorno.",
         ),
     ]
     sub_cols = st.columns(len(capex10_subblocks))
@@ -16379,10 +16373,6 @@ def render_inputs_capex_10kw_detail():
             st.warning(f"No se pudo cargar Control Cost: {exc}")
         else:
             render_control_cost_block(df_control_cost)
-        return
-
-    if selected_capex10_subblock == "evaluacion_telecom":
-        render_telecom_tower_eval_analysis()
         return
 
     render_pilotos_ana_embedded_view()
@@ -20758,6 +20748,7 @@ input_cards = [
     ("estado_actual", "1- Activo Tecnológico y Validación"),
     ("escalamiento", "2- Capital Requerido y Ejecución CAPEX"),
     ("valorizacion", "3-Análisis Financiero Basado en EBITDA"),
+    ("mercado", "4-Análisis de mercado"),
 ]
 
 if "inputs_bloque_sel" not in st.session_state:
@@ -20774,6 +20765,8 @@ def _set_inputs_bloque(value: str):
         st.session_state["inputs_escalamiento_capex_sel"] = None
     elif value == "valorizacion":
         st.session_state["inputs_val_bloque_sel"] = None
+    elif value == "mercado":
+        st.session_state["inputs_market_block_sel"] = None
 
 st.markdown(
         """
@@ -20954,13 +20947,13 @@ st.markdown(
     <div class="inputs-nav-shell">
       <div class="inputs-nav-head-k">MAPA DE LECTURA</div>
       <div class="inputs-nav-head-t">Selecciona el bloque estratégico que quieres revisar</div>
-      <div class="inputs-nav-head-s">La pantalla está organizada en tres vistas: activo tecnológico, capital requerido y estructura de valorización.</div>
+      <div class="inputs-nav-head-s">La pantalla está organizada en cuatro vistas: activo tecnológico, capital requerido, estructura de valorización y análisis de mercado.</div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-nav_cols = st.columns(3)
+nav_cols = st.columns(len(input_cards))
 for idx, (block_value, block_title) in enumerate(input_cards):
     is_active = st.session_state.get("inputs_bloque_sel") == block_value
     with nav_cols[idx]:
@@ -21010,6 +21003,10 @@ input_block_copy = {
     "valorizacion": (
         "3-Análisis Financiero Basado en EBITDA",
         "En esta sección se presenta el análisis financiero del proyecto a partir del EBITDA y su impacto en la valorización del negocio.",
+    ),
+    "mercado": (
+        "4-Análisis de mercado",
+        "Aquí se concentra la evaluación eólica de torres telecom, ranking de sitios, inputs comerciales, CAPEX, LCOE y retorno para lectura de mercado.",
     ),
 }
 if selected_input_block == "estado_actual":
@@ -21441,6 +21438,8 @@ elif selected_input_block == "escalamiento":
         pass
 elif selected_input_block == "valorizacion":
     render_valorizacion_module_content(key_prefix="inputs_val_")
+elif selected_input_block == "mercado":
+    render_telecom_tower_eval_analysis()
 else:
     st.info("Selecciona uno de los KPIs principales para abrir sus sub-bloques y contenido.")
 
