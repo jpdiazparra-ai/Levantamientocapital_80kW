@@ -15893,10 +15893,12 @@ def render_telecom_scenario_simulator(
         turbines_count = int(row.get("Nº turbinas", 0) or 0)
         height_value = float(row.get("Altura total m", np.nan))
         base_monthly_generation = float(row.get("Generación mensual kWh", 0.0) or 0.0)
+        generation_source_base = str(row.get("Fuente FP", "Promedio mensual calculado") or "Promedio mensual calculado")
+        use_curve_03_generation = "03 curva" in generation_source_base.casefold()
         monthly_rows = []
         for month in range(1, 13):
             generation_per_turbine = np.nan
-            if not wind_monthly_profile.empty and np.isfinite(height_value):
+            if (not use_curve_03_generation) and (not wind_monthly_profile.empty) and np.isfinite(height_value):
                 month_profile = wind_monthly_profile[np.isclose(wind_monthly_profile["Mes"].astype(float), float(month), atol=0.001)].copy()
                 if not month_profile.empty:
                     heights = month_profile["Altura m"].to_numpy(dtype=float)
@@ -15915,7 +15917,7 @@ def render_telecom_scenario_simulator(
             generation_source = (
                 "09_Viento mensual por altura"
                 if np.isfinite(generation_per_turbine)
-                else str(row.get("Fuente FP", "Promedio mensual calculado") or "Promedio mensual calculado")
+                else generation_source_base
             )
             covered = min(generation_total, monthly_consumption)
             surplus = max(generation_total - monthly_consumption, 0.0)
@@ -15928,6 +15930,7 @@ def render_telecom_scenario_simulator(
                     "Consumo cubierto kWh": covered,
                     "Excedente kWh": surplus,
                     "Brecha kWh": gap,
+                    "Balance kWh": generation_total - monthly_consumption,
                     "Consumo sitio kWh": monthly_consumption,
                     "Cobertura %": generation_total / monthly_consumption * 100.0 if monthly_consumption > 0 else 0.0,
                     "Fuente": generation_source,
@@ -15942,62 +15945,60 @@ def render_telecom_scenario_simulator(
         fig.add_trace(
             go.Bar(
                 x=monthly_df["Mes"],
-                y=monthly_df["Consumo cubierto kWh"],
-                name="Consumo cubierto",
-                marker_color=palette["sky"],
-                customdata=np.stack([monthly_df["Generación kWh"], monthly_df["Cobertura %"]], axis=-1),
-                hovertemplate="<b>%{x}</b><br>Generación: %{customdata[0]:,.0f} kWh<br>Cobertura: %{customdata[1]:.0f}%<extra></extra>",
-            )
-        )
-        fig.add_trace(
-            go.Bar(
-                x=monthly_df["Mes"],
-                y=monthly_df["Excedente kWh"],
-                name="Excedente",
-                marker_color=palette["orange"],
-                hovertemplate="<b>%{x}</b><br>Excedente: %{y:,.0f} kWh<extra></extra>",
-            )
-        )
-        fig.add_trace(
-            go.Bar(
-                x=monthly_df["Mes"],
-                y=monthly_df["Brecha kWh"],
-                name="Brecha",
-                marker_color="rgba(148,163,184,.30)",
-                hovertemplate="<b>%{x}</b><br>Brecha: %{y:,.0f} kWh<extra></extra>",
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=monthly_df["Mes"],
                 y=monthly_df["Consumo sitio kWh"],
                 name="Consumo sitio",
-                mode="lines+markers",
-                line=dict(color=palette["ink"], width=3, dash="dash"),
-                marker=dict(size=8, color="#ffffff", line=dict(color=palette["ink"], width=2)),
-                hovertemplate="<b>%{x}</b><br>Consumo: %{y:,.0f} kWh<extra></extra>",
+                marker_color="rgba(148,163,184,.28)",
+                offsetgroup="consumo",
+                customdata=np.stack([monthly_df["Generación kWh"], monthly_df["Cobertura %"], monthly_df["Balance kWh"]], axis=-1),
+                hovertemplate="<b>%{x}</b><br>Consumo: %{y:,.0f} kWh<br>Generación: %{customdata[0]:,.0f} kWh<br>Cobertura: %{customdata[1]:.0f}%<br>Balance: %{customdata[2]:+,.0f} kWh<extra></extra>",
+            )
+        )
+        fig.add_trace(
+            go.Bar(
+                x=monthly_df["Mes"],
+                y=monthly_df["Generación kWh"],
+                name="Generación 03",
+                marker_color=palette["orange"],
+                offsetgroup="generacion",
+                customdata=np.stack([monthly_df["Consumo cubierto kWh"], monthly_df["Excedente kWh"], monthly_df["Brecha kWh"], monthly_df["Cobertura %"]], axis=-1),
+                hovertemplate="<b>%{x}</b><br>Generación: %{y:,.0f} kWh<br>Cubierto: %{customdata[0]:,.0f} kWh<br>Excedente: %{customdata[1]:,.0f} kWh<br>Brecha: %{customdata[2]:,.0f} kWh<br>Cobertura: %{customdata[3]:.0f}%<extra></extra>",
+            )
+        )
+        fig.add_trace(
+            go.Bar(
+                x=monthly_df["Mes"],
+                y=monthly_df["Balance kWh"].abs(),
+                name="Brecha / excedente",
+                marker_color=np.where(monthly_df["Balance kWh"] >= 0, palette["sky"], "rgba(148,163,184,.55)"),
+                offsetgroup="balance",
+                customdata=np.stack([monthly_df["Balance kWh"], monthly_df["Excedente kWh"], monthly_df["Brecha kWh"]], axis=-1),
+                hovertemplate="<b>%{x}</b><br>Balance: %{customdata[0]:+,.0f} kWh<br>Excedente: %{customdata[1]:,.0f} kWh<br>Brecha: %{customdata[2]:,.0f} kWh<extra></extra>",
             )
         )
         fig.add_trace(
             go.Scatter(
                 x=monthly_df["Mes"],
-                y=monthly_df["Generación kWh"],
-                name="Generación total",
+                y=monthly_df["Cobertura %"],
+                name="Cobertura",
+                yaxis="y2",
                 mode="lines+markers+text",
-                line=dict(color=palette["copper"], width=2.8),
-                marker=dict(size=8, color="#ffffff", line=dict(color=palette["copper"], width=2)),
+                line=dict(color=palette["ink"], width=3.2),
+                marker=dict(size=9, color="#ffffff", line=dict(color=palette["ink"], width=2)),
                 text=[f"{value:.0f}%" for value in monthly_df["Cobertura %"]],
                 textposition="top center",
-                hovertemplate="<b>%{x}</b><br>Generación: %{y:,.0f} kWh<extra></extra>",
+                hovertemplate="<b>%{x}</b><br>Cobertura: %{y:.0f}%<extra></extra>",
             )
         )
         source_note = str(monthly_df["Fuente"].iloc[0]) if not monthly_df.empty else "Sin fuente"
+        annual_generation = float(monthly_df["Generación kWh"].sum() or 0.0)
+        annual_consumption = float(monthly_df["Consumo sitio kWh"].sum() or 0.0)
+        annual_coverage = annual_generation / annual_consumption * 100.0 if annual_consumption > 0 else 0.0
         fig.add_annotation(
             xref="paper",
             yref="paper",
             x=0.01,
-            y=1.12,
-            text=f"Fuente: {source_note}",
+            y=1.18,
+            text=f"Fuente: {source_note}<br>Año: {annual_generation:,.0f} kWh generados / {annual_consumption:,.0f} kWh consumo · cobertura {annual_coverage:.0f}%".replace(",", "."),
             showarrow=False,
             align="left",
             bgcolor="rgba(255,255,255,.88)",
@@ -16007,10 +16008,46 @@ def render_telecom_scenario_simulator(
             font=dict(color=palette["text"], size=11),
         )
         fig.update_layout(
-            barmode="stack",
+            barmode="group",
             xaxis=dict(title=None, categoryorder="array", categoryarray=month_labels),
             yaxis=dict(title="kWh/mes", rangemode="tozero"),
+            yaxis2=dict(title="Cobertura", overlaying="y", side="right", ticksuffix="%", rangemode="tozero", showgrid=False),
         )
+        fig = tune_fig(fig, height)
+        fig.update_layout(legend=dict(orientation="h", y=1.10, x=0, title=None))
+        return fig
+
+    def generation_audit_chart(row: pd.Series, height: int = 300) -> go.Figure:
+        monthly_df = monthly_generation_consumption_df(row)
+        generation = float(monthly_df["Generación kWh"].sum() or 0.0)
+        consumption = float(monthly_df["Consumo sitio kWh"].sum() or 0.0)
+        covered = float(monthly_df["Consumo cubierto kWh"].sum() or 0.0)
+        surplus = float(monthly_df["Excedente kWh"].sum() or 0.0)
+        gap = float(monthly_df["Brecha kWh"].sum() or 0.0)
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=["Generación 03", "Consumo anual", "Consumo cubierto", "Excedente", "Brecha"],
+            y=[generation, consumption, covered, surplus, gap],
+            marker_color=[palette["orange"], "rgba(148,163,184,.35)", palette["sky"], palette["copper"], "rgba(148,163,184,.65)"],
+            text=[f"{value:,.0f}".replace(",", ".") for value in [generation, consumption, covered, surplus, gap]],
+            textposition="outside",
+            hovertemplate="<b>%{x}</b><br>%{y:,.0f} kWh/año<extra></extra>",
+        ))
+        fig.add_annotation(
+            xref="paper",
+            yref="paper",
+            x=0.01,
+            y=1.12,
+            text="Auditoría anual: generación viene de pestaña 03; el balance separa cobertura útil, excedente y brecha.",
+            showarrow=False,
+            align="left",
+            font=dict(color=palette["text"], size=11),
+            bgcolor="rgba(255,255,255,.88)",
+            bordercolor="rgba(117,169,184,.35)",
+            borderwidth=1,
+            borderpad=4,
+        )
+        fig.update_layout(xaxis=dict(title=None), yaxis=dict(title="kWh/año", rangemode="tozero"), showlegend=False)
         return tune_fig(fig, height)
 
     st.markdown(
@@ -16060,10 +16097,11 @@ def render_telecom_scenario_simulator(
 
     st.markdown(
         f'<p class="telecom-panel-title">Generación mensual y consumo · {html.escape(str(recommended["Alternativa"]))}</p>'
-        '<p class="telecom-panel-sub">Barras: consumo cubierto, excedente y brecha. Líneas: generación mensual estimada desde 09_Viento y consumo mensual del sitio.</p>',
+        '<p class="telecom-panel-sub">Comparación mensual auditada: generación desde pestaña 03, consumo del PoP seleccionado, cobertura y balance energético.</p>',
         unsafe_allow_html=True,
     )
-    st.plotly_chart(monthly_generation_consumption_chart(recommended, 390), use_container_width=True, config={"displaylogo": False})
+    st.plotly_chart(monthly_generation_consumption_chart(recommended, 430), use_container_width=True, config={"displaylogo": False})
+    st.plotly_chart(generation_audit_chart(recommended, 310), use_container_width=True, config={"displaylogo": False})
 
     chart_a, chart_b = st.columns(2)
     with chart_a:
