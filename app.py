@@ -312,6 +312,43 @@ GANTT_PROJECT_CSV_URL_DEFAULT = (
     "2PACX-1vQOu_diukhhZWDV7kIcU9Ewto4lo_xQdSEZ0FMi2oto-Jb4r2e7aRNCBKF3qoVVk_4XsimMFx7eASkt/"
     "pub?gid=2063654006&single=true&output=csv"
 )
+TURBINE_POWER_CURVES_PUBLISHED_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vSqf8EYbthVQC_VXshBkh_kAH5UhJAYSEJD7FDlWnjtflAJHSwfgCwjIuaDvkLUPGX_N_rsskZWw3Lk/"
+    "pub?output=csv"
+)
+TURBINE_POWER_CURVES_PUB_BASE_URL = TURBINE_POWER_CURVES_PUBLISHED_CSV_URL_DEFAULT.split("?")[0]
+TURBINE_POWER_CURVES_PUBHTML_URL = f"{TURBINE_POWER_CURVES_PUB_BASE_URL}html"
+TURBINE_POWER_CURVES_SOURCE_VERSION = 20260626
+TURBINE_POWER_CURVE_SOURCE_SHEETS = {
+    "00_Resumen": "829632539",
+    "02_Ficha_GREEF": "1525851005",
+}
+TURBINE_POWER_CURVE_SHEETS = {
+    "VAWT 10 kW": {"sheet": "GVH-10KW", "curve_column": "GVH-10KW", "rated_kw": 10.0},
+    "VAWT 5 kW": {"sheet": "GVH-5KW", "curve_column": "GVH-5KW", "rated_kw": 5.0},
+    "VAWT 3 kW": {"sheet": "GV-3KW", "curve_column": "GV-3KW", "rated_kw": 3.0},
+    "VAWT 1 kW": {"sheet": "GV-1KW", "curve_column": "GV-1KW", "rated_kw": 1.0},
+}
+PROPUESTA_TECNICO_ECONOMICA_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vQU-R3cnQv4Jaj0OZSaAvbbPCkmIlOCKcB-o7bWfuAnnn-BzNt88g8CqtLB2KuSnwiTuB6vONplpof5/"
+    "pub?output=csv"
+)
+PROPUESTA_TECNICO_ECONOMICA_PUB_BASE_URL = PROPUESTA_TECNICO_ECONOMICA_CSV_URL_DEFAULT.split("?")[0]
+PROPUESTA_TECNICO_ECONOMICA_PUBHTML_URL = f"{PROPUESTA_TECNICO_ECONOMICA_PUB_BASE_URL}html"
+PROPUESTA_TECNICO_ECONOMICA_SOURCE_VERSION = 20260624
+PROPUESTA_TECNICO_ECONOMICA_SHEET_GIDS = {
+    "00_Resumen": "1764706849",
+    "01_Inputs_Sitio": "129678883",
+    "02_Catalogo_Tec": "2030782940",
+    "03_Recurso_Eolico": "1204562949",
+    "04_Dimensionamiento": "104519050",
+    "05_Evaluacion_Turbinas": "565673316",
+    "06_Flujo_Financiero": "1635752200",
+    "07_Checklist_Comercial": "626023188",
+    "08_Diccionario_Formulas": "1426392056",
+}
 GANTT_COSTO_PILOTO_TOTAL_CLP = 79_066_677
 GANTT_COSTO_COMERCIAL_TOTAL_CLP = 27_070_558
 FIN_PALETTE_SM = {
@@ -451,6 +488,186 @@ def telecom_published_csv_url(sheet_name: str, fallback_url: str, refresh_nonce:
     except Exception:
         pass
     return fallback_url
+
+
+def turbine_power_curve_source_csv_url(sheet_name: str, refresh_nonce: int = 0) -> str:
+    gid = TURBINE_POWER_CURVE_SOURCE_SHEETS.get(sheet_name)
+    try:
+        gid_map = load_google_pubhtml_sheet_gids(TURBINE_POWER_CURVES_PUBHTML_URL, refresh_nonce=refresh_nonce)
+        target_sheet = str(sheet_name).strip().casefold()
+        for published_sheet, sheet_gid in gid_map.items():
+            if str(published_sheet).strip().casefold() == target_sheet:
+                gid = sheet_gid
+                break
+    except Exception:
+        pass
+    if gid:
+        return f"{TURBINE_POWER_CURVES_PUB_BASE_URL}?gid={gid}&single=true&output=csv"
+    return TURBINE_POWER_CURVES_PUBLISHED_CSV_URL_DEFAULT
+
+
+def turbine_power_curve_csv_url(model: str, refresh_nonce: int = 0) -> str:
+    return turbine_power_curve_source_csv_url("00_Resumen", refresh_nonce=refresh_nonce)
+
+
+def propuesta_tecnico_economica_csv_url(sheet_name: str, refresh_nonce: int = 0) -> str:
+    gid = PROPUESTA_TECNICO_ECONOMICA_SHEET_GIDS.get(sheet_name)
+    try:
+        gid_map = load_google_pubhtml_sheet_gids(PROPUESTA_TECNICO_ECONOMICA_PUBHTML_URL, refresh_nonce=refresh_nonce)
+        target_sheet = str(sheet_name).strip().casefold()
+        for published_sheet, sheet_gid in gid_map.items():
+            if str(published_sheet).strip().casefold() == target_sheet:
+                gid = sheet_gid
+                break
+    except Exception:
+        pass
+    if gid:
+        return f"{PROPUESTA_TECNICO_ECONOMICA_PUB_BASE_URL}?gid={gid}&single=true&output=csv"
+    return PROPUESTA_TECNICO_ECONOMICA_CSV_URL_DEFAULT
+
+
+def parse_curve_number(value: object, default: float = np.nan) -> float:
+    if pd.isna(value):
+        return default
+    text = str(value).strip()
+    if not text or text.casefold() in {"nan", "none", "null", "-"}:
+        return default
+    text = text.replace("\u00a0", "").replace(" ", "")
+    if "," in text:
+        text = text.replace(".", "").replace(",", ".")
+    elif re.fullmatch(r"-?\d{1,3}(?:\.\d{3})+(?:\.\d+)?", text):
+        text = text.replace(".", "")
+    text = re.sub(r"[^0-9.\-]", "", text)
+    try:
+        return float(text)
+    except ValueError:
+        return default
+
+
+def _curve_sheet_value(ficha: dict[str, object], candidates: list[str], default: float = np.nan) -> float:
+    for candidate in candidates:
+        value = ficha.get(normalize_key(candidate))
+        parsed = parse_curve_number(value, default=np.nan)
+        if np.isfinite(parsed):
+            return float(parsed)
+    return default
+
+
+def _curve_ficha_by_model(raw: pd.DataFrame) -> dict[str, dict[str, object]]:
+    if raw is None or raw.empty:
+        return {}
+
+    header_idx = None
+    for idx in range(len(raw.index)):
+        first_cell = clean_sheet_cell(raw.iat[idx, 0]) if raw.shape[1] else ""
+        if normalize_key(first_cell) == normalize_key("Parámetro"):
+            header_idx = idx
+            break
+    if header_idx is None:
+        return {}
+
+    headers = [clean_sheet_cell(value) for value in raw.iloc[header_idx].tolist()]
+    allowed_columns = {normalize_key(meta["curve_column"]) for meta in TURBINE_POWER_CURVE_SHEETS.values()}
+    turbine_cols = [
+        (col_idx, label)
+        for col_idx, label in enumerate(headers)
+        if col_idx > 0 and normalize_key(label) in allowed_columns
+    ]
+    ficha: dict[str, dict[str, object]] = {label: {} for _, label in turbine_cols}
+
+    for row_idx in range(header_idx + 1, len(raw.index)):
+        param = clean_sheet_cell(raw.iat[row_idx, 0]) if raw.shape[1] else ""
+        param_key = normalize_key(param)
+        if not param_key:
+            continue
+        for col_idx, label in turbine_cols:
+            if col_idx < raw.shape[1]:
+                ficha[label][param_key] = raw.iat[row_idx, col_idx]
+    return ficha
+
+
+def _curve_table_from_resumen(raw: pd.DataFrame) -> pd.DataFrame:
+    if raw is None or raw.empty:
+        return pd.DataFrame()
+
+    header_idx = None
+    for idx in range(len(raw.index)):
+        first_cell = clean_sheet_cell(raw.iat[idx, 0]) if raw.shape[1] else ""
+        if normalize_key(first_cell) == normalize_key("V (m/s)"):
+            header_idx = idx
+            break
+    if header_idx is None:
+        return pd.DataFrame()
+
+    headers = [clean_sheet_cell(value) for value in raw.iloc[header_idx].tolist()]
+    table = raw.iloc[header_idx + 1 :].copy()
+    table = table.iloc[:, : len(headers)]
+    table.columns = headers
+    table = table[table[headers[0]].map(lambda value: np.isfinite(parse_curve_number(value, default=np.nan)))].copy()
+    if table.empty:
+        return pd.DataFrame()
+    return table.reset_index(drop=True)
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_turbine_power_curves(refresh_nonce: int = 0) -> dict[str, dict]:
+    curves: dict[str, dict] = {}
+    resumen_raw = read_remote_csv(
+        turbine_power_curve_source_csv_url("00_Resumen", refresh_nonce=refresh_nonce),
+        refresh_nonce=refresh_nonce + TURBINE_POWER_CURVES_SOURCE_VERSION,
+        dtype=str,
+        header=None,
+    ).fillna("")
+    ficha_raw = read_remote_csv(
+        turbine_power_curve_source_csv_url("02_Ficha_GREEF", refresh_nonce=refresh_nonce),
+        refresh_nonce=refresh_nonce + TURBINE_POWER_CURVES_SOURCE_VERSION,
+        dtype=str,
+        header=None,
+    ).fillna("")
+    curve_table = _curve_table_from_resumen(resumen_raw)
+    ficha_by_model = _curve_ficha_by_model(ficha_raw)
+    if curve_table.empty:
+        return curves
+
+    speed_col = curve_table.columns[0]
+    for model, meta in TURBINE_POWER_CURVE_SHEETS.items():
+        curve_column = str(meta.get("curve_column", meta.get("sheet", ""))).strip()
+        if curve_column not in curve_table.columns:
+            continue
+        curve = pd.DataFrame(
+            {
+                "Velocidad m/s": curve_table[speed_col].map(parse_curve_number),
+                "Potencia kW": curve_table[curve_column].map(parse_curve_number),
+            }
+        ).dropna(subset=["Velocidad m/s", "Potencia kW"])
+        curve = curve[(curve["Velocidad m/s"] >= 0) & (curve["Potencia kW"] >= 0)].copy()
+        if curve.empty:
+            continue
+        curve = curve.sort_values("Velocidad m/s").drop_duplicates("Velocidad m/s", keep="last").reset_index(drop=True)
+        ficha = ficha_by_model.get(curve_column, {})
+        rated_kw = _curve_sheet_value(ficha, ["Potencia nominal Pn"], float(meta.get("rated_kw", np.nan)))
+        tower_height_m = _curve_sheet_value(ficha, ["Altura torre"], np.nan)
+        rotor_area_m2 = _curve_sheet_value(ficha, ["Área barrida A", "Area barrida A"], np.nan)
+        air_density = _curve_sheet_value(ficha, ["rho", "ρ aire", "densidad aire"], 1.225)
+        curves[model] = {
+            "model": model,
+            "sheet": f"00_Resumen · {curve_column}",
+            "rated_kw": rated_kw,
+            "rotor_height_m": tower_height_m,
+            "total_height_m": tower_height_m,
+            "effective_wind_height_m": tower_height_m,
+            "rotor_diameter_m": _curve_sheet_value(ficha, ["Diámetro rotor", "Diametro rotor"], np.nan),
+            "rotor_area_m2": rotor_area_m2,
+            "air_density": air_density if np.isfinite(air_density) and air_density > 0 else 1.225,
+            "cp_sheet": _curve_sheet_value(ficha, ["Cp aparente nominal", "Cp nominal"], np.nan),
+            "eta_sheet": _curve_sheet_value(ficha, ["Eficiencia", "η"], np.nan),
+            "cut_in_ms": _curve_sheet_value(ficha, ["V cut-in efectivo", "Velocidad de arranque"], np.nan),
+            "cut_out_ms": _curve_sheet_value(ficha, ["Velocidad trabajo máxima"], np.nan),
+            "vnom_ms": _curve_sheet_value(ficha, ["Velocidad nominal Vnom"], np.nan),
+            "engineering_flag": clean_sheet_cell(ficha.get(normalize_key("Flag ingeniería"), "")),
+            "curve": curve,
+        }
+    return curves
 
 
 @st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
@@ -1357,6 +1574,90 @@ def get_first_model_value(model_map: dict, candidates: list[str], default=0.0) -
         if key in model_map:
             return parse_model_number(model_map.get(key))
     return float(default)
+
+
+def _build_sheet_table_from_row(raw_df: pd.DataFrame, start_row_idx: int = 19, first_col_name: str = "PoP") -> pd.DataFrame:
+    if raw_df is None or raw_df.empty:
+        return pd.DataFrame()
+    df_raw = raw_df.fillna("").copy()
+    header_idx = None
+    scan_limit = min(len(df_raw), max(start_row_idx + 2, 28))
+    header_tokens = {"pop", "sitio", "site", "ubicacion", "ubicacioncomercial", "alternativa", "modelo"}
+    for idx in range(scan_limit):
+        first = normalize_key(clean_sheet_cell(df_raw.iat[idx, 0])) if df_raw.shape[1] else ""
+        row_non_empty = sum(1 for value in df_raw.iloc[idx].tolist() if clean_sheet_cell(value))
+        if first in header_tokens or (idx >= start_row_idx and row_non_empty >= 2):
+            header_idx = idx
+            break
+    if header_idx is None:
+        header_idx = min(start_row_idx, max(len(df_raw) - 1, 0))
+
+    raw_headers = [clean_sheet_cell(value) for value in df_raw.iloc[header_idx].tolist()]
+    if not raw_headers or normalize_key(raw_headers[0]) not in header_tokens:
+        raw_headers = [first_col_name] + [
+            header if header else f"Campo {col_idx + 1}"
+            for col_idx, header in enumerate(raw_headers[1:], start=1)
+        ]
+        data_start = start_row_idx + 1 if header_idx <= start_row_idx else header_idx + 1
+    else:
+        raw_headers = [
+            header if header else f"Campo {col_idx + 1}"
+            for col_idx, header in enumerate(raw_headers)
+        ]
+        data_start = header_idx + 1
+
+    deduped_headers = []
+    seen_headers: dict[str, int] = {}
+    for header in raw_headers:
+        clean_header = header or f"Campo {len(deduped_headers) + 1}"
+        count = seen_headers.get(clean_header, 0)
+        seen_headers[clean_header] = count + 1
+        deduped_headers.append(clean_header if count == 0 else f"{clean_header}_{count + 1}")
+
+    records = []
+    for idx in range(data_start, len(df_raw)):
+        values = [clean_sheet_cell(value) for value in df_raw.iloc[idx].tolist()]
+        if not any(values):
+            continue
+        if not values[0]:
+            continue
+        records.append({deduped_headers[col_idx]: value for col_idx, value in enumerate(values[: len(deduped_headers)])})
+    return pd.DataFrame(records)
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_propuesta_site_options(refresh_nonce: int = 0) -> pd.DataFrame:
+    url = propuesta_tecnico_economica_csv_url("01_Inputs_Sitio", refresh_nonce=refresh_nonce)
+    raw_df = read_remote_csv(
+        url,
+        refresh_nonce=refresh_nonce + PROPUESTA_TECNICO_ECONOMICA_SOURCE_VERSION,
+        dtype=str,
+        header=None,
+    )
+    return _build_sheet_table_from_row(raw_df, start_row_idx=19, first_col_name="PoP")
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_propuesta_catalogo_tec(refresh_nonce: int = 0) -> pd.DataFrame:
+    url = propuesta_tecnico_economica_csv_url("02_Catalogo_Tec", refresh_nonce=refresh_nonce)
+    raw_df = read_remote_csv(
+        url,
+        refresh_nonce=refresh_nonce + PROPUESTA_TECNICO_ECONOMICA_SOURCE_VERSION,
+        dtype=str,
+        header=None,
+    )
+    return _build_sheet_table_from_row(raw_df, start_row_idx=19, first_col_name="Modelo")
+
+
+def first_matching_column(df: pd.DataFrame, candidates: list[str]) -> str | None:
+    if df is None or df.empty:
+        return None
+    candidate_keys = [normalize_key(candidate) for candidate in candidates]
+    for col in df.columns:
+        col_key = normalize_key(col)
+        if any(candidate_key and (candidate_key == col_key or candidate_key in col_key or col_key in candidate_key) for candidate_key in candidate_keys):
+            return col
+    return None
 
 
 @st.cache_data(show_spinner=False, ttl=120)
@@ -11677,7 +11978,7 @@ def render_telecom_tower_eval_analysis():
         profile = pd.DataFrame(st.session_state.get("telecom_09_viento_outputs", {}).get("perfil_alturas", []))
         if profile.empty:
             return pd.DataFrame()
-        for col in ["Altura m", "FP neto", "Velocidad media", "Energía anual neta kWh", "Horas equivalentes"]:
+        for col in ["Altura m", "FP neto", "Velocidad media", "Energía anual neta kWh", "Horas equivalentes", "Weibull k", "Weibull c"]:
             if col in profile.columns:
                 profile[col] = pd.to_numeric(profile[col], errors="coerce")
         if not {"Altura m", "FP neto"}.issubset(profile.columns):
@@ -12293,57 +12594,41 @@ def render_telecom_tower_eval_analysis():
                 return
 
             with st.container(border=True):
-                st.markdown("##### Selección técnica y validación")
-                config_a, config_b, config_c, config_d = st.columns(4)
-                with config_a:
-                    datetime_options = date_candidates + ["Sin fecha/hora"]
-                    selected_datetime_choice = st.selectbox("Columna fecha/hora", datetime_options, index=0 if date_candidates else 0, key="telecom_09_datetime_col")
-                    selected_datetime = None if selected_datetime_choice == "Sin fecha/hora" else selected_datetime_choice
-                    if "Fecha/hora" in raw_df.columns and datetime_detection_meta.get("valid_ratio", 0.0) >= 0.70:
-                        selected_datetime = "Fecha/hora"
-                        st.caption("Usando fecha/hora detectada automáticamente por contenido del CSV.")
-                    elif selected_datetime is None and date_candidates:
-                        selected_datetime = date_candidates[0]
-                        st.caption(f"Usando automáticamente `{selected_datetime}` como fecha/hora.")
-                with config_b:
-                    selected_wind_col = st.selectbox("Altura / columna a analizar", wind_candidates, index=0, key="telecom_09_wind_col")
-                with config_c:
+                st.markdown("##### Centro de control del recurso eólico")
+                ctrl_a, ctrl_b, ctrl_c, ctrl_d = st.columns([1.05, 1.0, 1.0, 1.15])
+                with ctrl_a:
+                    target_wind_height_m = st.number_input(
+                        "Altura objetivo de análisis (m)",
+                        min_value=1.0,
+                        max_value=220.0,
+                        value=float(st.session_state.get("telecom_09_target_height_m", 15.0)),
+                        step=0.5,
+                        key="telecom_09_target_height_m",
+                        help="El dashboard interpola velocidad, Weibull, FP y generación a esta altura usando las columnas cargadas.",
+                    )
+                with ctrl_b:
                     outlier_limit = st.number_input("Límite outlier velocidad (m/s)", min_value=12.0, max_value=80.0, value=35.0, step=1.0, key="telecom_09_outlier_limit")
-                with config_d:
-                    ranking_mode = st.selectbox("Ranking técnico", ["Mayor FP neto", "Mayor energía neta", "Mayor velocidad media"], index=0, key="telecom_09_ranking")
-
-            with st.container(border=True):
-                st.markdown("##### Curva de potencia, pérdidas y disponibilidad")
-                curve_cfg1, curve_cfg2 = st.columns([0.34, 0.66])
-                with curve_cfg1:
-                    power_curve_mode = st.selectbox(
-                        "Curva de potencia",
-                        ["Curva cúbica editable", "Curva publicada 10 kW"],
-                        index=0,
-                        key="telecom_09_power_curve_mode",
-                    )
-                with curve_cfg2:
-                    cp_10kw_url = st.text_input(
-                        "URL curva 10 kW",
-                        value=cp_10kw_default_url,
-                        key="telecom_09_cp_10kw_url",
-                        help="Debe publicar velocidad en columna A y potencia real en columna B.",
-                    )
-                pc1, pc2, pc3, pc4, pc5, pc6, pc7 = st.columns(7)
-                with pc1:
-                    rated_kw = st.number_input("Potencia nominal (kW)", min_value=0.1, value=10.0 if power_curve_mode == "Curva publicada 10 kW" else 3.0, step=0.5, key="telecom_09_rated_kw")
-                with pc2:
-                    cut_in = st.number_input("Cut-in (m/s)", min_value=0.0, value=3.0, step=0.1, key="telecom_09_cutin")
-                with pc3:
-                    rated_speed = st.number_input("Velocidad nominal (m/s)", min_value=0.1, value=11.0, step=0.1, key="telecom_09_rated_speed")
-                with pc4:
-                    cut_out = st.number_input("Cut-out (m/s)", min_value=0.1, value=25.0, step=0.5, key="telecom_09_cutout")
-                with pc5:
-                    electrical_losses = st.number_input("Pérdidas eléctricas (%)", min_value=0.0, max_value=60.0, value=3.0, step=0.5, key="telecom_09_electrical_losses")
-                with pc6:
-                    availability = st.number_input("Disponibilidad (%)", min_value=0.0, max_value=100.0, value=95.0, step=1.0, key="telecom_09_availability")
-                with pc7:
-                    additional_losses = st.number_input("Pérdidas adicionales (%)", min_value=0.0, max_value=60.0, value=2.0, step=0.5, key="telecom_09_additional_losses")
+                selected_datetime = None
+                if "Fecha/hora" in raw_df.columns and datetime_detection_meta.get("valid_ratio", 0.0) >= 0.70:
+                    selected_datetime = "Fecha/hora"
+                elif date_candidates:
+                    selected_datetime = date_candidates[0]
+                with ctrl_c:
+                    st.metric("Fecha/hora", selected_datetime or "Sintética")
+                    st.caption("Detección automática del CSV.")
+                with ctrl_d:
+                    st.metric("Columnas viento", len(wind_candidates))
+                    st.caption("Cálculo por columnas + interpolación a altura objetivo.")
+                ranking_mode = "Mayor FP neto"
+                power_curve_mode = "Curva cúbica editable"
+                cp_10kw_url = cp_10kw_default_url
+                rated_kw = 10.0
+                cut_in = 3.0
+                rated_speed = 11.0
+                cut_out = 25.0
+                electrical_losses = 3.0
+                availability = 95.0
+                additional_losses = 2.0
 
         working_df = raw_df.copy()
         if selected_datetime:
@@ -12410,11 +12695,59 @@ def render_telecom_tower_eval_analysis():
         else:
             comparison = comparison.sort_values("FP neto", ascending=False)
         comparison["Ranking técnico"] = range(1, len(comparison) + 1)
-        selected_analysis = next(item for item in analyses if item["Columna"] == selected_wind_col)
-        recommended = comparison.iloc[0]
         def _wind_output_height(col_name: str) -> float:
             match = re.search(r"(\d+(?:[.,]\d+)?)", str(col_name))
             return parse_float_local(match.group(1), np.nan) if match else np.nan
+
+        for idx, profile_row in comparison.iterrows():
+            comparison.loc[idx, "Altura m"] = _wind_output_height(str(profile_row.get("Columna", "")))
+
+        def _interpolate_by_height(column: str, default: float = np.nan) -> float:
+            interp_df = comparison[["Altura m", column]].copy() if column in comparison.columns else pd.DataFrame()
+            if interp_df.empty:
+                return default
+            interp_df["Altura m"] = pd.to_numeric(interp_df["Altura m"], errors="coerce")
+            interp_df[column] = pd.to_numeric(interp_df[column], errors="coerce")
+            interp_df = interp_df.dropna(subset=["Altura m", column]).sort_values("Altura m")
+            if interp_df.empty:
+                return default
+            heights = interp_df["Altura m"].to_numpy(dtype=float)
+            values = interp_df[column].to_numpy(dtype=float)
+            if len(heights) == 1:
+                return float(values[0])
+            return float(np.interp(float(target_wind_height_m), heights, values, left=values[0], right=values[-1]))
+
+        nearest_analysis = analyses[0]
+        height_distances = [
+            (
+                abs(_wind_output_height(str(item.get("Columna", ""))) - float(target_wind_height_m))
+                if np.isfinite(_wind_output_height(str(item.get("Columna", ""))))
+                else np.inf,
+                item,
+            )
+            for item in analyses
+        ]
+        if height_distances:
+            nearest_analysis = sorted(height_distances, key=lambda item: item[0])[0][1]
+        selected_analysis = {
+            **nearest_analysis,
+            "Columna": f"Altura objetivo {float(target_wind_height_m):g} m",
+            "Altura objetivo m": float(target_wind_height_m),
+            "Fuente curva potencia": "Curva cúbica editable · interpolación altura objetivo",
+        }
+        for metric_name in [
+            "Velocidad media", "Mediana", "Mínimo", "Máximo", "Desv. estándar",
+            "P10", "P25", "P50", "P75", "P90", "CV", "Weibull k", "Weibull c",
+            "Energía anual bruta kWh", "Energía anual neta kWh", "FP bruto", "FP neto",
+            "Horas equivalentes", "Potencia referencia kW",
+        ]:
+            selected_analysis[metric_name] = _interpolate_by_height(metric_name, float(nearest_analysis.get(metric_name, np.nan)))
+        selected_analysis["Clasificación"] = _resource_label(
+            float(selected_analysis.get("Velocidad media", 0.0) or 0.0),
+            float(selected_analysis.get("FP neto", 0.0) or 0.0) / 100.0,
+        )
+        selected_wind_col = str(selected_analysis["Columna"])
+        recommended = comparison.iloc[0]
         wind_profile_records = []
         wind_monthly_profile_records = []
         for _, profile_row in comparison.iterrows():
@@ -12429,8 +12762,23 @@ def render_telecom_tower_eval_analysis():
                     "FP neto": float(profile_row.get("FP neto", np.nan)),
                     "Energía anual neta kWh": float(profile_row.get("Energía anual neta kWh", np.nan)),
                     "Horas equivalentes": float(profile_row.get("Horas equivalentes", np.nan)),
+                    "Weibull k": float(profile_row.get("Weibull k", np.nan)),
+                    "Weibull c": float(profile_row.get("Weibull c", np.nan)),
                 }
             )
+        wind_profile_records.append(
+            {
+                "Columna": str(selected_analysis["Columna"]),
+                "Altura m": float(target_wind_height_m),
+                "Velocidad media": float(selected_analysis.get("Velocidad media", np.nan)),
+                "FP neto": float(selected_analysis.get("FP neto", np.nan)),
+                "Energía anual neta kWh": float(selected_analysis.get("Energía anual neta kWh", np.nan)),
+                "Horas equivalentes": float(selected_analysis.get("Horas equivalentes", np.nan)),
+                "Weibull k": float(selected_analysis.get("Weibull k", np.nan)),
+                "Weibull c": float(selected_analysis.get("Weibull c", np.nan)),
+                "Método": "Interpolación altura objetivo",
+            }
+        )
         datetime_valid_for_monthly = "_datetime" in working_df.columns and working_df["_datetime"].notna().mean() >= 0.55
         for item in analyses:
             height_value = _wind_output_height(str(item.get("Columna", "")))
@@ -12463,6 +12811,32 @@ def render_telecom_tower_eval_analysis():
                         "Energía mensual neta kWh por turbina": float(monthly_item.get("Potencia neta kW", 0.0) or 0.0),
                     }
                 )
+        if wind_monthly_profile_records:
+            monthly_profile_df = pd.DataFrame(wind_monthly_profile_records)
+            for month in range(1, 13):
+                month_profile = monthly_profile_df[monthly_profile_df["Mes"].astype(int) == month].copy()
+                month_profile["Altura m"] = pd.to_numeric(month_profile["Altura m"], errors="coerce")
+                month_profile["Energía mensual neta kWh por turbina"] = pd.to_numeric(
+                    month_profile["Energía mensual neta kWh por turbina"],
+                    errors="coerce",
+                )
+                month_profile = month_profile.dropna(subset=["Altura m", "Energía mensual neta kWh por turbina"]).sort_values("Altura m")
+                if month_profile.empty:
+                    continue
+                heights = month_profile["Altura m"].to_numpy(dtype=float)
+                monthly_energy = month_profile["Energía mensual neta kWh por turbina"].to_numpy(dtype=float)
+                if len(heights) == 1:
+                    target_monthly_energy = float(monthly_energy[0])
+                else:
+                    target_monthly_energy = float(np.interp(float(target_wind_height_m), heights, monthly_energy, left=monthly_energy[0], right=monthly_energy[-1]))
+                wind_monthly_profile_records.append(
+                    {
+                        "Columna": str(selected_analysis["Columna"]),
+                        "Altura m": float(target_wind_height_m),
+                        "Mes": month,
+                        "Energía mensual neta kWh por turbina": target_monthly_energy,
+                    }
+                )
         wind_outputs = {
             "velocidad_media_recomendada": float(selected_analysis["Velocidad media"]),
             "factor_planta_recomendado": float(selected_analysis["FP neto"]),
@@ -12470,6 +12844,8 @@ def render_telecom_tower_eval_analysis():
             "generacion_mensual_neta_por_turbina": float(selected_analysis["Energía anual neta kWh"]) / 12.0,
             "horas_equivalentes": float(selected_analysis["Horas equivalentes"]),
             "altura_columna_recomendada": str(selected_analysis["Columna"]),
+            "altura_objetivo_m": float(target_wind_height_m),
+            "metodo_altura_objetivo": "Interpolación lineal entre columnas de viento cargadas",
             "clasificacion_recurso": str(selected_analysis["Clasificación"]),
             "weibull_k": float(selected_analysis["Weibull k"]),
             "weibull_c": float(selected_analysis["Weibull c"]),
@@ -12493,10 +12869,10 @@ def render_telecom_tower_eval_analysis():
         if st.session_state.get("telecom_09_viento_output_signature") != output_signature:
             st.session_state["telecom_09_viento_output_signature"] = output_signature
             st.rerun()
-        st.success(
-            f"Puente automático activo: {selected_analysis['Columna']} alimenta el modelo con FP {selected_analysis['FP neto']:.1f}%, "
-            f"velocidad media {selected_analysis['Velocidad media']:.2f} m/s y generación mensual "
-            f"{selected_analysis['Energía anual neta kWh'] / 12.0:,.0f} kWh/turbina.".replace(",", ".")
+        st.caption(
+            f"Altura objetivo activa: {float(target_wind_height_m):.1f} m · FP {selected_analysis['FP neto']:.1f}% · "
+            f"velocidad {selected_analysis['Velocidad media']:.2f} m/s · "
+            f"{selected_analysis['Energía anual neta kWh'] / 12.0:,.0f} kWh/mes por turbina.".replace(",", ".")
         )
         st.caption(
             f"Curva de potencia usada: {selected_analysis.get('Fuente curva potencia', 'Curva cúbica editable')} · "
@@ -13839,125 +14215,204 @@ def render_telecom_tower_eval_analysis():
             active_fp = curve_base_fp
             active_source_detail = curve_base_fp_source
 
-        characteristics_curve = turbine_characteristics_df.copy() if isinstance(turbine_characteristics_df, pd.DataFrame) else pd.DataFrame()
-        characteristics_curve["Alternativa"] = characteristics_curve.get("Alternativa", pd.Series(dtype=str)).astype(str) if not characteristics_curve.empty else pd.Series(dtype=str)
-        row_10 = characteristics_curve[characteristics_curve["Alternativa"].str.contains("10", case=False, na=False)].head(1) if not characteristics_curve.empty else pd.DataFrame()
-        if row_10.empty:
-            curve_unit_kw = 10.0
-            curve_total_height = 14.0
-            curve_rotor_height = rotor_height_sheet if np.isfinite(rotor_height_sheet) and rotor_height_sheet > 0 else 7.0
-            curve_diameter = 5.0
-            curve_area = 35.0
-            curve_model_name = "Piloto 10 kW"
-        else:
-            row_10 = row_10.iloc[0]
-            curve_unit_kw = parse_float_local(row_10.get("Potencia unitaria kW", row_10.get("Potencia kW", 10.0)), 10.0)
-            curve_total_height = parse_float_local(row_10.get("Altura total", 14.0), 14.0)
-            curve_rotor_height = parse_float_local(row_10.get("Altura rotor", rotor_height_sheet), rotor_height_sheet if np.isfinite(rotor_height_sheet) else 7.0)
-            curve_diameter = parse_float_local(row_10.get("Diámetro rotor", row_10.get("Diametro rotor", 5.0)), 5.0)
-            curve_area = parse_float_local(row_10.get("área rotor", row_10.get("Área rotor", np.nan)), np.nan)
-            if not np.isfinite(curve_area) or curve_area <= 0:
-                curve_area = math.pi * (curve_diameter / 2.0) ** 2 if np.isfinite(curve_diameter) and curve_diameter > 0 else 35.0
-            curve_model_name = "Piloto 10 kW"
-        curve_unit_kw = curve_unit_kw if np.isfinite(curve_unit_kw) and curve_unit_kw > 0 else 10.0
-        curve_total_height = curve_total_height if np.isfinite(curve_total_height) and curve_total_height > 0 else 14.0
-        curve_rotor_height = curve_rotor_height if np.isfinite(curve_rotor_height) and curve_rotor_height > 0 else 7.0
-        curve_area = curve_area if np.isfinite(curve_area) and curve_area > 0 else 35.0
-
-        cut_in_curve = 3.0
-        rated_speed_curve = 11.0
-        cut_out_curve = 24.0
-        net_eff_curve = 0.885
-        cp_anchor_v = np.array([0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 16, 20, 21, 23, 30], dtype=float)
-        cp_anchor = np.array([0, 0, 0.12, 0.18, 0.25, 0.31, 0.35, 0.38, 0.39, 0.38, 0.36, 0.33, 0.28, 0.28, 0.20, 0.20, 0.20], dtype=float)
-
         wind_height_profile_curve = current_wind_height_profile()
-        hub_multiplier_curve = 1.048
-        hub_note = "Extrapolación referencial"
-        if isinstance(wind_height_profile_curve, pd.DataFrame) and not wind_height_profile_curve.empty and "Altura m" in wind_height_profile_curve.columns:
-            profile_curve_tmp = wind_height_profile_curve.dropna(subset=["Altura m"]).copy()
-            speed_cols_curve = [col for col in ["Velocidad media m/s", "Velocidad media", "Media m/s"] if col in profile_curve_tmp.columns]
-            if speed_cols_curve:
-                speed_col_curve = speed_cols_curve[0]
-                profile_curve_tmp[speed_col_curve] = pd.to_numeric(profile_curve_tmp[speed_col_curve], errors="coerce")
-                profile_curve_tmp = profile_curve_tmp.dropna(subset=[speed_col_curve]).sort_values("Altura m")
-                if len(profile_curve_tmp) >= 2:
-                    heights_curve = profile_curve_tmp["Altura m"].astype(float).to_numpy()
-                    speeds_curve = profile_curve_tmp[speed_col_curve].astype(float).to_numpy()
-                    ref_height_curve = 10.0 if heights_curve.min() <= 10.0 <= heights_curve.max() else float(heights_curve.min())
-                    speed_ref_curve = float(np.interp(ref_height_curve, heights_curve, speeds_curve))
-                    speed_hub_curve = float(np.interp(curve_total_height, heights_curve, speeds_curve))
-                    if speed_ref_curve > 0 and speed_hub_curve > 0:
-                        hub_multiplier_curve = speed_hub_curve / speed_ref_curve
-                        hub_note = f"09_Viento · altura {curve_total_height:.1f} m"
-        elif np.isfinite(measured_speed) and measured_speed > 0 and np.isfinite(measurement_height) and measurement_height > 0:
-            speed_hub_calc = measured_speed * ((curve_total_height / measurement_height) ** (roughness_exp if np.isfinite(roughness_exp) else 0.14))
-            if speed_hub_calc > 0:
-                hub_multiplier_curve = speed_hub_calc / measured_speed
+        if wind_height_profile_curve.empty and np.isfinite(measured_speed) and np.isfinite(measurement_height):
+            wind_height_profile_curve = pd.DataFrame(
+                [
+                    {
+                        "Columna": "05_Recurso_Eolico",
+                        "Altura m": measurement_height,
+                        "Velocidad media": measured_speed,
+                        "FP neto": active_fp,
+                        "Weibull k": weibull_k,
+                        "Weibull c": measured_speed / math.gamma(1 + 1 / weibull_k) if np.isfinite(weibull_k) and weibull_k > 0 else np.nan,
+                    }
+                ]
+            )
 
-        v_ref_values = np.arange(0.0, 30.0 + 1.0, 1.0)
-        v_hub_values = v_ref_values * hub_multiplier_curve
-        v_vnom = np.divide(v_hub_values, rated_speed_curve, out=np.zeros_like(v_hub_values), where=rated_speed_curve > 0)
-        cp_values = np.interp(v_hub_values, cp_anchor_v, cp_anchor, left=0.0, right=0.20)
-        cp_values = np.where(v_hub_values < cut_in_curve, 0.0, cp_values)
-        p_aero_kw = 0.5 * density_air * curve_area * np.power(v_hub_values, 3) * cp_values / 1000.0
-        p_net_unlimited = p_aero_kw * net_eff_curve
-        p_curve_kw = np.where(v_hub_values < cut_in_curve, 0.0, np.minimum(p_net_unlimited, curve_unit_kw))
-        p_curve_kw = np.where(v_hub_values >= cut_out_curve, 0.0, p_curve_kw)
-        rpm_values = v_ref_values * 11.211
-        omega_values = rpm_values * 2.0 * math.pi / 60.0
-        torque_values = np.divide(p_curve_kw * 1000.0, omega_values, out=np.zeros_like(p_curve_kw), where=omega_values > 0)
-        betz_used = np.where(cp_values > 0, cp_values / 0.593 * 100.0, 0.0)
+        try:
+            turbine_curves = load_turbine_power_curves(refresh_nonce=data_refresh_nonce)
+        except Exception as exc:
+            st.error(f"No se pudieron cargar las curvas publicadas de potencia: {exc}")
+            turbine_curves = {}
 
-        def _curve_status(vhub, pkw):
-            if vhub < cut_in_curve:
-                return "Bajo cut-in"
-            if vhub >= cut_out_curve:
-                return "Cut-out/protección"
-            if pkw >= curve_unit_kw * 0.995:
-                return "Limitada Pn"
-            return "Región V3"
+        def _interp_profile_value(target_height: float, col_name: str, default: float = np.nan) -> float:
+            if wind_height_profile_curve.empty or col_name not in wind_height_profile_curve.columns or not np.isfinite(target_height):
+                return default
+            values_df = wind_height_profile_curve[["Altura m", col_name]].copy()
+            values_df["Altura m"] = pd.to_numeric(values_df["Altura m"], errors="coerce")
+            values_df[col_name] = pd.to_numeric(values_df[col_name], errors="coerce")
+            values_df = values_df.dropna().sort_values("Altura m")
+            if values_df.empty:
+                return default
+            heights = values_df["Altura m"].to_numpy(dtype=float)
+            values = values_df[col_name].to_numpy(dtype=float)
+            if len(values) == 1:
+                return float(values[0])
+            return float(np.interp(float(target_height), heights, values, left=values[0], right=values[-1]))
 
-        curve_power_df = pd.DataFrame(
-            {
-                "V ref (m/s)": v_ref_values,
-                "V hub (m/s)": v_hub_values,
-                "V/Vnom": v_vnom,
-                "Cp": cp_values,
-                "Paero (kW)": p_aero_kw,
-                "P neta sin límite (kW)": p_net_unlimited,
-                "P curva neta (kW)": p_curve_kw,
-                "RPM": rpm_values,
-                "Omega (rad/s)": omega_values,
-                "Torque (Nm)": torque_values,
-                "Estado operacional": [_curve_status(v, p) for v, p in zip(v_hub_values, p_curve_kw)],
-                "Betz usado %": betz_used,
-                "P nominal (kW)": curve_unit_kw,
-                "Modelo": curve_model_name,
-            }
-        )
+        def _source_for_height(target_height: float) -> str:
+            if wind_height_profile_curve.empty or "Altura m" not in wind_height_profile_curve.columns:
+                return active_source_detail
+            tmp = wind_height_profile_curve.dropna(subset=["Altura m"]).copy()
+            if tmp.empty:
+                return active_source_detail
+            tmp["Altura m"] = pd.to_numeric(tmp["Altura m"], errors="coerce")
+            tmp = tmp.dropna(subset=["Altura m"])
+            if tmp.empty:
+                return active_source_detail
+            idx = (tmp["Altura m"] - float(target_height)).abs().idxmin()
+            return str(tmp.loc[idx].get("Columna", active_source_detail))
 
-        pmax_curve = float(curve_power_df["P curva neta (kW)"].max()) if not curve_power_df.empty else np.nan
-        pmax_row = curve_power_df.sort_values("P curva neta (kW)", ascending=False).head(1)
-        v_at_pmax = float(pmax_row["V hub (m/s)"].iloc[0]) if not pmax_row.empty else np.nan
-        cp_max = float(curve_power_df["Cp"].max()) if not curve_power_df.empty else np.nan
-        torque_max = float(curve_power_df["Torque (Nm)"].max()) if not curve_power_df.empty else np.nan
-        betz_max = float(curve_power_df["Betz usado %"].max()) if not curve_power_df.empty else np.nan
-        status_nominal = "Alcanza nominal" if np.isfinite(pmax_curve) and pmax_curve >= curve_unit_kw * 0.995 else "No alcanza nominal"
+        def _curve_power_at(curve_df: pd.DataFrame, speeds: np.ndarray) -> np.ndarray:
+            curve_speed = pd.to_numeric(curve_df["Velocidad m/s"], errors="coerce").to_numpy(dtype=float)
+            curve_power = pd.to_numeric(curve_df["Potencia kW"], errors="coerce").to_numpy(dtype=float)
+            valid = np.isfinite(curve_speed) & np.isfinite(curve_power)
+            curve_speed = curve_speed[valid]
+            curve_power = curve_power[valid]
+            if len(curve_speed) == 0:
+                return np.zeros_like(speeds, dtype=float)
+            return np.interp(speeds, curve_speed, curve_power, left=0.0, right=float(curve_power[-1]))
+
+        def _mean_power_from_weibull(curve_df: pd.DataFrame, mean_speed_value: float, k_value: float, c_value: float) -> float:
+            if not np.isfinite(mean_speed_value) or mean_speed_value <= 0:
+                return 0.0
+            if not np.isfinite(k_value) or k_value <= 0:
+                k_value = 2.0
+            if not np.isfinite(c_value) or c_value <= 0:
+                c_value = mean_speed_value / math.gamma(1.0 + 1.0 / k_value)
+            max_v = max(30.0, float(curve_df["Velocidad m/s"].max()) * 1.8, mean_speed_value * 3.0)
+            v_grid = np.linspace(0.0, max_v, 900)
+            power_grid = _curve_power_at(curve_df, v_grid)
+            pdf = (k_value / c_value) * np.power(np.clip(v_grid, 0, None) / c_value, k_value - 1.0) * np.exp(-np.power(np.clip(v_grid, 0, None) / c_value, k_value))
+            pdf[~np.isfinite(pdf)] = 0.0
+            pdf_area = float(np.trapz(pdf, v_grid))
+            if pdf_area <= 0:
+                return float(_curve_power_at(curve_df, np.array([mean_speed_value]))[0])
+            return float(np.trapz(power_grid * pdf, v_grid) / pdf_area)
+
+        curve_rows = []
+        curve_points = []
+        operating_points = []
+        for model, meta in turbine_curves.items():
+            curve_df = meta.get("curve", pd.DataFrame()).copy()
+            if curve_df.empty:
+                continue
+            rated_kw_curve = float(meta.get("rated_kw", np.nan))
+            rotor_height = float(meta.get("rotor_height_m", np.nan))
+            total_height = float(meta.get("total_height_m", np.nan))
+            effective_wind_height = float(meta.get("effective_wind_height_m", np.nan))
+            rotor_area = float(meta.get("rotor_area_m2", np.nan))
+            density_curve = float(meta.get("air_density", density_air))
+            if not np.isfinite(rated_kw_curve) or rated_kw_curve <= 0:
+                rated_kw_curve = float(curve_df["Potencia kW"].max())
+            if not np.isfinite(rotor_height) or rotor_height <= 0:
+                rotor_height = rotor_height_sheet if np.isfinite(rotor_height_sheet) else measurement_height
+            if not np.isfinite(effective_wind_height) or effective_wind_height <= 0:
+                effective_wind_height = rotor_height
+            if not np.isfinite(total_height) or total_height <= 0:
+                total_height = effective_wind_height
+            speed_at_height = _interp_profile_value(effective_wind_height, "Velocidad media", active_speed)
+            k_at_height = _interp_profile_value(effective_wind_height, "Weibull k", weibull_k)
+            c_at_height = _interp_profile_value(effective_wind_height, "Weibull c", np.nan)
+            c_for_calc = c_at_height
+            if not np.isfinite(c_for_calc) or c_for_calc <= 0:
+                k_for_calc = k_at_height if np.isfinite(k_at_height) and k_at_height > 0 else 2.0
+                c_for_calc = speed_at_height / math.gamma(1.0 + 1.0 / k_for_calc) if np.isfinite(speed_at_height) and speed_at_height > 0 else np.nan
+            mean_power_kw = _mean_power_from_weibull(curve_df, speed_at_height, k_at_height, c_for_calc)
+            fp_curve = mean_power_kw / rated_kw_curve * 100.0 if rated_kw_curve > 0 else np.nan
+            annual_kwh = mean_power_kw * 8760.0
+            p_oper_kw = float(_curve_power_at(curve_df, np.array([speed_at_height]))[0])
+            pmax_curve_model = float(curve_df["Potencia kW"].max())
+            v_at_pmax_model = float(curve_df.loc[curve_df["Potencia kW"].idxmax(), "Velocidad m/s"])
+            if np.isfinite(rotor_area) and rotor_area > 0 and np.isfinite(density_curve) and speed_at_height > 0:
+                p_cin_oper_kw = 0.5 * density_curve * rotor_area * speed_at_height ** 3 / 1000.0
+            else:
+                p_cin_oper_kw = np.nan
+            p_betz_oper_kw = p_cin_oper_kw * 0.593 if np.isfinite(p_cin_oper_kw) else np.nan
+            cp_oper = p_oper_kw / p_cin_oper_kw if np.isfinite(p_cin_oper_kw) and p_cin_oper_kw > 0 else np.nan
+            betz_oper = p_oper_kw / p_betz_oper_kw * 100.0 if np.isfinite(p_betz_oper_kw) and p_betz_oper_kw > 0 else np.nan
+            rpm_oper = speed_at_height * 11.211 if np.isfinite(speed_at_height) else np.nan
+            omega_oper = rpm_oper * 2.0 * math.pi / 60.0 if np.isfinite(rpm_oper) else np.nan
+            torque_oper = p_oper_kw * 1000.0 / omega_oper if np.isfinite(omega_oper) and omega_oper > 0 else np.nan
+            status = "Sobre nominal" if pmax_curve_model > rated_kw_curve * 1.02 else "Dentro nominal"
+            curve_rows.append(
+                {
+                    "Modelo": model,
+                    "Pestaña fuente": meta.get("sheet", ""),
+                    "Pn nominal kW": rated_kw_curve,
+                    "Altura barrida rotor m": rotor_height,
+                    "Altura total turbina m": total_height,
+                    "Altura efectiva viento m": effective_wind_height,
+                    "Velocidad interpolada m/s": speed_at_height,
+                    "Weibull k": k_at_height,
+                    "Weibull c": c_for_calc,
+                    "Potencia operativa kW": p_oper_kw,
+                    "Potencia media kW": mean_power_kw,
+                    "FP curva %": fp_curve,
+                    "Energía anual kWh": annual_kwh,
+                    "Pmax curva kW": pmax_curve_model,
+                    "V Pmax m/s": v_at_pmax_model,
+                    "Cp operativo": cp_oper,
+                    "Betz operativo %": betz_oper,
+                    "Torque operativo Nm": torque_oper,
+                    "Estado nominal": status,
+                    "Fuente medición": _source_for_height(effective_wind_height),
+                }
+            )
+            operating_points.append({"Modelo": model, "Velocidad interpolada m/s": speed_at_height, "Potencia operativa kW": p_oper_kw})
+            for _, point in curve_df.iterrows():
+                v_point = float(point["Velocidad m/s"])
+                p_kw_point = float(point["Potencia kW"])
+                p_cin_kw = 0.5 * density_curve * rotor_area * v_point ** 3 / 1000.0 if np.isfinite(rotor_area) and rotor_area > 0 else np.nan
+                cp_point = p_kw_point / p_cin_kw if np.isfinite(p_cin_kw) and p_cin_kw > 0 else np.nan
+                curve_points.append(
+                    {
+                        "Modelo": model,
+                        "V (m/s)": v_point,
+                        "P real kW": p_kw_point,
+                        "Cp efectivo": cp_point,
+                        "Betz usado %": cp_point / 0.593 * 100.0 if np.isfinite(cp_point) else np.nan,
+                        "Pn nominal kW": rated_kw_curve,
+                        "Altura barrida rotor m": rotor_height,
+                        "Altura efectiva viento m": effective_wind_height,
+                    }
+                )
+
+        curve_summary_df = pd.DataFrame(curve_rows)
+        curve_points_df = pd.DataFrame(curve_points)
+        operating_points_df = pd.DataFrame(operating_points)
+        if curve_summary_df.empty:
+            st.warning("No hay curvas publicadas disponibles para construir el análisis técnico.")
+            st.stop()
+
+        st.session_state["telecom_03_curve_summary_df"] = curve_summary_df.to_dict("records")
+        st.session_state["telecom_03_curve_points_df"] = curve_points_df.to_dict("records")
+
+        best_fp_row = curve_summary_df.sort_values("FP curva %", ascending=False).iloc[0]
+        best_energy_row = curve_summary_df.sort_values("Energía anual kWh", ascending=False).iloc[0]
+        selected_curve_row = curve_summary_df[curve_summary_df["Modelo"].eq("VAWT 10 kW")].head(1)
+        selected_curve_row = selected_curve_row.iloc[0] if not selected_curve_row.empty else best_fp_row
+        pmax_curve = float(selected_curve_row["Pmax curva kW"])
+        v_at_pmax = float(selected_curve_row["V Pmax m/s"])
+        cp_max = float(curve_points_df[curve_points_df["Modelo"].eq(selected_curve_row["Modelo"])]["Cp efectivo"].max())
+        torque_max = float(curve_summary_df["Torque operativo Nm"].max())
+        betz_max = float(curve_summary_df["Betz operativo %"].max())
+        status_nominal = str(selected_curve_row["Estado nominal"])
 
         st.markdown(
             f"""
             <div class="telecom-site-shell">
               <div class="telecom-site-head">
                 <div>
-                  <p class="telecom-site-k">03_CURVA_POTENCIA · Fuente activa {html.escape(active_resource_source)}</p>
-                  <h3 class="telecom-site-t">Curva neta con cut-in, potencia nominal y cut-out</h3>
-                  <p class="telecom-site-s">Vista técnica para validar si el recurso llega a zona útil, cuándo limita por potencia nominal y cuánto esfuerzo mecánico exige la turbina. Si 09_Viento está cargado, el ajuste de altura usa su perfil activo.</p>
+                  <p class="telecom-site-k">00_RESUMEN + 02_FICHA_GREEF · Curvas GREEF por turbina</p>
+                  <h3 class="telecom-site-t">Curvas reales 1/3/5/10 kW integradas con mediciones cargadas</h3>
+                  <p class="telecom-site-s">Cada turbina usa la curva publicada en 00_Resumen y la geometría de 02_Ficha_GREEF. La altura de cálculo para interpolar el recurso eólico es Altura torre, aplicada como altura barrida, altura total y altura efectiva de viento.</p>
                 </div>
                 <div class="telecom-site-status">
-                  <div class="telecom-site-pill"><strong>{_fmt_decimal(pmax_curve, 2)} kW</strong><span>Potencia máxima</span></div>
-                  <div class="telecom-site-pill"><strong>{_fmt_decimal(v_at_pmax, 2)} m/s</strong><span>Velocidad Pmax</span></div>
-                  <div class="telecom-site-pill"><strong>{html.escape(status_nominal)}</strong><span>Estado nominal</span></div>
+                  <div class="telecom-site-pill"><strong>{html.escape(str(best_fp_row["Modelo"]))}</strong><span>Mayor FP</span></div>
+                  <div class="telecom-site-pill"><strong>{_fmt_decimal(best_fp_row["FP curva %"], 1)}%</strong><span>FP curva</span></div>
+                  <div class="telecom-site-pill"><strong>{html.escape(str(best_energy_row["Modelo"]))}</strong><span>Mayor AEP</span></div>
                 </div>
               </div>
             </div>
@@ -13965,148 +14420,111 @@ def render_telecom_tower_eval_analysis():
             unsafe_allow_html=True,
         )
 
-        kpi_cols_curve = st.columns(6)
-        kpi_payload_curve = [
-            ("Modelo", curve_model_name, f"Pn {curve_unit_kw:.1f} kW"),
-            ("Ajuste hub", f"{hub_multiplier_curve:.3f}x", hub_note),
-            ("Cp máximo", _fmt_decimal(cp_max, 2), "No debe superar límite supuesto"),
-            ("Betz usado", f"{_fmt_decimal(betz_max, 1)}%", "Cp / 0,593"),
-            ("Torque máximo", f"{_fmt_decimal(torque_max, 1)} Nm", "Eje/generador/estructura"),
-            ("FP activo", f"{_fmt_decimal(active_fp, 1)}%", active_source_detail),
-        ]
-        for col, (title, value, caption) in zip(kpi_cols_curve, kpi_payload_curve):
-            with col:
-                st.markdown(
-                    f"""
-                    <div class="telecom-kpi-card">
-                      <div class="telecom-kpi-title">{html.escape(str(title))}</div>
-                      <div class="telecom-kpi-value">{html.escape(str(value))}</div>
-                      <div class="telecom-kpi-caption">{html.escape(str(caption))}</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
         curve_left, curve_right = st.columns([1.22, 0.78])
         with curve_left:
-            st.markdown('<p class="telecom-panel-title">Curva neta de potencia y Cp</p><p class="telecom-panel-sub">Potencia útil con límites operacionales y eficiencia aerodinámica aplicada.</p>', unsafe_allow_html=True)
+            st.markdown('<p class="telecom-panel-title">Curvas GREEF de potencia real</p><p class="telecom-panel-sub">Potencia real por velocidad desde 00_Resumen para 1, 3, 5 y 10 kW. Los marcadores indican la velocidad interpolada desde mediciones a la altura torre.</p>', unsafe_allow_html=True)
             fig_curve_resource = go.Figure()
-            fig_curve_resource.add_trace(go.Scatter(
-                x=curve_power_df["V hub (m/s)"],
-                y=curve_power_df["P curva neta (kW)"],
-                mode="lines+markers",
-                name="P curva neta",
-                line=dict(color=blue_5, width=4),
-                marker=dict(size=7, color=blue_5, line=dict(color="white", width=1.5)),
-                hovertemplate="<b>V hub %{x:.2f} m/s</b><br>P neta %{y:.2f} kW<extra></extra>",
-            ))
-            fig_curve_resource.add_trace(go.Scatter(
-                x=curve_power_df["V hub (m/s)"],
-                y=curve_power_df["P neta sin límite (kW)"],
-                mode="lines",
-                name="P sin límite",
-                line=dict(color=blue_2, width=2, dash="dot"),
-                hovertemplate="<b>V hub %{x:.2f} m/s</b><br>P sin límite %{y:.2f} kW<extra></extra>",
-            ))
-            fig_curve_resource.add_trace(go.Scatter(
-                x=curve_power_df["V hub (m/s)"],
-                y=curve_power_df["Cp"],
-                mode="lines+markers",
-                name="Cp",
-                yaxis="y2",
-                line=dict(color="#E86A00", width=3),
-                marker=dict(size=6, color="#E86A00", line=dict(color="white", width=1.5)),
-                hovertemplate="<b>V hub %{x:.2f} m/s</b><br>Cp %{y:.2f}<extra></extra>",
-            ))
-            fig_curve_resource.add_hline(y=curve_unit_kw, line=dict(color="#A8673C", dash="dash", width=2), annotation_text="Pn", annotation_position="top left")
-            fig_curve_resource.add_vline(x=cut_in_curve, line=dict(color="rgba(15,35,55,.35)", dash="dash"), annotation_text="cut-in", annotation_position="top")
-            fig_curve_resource.add_vline(x=cut_out_curve, line=dict(color="rgba(15,35,55,.35)", dash="dash"), annotation_text="cut-out", annotation_position="top")
+            palette_curve = {"VAWT 1 kW": "#75A9B8", "VAWT 3 kW": "#284763", "VAWT 5 kW": "#A9673B", "VAWT 10 kW": "#EA6400"}
+            for model in ["VAWT 1 kW", "VAWT 3 kW", "VAWT 5 kW", "VAWT 10 kW"]:
+                model_df = curve_points_df[curve_points_df["Modelo"].eq(model)]
+                if model_df.empty:
+                    continue
+                fig_curve_resource.add_trace(go.Scatter(
+                    x=model_df["V (m/s)"],
+                    y=model_df["P real kW"],
+                    mode="lines+markers",
+                    name=model,
+                    line=dict(color=palette_curve.get(model, blue_5), width=3),
+                    marker=dict(size=6, color=palette_curve.get(model, blue_5), line=dict(color="white", width=1.2)),
+                    hovertemplate=f"<b>{model}</b><br>V %{{x:.2f}} m/s<br>P real %{{y:.2f}} kW<extra></extra>",
+                ))
+            if not operating_points_df.empty:
+                fig_curve_resource.add_trace(go.Scatter(
+                    x=operating_points_df["Velocidad interpolada m/s"],
+                    y=operating_points_df["Potencia operativa kW"],
+                    mode="markers+text",
+                    name="Punto medido interpolado",
+                    text=operating_points_df["Modelo"],
+                    textposition="top center",
+                    marker=dict(size=13, color="#0F172A", symbol="diamond", line=dict(color="#FFFFFF", width=1.5)),
+                    hovertemplate="<b>%{text}</b><br>V interpolada %{x:.2f} m/s<br>P operativa %{y:.2f} kW<extra></extra>",
+                ))
             fig_curve_resource.update_layout(
                 height=420,
-                margin=dict(l=10, r=60, t=24, b=44),
+                margin=dict(l=10, r=24, t=24, b=44),
                 legend=dict(orientation="h", y=1.14, x=0, title=None),
-                xaxis=dict(title="V hub (m/s)", gridcolor="rgba(148,163,184,.18)"),
-                yaxis=dict(title="kW", gridcolor="rgba(148,163,184,.22)", rangemode="tozero"),
-                yaxis2=dict(title="Cp", overlaying="y", side="right", rangemode="tozero", showgrid=False),
+                xaxis=dict(title="Velocidad viento (m/s)", gridcolor="rgba(148,163,184,.18)"),
+                yaxis=dict(title="Potencia real (kW)", gridcolor="rgba(148,163,184,.22)", rangemode="tozero"),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 hovermode="x unified",
             )
             st.plotly_chart(fig_curve_resource, use_container_width=True, config={"displaylogo": False})
         with curve_right:
-            st.markdown('<p class="telecom-panel-title">Estado operacional por velocidad</p><p class="telecom-panel-sub">Distribución de puntos de la curva por régimen de operación.</p>', unsafe_allow_html=True)
-            status_counts = curve_power_df.groupby("Estado operacional", as_index=False).size()
-            status_colors = {
-                "Bajo cut-in": "#D9E8ED",
-                "Región V3": blue_2,
-                "Limitada Pn": blue_5,
-                "Cut-out/protección": "#A8673C",
-            }
+            st.markdown('<p class="telecom-panel-title">Factor de planta por curva real</p><p class="telecom-panel-sub">FP calculado integrando la curva GREEF con Weibull interpolado a la Altura torre de cada turbina.</p>', unsafe_allow_html=True)
             fig_status_curve = go.Figure(go.Bar(
-                x=status_counts["size"],
-                y=status_counts["Estado operacional"],
+                x=curve_summary_df.sort_values("FP curva %")["FP curva %"],
+                y=curve_summary_df.sort_values("FP curva %")["Modelo"],
                 orientation="h",
-                marker_color=[status_colors.get(v, blue_3) for v in status_counts["Estado operacional"]],
-                text=status_counts["size"],
+                marker_color=[palette_curve.get(v, blue_5) for v in curve_summary_df.sort_values("FP curva %")["Modelo"]],
+                text=[f"{v:.1f}%" for v in curve_summary_df.sort_values("FP curva %")["FP curva %"]],
                 textposition="outside",
                 cliponaxis=False,
-                hovertemplate="<b>%{y}</b><br>%{x} puntos<extra></extra>",
+                hovertemplate="<b>%{y}</b><br>FP %{x:.1f}%<extra></extra>",
             ))
-            fig_status_curve.update_layout(height=420, margin=dict(l=10, r=34, t=24, b=44), xaxis=dict(title="Puntos", gridcolor="rgba(148,163,184,.22)"), yaxis=dict(title=None), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            fig_status_curve.update_layout(height=420, margin=dict(l=10, r=44, t=24, b=44), xaxis=dict(title="FP (%)", gridcolor="rgba(148,163,184,.22)"), yaxis=dict(title=None), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig_status_curve, use_container_width=True, config={"displaylogo": False})
 
         mech_left, mech_right = st.columns(2)
         with mech_left:
-            st.markdown('<p class="telecom-panel-title">Torque y RPM</p><p class="telecom-panel-sub">Chequeo mecánico para eje, generador y estructura.</p>', unsafe_allow_html=True)
+            st.markdown('<p class="telecom-panel-title">Producción anual por turbina</p><p class="telecom-panel-sub">Energía anual integrada contra curva real por potencia.</p>', unsafe_allow_html=True)
             fig_torque = go.Figure()
-            fig_torque.add_trace(go.Scatter(x=curve_power_df["V hub (m/s)"], y=curve_power_df["Torque (Nm)"], name="Torque", mode="lines+markers", line=dict(color=blue_5, width=3), marker=dict(size=7, color=blue_5, line=dict(color="white", width=1.5)), hovertemplate="<b>V hub %{x:.2f}</b><br>Torque %{y:.1f} Nm<extra></extra>"))
-            fig_torque.add_trace(go.Scatter(x=curve_power_df["V hub (m/s)"], y=curve_power_df["RPM"], name="RPM", mode="lines", yaxis="y2", line=dict(color="#E86A00", width=3), hovertemplate="<b>V hub %{x:.2f}</b><br>RPM %{y:.1f}<extra></extra>"))
-            fig_torque.update_layout(height=360, margin=dict(l=10, r=58, t=24, b=44), legend=dict(orientation="h", y=1.13), xaxis=dict(title="V hub (m/s)", gridcolor="rgba(148,163,184,.18)"), yaxis=dict(title="Nm", gridcolor="rgba(148,163,184,.22)"), yaxis2=dict(title="RPM", overlaying="y", side="right", showgrid=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
+            fig_torque.add_trace(go.Bar(x=curve_summary_df["Modelo"], y=curve_summary_df["Energía anual kWh"], marker_color=[palette_curve.get(v, blue_5) for v in curve_summary_df["Modelo"]], text=[f"{v:,.0f}".replace(",", ".") for v in curve_summary_df["Energía anual kWh"]], textposition="outside", hovertemplate="<b>%{x}</b><br>AEP %{y:,.0f} kWh/año<extra></extra>"))
+            fig_torque.update_layout(height=360, margin=dict(l=10, r=28, t=24, b=44), xaxis=dict(title=None), yaxis=dict(title="kWh/año", gridcolor="rgba(148,163,184,.22)"), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig_torque, use_container_width=True, config={"displaylogo": False})
         with mech_right:
-            st.markdown('<p class="telecom-panel-title">Aprovechamiento Betz</p><p class="telecom-panel-sub">Relación Cp/0,593 para medir prudencia aerodinámica.</p>', unsafe_allow_html=True)
-            fig_betz = go.Figure(go.Scatter(x=curve_power_df["V hub (m/s)"], y=curve_power_df["Betz usado %"], mode="lines+markers", line=dict(color=blue_2, width=3), marker=dict(size=7, color=blue_2, line=dict(color="white", width=1.5)), fill="tozeroy", fillcolor="rgba(117,169,184,.18)", hovertemplate="<b>V hub %{x:.2f}</b><br>Betz usado %{y:.1f}%<extra></extra>"))
-            fig_betz.add_hline(y=100, line=dict(color="rgba(15,35,55,.35)", dash="dash"), annotation_text="Límite Betz", annotation_position="top left")
-            fig_betz.update_layout(height=360, margin=dict(l=10, r=28, t=24, b=44), xaxis=dict(title="V hub (m/s)", gridcolor="rgba(148,163,184,.18)"), yaxis=dict(title="%", gridcolor="rgba(148,163,184,.22)", rangemode="tozero"), showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.markdown('<p class="telecom-panel-title">Aerodinámica operativa</p><p class="telecom-panel-sub">Cp efectivo y uso Betz en la velocidad interpolada a la altura efectiva de viento.</p>', unsafe_allow_html=True)
+            fig_betz = go.Figure()
+            fig_betz.add_trace(go.Bar(x=curve_summary_df["Modelo"], y=curve_summary_df["Cp operativo"], name="Cp operativo", marker_color=blue_2, text=[_fmt_decimal(v, 2) for v in curve_summary_df["Cp operativo"]], textposition="outside"))
+            fig_betz.add_trace(go.Scatter(x=curve_summary_df["Modelo"], y=curve_summary_df["Betz operativo %"], name="Betz usado %", yaxis="y2", mode="lines+markers", line=dict(color="#EA6400", width=3), marker=dict(size=8, color="#EA6400", line=dict(color="#FFFFFF", width=1.4))))
+            fig_betz.update_layout(height=360, margin=dict(l=10, r=58, t=24, b=44), legend=dict(orientation="h", y=1.13), xaxis=dict(title=None), yaxis=dict(title="Cp", gridcolor="rgba(148,163,184,.22)", rangemode="tozero"), yaxis2=dict(title="Betz %", overlaying="y", side="right", showgrid=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig_betz, use_container_width=True, config={"displaylogo": False})
 
-        st.markdown('<p class="telecom-panel-title">Tabla técnica auditable de curva</p><p class="telecom-panel-sub">Velocidad, Cp, potencia neta, RPM, torque, estado operacional y potencia nominal.</p>', unsafe_allow_html=True)
-        curve_table = curve_power_df.copy()
+        st.markdown('<p class="telecom-panel-title">Tabla técnica auditable por turbina</p><p class="telecom-panel-sub">Curva fuente desde 00_Resumen, Altura torre desde 02_Ficha_GREEF, FP, AEP, potencia operativa, Cp, Betz y torque.</p>', unsafe_allow_html=True)
+        curve_table = curve_summary_df.copy()
         for col, digits in [
-            ("V ref (m/s)", 2),
-            ("V hub (m/s)", 2),
-            ("V/Vnom", 2),
-            ("Cp", 2),
-            ("Paero (kW)", 2),
-            ("P neta sin límite (kW)", 2),
-            ("P curva neta (kW)", 2),
-            ("RPM", 2),
-            ("Omega (rad/s)", 2),
-            ("Torque (Nm)", 2),
-            ("Betz usado %", 1),
-            ("P nominal (kW)", 2),
+            ("Pn nominal kW", 2),
+            ("Altura barrida rotor m", 2),
+            ("Altura total turbina m", 2),
+            ("Altura efectiva viento m", 2),
+            ("Velocidad interpolada m/s", 2),
+            ("Weibull k", 2),
+            ("Weibull c", 2),
+            ("Potencia operativa kW", 2),
+            ("Potencia media kW", 2),
+            ("FP curva %", 1),
+            ("Energía anual kWh", 0),
+            ("Pmax curva kW", 2),
+            ("V Pmax m/s", 2),
+            ("Cp operativo", 3),
+            ("Betz operativo %", 1),
+            ("Torque operativo Nm", 2),
         ]:
-            curve_table[col] = curve_table[col].map(lambda v, d=digits: _fmt_decimal(v, d))
+            if col in curve_table.columns:
+                curve_table[col] = curve_table[col].map(lambda v, d=digits: _fmt_decimal(v, d))
         st.dataframe(curve_table, use_container_width=True, hide_index=True)
 
         kpi_curve_table = pd.DataFrame(
             [
-                {"KPI curva": "Potencia máxima curva", "Valor": _fmt_decimal(pmax_curve, 2), "Unidad": "kW", "Lectura técnica": "Debe coincidir o quedar bajo Pn."},
-                {"KPI curva": "Velocidad a Pmax", "Valor": _fmt_decimal(v_at_pmax, 2), "Unidad": "m/s", "Lectura técnica": "Velocidad hub donde se alcanza máximo."},
-                {"KPI curva": "Cp máximo aplicado", "Valor": _fmt_decimal(cp_max, 2), "Unidad": "-", "Lectura técnica": "No debe superar Cp máximo supuesto."},
-                {"KPI curva": "Torque máximo", "Valor": _fmt_decimal(torque_max, 2), "Unidad": "Nm", "Lectura técnica": "Input para eje/generador/estructura."},
-                {"KPI curva": "Betz máximo usado", "Valor": _fmt_decimal(betz_max, 1), "Unidad": "%", "Lectura técnica": "Cp/0,593; indicador de prudencia."},
-                {"KPI curva": "Estado nominal", "Valor": status_nominal, "Unidad": "-", "Lectura técnica": "Check básico de dimensionamiento."},
-                {"KPI curva": "Modelo", "Valor": curve_model_name, "Unidad": "-", "Lectura técnica": "Selector activo."},
+                {"KPI curva": "Mayor factor de planta", "Valor": str(best_fp_row["Modelo"]), "Unidad": "-", "Lectura técnica": f"{_fmt_decimal(best_fp_row['FP curva %'], 1)}% con curva real."},
+                {"KPI curva": "Mayor producción anual", "Valor": str(best_energy_row["Modelo"]), "Unidad": "-", "Lectura técnica": f"{_fmt_decimal(best_energy_row['Energía anual kWh'], 0)} kWh/año."},
+                {"KPI curva": "Potencia máxima 10 kW", "Valor": _fmt_decimal(pmax_curve, 2), "Unidad": "kW", "Lectura técnica": "Valor máximo observado en curva GREEF."},
+                {"KPI curva": "Velocidad Pmax 10 kW", "Valor": _fmt_decimal(v_at_pmax, 2), "Unidad": "m/s", "Lectura técnica": "Velocidad de máxima potencia publicada."},
+                {"KPI curva": "Cp máximo observado", "Valor": _fmt_decimal(cp_max, 3), "Unidad": "-", "Lectura técnica": "Calculado desde P real / potencia cinética."},
+                {"KPI curva": "Torque operativo máximo", "Valor": _fmt_decimal(torque_max, 2), "Unidad": "Nm", "Lectura técnica": "Sobre velocidad interpolada a altura torre."},
             ]
         )
         st.dataframe(kpi_curve_table, use_container_width=True, hide_index=True)
-
-        if np.isfinite(rotor_speed_sheet) and rotor_speed_sheet < 1 and np.isfinite(active_speed) and active_speed > 3:
-            st.markdown(
-                f'<div class="telecom-note"><b>Control técnico:</b> la hoja pública informa velocidad a rotor {_fmt_decimal(rotor_speed_sheet, 2)} m/s, mientras la fuente activa indica {active_speed:.2f} m/s. La curva operacional usa la fuente activa o una extrapolación controlada para evitar una lectura físicamente inconsistente.</div>',
-                unsafe_allow_html=True,
-            )
 
     with tab_savings:
         def _format_clp_accounting(value):
@@ -14525,6 +14943,8 @@ def render_telecom_scenario_simulator(
     wind_defaults = pd.DataFrame()
     sensitivity_detail = pd.DataFrame()
     turbine_characteristics = pd.DataFrame()
+    proposal_site_options = pd.DataFrame()
+    proposal_catalog = pd.DataFrame()
     try:
         site_url = telecom_published_csv_url("02_Datos_Sitio", EVALUACION_TELECOM_SITE_CSV_URL_DEFAULT, data_refresh_nonce)
         wind_url = telecom_published_csv_url("04_Modelo_Eolico", EVALUACION_TELECOM_WIND_MODEL_CSV_URL_DEFAULT, data_refresh_nonce)
@@ -14556,6 +14976,15 @@ def render_telecom_scenario_simulator(
         wind_defaults = pd.DataFrame()
         sensitivity_detail = pd.DataFrame()
         turbine_characteristics = pd.DataFrame()
+    try:
+        proposal_site_options = load_propuesta_site_options(refresh_nonce=data_refresh_nonce)
+        proposal_catalog = load_propuesta_catalogo_tec(refresh_nonce=data_refresh_nonce)
+        if not proposal_site_options.empty:
+            source_badge = "PoP + modelo"
+            source_detail = "Selector 01_Inputs_Sitio"
+    except Exception:
+        proposal_site_options = pd.DataFrame()
+        proposal_catalog = pd.DataFrame()
 
     fallback_characteristics = pd.DataFrame(
         [
@@ -14649,6 +15078,61 @@ def render_telecom_scenario_simulator(
             return parse_percent_local(value, default_pct / 100.0) * 100.0
         return parse_float_local(value, default_pct)
 
+    pop_col = first_matching_column(proposal_site_options, ["PoP", "Sitio", "Site", "Ubicación comercial"]) if not proposal_site_options.empty else None
+    selected_pop = ""
+    selected_site_row = pd.Series(dtype=object)
+    if pop_col:
+        pop_options = [
+            str(value).strip()
+            for value in proposal_site_options[pop_col].dropna().astype(str).tolist()
+            if str(value).strip() and str(value).strip().casefold() not in {"nan", "none"}
+        ]
+        pop_options = list(dict.fromkeys(pop_options))
+        if pop_options:
+            selected_pop = st.selectbox(
+                "PoP / sitio",
+                options=pop_options,
+                index=0,
+                key="sim6_pop_selector",
+                help="Lista cargada desde 01_Inputs_Sitio, columna A desde la fila 21.",
+            )
+            site_matches = proposal_site_options[proposal_site_options[pop_col].astype(str).str.strip() == selected_pop]
+            if not site_matches.empty:
+                selected_site_row = site_matches.iloc[0]
+            if st.session_state.get("sim6_pop_selector_prev") != selected_pop:
+                for widget_key in [
+                    "sim6_monthly_consumption", "sim6_target_coverage", "sim6_safety_margin", "sim6_project_life",
+                    "sim6_plant_factor", "sim6_availability", "sim6_electrical_losses", "sim6_additional_losses",
+                    "sim6_degradation", "sim6_grid_cost", "sim6_mix_grid", "sim6_diesel_cost", "sim6_mix_diesel",
+                    "sim6_bess_cost", "sim6_mix_bess", "sim6_surplus_price", "sim6_surplus_factor",
+                    "sim6_bos_pct", "sim6_om_pct", "sim6_diesel_l_kwh", "sim6_co2_kg_l", "sim6_surface_per_kw",
+                ]:
+                    st.session_state.pop(widget_key, None)
+                st.session_state["sim6_pop_selector_prev"] = selected_pop
+
+    def selected_site_value(candidates: list[str], default: str = "") -> str:
+        if selected_site_row.empty:
+            return default
+        candidate_keys = [normalize_key(candidate) for candidate in candidates]
+        for col, value in selected_site_row.items():
+            col_key = normalize_key(col)
+            if any(candidate_key and (candidate_key == col_key or candidate_key in col_key or col_key in candidate_key) for candidate_key in candidate_keys):
+                clean_value = clean_sheet_cell(value)
+                if clean_value:
+                    return clean_value
+        return default
+
+    def selected_site_numeric(candidates: list[str], default: float = 0.0) -> float:
+        value = selected_site_value(candidates, "")
+        if not value:
+            return float(default)
+        if "%" in value:
+            return parse_percent_local(value, default / 100.0) * 100.0
+        money = parse_money_clp_robusto(value)
+        if money is not None and money != 0:
+            return float(money)
+        return parse_float_local(value, default)
+
     wind_by_alt = {}
     if not wind_defaults.empty and "Alternativa" in wind_defaults.columns:
         wind_by_alt = {
@@ -14720,6 +15204,37 @@ def render_telecom_scenario_simulator(
         surface_ratio = (impact / installed).replace([np.inf, -np.inf], np.nan).dropna()
         if not surface_ratio.empty:
             default_surface_per_kw = float(surface_ratio.median())
+
+    if selected_pop:
+        default_monthly_consumption = selected_site_numeric(["Consumo mensual modelo", "Consumo mensual", "kWh mes", "kWh/mes"], default_monthly_consumption)
+        default_target_coverage = selected_site_numeric(["Cobertura objetivo", "Cobertura", "Objetivo cobertura"], default_target_coverage)
+        default_project_life = int(max(5, min(30, round(selected_site_numeric(["Vida útil", "Vida util", "Años análisis"], default_project_life)))))
+        default_grid_cost = selected_site_numeric(["Tarifa red modelo", "Costo red", "Red CLP/kWh", "Tarifa red"], default_grid_cost)
+        default_diesel_cost = selected_site_numeric(["Costo electrógeno base", "Costo electrogeno", "Diésel CLP/kWh", "Diesel CLP/kWh"], default_diesel_cost)
+        default_bess_cost = selected_site_numeric(["Costo batería referencia", "Costo bateria", "BESS CLP/kWh", "FV/BESS"], default_bess_cost)
+        default_mix_grid = selected_site_numeric(["Mix Red", "Red %", "% red"], default_mix_grid)
+        default_mix_diesel = selected_site_numeric(["Mix Electrógeno", "Mix Electrogeno", "Diésel %", "Diesel %"], default_mix_diesel)
+        default_mix_bess = selected_site_numeric(["Mix Batería/Solar", "Mix Bateria", "BESS %", "FV %"], default_mix_bess)
+        default_surplus_price = selected_site_numeric(["Precio venta excedente", "Monetización excedente", "Excedente CLP/kWh"], default_surplus_price)
+        default_surplus_factor = selected_site_numeric(["Factor valorización excedente", "Factor excedente"], default_surplus_factor)
+        default_om_pct = selected_site_numeric(["O&M anual", "OM anual", "Opex anual"], default_om_pct)
+
+    if not proposal_catalog.empty:
+        capex_col = first_matching_column(proposal_catalog, ["CAPEX unitario", "CAPEX", "Inversión", "Inversion"])
+        opex_col = first_matching_column(proposal_catalog, ["OPEX", "O&M", "OM anual"])
+        for _, cat_row in proposal_catalog.iterrows():
+            row_text = " ".join(clean_sheet_cell(value) for value in cat_row.tolist()).casefold()
+            matched_name = next((name for name in turbine_order if name.casefold() in row_text), None)
+            if not matched_name:
+                matched_name = next((name for name in turbine_order if normalize_key(name).replace("vawt", "") in normalize_key(row_text)), None)
+            if matched_name and capex_col:
+                capex_value = parse_money_clp_robusto(cat_row.get(capex_col, ""))
+                if capex_value and capex_value > 0:
+                    default_unit_capex[matched_name] = float(capex_value)
+            if matched_name and opex_col:
+                opex_value = parse_float_local(cat_row.get(opex_col, ""), np.nan)
+                if np.isfinite(opex_value) and opex_value > 0:
+                    default_om_pct = float(opex_value)
 
     def years_label(value) -> str:
         if pd.isna(value) or not np.isfinite(float(value)):
@@ -14928,7 +15443,7 @@ def render_telecom_scenario_simulator(
     wind_profile = pd.DataFrame(st.session_state.get("telecom_09_viento_outputs", {}).get("perfil_alturas", []))
     wind_monthly_profile = pd.DataFrame(st.session_state.get("telecom_09_viento_outputs", {}).get("perfil_mensual_alturas", []))
     if not wind_profile.empty:
-        for col in ["Altura m", "FP neto", "Velocidad media", "Energía anual neta kWh", "Horas equivalentes"]:
+        for col in ["Altura m", "FP neto", "Velocidad media", "Energía anual neta kWh", "Horas equivalentes", "Weibull k", "Weibull c"]:
             if col in wind_profile.columns:
                 wind_profile[col] = pd.to_numeric(wind_profile[col], errors="coerce")
         wind_profile = wind_profile.dropna(subset=["Altura m", "FP neto"]).sort_values("Altura m")
@@ -14937,6 +15452,21 @@ def render_telecom_scenario_simulator(
             if col in wind_monthly_profile.columns:
                 wind_monthly_profile[col] = pd.to_numeric(wind_monthly_profile[col], errors="coerce")
         wind_monthly_profile = wind_monthly_profile.dropna(subset=["Altura m", "Mes", "Energía mensual neta kWh por turbina"]).sort_values(["Mes", "Altura m"])
+
+    curve_summary_df = pd.DataFrame(st.session_state.get("telecom_03_curve_summary_df", []))
+    if not curve_summary_df.empty:
+        for col in [
+            "Pn nominal kW", "Altura total turbina m", "Altura barrida rotor m", "Altura torre m",
+            "Altura efectiva viento m", "Velocidad interpolada m/s", "Potencia media kW",
+            "FP curva %", "Energía anual kWh", "Torque operativo Nm",
+        ]:
+            if col in curve_summary_df.columns:
+                curve_summary_df[col] = pd.to_numeric(curve_summary_df[col], errors="coerce")
+    curve_summary_by_model = {
+        str(row.get("Modelo", "")).strip(): row
+        for _, row in curve_summary_df.iterrows()
+        if str(row.get("Modelo", "")).strip()
+    }
 
     def wind_profile_for_turbine(name: str) -> dict:
         char_row = characteristics_by_alt.get(name)
@@ -14951,6 +15481,29 @@ def render_telecom_scenario_simulator(
             rotor_diameter = float(char_row.get("Diámetro rotor", np.nan))
             rotor_area = float(char_row.get("Área rotor", np.nan))
             impact_surface = float(char_row.get("Impacto superficial", np.nan))
+        curve_row = curve_summary_by_model.get(name)
+        if curve_row is not None:
+            curve_height_total = float(curve_row.get("Altura total turbina m", np.nan))
+            curve_rotor_height = float(curve_row.get("Altura barrida rotor m", np.nan))
+            curve_pf = float(curve_row.get("FP curva %", np.nan)) / 100.0
+            curve_annual = float(curve_row.get("Energía anual kWh", np.nan))
+            if np.isfinite(curve_height_total):
+                height_total = curve_height_total
+            if np.isfinite(curve_rotor_height):
+                rotor_height = curve_rotor_height
+            if np.isfinite(curve_pf) and curve_pf > 0:
+                return {
+                    "height_total": height_total,
+                    "rotor_height": rotor_height,
+                    "rotor_diameter": rotor_diameter,
+                    "rotor_area": rotor_area,
+                    "impact_surface": impact_surface,
+                    "pf": max(0.0, curve_pf),
+                    "source": "03 Curva Técnica y Producción",
+                    "wind_col": str(curve_row.get("Fuente medición", "")),
+                    "annual_kwh_per_turbine": curve_annual if np.isfinite(curve_annual) and curve_annual > 0 else np.nan,
+                    "monthly_kwh_per_turbine": curve_annual / 12.0 if np.isfinite(curve_annual) and curve_annual > 0 else np.nan,
+                }
         if wind_profile.empty or not np.isfinite(height_total):
             return {
                 "height_total": height_total,
@@ -14961,6 +15514,8 @@ def render_telecom_scenario_simulator(
                 "pf": effective_pf,
                 "source": "Input base",
                 "wind_col": "",
+                "annual_kwh_per_turbine": np.nan,
+                "monthly_kwh_per_turbine": np.nan,
             }
         heights = wind_profile["Altura m"].to_numpy(dtype=float)
         fps = (wind_profile["FP neto"].to_numpy(dtype=float) / 100.0)
@@ -14986,6 +15541,8 @@ def render_telecom_scenario_simulator(
             "pf": max(0.0, pf_value),
             "source": "09_Viento por altura",
             "wind_col": wind_col,
+            "annual_kwh_per_turbine": np.nan,
+            "monthly_kwh_per_turbine": np.nan,
         }
 
     required_monthly = monthly_consumption * (target_coverage + safety_margin) / 100.0
@@ -14994,7 +15551,8 @@ def render_telecom_scenario_simulator(
         kw = turbine_kw[name]
         wind_match = wind_profile_for_turbine(name)
         pf_for_turbine = float(wind_match["pf"])
-        gen_month_turbine = kw * 8760.0 * pf_for_turbine / 12.0
+        curve_monthly_kwh = float(wind_match.get("monthly_kwh_per_turbine", np.nan))
+        gen_month_turbine = curve_monthly_kwh if np.isfinite(curve_monthly_kwh) and curve_monthly_kwh > 0 else kw * 8760.0 * pf_for_turbine / 12.0
         turbines = int(max(1, math.ceil(required_monthly / gen_month_turbine))) if gen_month_turbine > 0 else 0
         installed_kw = turbines * kw
         gen_month_total = gen_month_turbine * turbines
@@ -15329,6 +15887,11 @@ def render_telecom_scenario_simulator(
                     elif len(heights) > 1:
                         generation_per_turbine = float(np.interp(height_value, heights, monthly_energy, left=monthly_energy[0], right=monthly_energy[-1]))
             generation_total = generation_per_turbine * turbines_count if np.isfinite(generation_per_turbine) else base_monthly_generation
+            generation_source = (
+                "09_Viento mensual por altura"
+                if np.isfinite(generation_per_turbine)
+                else str(row.get("Fuente FP", "Promedio mensual calculado") or "Promedio mensual calculado")
+            )
             covered = min(generation_total, monthly_consumption)
             surplus = max(generation_total - monthly_consumption, 0.0)
             gap = max(monthly_consumption - generation_total, 0.0)
@@ -15342,7 +15905,7 @@ def render_telecom_scenario_simulator(
                     "Brecha kWh": gap,
                     "Consumo sitio kWh": monthly_consumption,
                     "Cobertura %": generation_total / monthly_consumption * 100.0 if monthly_consumption > 0 else 0.0,
-                    "Fuente": "09_Viento mensual por altura" if np.isfinite(generation_per_turbine) else "Promedio mensual calculado",
+                    "Fuente": generation_source,
                 }
             )
         return pd.DataFrame(monthly_rows)
@@ -15461,8 +16024,8 @@ def render_telecom_scenario_simulator(
               <div class="sim6-kpi" style="--accent:#75A9B8;"><p class="sim6-kpi-k">Valor periodo</p><p class="sim6-kpi-v">{float(recommended["Beneficio neto periodo CLP"])/1_000_000:.1f} MM</p><p class="sim6-kpi-s">Neto post CAPEX</p></div>
             </div>
             <div class="sim6-engineering-note">
-              <p class="sim6-note-main"><b>Lectura técnica:</b> la alternativa recomendada usa FP {rec_fp:.1f}% desde {html.escape(rec_wind_text)}, cubre {rec_coverage:.0f}% de la demanda mensual, genera {rec_benefit/1_000_000:.1f} MM CLP/año netos y mantiene una relación inversión-retorno competitiva.</p>
-              <span class="sim6-note-tag">Altura integrada</span>
+              <p class="sim6-note-main"><b>Por qué se elige esta versión:</b> combina {int(recommended["Nº turbinas"])} unidad(es) {html.escape(str(recommended["Alternativa"]))} para producir {rec_generation:,.0f} kWh/mes con FP {rec_fp:.1f}% desde {html.escape(rec_wind_text)}. Cubre {rec_coverage:.0f}% del consumo, requiere {rec_capex:.1f} MM CLP de CAPEX y recupera la inversión en {html.escape(years_label(recommended["Payback años"]))}.</p>
+              <span class="sim6-note-tag">FP y generación auditables</span>
             </div>
           </div>
         </div>
