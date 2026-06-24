@@ -13505,11 +13505,158 @@ def render_telecom_tower_eval_analysis():
 
     with tab_inputs:
         section("01 · Sitio y demanda", "Ubicación, consumo, costo energético y tipo de suministro", "Primera lectura para cliente: dónde está el sitio, cuánto consume, cuánto cuesta operar y qué fuente energética predomina antes de evaluar la solución eólica.")
-        status_counts = site_data["Estado"].replace("", "Sin estado").value_counts().to_dict()
-        alta_count = int((site_data["Prioridad"].astype(str).str.casefold() == "alta").sum())
-        auto_count = int((site_data["Estado"].astype(str).str.casefold() == "automático").sum())
-        pending_count = int((site_data["Estado"].astype(str).str.casefold() == "por validar").sum())
-        tab_inputs_fp_base, tab_inputs_fp_source = _analysis_recommended_fp(site_percent_value("Factor planta ficha sitio", 35.0))
+        site_data_view = site_data.copy()
+        selected_site_row_tab = pd.Series(dtype=object)
+        try:
+            proposal_site_options_tab = load_propuesta_site_options(refresh_nonce=data_refresh_nonce)
+        except Exception:
+            proposal_site_options_tab = pd.DataFrame()
+
+        pop_col_tab = first_matching_column(
+            proposal_site_options_tab,
+            ["PoP", "Sitio", "Site", "Ubicación comercial"],
+        ) if not proposal_site_options_tab.empty else None
+        if pop_col_tab:
+            pop_options_tab = [
+                str(value).strip()
+                for value in proposal_site_options_tab[pop_col_tab].dropna().astype(str).tolist()
+                if str(value).strip() and str(value).strip().casefold() not in {"nan", "none"}
+            ]
+            pop_options_tab = list(dict.fromkeys(pop_options_tab))
+            if pop_options_tab:
+                selected_pop_tab = st.selectbox(
+                    "PoP / sitio",
+                    options=pop_options_tab,
+                    index=0,
+                    key="site_demand_pop_selector",
+                    help="Lista cargada desde 01_Inputs_Sitio, columna A desde la fila 21.",
+                )
+                site_matches_tab = proposal_site_options_tab[
+                    proposal_site_options_tab[pop_col_tab].astype(str).str.strip() == selected_pop_tab
+                ]
+                if not site_matches_tab.empty:
+                    selected_site_row_tab = site_matches_tab.iloc[0]
+
+        def selected_site_tab_value(candidates: list[str], default: str = "") -> str:
+            if selected_site_row_tab.empty:
+                return default
+            candidate_keys = [normalize_key(candidate) for candidate in candidates]
+            for col, value in selected_site_row_tab.items():
+                col_key = normalize_key(col)
+                if any(
+                    candidate_key and (candidate_key == col_key or candidate_key in col_key or col_key in candidate_key)
+                    for candidate_key in candidate_keys
+                ):
+                    clean_value = clean_sheet_cell(value)
+                    if clean_value:
+                        return clean_value
+            return default
+
+        def upsert_site_view_value(
+            variable: str,
+            value: str,
+            unit: str = "",
+            section_name: str = "Identificación y ubicación",
+            usage: str = "Ficha sitio",
+            priority: str = "Alta",
+        ) -> None:
+            nonlocal site_data_view
+            clean_value = clean_sheet_cell(value)
+            if not clean_value:
+                return
+            mask = site_data_view["Variable"].astype(str).str.casefold() == variable.casefold()
+            if mask.any():
+                site_data_view.loc[mask, "Valor"] = clean_value
+                if unit:
+                    site_data_view.loc[mask, "Unidad"] = unit
+                site_data_view.loc[mask, "Fuente requerida"] = "01_Inputs_Sitio"
+                site_data_view.loc[mask, "Estado"] = "Automático"
+                site_data_view.loc[mask, "Comentario"] = "Sincronizado desde tabla maestra PoP."
+                return
+            site_data_view = pd.concat(
+                [
+                    site_data_view,
+                    pd.DataFrame(
+                        [
+                            {
+                                "Sección": section_name,
+                                "Variable": variable,
+                                "Valor": clean_value,
+                                "Unidad": unit,
+                                "Fuente requerida": "01_Inputs_Sitio",
+                                "Uso": usage,
+                                "Estado": "Automático",
+                                "Comentario": "Sincronizado desde tabla maestra PoP.",
+                                "Prioridad": priority,
+                            }
+                        ]
+                    ),
+                ],
+                ignore_index=True,
+            )
+
+        if not selected_site_row_tab.empty:
+            selected_pop_label = selected_site_tab_value(["PoP", "Sitio", "Site"], "PoP seleccionado")
+            selected_cost_kwh = selected_site_tab_value(["Costo $/kWh", "Costo kWh", "Costo energia equivalente"], "")
+            upsert_site_view_value("ID Sitio", selected_pop_label, section_name="Identificación y ubicación")
+            upsert_site_view_value("Nombre sitio", selected_pop_label, section_name="Identificación y ubicación")
+            upsert_site_view_value("Región", selected_site_tab_value(["Región", "Region"]), section_name="Identificación y ubicación")
+            upsert_site_view_value("Comuna", selected_site_tab_value(["Comuna/Sector", "Comuna", "Sector"]), section_name="Identificación y ubicación")
+            upsert_site_view_value("Latitud", selected_site_tab_value(["Latitud"]), section_name="Identificación y ubicación")
+            upsert_site_view_value("Longitud", selected_site_tab_value(["Longitud"]), section_name="Identificación y ubicación")
+            upsert_site_view_value("Altitud", selected_site_tab_value(["Altitud msnm", "Altitud"]), "msnm", "Identificación y ubicación")
+            upsert_site_view_value("Litros/año", selected_site_tab_value(["Litros/año", "Litros ano"]), "L/año", "Consumo, suministro y costos energéticos")
+            upsert_site_view_value("Consumo mensual modelo", selected_site_tab_value(["Consumo kWh/mes", "Consumo mensual modelo", "Consumo mensual"]), "kWh/mes", "Consumo, suministro y costos energéticos")
+            upsert_site_view_value("Consumo anual", selected_site_tab_value(["Energía kWh/año", "Energia kWh/ano", "Demanda anual"]), "kWh/año", "Consumo, suministro y costos energéticos")
+            upsert_site_view_value("Potencia promedio", selected_site_tab_value(["Potencia prom. kW", "Potencia promedio"]), "kW", "Consumo, suministro y costos energéticos")
+            upsert_site_view_value("OPEX combustible", selected_site_tab_value(["OPEX $/año", "OPEX combustible", "OPEX anual"]), "$/año", "Consumo, suministro y costos energéticos")
+            upsert_site_view_value("Costo ponderado actual", selected_cost_kwh, "CLP/kWh", "Consumo, suministro y costos energéticos")
+            upsert_site_view_value("Tarifa red modelo", selected_cost_kwh, "CLP/kWh", "Consumo, suministro y costos energéticos")
+            upsert_site_view_value("Costo electrógeno base", selected_cost_kwh, "CLP/kWh", "Consumo, suministro y costos energéticos")
+            upsert_site_view_value("Mix Red", selected_site_tab_value(["Red %", "Mix Red"]), "%", "Consumo, suministro y costos energéticos")
+            upsert_site_view_value("Mix Electrógeno", selected_site_tab_value(["Diésel %", "Diesel %", "Mix Electrógeno", "Mix Electrogeno"]), "%", "Consumo, suministro y costos energéticos")
+            upsert_site_view_value("Mix Batería/Solar", selected_site_tab_value(["Solar %", "Batería %", "Bateria %", "Mix Batería/Solar"]), "%", "Consumo, suministro y costos energéticos")
+            upsert_site_view_value("CO₂ informado", selected_site_tab_value(["CO₂ t/año", "CO2 t/año", "CO2"]), "t/año", "Consumo, suministro y costos energéticos")
+            upsert_site_view_value("Prioridad comercial", selected_site_tab_value(["Prioridad", "Prioridad comercial"]), "", "Identificación y ubicación")
+            st.markdown(
+                f"""
+                <div class="telecom-note">
+                  <b>PoP activo:</b> {html.escape(selected_pop_label)} · datos sincronizados desde
+                  <b>01_Inputs_Sitio</b> fila maestra A21:U. Los KPIs, mix, consumo, coordenadas y costo energético de esta pestaña se recalculan con la selección.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        site_sections_view = {name: group.reset_index(drop=True) for name, group in site_data_view.groupby("Sección", sort=False)}
+
+        def site_view_value(variable: str, default: str = "") -> str:
+            matches = site_data_view[site_data_view["Variable"].astype(str).str.casefold() == variable.casefold()]
+            if matches.empty:
+                return default
+            value = str(matches.iloc[0].get("Valor", "")).strip()
+            return value if value else default
+
+        def site_view_numeric(variable: str, default: float = 0.0) -> float:
+            value = site_view_value(variable, "")
+            money = parse_money_clp_robusto(value)
+            if "$" in value or "CLP" in value.upper():
+                return float(money)
+            if money:
+                return float(money)
+            return parse_float_local(value, default)
+
+        def site_view_percent_value(variable: str, default_pct: float = 0.0) -> float:
+            value = site_view_value(variable, "")
+            if "%" in value:
+                return parse_percent_local(value, default_pct / 100.0) * 100.0
+            return parse_float_local(value, default_pct)
+
+        status_counts = site_data_view["Estado"].replace("", "Sin estado").value_counts().to_dict()
+        alta_count = int((site_data_view["Prioridad"].astype(str).str.casefold() == "alta").sum())
+        auto_count = int((site_data_view["Estado"].astype(str).str.casefold() == "automático").sum())
+        pending_count = int((site_data_view["Estado"].astype(str).str.casefold() == "por validar").sum())
+        tab_inputs_fp_base, tab_inputs_fp_source = _analysis_recommended_fp(site_view_percent_value("Factor planta ficha sitio", 35.0))
 
         def render_site_identity_block(section_df: pd.DataFrame) -> None:
             identity = {
@@ -13600,7 +13747,7 @@ def render_telecom_tower_eval_analysis():
                   <p class="telecom-site-s">Ficha comercial del sitio: consumo validado, costo energético, mix operativo y brechas de datos que condicionan la recomendación.</p>
                 </div>
                 <div class="telecom-site-status">
-                  <div class="telecom-site-pill"><strong>{len(site_data)}</strong><span>Variables</span></div>
+                  <div class="telecom-site-pill"><strong>{len(site_data_view)}</strong><span>Variables</span></div>
                   <div class="telecom-site-pill"><strong>{alta_count}</strong><span>Prioridad alta</span></div>
                   <div class="telecom-site-pill"><strong>{pending_count}</strong><span>Por validar</span></div>
                   <div class="telecom-site-pill"><strong>{html.escape(str(site_model.get("source_mode", "remote")).upper())}</strong><span>Fuente base</span></div>
@@ -13610,15 +13757,15 @@ def render_telecom_tower_eval_analysis():
             """,
             unsafe_allow_html=True,
         )
-        identity_section = site_sections.get("Identificación y ubicación")
+        identity_section = site_sections_view.get("Identificación y ubicación")
         if identity_section is not None and not identity_section.empty:
             render_site_identity_block(identity_section)
-            site_lat = site_numeric("Latitud", np.nan)
-            site_lon = site_numeric("Longitud", np.nan)
-            site_alt = site_numeric("Altitud", np.nan)
-            site_region = site_value("Región", "Por validar")
-            site_comuna = site_value("Comuna", "Por validar")
-            site_name_map = site_value("Nombre sitio", "Torre telecom")
+            site_lat = site_view_numeric("Latitud", np.nan)
+            site_lon = site_view_numeric("Longitud", np.nan)
+            site_alt = site_view_numeric("Altitud", np.nan)
+            site_region = site_view_value("Región", "Por validar")
+            site_comuna = site_view_value("Comuna", "Por validar")
+            site_name_map = site_view_value("Nombre sitio", "Torre telecom")
             if np.isfinite(site_lat) and np.isfinite(site_lon) and -90 <= site_lat <= 90 and -180 <= site_lon <= 180:
                 map_left, map_right = st.columns([1.35, 0.65])
                 with map_left:
@@ -13701,13 +13848,13 @@ def render_telecom_tower_eval_analysis():
                     unsafe_allow_html=True,
                 )
 
-        default_consumo = site_numeric("Consumo mensual modelo", float(summary["consumo_mensual"] or 3238.0))
-        default_cobertura = int(round(site_percent_value("Cobertura objetivo", float(summary["cobertura_objetivo"] or 1.0) * 100)))
-        default_costo_ponderado = site_numeric("Costo ponderado actual", float(summary["costo_ponderado_actual"] or 429.0))
-        default_factor_co2 = site_numeric("Factor emisión diésel", 2.68)
-        default_mix_red = int(round(site_percent_value("Mix Red", 60.0)))
-        default_mix_diesel = int(round(site_percent_value("Mix Electrógeno", 40.0)))
-        default_mix_bess = int(round(site_percent_value("Mix Batería/Solar", 0.0)))
+        default_consumo = site_view_numeric("Consumo mensual modelo", float(summary["consumo_mensual"] or 3238.0))
+        default_cobertura = int(round(site_view_percent_value("Cobertura objetivo", float(summary["cobertura_objetivo"] or 1.0) * 100)))
+        default_costo_ponderado = site_view_numeric("Costo ponderado actual", float(summary["costo_ponderado_actual"] or 429.0))
+        default_factor_co2 = site_view_numeric("Factor emisión diésel", 2.68)
+        default_mix_red = int(round(site_view_percent_value("Mix Red", 60.0)))
+        default_mix_diesel = int(round(site_view_percent_value("Mix Electrógeno", 40.0)))
+        default_mix_bess = int(round(site_view_percent_value("Mix Batería/Solar", 0.0)))
 
         consumo_mensual = float(default_consumo)
         cobertura_pct = float(default_cobertura)
@@ -13720,19 +13867,19 @@ def render_telecom_tower_eval_analysis():
 
         mix_total = mix_red_pct + mix_diesel_pct + mix_bess_pct
         energia_objetivo = consumo_mensual * 12 * cobertura_pct / 100
-        costo_red = site_numeric("Tarifa red modelo", 0.0)
-        costo_diesel = site_numeric("Costo electrógeno base", 0.0)
-        costo_solar = site_numeric("Costo solar referencia", 0.0)
-        costo_bateria = site_numeric("Costo batería referencia", 0.0)
+        costo_red = site_view_numeric("Tarifa red modelo", 0.0)
+        costo_diesel = site_view_numeric("Costo electrógeno base", 0.0)
+        costo_solar = site_view_numeric("Costo solar referencia", 0.0)
+        costo_bateria = site_view_numeric("Costo batería referencia", 0.0)
         costo_ponderado_calc = (
             costo_red * mix_red_pct / 100.0
             + costo_diesel * mix_diesel_pct / 100.0
             + ((costo_solar + costo_bateria) / 2.0) * mix_bess_pct / 100.0
         )
-        data_health = (len(site_data) - pending_count) / max(len(site_data), 1) * 100.0
-        high_pending_df = site_data[
-            (site_data["Prioridad"].astype(str).str.casefold() == "alta")
-            & (site_data["Estado"].astype(str).str.casefold() == "por validar")
+        data_health = (len(site_data_view) - pending_count) / max(len(site_data_view), 1) * 100.0
+        high_pending_df = site_data_view[
+            (site_data_view["Prioridad"].astype(str).str.casefold() == "alta")
+            & (site_data_view["Estado"].astype(str).str.casefold() == "por validar")
         ].copy()
         st.markdown(
             f"""
@@ -13841,12 +13988,12 @@ def render_telecom_tower_eval_analysis():
             st.plotly_chart(tune_site_chart(fig_cost, 380), use_container_width=True, config={"displaylogo": False})
 
         status_df = (
-            site_data.assign(Estado=site_data["Estado"].replace("", "Sin estado"))
+            site_data_view.assign(Estado=site_data_view["Estado"].replace("", "Sin estado"))
             .groupby(["Sección", "Estado"], as_index=False)
             .size()
         )
         priority_df = (
-            site_data.assign(Prioridad=site_data["Prioridad"].replace("", "Sin prioridad"))
+            site_data_view.assign(Prioridad=site_data_view["Prioridad"].replace("", "Sin prioridad"))
             .groupby(["Sección", "Prioridad"], as_index=False)
             .size()
         )
@@ -13873,9 +14020,9 @@ def render_telecom_tower_eval_analysis():
         with control_right:
             st.markdown('<p class="telecom-panel-title">Mapa de riesgo de validación</p><p class="telecom-panel-sub">Cruce de prioridad y estado para enfocar los cierres técnicos antes de cliente.</p>', unsafe_allow_html=True)
             risk_matrix = (
-                site_data.assign(
-                    Estado=site_data["Estado"].replace("", "Sin estado"),
-                    Prioridad=site_data["Prioridad"].replace("", "Sin prioridad"),
+                site_data_view.assign(
+                    Estado=site_data_view["Estado"].replace("", "Sin estado"),
+                    Prioridad=site_data_view["Prioridad"].replace("", "Sin prioridad"),
                 )
                 .pivot_table(index="Prioridad", columns="Estado", values="Variable", aggfunc="count", fill_value=0)
             )
@@ -13950,7 +14097,7 @@ def render_telecom_tower_eval_analysis():
             "Supuestos de proyecto eólico": "Parámetros técnicos que afectan energía útil, LCOE, payback, excedentes e impacto.",
         }
         with st.expander("Tablas auditables de datos del sitio", expanded=False):
-            for section_name, section_df in site_sections.items():
+            for section_name, section_df in site_sections_view.items():
                 if str(section_name) == "Identificación y ubicación":
                     continue
 
