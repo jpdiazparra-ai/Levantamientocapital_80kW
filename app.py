@@ -13460,23 +13460,14 @@ def render_telecom_tower_eval_analysis():
         tab_wind,
         tab_risk,
         tab_analysis,
-        tab_savings,
     ) = st.tabs(
         [
             "01 Sitio y Demanda",
             "02 Recurso Eólico",
             "03 Curva Técnica y Producción",
             "04 Propuesta Técnico-Económica",
-            "05 Retorno, Riesgo y Plan Financiero",
         ]
     )
-
-    with tab_analysis:
-        render_telecom_scenario_simulator(
-            context_label="04 Propuesta técnico-económica · Recomendación comercial",
-            table_context="Resultados calculados para la propuesta técnico-económica.",
-            download_filename="propuesta_tecnico_economica_telecom.csv",
-        )
 
     def _analysis_context_state() -> dict:
         ctx = st.session_state.get("telecom_00_analysis_context", {}) or {}
@@ -14410,6 +14401,7 @@ def render_telecom_tower_eval_analysis():
             st.stop()
 
         st.session_state["telecom_03_curve_summary_df"] = curve_summary_df.to_dict("records")
+        st.session_state["telecom_03_curve_active_summary_df"] = curve_summary_df.to_dict("records")
         st.session_state["telecom_03_curve_points_df"] = curve_points_df.to_dict("records")
 
         best_fp_row = curve_summary_df.sort_values("FP curva %", ascending=False).iloc[0]
@@ -14549,7 +14541,14 @@ def render_telecom_tower_eval_analysis():
         )
         st.dataframe(kpi_curve_table, use_container_width=True, hide_index=True)
 
-    with tab_savings:
+    with tab_analysis:
+        render_telecom_scenario_simulator(
+            context_label="04 Propuesta técnico-económica · Recomendación comercial",
+            table_context="Resultados calculados para la propuesta técnico-económica.",
+            download_filename="propuesta_tecnico_economica_telecom.csv",
+        )
+
+    if False:
         def _format_clp_accounting(value):
             try:
                 num = float(value)
@@ -15476,7 +15475,10 @@ def render_telecom_scenario_simulator(
                 wind_monthly_profile[col] = pd.to_numeric(wind_monthly_profile[col], errors="coerce")
         wind_monthly_profile = wind_monthly_profile.dropna(subset=["Altura m", "Mes", "Energía mensual neta kWh por turbina"]).sort_values(["Mes", "Altura m"])
 
-    curve_summary_df = pd.DataFrame(st.session_state.get("telecom_03_curve_summary_df", []))
+    curve_summary_df = pd.DataFrame(
+        st.session_state.get("telecom_03_curve_active_summary_df", [])
+        or st.session_state.get("telecom_03_curve_summary_df", [])
+    )
     if not curve_summary_df.empty:
         for col in [
             "Pn nominal kW", "Altura total turbina m", "Altura barrida rotor m", "Altura torre m",
@@ -15522,7 +15524,7 @@ def render_telecom_scenario_simulator(
                     "rotor_area": rotor_area,
                     "impact_surface": impact_surface,
                     "pf": max(0.0, curve_pf),
-                    "source": "03 Curva Técnica y Producción",
+                    "source": "03 Curva Técnica y Producción · curva GREEF + viento interpolado",
                     "wind_col": str(curve_row.get("Fuente medición", "")),
                     "annual_kwh_per_turbine": curve_annual if np.isfinite(curve_annual) and curve_annual > 0 else np.nan,
                     "monthly_kwh_per_turbine": curve_annual / 12.0 if np.isfinite(curve_annual) and curve_annual > 0 else np.nan,
