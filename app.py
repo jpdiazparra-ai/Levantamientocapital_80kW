@@ -1634,7 +1634,30 @@ def load_propuesta_site_options(refresh_nonce: int = 0) -> pd.DataFrame:
         dtype=str,
         header=None,
     )
-    return _build_sheet_table_from_row(raw_df, start_row_idx=19, first_col_name="PoP")
+    raw_df = raw_df.fillna("")
+    header_idx = None
+    for idx in range(len(raw_df.index)):
+        first = normalize_key(clean_sheet_cell(raw_df.iat[idx, 0])) if raw_df.shape[1] else ""
+        row_keys = {normalize_key(value) for value in raw_df.iloc[idx].tolist() if clean_sheet_cell(value)}
+        if first == "pop" and {"region", "consumokwhmes", "costokwh"}.intersection(row_keys):
+            header_idx = idx
+            break
+    if header_idx is None:
+        return _build_sheet_table_from_row(raw_df, start_row_idx=19, first_col_name="PoP")
+
+    headers = [clean_sheet_cell(value) or f"Campo {col_idx + 1}" for col_idx, value in enumerate(raw_df.iloc[header_idx].tolist())]
+    records = []
+    for row_idx in range(header_idx + 1, len(raw_df.index)):
+        values = [clean_sheet_cell(value) for value in raw_df.iloc[row_idx].tolist()]
+        if not any(values):
+            continue
+        pop_value = values[0] if values else ""
+        if not pop_value:
+            continue
+        if normalize_key(pop_value) in {"base", "metricas", "selectorprincipal"}:
+            continue
+        records.append({headers[col_idx]: values[col_idx] if col_idx < len(values) else "" for col_idx in range(len(headers))})
+    return pd.DataFrame(records)
 
 
 @st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
@@ -15206,15 +15229,15 @@ def render_telecom_scenario_simulator(
             default_surface_per_kw = float(surface_ratio.median())
 
     if selected_pop:
-        default_monthly_consumption = selected_site_numeric(["Consumo mensual modelo", "Consumo mensual", "kWh mes", "kWh/mes"], default_monthly_consumption)
+        default_monthly_consumption = selected_site_numeric(["Consumo mensual modelo", "Consumo mensual", "Consumo kWh/mes", "kWh mes", "kWh/mes"], default_monthly_consumption)
         default_target_coverage = selected_site_numeric(["Cobertura objetivo", "Cobertura", "Objetivo cobertura"], default_target_coverage)
         default_project_life = int(max(5, min(30, round(selected_site_numeric(["Vida útil", "Vida util", "Años análisis"], default_project_life)))))
-        default_grid_cost = selected_site_numeric(["Tarifa red modelo", "Costo red", "Red CLP/kWh", "Tarifa red"], default_grid_cost)
-        default_diesel_cost = selected_site_numeric(["Costo electrógeno base", "Costo electrogeno", "Diésel CLP/kWh", "Diesel CLP/kWh"], default_diesel_cost)
-        default_bess_cost = selected_site_numeric(["Costo batería referencia", "Costo bateria", "BESS CLP/kWh", "FV/BESS"], default_bess_cost)
+        default_grid_cost = selected_site_numeric(["Tarifa red modelo", "Costo red", "Red CLP/kWh", "Tarifa red", "Costo $/kWh"], default_grid_cost)
+        default_diesel_cost = selected_site_numeric(["Costo electrógeno base", "Costo electrogeno", "Diésel CLP/kWh", "Diesel CLP/kWh", "Costo $/kWh"], default_diesel_cost)
+        default_bess_cost = selected_site_numeric(["Costo batería referencia", "Costo bateria", "BESS CLP/kWh", "FV/BESS", "Costo $/kWh"], default_bess_cost)
         default_mix_grid = selected_site_numeric(["Mix Red", "Red %", "% red"], default_mix_grid)
         default_mix_diesel = selected_site_numeric(["Mix Electrógeno", "Mix Electrogeno", "Diésel %", "Diesel %"], default_mix_diesel)
-        default_mix_bess = selected_site_numeric(["Mix Batería/Solar", "Mix Bateria", "BESS %", "FV %"], default_mix_bess)
+        default_mix_bess = selected_site_numeric(["Mix Batería/Solar", "Mix Bateria", "BESS %", "FV %", "Solar %", "Batería %", "Bateria %"], default_mix_bess)
         default_surplus_price = selected_site_numeric(["Precio venta excedente", "Monetización excedente", "Excedente CLP/kWh"], default_surplus_price)
         default_surplus_factor = selected_site_numeric(["Factor valorización excedente", "Factor excedente"], default_surplus_factor)
         default_om_pct = selected_site_numeric(["O&M anual", "OM anual", "Opex anual"], default_om_pct)
