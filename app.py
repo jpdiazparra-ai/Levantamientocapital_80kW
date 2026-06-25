@@ -14406,6 +14406,21 @@ def render_telecom_tower_eval_analysis():
         with st.expander("Tabla auditable de boletas mensuales", expanded=False):
             st.dataframe(billing_table, use_container_width=True, hide_index=True)
 
+    if selected_telecom_market_tab == "01 Sitio y Demanda":
+        return
+
+    if selected_telecom_market_tab == "02 Recurso Eólico":
+        render_wind_csv_analysis_tab()
+        return
+
+    if selected_telecom_market_tab == "04 Propuesta Técnico-Económica":
+        render_telecom_scenario_simulator(
+            context_label="04 Propuesta técnico-económica · Recomendación comercial",
+            table_context="Resultados calculados para la propuesta técnico-económica.",
+            download_filename="propuesta_tecnico_economica_telecom.csv",
+        )
+        return
+
     alternatives["Alternativa"] = pd.Categorical(alternatives["Alternativa"], categories=turbine_order, ordered=True)
     alternatives = alternatives.sort_values("Alternativa").copy()
     alternatives["Alternativa"] = alternatives["Alternativa"].astype(str)
@@ -15268,6 +15283,14 @@ def render_telecom_scenario_simulator(
     except Exception:
         proposal_site_options = pd.DataFrame()
         proposal_catalog = pd.DataFrame()
+
+    wind_csv_outputs = st.session_state.get("telecom_09_viento_outputs", {}) or {}
+    wind_csv_bridge_fp = np.nan
+    if isinstance(wind_csv_outputs, dict) and wind_csv_outputs:
+        wind_csv_bridge_fp = parse_float_local(wind_csv_outputs.get("factor_planta_recomendado", np.nan), np.nan)
+        if not np.isfinite(wind_csv_bridge_fp) or wind_csv_bridge_fp <= 0:
+            wind_csv_bridge_fp = parse_float_local(wind_csv_outputs.get("fp_neto_pct", np.nan), np.nan)
+    wind_csv_bridge_active = bool(np.isfinite(wind_csv_bridge_fp) and wind_csv_bridge_fp > 0)
 
     fallback_characteristics = pd.DataFrame(
         [
