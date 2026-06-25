@@ -13611,6 +13611,12 @@ def render_telecom_tower_eval_analysis():
             return float(fp_value), detail
         return default, "Fuente local"
 
+    consumo_mensual = float(site_numeric("Consumo mensual modelo", float(summary["consumo_mensual"] or 3238.0)))
+    cobertura_pct = float(site_percent_value("Cobertura objetivo", float(summary["cobertura_objetivo"] or 1.0) * 100))
+    costo_ponderado = float(site_numeric("Costo ponderado actual", float(summary["costo_ponderado_actual"] or 429.0)))
+    factor_co2_diesel = float(site_numeric("Factor emisión diésel", 2.68))
+    criterio = "Balance técnico-económico"
+
     if selected_telecom_market_tab == "01 Sitio y Demanda":
         section("01 · Sitio y demanda", "Ubicación, consumo, costo energético y tipo de suministro", "Primera lectura para cliente: dónde está el sitio, cuánto consume, cuánto cuesta operar y qué fuente energética predomina antes de evaluar la solución eólica.")
         site_data_view = site_data.copy()
