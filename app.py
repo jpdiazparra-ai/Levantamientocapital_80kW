@@ -324,6 +324,17 @@ TURBINE_POWER_CURVE_SOURCE_SHEETS = {
     "00_Resumen": "829632539",
     "02_Ficha_GREEF": "1525851005",
 }
+TURBINE_CAPEX_RESUMEN_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vS1TP5aIfdteYk4obCGlSNGcWcgbYjaQTyBenkOEtBUlacLxYFJMHu6fka6rJE-jfULXB16FlJ6pdFa/"
+    "pub?output=csv"
+)
+TURBINE_CAPEX_RESUMEN_PUB_BASE_URL = TURBINE_CAPEX_RESUMEN_CSV_URL_DEFAULT.split("?")[0]
+TURBINE_CAPEX_RESUMEN_PUBHTML_URL = f"{TURBINE_CAPEX_RESUMEN_PUB_BASE_URL}html"
+TURBINE_CAPEX_RESUMEN_SOURCE_VERSION = 20260628
+TURBINE_CAPEX_RESUMEN_SOURCE_SHEETS = {
+    "00_Resumen": "656999778",
+}
 TURBINE_POWER_CURVE_SHEETS = {
     "VAWT 10 kW": {"sheet": "GVH-10KW", "curve_column": "GVH-10KW", "rated_kw": 10.0},
     "VAWT 5 kW": {"sheet": "GVH-5KW", "curve_column": "GVH-5KW", "rated_kw": 5.0},
@@ -513,6 +524,22 @@ def turbine_power_curve_source_csv_url(sheet_name: str, refresh_nonce: int = 0) 
     return TURBINE_POWER_CURVES_PUBLISHED_CSV_URL_DEFAULT
 
 
+def turbine_capex_resumen_csv_url(sheet_name: str = "00_Resumen", refresh_nonce: int = 0) -> str:
+    gid = TURBINE_CAPEX_RESUMEN_SOURCE_SHEETS.get(sheet_name)
+    try:
+        gid_map = load_google_pubhtml_sheet_gids(TURBINE_CAPEX_RESUMEN_PUBHTML_URL, refresh_nonce=refresh_nonce)
+        target_sheet = str(sheet_name).strip().casefold()
+        for published_sheet, sheet_gid in gid_map.items():
+            if str(published_sheet).strip().casefold() == target_sheet:
+                gid = sheet_gid
+                break
+    except Exception:
+        pass
+    if gid:
+        return f"{TURBINE_CAPEX_RESUMEN_PUB_BASE_URL}?gid={gid}&single=true&output=csv"
+    return TURBINE_CAPEX_RESUMEN_CSV_URL_DEFAULT
+
+
 def turbine_power_curve_csv_url(model: str, refresh_nonce: int = 0) -> str:
     return turbine_power_curve_source_csv_url("00_Resumen", refresh_nonce=refresh_nonce)
 
@@ -616,15 +643,67 @@ def _curve_table_from_resumen(raw: pd.DataFrame) -> pd.DataFrame:
     return table.reset_index(drop=True)
 
 
+def _turbine_capex_model_key(value: object) -> str | None:
+    key = normalize_key(clean_sheet_cell(value))
+    if not key:
+        return None
+    if "10" in key and any(token in key for token in ["ghv", "gvh", "vawt", "gv"]):
+        return "VAWT 10 kW"
+    if "5" in key and any(token in key for token in ["ghv", "gvh", "vawt", "gv"]):
+        return "VAWT 5 kW"
+    if "3" in key and any(token in key for token in ["ghv", "gvh", "vawt", "gv"]):
+        return "VAWT 3 kW"
+    if "1" in key and "10" not in key and any(token in key for token in ["ghv", "gvh", "vawt", "gv"]):
+        return "VAWT 1 kW"
+    if "80" in key and any(token in key for token in ["ghv", "gvh", "vawt", "gv"]):
+        return "VAWT 80 kW"
+    return None
+
+
 @st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_turbine_capex_defaults_from_resumen(refresh_nonce: int = 0) -> dict[str, float]:
     raw = read_remote_csv(
-        turbine_power_curve_source_csv_url("00_Resumen", refresh_nonce=refresh_nonce),
-        refresh_nonce=refresh_nonce + TURBINE_POWER_CURVES_SOURCE_VERSION,
+        turbine_capex_resumen_csv_url("00_Resumen", refresh_nonce=refresh_nonce),
+        refresh_nonce=refresh_nonce + TURBINE_CAPEX_RESUMEN_SOURCE_VERSION,
         dtype=str,
         header=None,
     ).fillna("")
     capex_by_model: dict[str, float] = {}
+
+    header_idx = None
+    model_col_idx = None
+    capex_col_idx = None
+    preferred_capex_keys = [
+        normalize_key("Sistema CLP Venta"),
+        normalize_key("Sistema CLP"),
+        normalize_key("CAPEX unitario"),
+    ]
+    for idx in range(len(raw.index)):
+        row_values = [clean_sheet_cell(value) for value in raw.iloc[idx].tolist()]
+        row_keys = [normalize_key(value) for value in row_values]
+        if normalize_key("Modelo") not in row_keys:
+            continue
+        header_idx = idx
+        model_col_idx = row_keys.index(normalize_key("Modelo"))
+        for preferred in preferred_capex_keys:
+            if preferred in row_keys:
+                capex_col_idx = row_keys.index(preferred)
+                break
+        if capex_col_idx is None and raw.shape[1] > 7:
+            capex_col_idx = 7  # Columna H como respaldo explícito del archivo fuente.
+        break
+
+    if header_idx is not None and model_col_idx is not None and capex_col_idx is not None:
+        for row_idx in range(header_idx + 1, len(raw.index)):
+            model_key = _turbine_capex_model_key(raw.iat[row_idx, model_col_idx])
+            if not model_key or capex_col_idx >= raw.shape[1]:
+                continue
+            parsed = parse_money_clp_robusto(clean_sheet_cell(raw.iat[row_idx, capex_col_idx]))
+            if parsed and parsed > 0:
+                capex_by_model[model_key] = float(parsed)
+        if capex_by_model:
+            return capex_by_model
+
     capex_col_idx = 7  # Columna H en Google Sheets.
     capex_start_row_idx = 11  # Fila 12 en Google Sheets.
     for offset, model in enumerate(TURBINE_CAPEX_RESUMEN_ROW_MODEL_ORDER):
@@ -13485,18 +13564,17 @@ def render_telecom_tower_eval_analysis():
             unsafe_allow_html=True,
         )
 
-    (
-        tab_inputs,
-        tab_wind,
-        tab_risk,
-        tab_analysis,
-    ) = st.tabs(
-        [
-            "01 Sitio y Demanda",
-            "02 Recurso Eólico",
-            "03 Curva Técnica y Producción",
-            "04 Propuesta Técnico-Económica",
-        ]
+    telecom_market_tabs = [
+        "01 Sitio y Demanda",
+        "02 Recurso Eólico",
+        "03 Curva Técnica y Producción",
+        "04 Propuesta Técnico-Económica",
+    ]
+    selected_telecom_market_tab = render_single_select_pills_compat(
+        "Vista de análisis de mercado",
+        telecom_market_tabs,
+        default=telecom_market_tabs[0],
+        key="telecom_market_tab_selector",
     )
 
     def _analysis_context_state() -> dict:
@@ -13533,7 +13611,7 @@ def render_telecom_tower_eval_analysis():
             return float(fp_value), detail
         return default, "Fuente local"
 
-    with tab_inputs:
+    if selected_telecom_market_tab == "01 Sitio y Demanda":
         section("01 · Sitio y demanda", "Ubicación, consumo, costo energético y tipo de suministro", "Primera lectura para cliente: dónde está el sitio, cuánto consume, cuánto cuesta operar y qué fuente energética predomina antes de evaluar la solución eólica.")
         site_data_view = site_data.copy()
         selected_site_row_tab = pd.Series(dtype=object)
@@ -14359,7 +14437,7 @@ def render_telecom_tower_eval_analysis():
     rec_simple_payback = recommended["Payback simple simulado años"]
     lifetime_value = (rec_saving * 15) - rec_capex
 
-    with tab_risk:
+    if selected_telecom_market_tab == "03 Curva Técnica y Producción":
         section(
             "03 · Curva técnica y producción",
             "Curva neta, potencia nominal y operación",
@@ -14718,7 +14796,7 @@ def render_telecom_tower_eval_analysis():
         )
         st.dataframe(kpi_curve_table, use_container_width=True, hide_index=True)
 
-    with tab_analysis:
+    if selected_telecom_market_tab == "04 Propuesta Técnico-Económica":
         render_telecom_scenario_simulator(
             context_label="04 Propuesta técnico-económica · Recomendación comercial",
             table_context="Resultados calculados para la propuesta técnico-económica.",
@@ -15104,7 +15182,7 @@ def render_telecom_tower_eval_analysis():
         )
 
 
-    with tab_wind:
+    if selected_telecom_market_tab == "02 Recurso Eólico":
         render_wind_csv_analysis_tab()
 
 
@@ -15301,7 +15379,7 @@ def render_telecom_scenario_simulator(
             if st.session_state.get("sim6_pop_selector_prev") != selected_pop:
                 for widget_key in [
                     "sim6_monthly_consumption", "sim6_target_coverage", "sim6_safety_margin", "sim6_project_life",
-                    "sim6_plant_factor", "sim6_availability", "sim6_electrical_losses", "sim6_additional_losses",
+                    "sim6_plant_factor", "sim6_plant_factor_locked", "sim6_availability", "sim6_electrical_losses", "sim6_additional_losses",
                     "sim6_degradation", "sim6_grid_cost", "sim6_mix_grid", "sim6_diesel_cost", "sim6_mix_diesel",
                     "sim6_bess_cost", "sim6_mix_bess", "sim6_surplus_price", "sim6_surplus_factor",
                     "sim6_bos_pct", "sim6_om_pct", "sim6_diesel_l_kwh", "sim6_co2_kg_l", "sim6_surface_per_kw",
@@ -15379,6 +15457,8 @@ def render_telecom_scenario_simulator(
     default_plant_factor = site_percent_value("Factor planta ficha sitio", 35.0)
     if not wind_defaults.empty and "Factor planta" in wind_defaults.columns:
         default_plant_factor = float(pd.to_numeric(wind_defaults["Factor planta"], errors="coerce").dropna().median() or default_plant_factor)
+    if wind_csv_bridge_active:
+        default_plant_factor = float(wind_csv_bridge_fp)
     default_availability = site_percent_value("Disponibilidad", 95.0)
     default_electrical_losses = site_percent_value("Pérdidas eléctricas", 3.0)
     default_additional_losses = site_percent_value("Pérdidas adicionales", 2.0)
@@ -15444,7 +15524,7 @@ def render_telecom_scenario_simulator(
         for name, capex_value in resumen_capex_defaults.items():
             if name in default_unit_capex and np.isfinite(capex_value) and capex_value > 0:
                 default_unit_capex[name] = float(capex_value)
-        source_detail = "CAPEX unitario desde 00_Resumen H12:H16"
+        source_detail = "CAPEX unitario desde 00_Resumen · Sistema CLP Venta"
 
     def years_label(value) -> str:
         if pd.isna(value) or not np.isfinite(float(value)):
@@ -15576,7 +15656,17 @@ def render_telecom_scenario_simulator(
             st.markdown("##### Recurso eólico y operación")
             e1, e2, e3, e4, e5 = st.columns(5)
             with e1:
-                plant_factor = st.slider("Factor planta base (%)", min_value=10.0, max_value=60.0, value=float(max(10.0, min(60.0, default_plant_factor))), step=0.5, key="sim6_plant_factor")
+                plant_factor_value = float(max(10.0, min(60.0, default_plant_factor)))
+                plant_factor = st.slider(
+                    "Factor planta base (%)",
+                    min_value=10.0,
+                    max_value=60.0,
+                    value=plant_factor_value,
+                    step=0.5,
+                    key="sim6_plant_factor_locked" if wind_csv_bridge_active else "sim6_plant_factor",
+                    disabled=wind_csv_bridge_active,
+                    help="Bloqueado porque existe data activa desde 02 Recurso Eólico." if wind_csv_bridge_active else None,
+                )
             with e2:
                 availability = st.slider("Disponibilidad (%)", min_value=70.0, max_value=100.0, value=float(max(70.0, min(100.0, default_availability))), step=1.0, key="sim6_availability")
             with e3:
@@ -15630,7 +15720,7 @@ def render_telecom_scenario_simulator(
                         f"CAPEX unitario {name}",
                         capex_default,
                         key=f"sim6_capex_text_{capex_key_name}_{int(round(capex_default))}",
-                        help_text="Valor inicial desde 00_Resumen H12:H16, editable en CLP.",
+                        help_text="Valor inicial desde 00_Resumen, columna Sistema CLP Venta, editable en CLP.",
                     )
 
     mix_grid_active = mix_grid if mix_grid > 0.0001 else 0.0
