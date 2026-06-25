@@ -319,7 +319,7 @@ TURBINE_POWER_CURVES_PUBLISHED_CSV_URL_DEFAULT = (
 )
 TURBINE_POWER_CURVES_PUB_BASE_URL = TURBINE_POWER_CURVES_PUBLISHED_CSV_URL_DEFAULT.split("?")[0]
 TURBINE_POWER_CURVES_PUBHTML_URL = f"{TURBINE_POWER_CURVES_PUB_BASE_URL}html"
-TURBINE_POWER_CURVES_SOURCE_VERSION = 20260626
+TURBINE_POWER_CURVES_SOURCE_VERSION = 20260627
 TURBINE_POWER_CURVE_SOURCE_SHEETS = {
     "00_Resumen": "829632539",
     "02_Ficha_GREEF": "1525851005",
@@ -330,6 +330,13 @@ TURBINE_POWER_CURVE_SHEETS = {
     "VAWT 3 kW": {"sheet": "GV-3KW", "curve_column": "GV-3KW", "rated_kw": 3.0},
     "VAWT 1 kW": {"sheet": "GV-1KW", "curve_column": "GV-1KW", "rated_kw": 1.0},
 }
+TURBINE_CAPEX_RESUMEN_ROW_MODEL_ORDER = [
+    "VAWT 1 kW",
+    "VAWT 3 kW",
+    "VAWT 5 kW",
+    "VAWT 10 kW",
+    "VAWT 80 kW",
+]
 PROPUESTA_TECNICO_ECONOMICA_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vQU-R3cnQv4Jaj0OZSaAvbbPCkmIlOCKcB-o7bWfuAnnn-BzNt88g8CqtLB2KuSnwiTuB6vONplpof5/"
@@ -610,6 +617,28 @@ def _curve_table_from_resumen(raw: pd.DataFrame) -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_turbine_capex_defaults_from_resumen(refresh_nonce: int = 0) -> dict[str, float]:
+    raw = read_remote_csv(
+        turbine_power_curve_source_csv_url("00_Resumen", refresh_nonce=refresh_nonce),
+        refresh_nonce=refresh_nonce + TURBINE_POWER_CURVES_SOURCE_VERSION,
+        dtype=str,
+        header=None,
+    ).fillna("")
+    capex_by_model: dict[str, float] = {}
+    capex_col_idx = 7  # Columna H en Google Sheets.
+    capex_start_row_idx = 11  # Fila 12 en Google Sheets.
+    for offset, model in enumerate(TURBINE_CAPEX_RESUMEN_ROW_MODEL_ORDER):
+        row_idx = capex_start_row_idx + offset
+        if row_idx >= raw.shape[0] or capex_col_idx >= raw.shape[1]:
+            continue
+        raw_value = clean_sheet_cell(raw.iat[row_idx, capex_col_idx])
+        parsed = parse_money_clp_robusto(raw_value)
+        if parsed and parsed > 0:
+            capex_by_model[model] = float(parsed)
+    return capex_by_model
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_turbine_power_curves(refresh_nonce: int = 0) -> dict[str, dict]:
     curves: dict[str, dict] = {}
     resumen_raw = read_remote_csv(
@@ -647,13 +676,14 @@ def load_turbine_power_curves(refresh_nonce: int = 0) -> dict[str, dict]:
         ficha = ficha_by_model.get(curve_column, {})
         rated_kw = _curve_sheet_value(ficha, ["Potencia nominal Pn"], float(meta.get("rated_kw", np.nan)))
         tower_height_m = _curve_sheet_value(ficha, ["Altura torre"], np.nan)
+        blade_length_m = _curve_sheet_value(ficha, ["Largo de pala", "Blades Length"], np.nan)
         rotor_area_m2 = _curve_sheet_value(ficha, ["Área barrida A", "Area barrida A"], np.nan)
         air_density = _curve_sheet_value(ficha, ["rho", "ρ aire", "densidad aire"], 1.225)
         curves[model] = {
             "model": model,
             "sheet": f"00_Resumen · {curve_column}",
             "rated_kw": rated_kw,
-            "rotor_height_m": tower_height_m,
+            "rotor_height_m": blade_length_m,
             "total_height_m": tower_height_m,
             "effective_wind_height_m": tower_height_m,
             "rotor_diameter_m": _curve_sheet_value(ficha, ["Diámetro rotor", "Diametro rotor"], np.nan),
@@ -14569,7 +14599,7 @@ def render_telecom_tower_eval_analysis():
                 <div>
                   <p class="telecom-site-k">00_RESUMEN + 02_FICHA_GREEF · Curvas GREEF por turbina</p>
                   <h3 class="telecom-site-t">Curvas reales 1/3/5/10 kW integradas con mediciones cargadas</h3>
-                  <p class="telecom-site-s">Cada turbina usa la curva publicada en 00_Resumen y la geometría de 02_Ficha_GREEF. La altura de cálculo para interpolar el recurso eólico es Altura torre, aplicada como altura barrida, altura total y altura efectiva de viento.</p>
+                  <p class="telecom-site-s">Cada turbina usa la curva publicada en 00_Resumen y la geometría de 02_Ficha_GREEF. La altura barrida se toma desde Largo de pala; Altura torre queda como altura total y altura efectiva de viento.</p>
                 </div>
                 <div class="telecom-site-status">
                   <div class="telecom-site-pill"><strong>{html.escape(str(best_fp_row["Modelo"]))}</strong><span>Mayor FP</span></div>
@@ -14652,7 +14682,7 @@ def render_telecom_tower_eval_analysis():
             fig_betz.update_layout(height=360, margin=dict(l=10, r=58, t=24, b=44), legend=dict(orientation="h", y=1.13), xaxis=dict(title=None), yaxis=dict(title="Cp", gridcolor="rgba(148,163,184,.22)", rangemode="tozero"), yaxis2=dict(title="Betz %", overlaying="y", side="right", showgrid=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig_betz, use_container_width=True, config={"displaylogo": False})
 
-        st.markdown('<p class="telecom-panel-title">Tabla técnica auditable por turbina</p><p class="telecom-panel-sub">Curva fuente desde 00_Resumen, Altura torre desde 02_Ficha_GREEF, FP, AEP, potencia operativa, Cp, Betz y torque.</p>', unsafe_allow_html=True)
+        st.markdown('<p class="telecom-panel-title">Tabla técnica auditable por turbina</p><p class="telecom-panel-sub">Curva fuente desde 00_Resumen; altura barrida desde Largo de pala en 02_Ficha_GREEF; altura total/efectiva desde Altura torre.</p>', unsafe_allow_html=True)
         curve_table = curve_summary_df.copy()
         for col, digits in [
             ("Pn nominal kW", 2),
@@ -15405,6 +15435,17 @@ def render_telecom_scenario_simulator(
                 if np.isfinite(opex_value) and opex_value > 0:
                     default_om_pct = float(opex_value)
 
+    try:
+        resumen_capex_defaults = load_turbine_capex_defaults_from_resumen(refresh_nonce=data_refresh_nonce)
+    except Exception:
+        resumen_capex_defaults = {}
+    capex_defaults_from_resumen = bool(resumen_capex_defaults)
+    if capex_defaults_from_resumen:
+        for name, capex_value in resumen_capex_defaults.items():
+            if name in default_unit_capex and np.isfinite(capex_value) and capex_value > 0:
+                default_unit_capex[name] = float(capex_value)
+        source_detail = "CAPEX unitario desde 00_Resumen H12:H16"
+
     def years_label(value) -> str:
         if pd.isna(value) or not np.isfinite(float(value)):
             return "N/A"
@@ -15579,13 +15620,17 @@ def render_telecom_scenario_simulator(
             unit_capex = {}
             for idx, name in enumerate(turbine_order):
                 with capex_cols[idx]:
-                    capex_default = float(wind_default(name, "CAPEX unitario $", default_unit_capex[name]))
+                    capex_default = float(
+                        default_unit_capex[name]
+                        if capex_defaults_from_resumen and name in default_unit_capex
+                        else wind_default(name, "CAPEX unitario $", default_unit_capex[name])
+                    )
                     capex_key_name = re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_")
                     unit_capex[name] = money_text_input(
                         f"CAPEX unitario {name}",
                         capex_default,
                         key=f"sim6_capex_text_{capex_key_name}_{int(round(capex_default))}",
-                        help_text="Valor inicial desde 04_Modelo_Eolico > CAPEX unitario, editable en CLP.",
+                        help_text="Valor inicial desde 00_Resumen H12:H16, editable en CLP.",
                     )
 
     mix_grid_active = mix_grid if mix_grid > 0.0001 else 0.0
