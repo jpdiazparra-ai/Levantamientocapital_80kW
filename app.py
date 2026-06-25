@@ -355,7 +355,7 @@ PROPUESTA_TECNICO_ECONOMICA_CSV_URL_DEFAULT = (
 )
 PROPUESTA_TECNICO_ECONOMICA_PUB_BASE_URL = PROPUESTA_TECNICO_ECONOMICA_CSV_URL_DEFAULT.split("?")[0]
 PROPUESTA_TECNICO_ECONOMICA_PUBHTML_URL = f"{PROPUESTA_TECNICO_ECONOMICA_PUB_BASE_URL}html"
-PROPUESTA_TECNICO_ECONOMICA_SOURCE_VERSION = 20260624
+PROPUESTA_TECNICO_ECONOMICA_SOURCE_VERSION = 20260629
 PROPUESTA_TECNICO_ECONOMICA_SHEET_GIDS = {
     "00_Resumen": "1764706849",
     "01_Inputs_Sitio": "129678883",
@@ -1747,8 +1747,9 @@ def load_propuesta_site_options(refresh_nonce: int = 0) -> pd.DataFrame:
     header_idx = None
     for idx in range(len(raw_df.index)):
         first = normalize_key(clean_sheet_cell(raw_df.iat[idx, 0])) if raw_df.shape[1] else ""
-        row_keys = {normalize_key(value) for value in raw_df.iloc[idx].tolist() if clean_sheet_cell(value)}
-        if first == "pop" and {"region", "consumokwhmes", "costokwh"}.intersection(row_keys):
+        row_values = [clean_sheet_cell(value) for value in raw_df.iloc[idx].tolist()]
+        row_keys = {normalize_key(value) for value in row_values if value}
+        if first == "pop" and "region" in row_keys and len(row_keys) >= 8:
             header_idx = idx
             break
     if header_idx is None:
@@ -13774,6 +13775,23 @@ def render_telecom_tower_eval_analysis():
         alta_count = int((site_data_view["Prioridad"].astype(str).str.casefold() == "alta").sum())
         auto_count = int((site_data_view["Estado"].astype(str).str.casefold() == "automático").sum())
         pending_count = int((site_data_view["Estado"].astype(str).str.casefold() == "por validar").sum())
+        status_variables_display = str(len(site_data_view))
+        status_priority_display = str(alta_count)
+        status_pending_display = str(pending_count)
+        status_source_display = str(site_model.get("source_mode", "remote")).upper()
+        if not selected_site_row_tab.empty:
+            selected_values = [clean_sheet_cell(value) for value in selected_site_row_tab.tolist()[:21]]
+            status_variables_display = str(sum(1 for value in selected_values if value))
+            selected_priority = selected_site_tab_value(["Prioridad", "Prioridad comercial"], "")
+            status_priority_display = selected_priority or "N/D"
+            critical_headers = [
+                "PoP", "Región", "Comuna/Sector", "Latitud", "Longitud", "Altitud msnm",
+                "Litros/año", "Energía kWh/año", "Consumo kWh/mes", "Costo $/kWh",
+            ]
+            status_pending_display = str(
+                sum(1 for header in critical_headers if not selected_site_tab_value([header], ""))
+            )
+            status_source_display = "01_INPUTS"
         tab_inputs_fp_base, tab_inputs_fp_source = _analysis_recommended_fp(site_view_percent_value("Factor planta ficha sitio", 35.0))
 
         def render_site_identity_block(section_df: pd.DataFrame) -> None:
@@ -13865,10 +13883,10 @@ def render_telecom_tower_eval_analysis():
                   <p class="telecom-site-s">Ficha comercial del sitio: consumo validado, costo energético, mix operativo y brechas de datos que condicionan la recomendación.</p>
                 </div>
                 <div class="telecom-site-status">
-                  <div class="telecom-site-pill"><strong>{len(site_data_view)}</strong><span>Variables</span></div>
-                  <div class="telecom-site-pill"><strong>{alta_count}</strong><span>Prioridad alta</span></div>
-                  <div class="telecom-site-pill"><strong>{pending_count}</strong><span>Por validar</span></div>
-                  <div class="telecom-site-pill"><strong>{html.escape(str(site_model.get("source_mode", "remote")).upper())}</strong><span>Fuente base</span></div>
+                  <div class="telecom-site-pill"><strong>{html.escape(status_variables_display)}</strong><span>Campos A:U</span></div>
+                  <div class="telecom-site-pill"><strong>{html.escape(status_priority_display)}</strong><span>Prioridad</span></div>
+                  <div class="telecom-site-pill"><strong>{html.escape(status_pending_display)}</strong><span>Por validar</span></div>
+                  <div class="telecom-site-pill"><strong>{html.escape(status_source_display)}</strong><span>Fuente base</span></div>
                 </div>
               </div>
             </div>
