@@ -13109,16 +13109,61 @@ def render_telecom_tower_eval_analysis():
         hist_col, weib_col, dur_col = st.columns(3)
         with hist_col:
             st.markdown('<p class="telecom-panel-title">Histograma de velocidad</p><p class="telecom-panel-sub">Distribución real de viento validado.</p>', unsafe_allow_html=True)
-            fig_hist = px.histogram(clean_speed, nbins=36, histnorm="probability density", labels={"value": "Velocidad (m/s)", "count": "Densidad"}, color_discrete_sequence=[blue_2])
-            fig_hist.update_layout(height=340, showlegend=False, margin=dict(l=10, r=10, t=12, b=38), yaxis=dict(gridcolor="rgba(148,163,184,.22)"))
+            fig_hist = px.histogram(
+                clean_speed,
+                nbins=36,
+                histnorm="percent",
+                labels={"value": "Velocidad (m/s)", "count": "% ocurrencia"},
+                color_discrete_sequence=[blue_2],
+            )
+            fig_hist.update_traces(
+                hovertemplate="Velocidad: %{x}<br>Ocurrencia: %{y:.1f}%<extra></extra>"
+            )
+            fig_hist.update_layout(
+                height=340,
+                showlegend=False,
+                margin=dict(l=10, r=10, t=12, b=38),
+                xaxis=dict(title="Velocidad (m/s)"),
+                yaxis=dict(title="% ocurrencia", ticksuffix="%", gridcolor="rgba(148,163,184,.22)", rangemode="tozero"),
+            )
             st.plotly_chart(fig_hist, use_container_width=True, config={"displaylogo": False})
         with weib_col:
             st.markdown('<p class="telecom-panel-title">Weibull versus datos reales</p><p class="telecom-panel-sub">Ajuste paramétrico para extrapolar producción y riesgo del recurso.</p>', unsafe_allow_html=True)
             x_grid = np.linspace(0, max(float(clean_speed.max() or 1.0), 1.0), 120)
+            weibull_bin_width = (float(clean_speed.max() or 1.0) - float(clean_speed.min() or 0.0)) / 36.0
+            if not np.isfinite(weibull_bin_width) or weibull_bin_width <= 0:
+                weibull_bin_width = max(float(clean_speed.max() or 1.0), 1.0) / 36.0
+            weibull_percent = _weibull_pdf(
+                x_grid,
+                selected_analysis["Weibull k"],
+                selected_analysis["Weibull c"],
+            ) * weibull_bin_width * 100.0
             fig_weib = go.Figure()
-            fig_weib.add_trace(go.Histogram(x=clean_speed, histnorm="probability density", nbinsx=36, name="Datos reales", marker_color=blue_2, opacity=.72))
-            fig_weib.add_trace(go.Scatter(x=x_grid, y=_weibull_pdf(x_grid, selected_analysis["Weibull k"], selected_analysis["Weibull c"]), mode="lines", name="Weibull estimada", line=dict(color=blue_4, width=3)))
-            fig_weib.update_layout(height=340, barmode="overlay", margin=dict(l=10, r=10, t=12, b=38), xaxis=dict(title="Velocidad (m/s)"), yaxis=dict(title="Densidad", gridcolor="rgba(148,163,184,.22)"), legend=dict(orientation="h", y=1.16, x=0))
+            fig_weib.add_trace(go.Histogram(
+                x=clean_speed,
+                histnorm="percent",
+                nbinsx=36,
+                name="Datos reales",
+                marker_color=blue_2,
+                opacity=.72,
+                hovertemplate="Velocidad: %{x}<br>Ocurrencia real: %{y:.1f}%<extra></extra>",
+            ))
+            fig_weib.add_trace(go.Scatter(
+                x=x_grid,
+                y=weibull_percent,
+                mode="lines",
+                name="Weibull estimada",
+                line=dict(color=blue_4, width=3),
+                hovertemplate="Velocidad: %{x:.2f} m/s<br>Ocurrencia Weibull: %{y:.1f}%<extra></extra>",
+            ))
+            fig_weib.update_layout(
+                height=340,
+                barmode="overlay",
+                margin=dict(l=10, r=10, t=12, b=38),
+                xaxis=dict(title="Velocidad (m/s)"),
+                yaxis=dict(title="% ocurrencia por rango", ticksuffix="%", gridcolor="rgba(148,163,184,.22)", rangemode="tozero"),
+                legend=dict(orientation="h", y=1.16, x=0),
+            )
             st.plotly_chart(fig_weib, use_container_width=True, config={"displaylogo": False})
         with dur_col:
             st.markdown('<p class="telecom-panel-title">Curva de duración</p><p class="telecom-panel-sub">Velocidades ordenadas de mayor a menor.</p>', unsafe_allow_html=True)
