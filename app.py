@@ -2680,23 +2680,27 @@ def render_single_select_pills_compat(
     format_func=None,
 ):
     if hasattr(st, "pills"):
-        return st.pills(
-            label,
-            options=options,
-            default=default,
-            selection_mode="single",
-            key=key,
-            format_func=format_func,
-        )
+        kwargs = {
+            "label": label,
+            "options": options,
+            "default": default,
+            "selection_mode": "single",
+            "key": key,
+        }
+        if format_func is not None:
+            kwargs["format_func"] = format_func
+        return st.pills(**kwargs)
     if key not in st.session_state or st.session_state[key] not in options:
         st.session_state[key] = default if default in options else options[0]
-    return st.radio(
-        label,
-        options=options,
-        horizontal=True,
-        key=key,
-        format_func=format_func,
-    )
+    kwargs = {
+        "label": label,
+        "options": options,
+        "horizontal": True,
+        "key": key,
+    }
+    if format_func is not None:
+        kwargs["format_func"] = format_func
+    return st.radio(**kwargs)
 
 
 def render_inputs_sm_kpi_cards(tabla_sm: pd.DataFrame):
@@ -15624,42 +15628,12 @@ def render_telecom_scenario_simulator(
         .sim6-engineering-note{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;margin-top:14px;border:1px solid rgba(117,169,184,.25);border-radius:13px;background:#fff;padding:12px 14px;}
         .sim6-note-main{font-size:12px;line-height:1.35;color:#293241;font-weight:780;margin:0;}
         .sim6-note-tag{border-radius:999px;background:#e0fbfc;color:#3d5a80;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;padding:7px 10px;white-space:nowrap;}
-        .sim6-hero{border:1px solid rgba(117,169,184,.30);border-radius:18px;background:linear-gradient(135deg,#ffffff 0%,#F7FBFC 48%,#e0fbfc 100%);box-shadow:0 16px 38px rgba(40,71,99,.08);padding:20px 22px;margin:10px 0 18px;overflow:hidden;}
-        .sim6-hero-grid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;}
-        .sim6-hero-k{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#293241;font-weight:950;margin:0 0 8px;}
-        .sim6-hero-t{font-size:clamp(24px,2vw,34px);line-height:1.04;font-weight:950;color:#0b1730;margin:0 0 8px;letter-spacing:-.02em;}
-        .sim6-hero-s{font-size:13px;line-height:1.42;color:#475569;font-weight:760;margin:0;max-width:850px;}
-        .sim6-hero-status{display:grid;grid-template-columns:repeat(3,minmax(112px,1fr));gap:9px;}
-        .sim6-hero-pill{border:1px solid rgba(117,169,184,.34);border-radius:13px;background:#ffffff;padding:12px 13px;box-shadow:0 8px 18px rgba(40,71,99,.055);}
-        .sim6-hero-pill strong{display:block;font-size:10px;letter-spacing:.11em;text-transform:uppercase;color:#3d5a80;font-weight:950;margin:0 0 5px;}
-        .sim6-hero-pill span{display:block;font-size:13px;line-height:1.15;color:#0b1730;font-weight:900;}
         .sim6-input-note{border:1px solid rgba(117,169,184,.28);border-radius:13px;background:linear-gradient(180deg,#ffffff,#F8FBFC);padding:12px 14px;margin:2px 0 14px;color:#293241;font-size:12px;line-height:1.35;font-weight:760;}
         div[data-testid="stExpander"] details{border:1px solid rgba(117,169,184,.34);border-radius:16px;background:#fff;box-shadow:0 12px 30px rgba(40,71,99,.065);}
         div[data-testid="stExpander"] summary{font-weight:900;color:#293241;}
         @media (max-width: 1300px){.sim6-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));}.sim6-result-head{grid-template-columns:1fr;}}
-        @media (max-width: 1100px){.sim6-hero-grid{grid-template-columns:1fr}.sim6-hero-status{grid-template-columns:repeat(3,minmax(0,1fr));}}
-        @media (max-width: 760px){.sim6-kpi-grid{grid-template-columns:1fr;}.sim6-result-head{padding:20px 18px}.sim6-result-body{padding:16px}.sim6-engineering-note{grid-template-columns:1fr}.sim6-title{font-size:28px;}.sim6-hero-status{grid-template-columns:1fr;}}
+        @media (max-width: 760px){.sim6-kpi-grid{grid-template-columns:1fr;}.sim6-result-head{padding:20px 18px}.sim6-result-body{padding:16px}.sim6-engineering-note{grid-template-columns:1fr}.sim6-title{font-size:28px;}}
         </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        f"""
-        <div class="sim6-hero">
-          <div class="sim6-hero-grid">
-            <div>
-              <p class="sim6-hero-k">{html.escape(context_label)}</p>
-              <h3 class="sim6-hero-t">Modelo interactivo para torres telecom</h3>
-              <p class="sim6-hero-s">Ingrese supuestos técnicos, energéticos y económicos. El sistema recalcula en vivo la recomendación, cobertura, CAPEX, LCOE, payback, impacto y tabla ejecutiva. Los valores iniciales se alimentan desde Google Sheets cuando están disponibles.</p>
-            </div>
-            <div class="sim6-hero-status">
-              <div class="sim6-hero-pill"><strong>Input</strong><span>{html.escape(source_badge)}</span></div>
-              <div class="sim6-hero-pill"><strong>Portafolio</strong><span>{len(turbine_order)} alternativas</span></div>
-              <div class="sim6-hero-pill"><strong>Estado</strong><span>{html.escape(source_detail)}</span></div>
-            </div>
-          </div>
-        </div>
         """,
         unsafe_allow_html=True,
     )
