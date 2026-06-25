@@ -11888,12 +11888,12 @@ def render_telecom_tower_eval_analysis():
             ]
             resource_df = pd.concat([pd.DataFrame(resource_override_rows), resource_df], ignore_index=True)
 
-    blue_1 = "#DCECEF"
-    blue_2 = "#75A9B8"
-    blue_3 = "#A9673B"
-    blue_4 = "#EA6400"
-    blue_5 = "#284763"
-    blue_text = "#20384F"
+    blue_1 = "#e0fbfc"
+    blue_2 = "#98c1d9"
+    blue_3 = "#293241"
+    blue_4 = "#ee6c4d"
+    blue_5 = "#3d5a80"
+    blue_text = "#293241"
     turbine_order = ["VAWT 1 kW", "VAWT 3 kW", "VAWT 5 kW", "VAWT 10 kW", "VAWT 80 kW"]
     fallback_turbine_characteristics = pd.DataFrame(
         [
@@ -12045,18 +12045,18 @@ def render_telecom_tower_eval_analysis():
     st.markdown(
         """
         <style>
-        .telecom-hero{border:1px solid rgba(40,71,99,.20);border-radius:16px;background:linear-gradient(135deg,#284763 0%,#75A9B8 58%,#EA6400 100%);padding:18px 22px;margin:12px 0 12px;box-shadow:0 14px 32px rgba(40,71,99,.16);}
+        .telecom-hero{border:1px solid rgba(40,71,99,.20);border-radius:16px;background:linear-gradient(135deg,#3d5a80 0%,#98c1d9 58%,#ee6c4d 100%);padding:18px 22px;margin:12px 0 12px;box-shadow:0 14px 32px rgba(40,71,99,.16);}
         .telecom-k{font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#F6E7DD;margin:0 0 8px;}
         .telecom-t{font-size:30px;line-height:1.05;font-weight:950;color:#fff;margin:0 0 8px;}
         .telecom-s{font-size:13.5px;line-height:1.48;color:#F8FBFC;font-weight:760;margin:0;max-width:1080px;}
         .telecom-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:8px 0 10px;}
         .telecom-grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:8px 0 10px;}
-        .telecom-card{border:1px solid #DCECEF;border-radius:10px;background:linear-gradient(180deg,#ffffff 0%,#F7FBFC 100%);padding:9px 11px;box-shadow:0 8px 18px rgba(40,71,99,.055);min-height:78px;}
-        .telecom-card-k{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:#284763;font-weight:950;margin:0 0 5px;}
+        .telecom-card{border:1px solid #e0fbfc;border-radius:10px;background:linear-gradient(180deg,#ffffff 0%,#F7FBFC 100%);padding:9px 11px;box-shadow:0 8px 18px rgba(40,71,99,.055);min-height:78px;}
+        .telecom-card-k{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:#3d5a80;font-weight:950;margin:0 0 5px;}
         .telecom-card-v{font-size:17px;line-height:1.02;font-weight:950;color:#0b1730;margin:0 0 4px;overflow-wrap:anywhere;}
         .telecom-card-s{font-size:10px;line-height:1.18;color:#475569;font-weight:740;margin:0;}
-        .telecom-dash-shell{border:1px solid #DCECEF;border-radius:14px;background:#ffffff;box-shadow:0 12px 28px rgba(40,71,99,.065);overflow:hidden;margin:8px 0 12px;}
-        .telecom-dash-head{display:grid;grid-template-columns:1.25fr .75fr;gap:14px;align-items:center;background:linear-gradient(135deg,#284763 0%,#75A9B8 62%,#A9673B 100%);padding:15px 18px;color:#fff;}
+        .telecom-dash-shell{border:1px solid #e0fbfc;border-radius:14px;background:#ffffff;box-shadow:0 12px 28px rgba(40,71,99,.065);overflow:hidden;margin:8px 0 12px;}
+        .telecom-dash-head{display:grid;grid-template-columns:1.25fr .75fr;gap:14px;align-items:center;background:linear-gradient(135deg,#3d5a80 0%,#98c1d9 62%,#293241 100%);padding:15px 18px;color:#fff;}
         .telecom-dash-k{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#F6E7DD;font-weight:950;margin:0 0 7px;}
         .telecom-dash-t{font-size:24px;line-height:1.05;font-weight:950;color:#fff;margin:0 0 8px;}
         .telecom-dash-s{font-size:12.5px;line-height:1.42;color:#F8FBFC;font-weight:740;margin:0;max-width:820px;}
@@ -12065,9 +12065,9 @@ def render_telecom_tower_eval_analysis():
         .telecom-dash-rec-v{font-size:28px;line-height:1;font-weight:950;color:#fff;margin:0;}
         .telecom-dash-body{padding:12px 14px 14px;}
         .telecom-dash-layout{display:grid;grid-template-columns:.9fr 1.1fr;gap:18px;align-items:start;margin-top:12px;}
-        .telecom-dash-message{border:1px solid #DCECEF;border-left:5px solid #EA6400;border-radius:12px;background:#F7FBFC;padding:12px 14px;color:#20384F;font-size:12.2px;font-weight:760;line-height:1.38;}
-        .telecom-section{margin:22px 0 12px;padding:12px 14px;border-left:5px solid #EA6400;background:#F7FBFC;border-radius:10px;border-top:1px solid #DCECEF;border-right:1px solid #DCECEF;border-bottom:1px solid #DCECEF;}
-        .telecom-section-k{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#A9673B;font-weight:950;margin:0 0 4px;}
+        .telecom-dash-message{border:1px solid #e0fbfc;border-left:5px solid #ee6c4d;border-radius:12px;background:#F7FBFC;padding:12px 14px;color:#293241;font-size:12.2px;font-weight:760;line-height:1.38;}
+        .telecom-section{margin:22px 0 12px;padding:12px 14px;border-left:5px solid #ee6c4d;background:#F7FBFC;border-radius:10px;border-top:1px solid #e0fbfc;border-right:1px solid #e0fbfc;border-bottom:1px solid #e0fbfc;}
+        .telecom-section-k{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#293241;font-weight:950;margin:0 0 4px;}
         .telecom-section-t{font-size:15px;line-height:1.15;color:#0f172a;font-weight:950;margin:0;}
         .telecom-section-s{font-size:12px;line-height:1.35;color:#64748b;font-weight:740;margin:4px 0 0;}
         .telecom-panel-title{
@@ -12076,9 +12076,9 @@ def render_telecom_tower_eval_analysis():
             color:#0f172a;
             margin:14px 0 0;
             padding:10px 12px 3px;
-            border:1px solid #DCECEF;
+            border:1px solid #e0fbfc;
             border-bottom:0;
-            border-left:4px solid #75A9B8;
+            border-left:4px solid #98c1d9;
             border-radius:11px 11px 0 0;
             background:linear-gradient(180deg,#ffffff 0%,#F8FBFC 100%);
             box-shadow:0 7px 16px rgba(40,71,99,.045);
@@ -12089,77 +12089,77 @@ def render_telecom_tower_eval_analysis():
             color:#64748b;
             margin:0 0 10px;
             padding:0 12px 10px;
-            border:1px solid #DCECEF;
+            border:1px solid #e0fbfc;
             border-top:0;
-            border-left:4px solid #75A9B8;
+            border-left:4px solid #98c1d9;
             border-radius:0 0 11px 11px;
             background:linear-gradient(180deg,#F8FBFC 0%,#ffffff 100%);
             box-shadow:0 7px 16px rgba(40,71,99,.045);
         }
-        .telecom-input-head{border:1px solid #DCECEF;border-radius:14px;background:#fff;padding:16px 18px;margin:0 0 14px;box-shadow:0 10px 24px rgba(40,71,99,.055);}
-        .telecom-input-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#A9673B;font-weight:950;margin:0 0 6px;}
+        .telecom-input-head{border:1px solid #e0fbfc;border-radius:14px;background:#fff;padding:16px 18px;margin:0 0 14px;box-shadow:0 10px 24px rgba(40,71,99,.055);}
+        .telecom-input-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#293241;font-weight:950;margin:0 0 6px;}
         .telecom-input-t{font-size:20px;line-height:1.1;color:#0f172a;font-weight:950;margin:0 0 6px;}
         .telecom-input-s{font-size:12.5px;line-height:1.38;color:#64748b;font-weight:760;margin:0;max-width:1000px;}
-        .telecom-note{border:1px solid #DCECEF;border-left:5px solid #EA6400;background:#FFF7F1;border-radius:10px;padding:13px 15px;color:#20384F;font-size:12.5px;font-weight:790;line-height:1.42;margin:8px 0 16px;}
-        .telecom-site-shell{border:1px solid #DCECEF;border-radius:16px;background:#fff;box-shadow:0 16px 34px rgba(40,71,99,.07);overflow:hidden;margin:10px 0 16px;}
-        .telecom-site-head{display:grid;grid-template-columns:1fr .55fr;gap:18px;align-items:center;padding:18px 20px;background:linear-gradient(135deg,#F7FBFC 0%,#DCECEF 58%,#75A9B8 100%);border-bottom:1px solid #DCECEF;}
-        .telecom-site-k{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#A9673B;font-weight:950;margin:0 0 6px;}
+        .telecom-note{border:1px solid #e0fbfc;border-left:5px solid #ee6c4d;background:#FFF7F1;border-radius:10px;padding:13px 15px;color:#293241;font-size:12.5px;font-weight:790;line-height:1.42;margin:8px 0 16px;}
+        .telecom-site-shell{border:1px solid #e0fbfc;border-radius:16px;background:#fff;box-shadow:0 16px 34px rgba(40,71,99,.07);overflow:hidden;margin:10px 0 16px;}
+        .telecom-site-head{display:grid;grid-template-columns:1fr .55fr;gap:18px;align-items:center;padding:18px 20px;background:linear-gradient(135deg,#F7FBFC 0%,#e0fbfc 58%,#98c1d9 100%);border-bottom:1px solid #e0fbfc;}
+        .telecom-site-k{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#293241;font-weight:950;margin:0 0 6px;}
         .telecom-site-t{font-size:22px;line-height:1.08;color:#0b1730;font-weight:950;margin:0 0 6px;}
         .telecom-site-s{font-size:12.5px;line-height:1.4;color:#475569;font-weight:760;margin:0;max-width:900px;}
         .telecom-site-status{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
         .telecom-site-pill{border:1px solid rgba(40,71,99,.18);border-radius:12px;background:rgba(255,255,255,.74);padding:10px 11px;text-align:center;}
         .telecom-site-pill strong{display:block;color:#0b1730;font-size:20px;line-height:1;font-weight:950;margin-bottom:4px;}
-        .telecom-site-pill span{display:block;color:#284763;font-size:9.5px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;}
+        .telecom-site-pill span{display:block;color:#3d5a80;font-size:9.5px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;}
         .telecom-site-body{padding:16px 18px 18px;}
-        .telecom-site-block{border:1px solid #DCECEF;border-radius:13px;background:#fff;margin:0 0 14px;overflow:hidden;box-shadow:0 10px 24px rgba(40,71,99,.055);}
-        .telecom-site-block-h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;background:#F7FBFC;border-bottom:1px solid #DCECEF;padding:13px 15px;}
+        .telecom-site-block{border:1px solid #e0fbfc;border-radius:13px;background:#fff;margin:0 0 14px;overflow:hidden;box-shadow:0 10px 24px rgba(40,71,99,.055);}
+        .telecom-site-block-h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;background:#F7FBFC;border-bottom:1px solid #e0fbfc;padding:13px 15px;}
         .telecom-site-block-h h4{font-size:14px;color:#0f172a;font-weight:950;margin:0;}
         .telecom-site-block-h p{font-size:11.5px;color:#64748b;font-weight:750;line-height:1.32;margin:4px 0 0;}
-        .telecom-site-mini{display:inline-flex;align-items:center;border-radius:999px;background:#DCECEF;color:#20384F;padding:5px 8px;font-size:10px;font-weight:950;text-transform:uppercase;white-space:nowrap;}
+        .telecom-site-mini{display:inline-flex;align-items:center;border-radius:999px;background:#e0fbfc;color:#293241;padding:5px 8px;font-size:10px;font-weight:950;text-transform:uppercase;white-space:nowrap;}
         .telecom-site-table{width:100%;border-collapse:separate;border-spacing:0;font-size:11.5px;color:#102039;}
-        .telecom-site-table th{background:#F7FBFC;color:#284763;text-transform:uppercase;letter-spacing:.07em;font-size:9.5px;font-weight:950;text-align:left;padding:11px 12px;border-bottom:1px solid #DCECEF;}
+        .telecom-site-table th{background:#F7FBFC;color:#3d5a80;text-transform:uppercase;letter-spacing:.07em;font-size:9.5px;font-weight:950;text-align:left;padding:11px 12px;border-bottom:1px solid #e0fbfc;}
         .telecom-site-table td{padding:11px 12px;border-bottom:1px solid #edf2f7;vertical-align:top;font-weight:760;}
         .telecom-site-table tbody tr:nth-child(even) td{background:#FBFEFF;}
         .telecom-site-table tbody tr:hover td{background:#FFF7F1;}
         .telecom-site-table tr:last-child td{border-bottom:none;}
         .telecom-site-value{font-weight:950;color:#0b1730;white-space:nowrap;}
-        .telecom-site-auto{display:inline-flex;border-radius:999px;background:#DCECEF;color:#20384F;padding:4px 7px;font-size:9.5px;font-weight:950;}
-        .telecom-site-edit{display:inline-flex;border-radius:999px;background:#D8EBEF;color:#284763;padding:4px 7px;font-size:9.5px;font-weight:950;}
+        .telecom-site-auto{display:inline-flex;border-radius:999px;background:#e0fbfc;color:#293241;padding:4px 7px;font-size:9.5px;font-weight:950;}
+        .telecom-site-edit{display:inline-flex;border-radius:999px;background:#D8EBEF;color:#3d5a80;padding:4px 7px;font-size:9.5px;font-weight:950;}
         .telecom-site-pending{display:inline-flex;border-radius:999px;background:#FFE8D8;color:#A94700;padding:4px 7px;font-size:9.5px;font-weight:950;}
-        .telecom-site-priority-high{display:inline-flex;border-radius:999px;background:#284763;color:#fff;padding:4px 7px;font-size:9.5px;font-weight:950;}
-        .telecom-site-priority-medium{display:inline-flex;border-radius:999px;background:#DCECEF;color:#20384F;padding:4px 7px;font-size:9.5px;font-weight:950;}
-        .telecom-site-priority-low{display:inline-flex;border-radius:999px;background:#F7FBFC;color:#64748b;padding:4px 7px;font-size:9.5px;font-weight:950;border:1px solid #DCECEF;}
+        .telecom-site-priority-high{display:inline-flex;border-radius:999px;background:#3d5a80;color:#fff;padding:4px 7px;font-size:9.5px;font-weight:950;}
+        .telecom-site-priority-medium{display:inline-flex;border-radius:999px;background:#e0fbfc;color:#293241;padding:4px 7px;font-size:9.5px;font-weight:950;}
+        .telecom-site-priority-low{display:inline-flex;border-radius:999px;background:#F7FBFC;color:#64748b;padding:4px 7px;font-size:9.5px;font-weight:950;border:1px solid #e0fbfc;}
         .telecom-site-critical{border:1px solid #F4C89E;border-radius:14px;background:#fff;box-shadow:0 12px 28px rgba(40,71,99,.065);overflow:hidden;margin:10px 0 16px;}
         .telecom-site-critical-h{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;background:#FFF7F1;border-bottom:1px solid #F4C89E;padding:14px 16px;}
         .telecom-site-critical-h h4{font-size:15px;color:#0f172a;font-weight:950;margin:0 0 4px;}
         .telecom-site-critical-h p{font-size:11.5px;color:#64748b;font-weight:760;line-height:1.34;margin:0;}
-        .telecom-site-critical-count{display:inline-flex;align-items:center;border-radius:999px;background:#EA6400;color:#fff;padding:6px 9px;font-size:10px;font-weight:950;white-space:nowrap;}
-        .telecom-location-hero{display:grid;grid-template-columns:1.2fr .8fr;gap:14px;padding:15px;background:linear-gradient(135deg,#F7FBFC 0%,#ffffff 62%,#FFF7F1 100%);border-bottom:1px solid #DCECEF;}
-        .telecom-location-main{border:1px solid #DCECEF;border-radius:12px;background:#fff;padding:14px 15px;box-shadow:0 10px 22px rgba(40,71,99,.055);}
-        .telecom-location-k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#A9673B;font-weight:950;margin:0 0 6px;}
-        .telecom-location-v{font-size:28px;line-height:1.02;color:#20384F;font-weight:950;margin:0 0 8px;overflow-wrap:anywhere;}
+        .telecom-site-critical-count{display:inline-flex;align-items:center;border-radius:999px;background:#ee6c4d;color:#fff;padding:6px 9px;font-size:10px;font-weight:950;white-space:nowrap;}
+        .telecom-location-hero{display:grid;grid-template-columns:1.2fr .8fr;gap:14px;padding:15px;background:linear-gradient(135deg,#F7FBFC 0%,#ffffff 62%,#FFF7F1 100%);border-bottom:1px solid #e0fbfc;}
+        .telecom-location-main{border:1px solid #e0fbfc;border-radius:12px;background:#fff;padding:14px 15px;box-shadow:0 10px 22px rgba(40,71,99,.055);}
+        .telecom-location-k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#293241;font-weight:950;margin:0 0 6px;}
+        .telecom-location-v{font-size:28px;line-height:1.02;color:#293241;font-weight:950;margin:0 0 8px;overflow-wrap:anywhere;}
         .telecom-location-s{font-size:12px;color:#64748b;font-weight:760;line-height:1.38;margin:0;}
         .telecom-location-side{display:grid;grid-template-columns:1fr;gap:9px;}
-        .telecom-location-chip{border:1px solid #DCECEF;border-radius:10px;background:#fff;padding:10px 11px;}
+        .telecom-location-chip{border:1px solid #e0fbfc;border-radius:10px;background:#fff;padding:10px 11px;}
         .telecom-location-chip span{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#64748b;font-weight:950;margin-bottom:4px;}
         .telecom-location-chip b{display:block;font-size:14px;color:#0f172a;font-weight:950;overflow-wrap:anywhere;}
         .telecom-location-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:13px 15px;}
-        .telecom-location-card{border:1px solid #DCECEF;border-radius:11px;background:#fff;padding:12px 13px;min-height:88px;}
+        .telecom-location-card{border:1px solid #e0fbfc;border-radius:11px;background:#fff;padding:12px 13px;min-height:88px;}
         .telecom-location-card p:first-child{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#64748b;font-weight:950;margin:0 0 6px;}
         .telecom-location-card p:nth-child(2){font-size:16px;line-height:1.1;color:#0f172a;font-weight:950;margin:0 0 6px;overflow-wrap:anywhere;}
         .telecom-location-card p:last-child{font-size:11px;line-height:1.28;color:#64748b;font-weight:740;margin:0;}
-        .telecom-location-alert{margin:0 15px 15px;border:1px solid #F4C89E;border-left:5px solid #EA6400;background:#FFF7F1;border-radius:10px;padding:11px 13px;color:#20384F;font-size:12px;font-weight:790;line-height:1.38;}
-        .telecom-table-shell{border:1px solid #DCECEF;border-radius:14px;background:#fff;box-shadow:0 12px 28px rgba(40,71,99,.065);overflow:hidden;margin:8px 0 14px;}
-        .telecom-table-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;background:#284763;color:#fff;padding:16px 18px;}
+        .telecom-location-alert{margin:0 15px 15px;border:1px solid #F4C89E;border-left:5px solid #ee6c4d;background:#FFF7F1;border-radius:10px;padding:11px 13px;color:#293241;font-size:12px;font-weight:790;line-height:1.38;}
+        .telecom-table-shell{border:1px solid #e0fbfc;border-radius:14px;background:#fff;box-shadow:0 12px 28px rgba(40,71,99,.065);overflow:hidden;margin:8px 0 14px;}
+        .telecom-table-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;background:#3d5a80;color:#fff;padding:16px 18px;}
         .telecom-table-head h3{font-size:17px;font-weight:950;margin:0 0 4px;}
-        .telecom-table-head p{font-size:12px;line-height:1.35;color:#DCECEF;font-weight:760;margin:0;}
+        .telecom-table-head p{font-size:12px;line-height:1.35;color:#e0fbfc;font-weight:760;margin:0;}
         .telecom-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;color:#0f172a;}
         .telecom-table th{background:#f8fafc;color:#475569;text-transform:uppercase;letter-spacing:.07em;font-size:10px;font-weight:950;text-align:right;padding:11px 12px;border-bottom:1px solid #e2e8f0;}
         .telecom-table th:first-child,.telecom-table td:first-child{text-align:left;}
         .telecom-table td{padding:12px;border-bottom:1px solid #edf2f7;text-align:right;font-weight:780;vertical-align:middle;}
         .telecom-table tr:last-child td{border-bottom:none;}
         .telecom-table tr.recommended td{background:#FFF7F1;}
-        .telecom-badge{display:inline-flex;align-items:center;border-radius:999px;background:#DCECEF;color:#20384F;padding:5px 8px;font-size:10px;font-weight:950;letter-spacing:.04em;text-transform:uppercase;}
+        .telecom-badge{display:inline-flex;align-items:center;border-radius:999px;background:#e0fbfc;color:#293241;padding:5px 8px;font-size:10px;font-weight:950;letter-spacing:.04em;text-transform:uppercase;}
         .telecom-muted{color:#64748b;font-weight:740;}
         @media (max-width:1400px){.telecom-grid{grid-template-columns:repeat(3,minmax(0,1fr));}.telecom-grid-4{grid-template-columns:repeat(2,minmax(0,1fr));}.telecom-dash-layout{grid-template-columns:1fr;}}
         @media (max-width:760px){.telecom-grid,.telecom-grid-4,.telecom-dash-head,.telecom-site-head,.telecom-site-status,.telecom-location-hero,.telecom-location-grid{grid-template-columns:1fr}.telecom-t{font-size:24px}.telecom-dash-rec{text-align:left;}}
@@ -14586,7 +14586,7 @@ def render_telecom_tower_eval_analysis():
         with curve_left:
             st.markdown('<p class="telecom-panel-title">Curvas GREEF de potencia real</p><p class="telecom-panel-sub">Potencia real por velocidad desde 00_Resumen para 1, 3, 5 y 10 kW. Los marcadores indican la velocidad interpolada desde mediciones a la altura torre.</p>', unsafe_allow_html=True)
             fig_curve_resource = go.Figure()
-            palette_curve = {"VAWT 1 kW": "#75A9B8", "VAWT 3 kW": "#284763", "VAWT 5 kW": "#A9673B", "VAWT 10 kW": "#EA6400"}
+            palette_curve = {"VAWT 1 kW": "#98c1d9", "VAWT 3 kW": "#3d5a80", "VAWT 5 kW": "#293241", "VAWT 10 kW": "#ee6c4d"}
             for model in ["VAWT 1 kW", "VAWT 3 kW", "VAWT 5 kW", "VAWT 10 kW"]:
                 model_df = curve_points_df[curve_points_df["Modelo"].eq(model)]
                 if model_df.empty:
@@ -14648,7 +14648,7 @@ def render_telecom_tower_eval_analysis():
             st.markdown('<p class="telecom-panel-title">Aerodinámica operativa</p><p class="telecom-panel-sub">Cp efectivo y uso Betz en la velocidad interpolada a la altura efectiva de viento.</p>', unsafe_allow_html=True)
             fig_betz = go.Figure()
             fig_betz.add_trace(go.Bar(x=curve_summary_df["Modelo"], y=curve_summary_df["Cp operativo"], name="Cp operativo", marker_color=blue_2, text=[_fmt_decimal(v, 2) for v in curve_summary_df["Cp operativo"]], textposition="outside"))
-            fig_betz.add_trace(go.Scatter(x=curve_summary_df["Modelo"], y=curve_summary_df["Betz operativo %"], name="Betz usado %", yaxis="y2", mode="lines+markers", line=dict(color="#EA6400", width=3), marker=dict(size=8, color="#EA6400", line=dict(color="#FFFFFF", width=1.4))))
+            fig_betz.add_trace(go.Scatter(x=curve_summary_df["Modelo"], y=curve_summary_df["Betz operativo %"], name="Betz usado %", yaxis="y2", mode="lines+markers", line=dict(color="#ee6c4d", width=3), marker=dict(size=8, color="#ee6c4d", line=dict(color="#FFFFFF", width=1.4))))
             fig_betz.update_layout(height=360, margin=dict(l=10, r=58, t=24, b=44), legend=dict(orientation="h", y=1.13), xaxis=dict(title=None), yaxis=dict(title="Cp", gridcolor="rgba(148,163,184,.22)", rangemode="tozero"), yaxis2=dict(title="Betz %", overlaying="y", side="right", showgrid=False), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig_betz, use_container_width=True, config={"displaylogo": False})
 
@@ -15099,12 +15099,12 @@ def render_telecom_scenario_simulator(
         "VAWT 80 kW": 105_000_000.0,
     }
     palette = {
-        "ink": "#284763",
-        "sky": "#75A9B8",
-        "pale": "#DCECEF",
-        "orange": "#EA6400",
-        "copper": "#A9673B",
-        "text": "#20384F",
+        "ink": "#3d5a80",
+        "sky": "#98c1d9",
+        "pale": "#e0fbfc",
+        "orange": "#ee6c4d",
+        "copper": "#293241",
+        "text": "#293241",
     }
     source_badge = "Manual"
     source_detail = "Inputs editables"
@@ -15452,7 +15452,7 @@ def render_telecom_scenario_simulator(
         """
         <style>
         .sim6-result-shell{border:1px solid rgba(117,169,184,.28);border-radius:18px;background:#ffffff;box-shadow:0 18px 44px rgba(40,71,99,.10);overflow:hidden;margin:18px 0 18px;}
-        .sim6-result-head{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(260px,.55fr);gap:22px;align-items:stretch;background:linear-gradient(125deg,#284763 0%,#75A9B8 58%,#A9673B 100%);padding:24px 26px;color:#fff;}
+        .sim6-result-head{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(260px,.55fr);gap:22px;align-items:stretch;background:linear-gradient(125deg,#3d5a80 0%,#98c1d9 58%,#293241 100%);padding:24px 26px;color:#fff;}
         .sim6-eyebrow{margin:0 0 10px;font-size:11px;line-height:1;letter-spacing:.18em;text-transform:uppercase;font-weight:950;color:rgba(255,255,255,.78);}
         .sim6-title{margin:0 0 9px;font-size:clamp(28px,2.2vw,40px);line-height:1.02;font-weight:950;letter-spacing:-.02em;color:#fff;}
         .sim6-sub{margin:0;max-width:850px;font-size:13px;line-height:1.45;font-weight:780;color:rgba(255,255,255,.88);}
@@ -15468,24 +15468,24 @@ def render_telecom_scenario_simulator(
         .sim6-kpi-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin:0;}
         .sim6-kpi{position:relative;border:1px solid rgba(117,169,184,.26);border-radius:14px;background:#ffffff;padding:14px 14px 13px;min-height:104px;box-shadow:0 10px 24px rgba(40,71,99,.055);overflow:hidden;}
         .sim6-kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent);}
-        .sim6-kpi-k{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:#284763;font-weight:950;margin:0 0 8px;line-height:1.12;}
+        .sim6-kpi-k{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:#3d5a80;font-weight:950;margin:0 0 8px;line-height:1.12;}
         .sim6-kpi-v{font-size:clamp(17px,1.25vw,23px);line-height:1.02;font-weight:950;color:#0b1730;margin:0 0 7px;overflow-wrap:anywhere;}
         .sim6-kpi-s{font-size:10.5px;line-height:1.23;color:#64748b;font-weight:760;margin:0;}
         .sim6-engineering-note{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;margin-top:14px;border:1px solid rgba(117,169,184,.25);border-radius:13px;background:#fff;padding:12px 14px;}
-        .sim6-note-main{font-size:12px;line-height:1.35;color:#20384F;font-weight:780;margin:0;}
-        .sim6-note-tag{border-radius:999px;background:#DCECEF;color:#284763;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;padding:7px 10px;white-space:nowrap;}
-        .sim6-hero{border:1px solid rgba(117,169,184,.30);border-radius:18px;background:linear-gradient(135deg,#ffffff 0%,#F7FBFC 48%,#DCECEF 100%);box-shadow:0 16px 38px rgba(40,71,99,.08);padding:20px 22px;margin:10px 0 18px;overflow:hidden;}
+        .sim6-note-main{font-size:12px;line-height:1.35;color:#293241;font-weight:780;margin:0;}
+        .sim6-note-tag{border-radius:999px;background:#e0fbfc;color:#3d5a80;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;padding:7px 10px;white-space:nowrap;}
+        .sim6-hero{border:1px solid rgba(117,169,184,.30);border-radius:18px;background:linear-gradient(135deg,#ffffff 0%,#F7FBFC 48%,#e0fbfc 100%);box-shadow:0 16px 38px rgba(40,71,99,.08);padding:20px 22px;margin:10px 0 18px;overflow:hidden;}
         .sim6-hero-grid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;}
-        .sim6-hero-k{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#A9673B;font-weight:950;margin:0 0 8px;}
+        .sim6-hero-k{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#293241;font-weight:950;margin:0 0 8px;}
         .sim6-hero-t{font-size:clamp(24px,2vw,34px);line-height:1.04;font-weight:950;color:#0b1730;margin:0 0 8px;letter-spacing:-.02em;}
         .sim6-hero-s{font-size:13px;line-height:1.42;color:#475569;font-weight:760;margin:0;max-width:850px;}
         .sim6-hero-status{display:grid;grid-template-columns:repeat(3,minmax(112px,1fr));gap:9px;}
         .sim6-hero-pill{border:1px solid rgba(117,169,184,.34);border-radius:13px;background:#ffffff;padding:12px 13px;box-shadow:0 8px 18px rgba(40,71,99,.055);}
-        .sim6-hero-pill strong{display:block;font-size:10px;letter-spacing:.11em;text-transform:uppercase;color:#284763;font-weight:950;margin:0 0 5px;}
+        .sim6-hero-pill strong{display:block;font-size:10px;letter-spacing:.11em;text-transform:uppercase;color:#3d5a80;font-weight:950;margin:0 0 5px;}
         .sim6-hero-pill span{display:block;font-size:13px;line-height:1.15;color:#0b1730;font-weight:900;}
-        .sim6-input-note{border:1px solid rgba(117,169,184,.28);border-radius:13px;background:linear-gradient(180deg,#ffffff,#F8FBFC);padding:12px 14px;margin:2px 0 14px;color:#20384F;font-size:12px;line-height:1.35;font-weight:760;}
+        .sim6-input-note{border:1px solid rgba(117,169,184,.28);border-radius:13px;background:linear-gradient(180deg,#ffffff,#F8FBFC);padding:12px 14px;margin:2px 0 14px;color:#293241;font-size:12px;line-height:1.35;font-weight:760;}
         div[data-testid="stExpander"] details{border:1px solid rgba(117,169,184,.34);border-radius:16px;background:#fff;box-shadow:0 12px 30px rgba(40,71,99,.065);}
-        div[data-testid="stExpander"] summary{font-weight:900;color:#20384F;}
+        div[data-testid="stExpander"] summary{font-weight:900;color:#293241;}
         @media (max-width: 1300px){.sim6-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));}.sim6-result-head{grid-template-columns:1fr;}}
         @media (max-width: 1100px){.sim6-hero-grid{grid-template-columns:1fr}.sim6-hero-status{grid-template-columns:repeat(3,minmax(0,1fr));}}
         @media (max-width: 760px){.sim6-kpi-grid{grid-template-columns:1fr;}.sim6-result-head{padding:20px 18px}.sim6-result-body{padding:16px}.sim6-engineering-note{grid-template-columns:1fr}.sim6-title{font-size:28px;}.sim6-hero-status{grid-template-columns:1fr;}}
@@ -16033,7 +16033,7 @@ def render_telecom_scenario_simulator(
     rec_height_text = f"{rec_height:.1f} m" if np.isfinite(rec_height) else "altura no disponible"
     rec_fp_source = str(recommended.get("Fuente FP", "Input base"))
     rec_wind_col = str(recommended.get("Columna viento", "") or "")
-    rec_wind_text = rec_fp_source + (f" · {rec_wind_col}" if rec_wind_col else "")
+    rec_wind_text = rec_fp_source
 
     def monthly_generation_consumption_df(row: pd.Series) -> pd.DataFrame:
         month_labels = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sept", "Oct", "Nov", "Dic"]
@@ -16225,15 +16225,15 @@ def render_telecom_scenario_simulator(
           </div>
           <div class="sim6-result-body">
             <div class="sim6-kpi-grid">
-              <div class="sim6-kpi" style="--accent:#284763;"><p class="sim6-kpi-k">Costo ponderado</p><p class="sim6-kpi-v">{format_clp(weighted_cost)}</p><p class="sim6-kpi-s">Mix normalizado del sitio</p></div>
-              <div class="sim6-kpi" style="--accent:#75A9B8;"><p class="sim6-kpi-k">Cobertura real</p><p class="sim6-kpi-v">{rec_coverage:.0f}%</p><p class="sim6-kpi-s">Generación vs consumo</p></div>
-              <div class="sim6-kpi" style="--accent:#EA6400;"><p class="sim6-kpi-k">CAPEX total</p><p class="sim6-kpi-v">{rec_capex:.1f} MM</p><p class="sim6-kpi-s">Turbinas + BOS</p></div>
-              <div class="sim6-kpi" style="--accent:#A9673B;"><p class="sim6-kpi-k">Payback</p><p class="sim6-kpi-v">{years_label(recommended["Payback años"])}</p><p class="sim6-kpi-s">Sobre beneficio neto anual</p></div>
-              <div class="sim6-kpi" style="--accent:#284763;"><p class="sim6-kpi-k">LCOE</p><p class="sim6-kpi-v">{format_clp(float(recommended["LCOE CLP/kWh"]))}</p><p class="sim6-kpi-s">CLP/kWh generado</p></div>
-              <div class="sim6-kpi" style="--accent:#75A9B8;"><p class="sim6-kpi-k">Valor periodo</p><p class="sim6-kpi-v">{float(recommended["Beneficio neto periodo CLP"])/1_000_000:.1f} MM</p><p class="sim6-kpi-s">Neto post CAPEX</p></div>
+              <div class="sim6-kpi" style="--accent:#3d5a80;"><p class="sim6-kpi-k">Costo ponderado</p><p class="sim6-kpi-v">{format_clp(weighted_cost)}</p><p class="sim6-kpi-s">Mix normalizado del sitio</p></div>
+              <div class="sim6-kpi" style="--accent:#98c1d9;"><p class="sim6-kpi-k">Cobertura real</p><p class="sim6-kpi-v">{rec_coverage:.0f}%</p><p class="sim6-kpi-s">Generación vs consumo</p></div>
+              <div class="sim6-kpi" style="--accent:#ee6c4d;"><p class="sim6-kpi-k">CAPEX total</p><p class="sim6-kpi-v">{rec_capex:.1f} MM</p><p class="sim6-kpi-s">Turbinas + BOS</p></div>
+              <div class="sim6-kpi" style="--accent:#293241;"><p class="sim6-kpi-k">Payback</p><p class="sim6-kpi-v">{years_label(recommended["Payback años"])}</p><p class="sim6-kpi-s">Sobre beneficio neto anual</p></div>
+              <div class="sim6-kpi" style="--accent:#3d5a80;"><p class="sim6-kpi-k">LCOE</p><p class="sim6-kpi-v">{format_clp(float(recommended["LCOE CLP/kWh"]))}</p><p class="sim6-kpi-s">CLP/kWh generado</p></div>
+              <div class="sim6-kpi" style="--accent:#98c1d9;"><p class="sim6-kpi-k">Valor periodo</p><p class="sim6-kpi-v">{float(recommended["Beneficio neto periodo CLP"])/1_000_000:.1f} MM</p><p class="sim6-kpi-s">Neto post CAPEX</p></div>
             </div>
             <div class="sim6-engineering-note">
-              <p class="sim6-note-main"><b>Por qué se elige esta versión:</b> combina {int(recommended["Nº turbinas"])} unidad(es) {html.escape(str(recommended["Alternativa"]))} para producir {rec_generation:,.0f} kWh/mes con FP {rec_fp:.1f}% desde {html.escape(rec_wind_text)}. Cubre {rec_coverage:.0f}% del consumo, requiere {rec_capex:.1f} MM CLP de CAPEX y recupera la inversión en {html.escape(years_label(recommended["Payback años"]))}.</p>
+              <p class="sim6-note-main"><b>Por qué se elige esta versión:</b> combina {int(recommended["Nº turbinas"])} unidad(es) {html.escape(str(recommended["Alternativa"]))} para producir {rec_generation:,.0f} kWh/mes con FP {rec_fp:.1f}% desde {html.escape(rec_wind_text)}.</p>
               <span class="sim6-note-tag">FP y generación auditables</span>
             </div>
           </div>
@@ -16249,6 +16249,13 @@ def render_telecom_scenario_simulator(
     )
     st.plotly_chart(monthly_generation_consumption_chart(recommended, 430), use_container_width=True, config={"displaylogo": False})
     st.plotly_chart(generation_audit_chart(recommended, 310), use_container_width=True, config={"displaylogo": False})
+
+    st.markdown(
+        f'<p class="telecom-panel-title">Recuperación de inversión y ahorro acumulado · {html.escape(str(recommended["Alternativa"]))}</p>'
+        '<p class="telecom-panel-sub">Beneficio acumulado frente al neto después de CAPEX. El marcador indica cuándo se recupera la inversión.</p>',
+        unsafe_allow_html=True,
+    )
+    st.plotly_chart(cumulative_savings_chart(recommended, 350), use_container_width=True, config={"displaylogo": False})
 
     chart_a, chart_b = st.columns(2)
     with chart_a:
@@ -16272,12 +16279,6 @@ def render_telecom_scenario_simulator(
     st.plotly_chart(decision_map_chart(sim_df, str(recommended["Alternativa"]), 380), use_container_width=True, config={"displaylogo": False})
 
     with st.expander("Análisis financiero avanzado de la propuesta", expanded=False):
-        st.markdown(
-            f'<p class="telecom-panel-title">Recuperación de inversión y ahorro acumulado · {html.escape(str(recommended["Alternativa"]))}</p>'
-            '<p class="telecom-panel-sub">Beneficio acumulado frente al neto después de CAPEX. El marcador indica cuándo se recupera la inversión.</p>',
-            unsafe_allow_html=True,
-        )
-        st.plotly_chart(cumulative_savings_chart(recommended, 350), use_container_width=True, config={"displaylogo": False})
         fin_left, fin_right = st.columns(2)
         with fin_left:
             st.markdown('<p class="telecom-panel-title">Beneficio marginal por alternativa</p><p class="telecom-panel-sub">Valor anual neto, ingreso por excedentes y O&M.</p>', unsafe_allow_html=True)
