@@ -295,6 +295,11 @@ EVALUACION_TELECOM_SENSITIVITY_CSV_URL_DEFAULT = (
     "2PACX-1vRnk67jNMCQVl2gli3nWHf7Lfs2HH0ygPKqBK4PGjVFipx-uhYDh1ez4AssHVZcyblLr4sERuMuPHej/"
     "pub?gid=1448973768&single=true&output=csv"
 )
+TELECOM_SITE_MASTER_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vTnHc4N1Uf0KAY-AnYRGKml7pcwL8CrdHXv0DUgEn-h7X0bM5ujhqeypd64FK17mfCK3zSFSXkNe14j/"
+    "pub?output=csv"
+)
 INGENIERIA_PILOTO_10KW_CACHE_VERSION = 3
 INGENIERIA_PILOTO_10KW_ALLOWED_MONTHS = {"dic", "abr", "may"}
 BULLET_CONTEXTO_10KW_CSV_URL_DEFAULT = (
@@ -361,25 +366,6 @@ TURBINE_CAPEX_RESUMEN_ROW_MODEL_ORDER = [
     "VAWT 10 kW",
     "VAWT 80 kW",
 ]
-PROPUESTA_TECNICO_ECONOMICA_CSV_URL_DEFAULT = (
-    "https://docs.google.com/spreadsheets/d/e/"
-    "2PACX-1vQU-R3cnQv4Jaj0OZSaAvbbPCkmIlOCKcB-o7bWfuAnnn-BzNt88g8CqtLB2KuSnwiTuB6vONplpof5/"
-    "pub?output=csv"
-)
-PROPUESTA_TECNICO_ECONOMICA_PUB_BASE_URL = PROPUESTA_TECNICO_ECONOMICA_CSV_URL_DEFAULT.split("?")[0]
-PROPUESTA_TECNICO_ECONOMICA_PUBHTML_URL = f"{PROPUESTA_TECNICO_ECONOMICA_PUB_BASE_URL}html"
-PROPUESTA_TECNICO_ECONOMICA_SOURCE_VERSION = 20260629
-PROPUESTA_TECNICO_ECONOMICA_SHEET_GIDS = {
-    "00_Resumen": "1764706849",
-    "01_Inputs_Sitio": "129678883",
-    "02_Catalogo_Tec": "2030782940",
-    "03_Recurso_Eolico": "1204562949",
-    "04_Dimensionamiento": "104519050",
-    "05_Evaluacion_Turbinas": "565673316",
-    "06_Flujo_Financiero": "1635752200",
-    "07_Checklist_Comercial": "626023188",
-    "08_Diccionario_Formulas": "1426392056",
-}
 GANTT_COSTO_PILOTO_TOTAL_CLP = 79_066_677
 GANTT_COSTO_COMERCIAL_TOTAL_CLP = 27_070_558
 FIN_PALETTE_SM = {
@@ -555,22 +541,6 @@ def turbine_capex_resumen_csv_url(sheet_name: str = "00_Resumen", refresh_nonce:
 
 def turbine_power_curve_csv_url(model: str, refresh_nonce: int = 0) -> str:
     return turbine_power_curve_source_csv_url("00_Resumen", refresh_nonce=refresh_nonce)
-
-
-def propuesta_tecnico_economica_csv_url(sheet_name: str, refresh_nonce: int = 0) -> str:
-    gid = PROPUESTA_TECNICO_ECONOMICA_SHEET_GIDS.get(sheet_name)
-    try:
-        gid_map = load_google_pubhtml_sheet_gids(PROPUESTA_TECNICO_ECONOMICA_PUBHTML_URL, refresh_nonce=refresh_nonce)
-        target_sheet = str(sheet_name).strip().casefold()
-        for published_sheet, sheet_gid in gid_map.items():
-            if str(published_sheet).strip().casefold() == target_sheet:
-                gid = sheet_gid
-                break
-    except Exception:
-        pass
-    if gid:
-        return f"{PROPUESTA_TECNICO_ECONOMICA_PUB_BASE_URL}?gid={gid}&single=true&output=csv"
-    return PROPUESTA_TECNICO_ECONOMICA_CSV_URL_DEFAULT
 
 
 def turbine_capex_supply_installation_csv_url(sheet_name: str = "00_Resumen", refresh_nonce: int = 0) -> str:
@@ -1952,52 +1922,59 @@ def _build_sheet_table_from_row(raw_df: pd.DataFrame, start_row_idx: int = 19, f
     return pd.DataFrame(records)
 
 
-@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
-def load_propuesta_site_options(refresh_nonce: int = 0) -> pd.DataFrame:
-    url = propuesta_tecnico_economica_csv_url("01_Inputs_Sitio", refresh_nonce=refresh_nonce)
-    raw_df = read_remote_csv(
-        url,
-        refresh_nonce=refresh_nonce + PROPUESTA_TECNICO_ECONOMICA_SOURCE_VERSION,
-        dtype=str,
-        header=None,
-    )
-    raw_df = raw_df.fillna("")
+def _build_transposed_site_table(raw_df: pd.DataFrame) -> pd.DataFrame:
+    if raw_df is None or raw_df.empty:
+        return pd.DataFrame()
+    df_raw = raw_df.fillna("").copy()
     header_idx = None
-    for idx in range(len(raw_df.index)):
-        first = normalize_key(clean_sheet_cell(raw_df.iat[idx, 0])) if raw_df.shape[1] else ""
-        row_values = [clean_sheet_cell(value) for value in raw_df.iloc[idx].tolist()]
-        row_keys = {normalize_key(value) for value in row_values if value}
-        if first == "pop" and "region" in row_keys and len(row_keys) >= 8:
+    for idx in range(len(df_raw.index)):
+        first = normalize_key(clean_sheet_cell(df_raw.iat[idx, 0])) if df_raw.shape[1] else ""
+        site_count = sum(1 for value in df_raw.iloc[idx, 1:].tolist() if clean_sheet_cell(value))
+        if first == "pop" and site_count >= 2:
             header_idx = idx
             break
     if header_idx is None:
-        return _build_sheet_table_from_row(raw_df, start_row_idx=19, first_col_name="PoP")
+        return pd.DataFrame()
 
-    headers = [clean_sheet_cell(value) or f"Campo {col_idx + 1}" for col_idx, value in enumerate(raw_df.iloc[header_idx].tolist())]
-    records = []
-    for row_idx in range(header_idx + 1, len(raw_df.index)):
-        values = [clean_sheet_cell(value) for value in raw_df.iloc[row_idx].tolist()]
-        if not any(values):
+    site_ids = [clean_sheet_cell(value) for value in df_raw.iloc[header_idx, 1:].tolist()]
+    valid_site_cols = [(col_idx + 1, site_id) for col_idx, site_id in enumerate(site_ids) if site_id]
+    records = [{"PoP": site_id} for _, site_id in valid_site_cols]
+    for row_idx in range(header_idx + 1, len(df_raw.index)):
+        metric = clean_sheet_cell(df_raw.iat[row_idx, 0])
+        if not metric:
             continue
-        pop_value = values[0] if values else ""
-        if not pop_value:
-            continue
-        if normalize_key(pop_value) in {"base", "metricas", "selectorprincipal"}:
-            continue
-        records.append({headers[col_idx]: values[col_idx] if col_idx < len(values) else "" for col_idx in range(len(headers))})
-    return pd.DataFrame(records)
+        metric_key = normalize_key(metric)
+        if metric_key in {"basemaestraeditabledeinstalacionesdatostecnicosyeconomicos", "basemaestraeditablededatos"}:
+            break
+        for record, (col_idx, _) in zip(records, valid_site_cols):
+            record[metric] = clean_sheet_cell(df_raw.iat[row_idx, col_idx]) if col_idx < df_raw.shape[1] else ""
+
+    table = pd.DataFrame(records)
+    if table.empty or "PoP" not in table.columns:
+        return pd.DataFrame()
+    return table[table["PoP"].astype(str).str.strip() != ""].reset_index(drop=True)
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_propuesta_site_options(refresh_nonce: int = 0) -> pd.DataFrame:
+    raw_df = read_remote_csv(
+        TELECOM_SITE_MASTER_CSV_URL_DEFAULT,
+        refresh_nonce=refresh_nonce,
+        dtype=str,
+        header=None,
+    ).fillna("")
+    return _build_transposed_site_table(raw_df)
 
 
 @st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_propuesta_catalogo_tec(refresh_nonce: int = 0) -> pd.DataFrame:
-    url = propuesta_tecnico_economica_csv_url("02_Catalogo_Tec", refresh_nonce=refresh_nonce)
     raw_df = read_remote_csv(
-        url,
-        refresh_nonce=refresh_nonce + PROPUESTA_TECNICO_ECONOMICA_SOURCE_VERSION,
+        turbine_capex_supply_installation_csv_url("00_Resumen", refresh_nonce=refresh_nonce),
+        refresh_nonce=refresh_nonce + TURBINE_CAPEX_SUPPLY_INSTALLATION_SOURCE_VERSION,
         dtype=str,
         header=None,
-    )
-    return _build_sheet_table_from_row(raw_df, start_row_idx=19, first_col_name="Modelo")
+    ).fillna("")
+    return _build_sheet_table_from_row(raw_df, start_row_idx=2, first_col_name="Modelo")
 
 
 def first_matching_column(df: pd.DataFrame, candidates: list[str]) -> str | None:
@@ -11944,6 +11921,69 @@ def load_telecom_site_inputs_model(url: str, refresh_nonce: int = 0) -> dict:
         except Exception:
             return ""
 
+    transposed_sites = _build_transposed_site_table(raw)
+    if not transposed_sites.empty:
+        site_record = transposed_sites.iloc[0].to_dict()
+
+        def record_value(candidates: list[str], default: str = "") -> str:
+            candidate_keys = [normalize_key(candidate) for candidate in candidates]
+            for key, value in site_record.items():
+                key_norm = normalize_key(key)
+                if any(candidate_key and (candidate_key == key_norm or candidate_key in key_norm or key_norm in candidate_key) for candidate_key in candidate_keys):
+                    clean_value = clean_sheet_cell(value)
+                    if clean_value:
+                        return clean_value
+            return default
+
+        site_label = record_value(["PoP", "Sitio", "Site"], "Sitio seleccionado")
+        energy_cost = record_value(["Costo $/kWh", "Costo energia equivalente", "Costo kWh"], "$429")
+        rows = [
+            ("Identificación y ubicación", "ID Sitio", site_label, "", "Base maestra sitios", "Trazabilidad", "Automático", "Sincronizado desde CSV maestro.", "Alta"),
+            ("Identificación y ubicación", "Nombre sitio", site_label, "", "Base maestra sitios", "Ficha técnica", "Automático", "Sincronizado desde CSV maestro.", "Alta"),
+            ("Identificación y ubicación", "Región", record_value(["Región", "Region"], "Por definir"), "", "Base maestra sitios", "Logística", "Automático", "", "Alta"),
+            ("Identificación y ubicación", "Comuna", record_value(["Comuna/Sector", "Comuna", "Sector"], "Por definir"), "", "Base maestra sitios", "Permisos", "Automático", "", "Alta"),
+            ("Identificación y ubicación", "Latitud", record_value(["Latitud"]), "°", "Base maestra sitios", "Recurso eólico", "Automático", "", "Alta"),
+            ("Identificación y ubicación", "Longitud", record_value(["Longitud"]), "°", "Base maestra sitios", "Recurso eólico", "Automático", "", "Alta"),
+            ("Identificación y ubicación", "Altitud", record_value(["Altitud msnm", "Altitud"]), "msnm", "Base maestra sitios", "Densidad aire", "Automático", "", "Media"),
+            ("Identificación y ubicación", "Prioridad comercial", record_value(["Prioridad"], ""), "", "Base maestra sitios", "Priorización", "Automático", "", "Media"),
+            ("Consumo, suministro y costos energéticos", "Litros/año", record_value(["Litros/año", "Litros ano"]), "L/año", "Base maestra sitios", "Consumo actual", "Automático", "", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Consumo mensual modelo", record_value(["Consumo kWh/mes", "Consumo mensual modelo", "Consumo mensual"], "3.238"), "kWh/mes", "Base maestra sitios", "Dimensionamiento", "Automático", "", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Consumo anual", record_value(["Energía kWh/año", "Energia kWh/ano", "Demanda anual"], "38.851"), "kWh/año", "Base maestra sitios", "Modelo", "Automático", "", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Potencia promedio", record_value(["Potencia prom. kW", "Potencia promedio"], ""), "kW", "Base maestra sitios", "Carga equivalente", "Automático", "", "Media"),
+            ("Consumo, suministro y costos energéticos", "OPEX combustible", record_value(["OPEX $/año", "OPEX combustible", "OPEX anual"], ""), "$/año", "Base maestra sitios", "Costo actual", "Automático", "", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Tarifa red modelo", energy_cost, "$/kWh", "Base maestra sitios", "Ahorro red", "Automático", "", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Costo electrógeno base", energy_cost, "$/kWh", "Base maestra sitios", "Ahorro diésel", "Automático", "", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Costo ponderado actual", energy_cost, "$/kWh", "Base maestra sitios", "Ahorro híbrido", "Automático", "", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Mix Red", record_value(["Red %", "Mix Red"], "0%"), "% energía", "Base maestra sitios", "Costo ponderado", "Automático", "", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Mix Electrógeno", record_value(["Diésel %", "Diesel %", "Mix Electrógeno", "Mix Electrogeno"], "100%"), "% energía", "Base maestra sitios", "Costo ponderado", "Automático", "", "Alta"),
+            ("Consumo, suministro y costos energéticos", "Mix Batería/Solar", record_value(["Solar %", "Batería %", "Bateria %", "Mix Batería/Solar"], "0%"), "% energía", "Base maestra sitios", "Costo ponderado", "Automático", "", "Media"),
+            ("Consumo, suministro y costos energéticos", "CO₂ informado", record_value(["CO₂ t/año", "CO2 t/año", "CO2"], ""), "t/año", "Base maestra sitios", "Impacto ambiental", "Automático", "", "Media"),
+            ("Supuestos de proyecto eólico", "Cobertura objetivo", "100,0%", "% consumo", "Cliente", "Dimensionamiento", "Editable", "Escenario de sensibilidad", "Alta"),
+            ("Supuestos de proyecto eólico", "Vida útil", "20", "años", "Proveedor", "LCOE/VAN", "Por validar", "", "Alta"),
+            ("Supuestos de proyecto eólico", "Tasa descuento", "10,0%", "%", "Finanzas", "VAN", "Por validar", "", "Media"),
+            ("Supuestos de proyecto eólico", "O&M anual", "2,0%", "% CAPEX/año", "Proveedor/O&M", "Payback neto", "Por validar", "", "Alta"),
+            ("Supuestos de proyecto eólico", "Disponibilidad", "95,0%", "%", "Proveedor/O&M", "Energía", "Por validar", "", "Alta"),
+            ("Supuestos de proyecto eólico", "Pérdidas eléctricas", "3,0%", "%", "Diseño eléctrico", "Energía", "Por validar", "", "Alta"),
+            ("Supuestos de proyecto eólico", "Pérdidas adicionales", "2,0%", "%", "Sitio", "Energía", "Por validar", "", "Media"),
+            ("Supuestos de proyecto eólico", "Factor planta ficha sitio", "35,0%", "%", "Ficha sitio/medición/simulación", "Energía", "Por validar", "Debe justificarse por sitio", "Alta"),
+            ("Supuestos de proyecto eólico", "Consumo específico diésel", record_value(["Rend. kWh/L"], "3"), "kWh/L", "Base maestra sitios", "Diésel evitado", "Automático", "", "Alta"),
+            ("Supuestos de proyecto eólico", "Factor emisión diésel", "2,68", "kgCO₂/L", "Factor estándar", "CO₂ evitado", "Por validar", "", "Media"),
+            ("Supuestos de proyecto eólico", "Permite venta excedente", "SI", "SI/NO", "", "", "", "", ""),
+            ("Supuestos de proyecto eólico", "Precio venta excedente", "90", "$/kWh", "", "", "", "", ""),
+            ("Supuestos de proyecto eólico", "Factor valorización excedente", "1", "factor", "", "", "", "", ""),
+        ]
+        data = pd.DataFrame(
+            rows,
+            columns=["Sección", "Variable", "Valor", "Unidad", "Fuente requerida", "Uso", "Estado", "Comentario", "Prioridad"],
+        )
+        return {
+            "title": "Datos del sitio - inputs maestros",
+            "data": data,
+            "sections": {name: group.reset_index(drop=True) for name, group in data.groupby("Sección", sort=False)},
+            "source_warning": "",
+            "source_mode": "remote",
+        }
+
     rows = []
     current_section = ""
     headers = []
@@ -12598,7 +12638,7 @@ def load_telecom_tower_eval_model(url: str, refresh_nonce: int = 0) -> dict:
 
 def render_telecom_tower_eval_analysis():
     dashboard_url = telecom_published_csv_url("01_Dashboard", EVALUACION_TELECOM_CSV_URL_DEFAULT, data_refresh_nonce)
-    site_url = telecom_published_csv_url("02_Datos_Sitio", EVALUACION_TELECOM_SITE_CSV_URL_DEFAULT, data_refresh_nonce)
+    site_url = TELECOM_SITE_MASTER_CSV_URL_DEFAULT
     billing_url = telecom_published_csv_url("03_Boleta_Carga", EVALUACION_TELECOM_BILLING_CSV_URL_DEFAULT, data_refresh_nonce)
     wind_url = telecom_published_csv_url("04_Modelo_Eolico", EVALUACION_TELECOM_WIND_MODEL_CSV_URL_DEFAULT, data_refresh_nonce)
     resource_url = telecom_published_csv_url("05_Recurso_Eolico", EVALUACION_TELECOM_WIND_RESOURCE_CSV_URL_DEFAULT, data_refresh_nonce)
@@ -14743,7 +14783,7 @@ def render_telecom_tower_eval_analysis():
                     options=pop_options_tab,
                     index=0,
                     key="site_demand_pop_selector",
-                    help="Lista cargada desde 01_Inputs_Sitio, columna A desde la fila 21.",
+                    help="Lista cargada desde el CSV maestro de sitios.",
                 )
                 site_matches_tab = proposal_site_options_tab[
                     proposal_site_options_tab[pop_col_tab].astype(str).str.strip() == selected_pop_tab
@@ -14783,7 +14823,7 @@ def render_telecom_tower_eval_analysis():
                 site_data_view.loc[mask, "Valor"] = clean_value
                 if unit:
                     site_data_view.loc[mask, "Unidad"] = unit
-                site_data_view.loc[mask, "Fuente requerida"] = "01_Inputs_Sitio"
+                site_data_view.loc[mask, "Fuente requerida"] = "Base maestra sitios"
                 site_data_view.loc[mask, "Estado"] = "Automático"
                 site_data_view.loc[mask, "Comentario"] = "Sincronizado desde tabla maestra PoP."
                 return
@@ -14797,7 +14837,7 @@ def render_telecom_tower_eval_analysis():
                                 "Variable": variable,
                                 "Valor": clean_value,
                                 "Unidad": unit,
-                                "Fuente requerida": "01_Inputs_Sitio",
+                                "Fuente requerida": "Base maestra sitios",
                                 "Uso": usage,
                                 "Estado": "Automático",
                                 "Comentario": "Sincronizado desde tabla maestra PoP.",
@@ -14836,7 +14876,7 @@ def render_telecom_tower_eval_analysis():
                 f"""
                 <div class="telecom-note">
                   <b>PoP activo:</b> {html.escape(selected_pop_label)} · datos sincronizados desde
-                  <b>01_Inputs_Sitio</b> fila maestra A21:U. Los KPIs, mix, consumo, coordenadas y costo energético de esta pestaña se recalculan con la selección.
+                  <b>Base maestra sitios</b>. Los KPIs, mix, consumo, coordenadas y costo energético de esta pestaña se recalculan con la selección.
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -14886,7 +14926,7 @@ def render_telecom_tower_eval_analysis():
             status_pending_display = str(
                 sum(1 for header in critical_headers if not selected_site_tab_value([header], ""))
             )
-            status_source_display = "01_INPUTS"
+            status_source_display = "BASE_MAESTRA"
         tab_inputs_fp_base, tab_inputs_fp_source = _analysis_recommended_fp(site_view_percent_value("Factor planta ficha sitio", 35.0))
 
         def render_site_identity_block(section_df: pd.DataFrame) -> None:
@@ -14973,7 +15013,7 @@ def render_telecom_tower_eval_analysis():
             <div class="telecom-site-shell">
               <div class="telecom-site-head">
                 <div>
-                  <p class="telecom-site-k">Pestaña 02_Datos_Sitio · Fuente Google Sheets</p>
+                  <p class="telecom-site-k">Base maestra sitios · Fuente Google Sheets</p>
                   <h3 class="telecom-site-t">{html.escape(str(site_model["title"]))}</h3>
                   <p class="telecom-site-s">Ficha comercial del sitio: consumo validado, costo energético, mix operativo y brechas de datos que condicionan la recomendación.</p>
                 </div>
@@ -15002,7 +15042,7 @@ def render_telecom_tower_eval_analysis():
                 with map_left:
                     st.markdown(
                         '<p class="telecom-panel-title">Mapa territorial del sitio</p>'
-                        '<p class="telecom-panel-sub">Ubicación publicada desde 02_Datos_Sitio para validar recurso, logística y contexto operativo.</p>',
+                        '<p class="telecom-panel-sub">Ubicación publicada desde la base maestra de sitios para validar recurso, logística y contexto operativo.</p>',
                         unsafe_allow_html=True,
                     )
                     lat_span = 7 if abs(site_lat) > 40 else 4
@@ -15075,7 +15115,7 @@ def render_telecom_tower_eval_analysis():
                     )
             else:
                 st.markdown(
-                    '<div class="telecom-note"><b>Mapa territorial:</b> la hoja 02_Datos_Sitio no publica todavía una latitud y longitud válidas. Al completar ambos campos, el mapa se activa automáticamente.</div>',
+                    '<div class="telecom-note"><b>Mapa territorial:</b> la base maestra de sitios no publica todavía una latitud y longitud válidas. Al completar ambos campos, el mapa se activa automáticamente.</div>',
                     unsafe_allow_html=True,
                 )
 
@@ -15125,7 +15165,7 @@ def render_telecom_tower_eval_analysis():
             unsafe_allow_html=True,
         )
         st.markdown(
-            f'<div class="telecom-note"><b>Lectura ejecutiva:</b> la pestaña 02_Datos_Sitio queda como fuente maestra, no como simulador. El caso publicado usa {consumo_mensual:,.0f} kWh/mes, cobertura objetivo {cobertura_pct:.0f}%, mix {mix_red_pct:.0f}% red / {mix_diesel_pct:.0f}% electrógeno / {mix_bess_pct:.0f}% BESS y costo ponderado {format_clp(costo_ponderado)}/kWh. Las variables de prioridad alta por validar deben cerrarse antes de prometer payback, CAPEX final o impacto ambiental.</div>'.replace(",", "."),
+            f'<div class="telecom-note"><b>Lectura ejecutiva:</b> la base maestra de sitios queda como fuente principal. El caso publicado usa {consumo_mensual:,.0f} kWh/mes, cobertura objetivo {cobertura_pct:.0f}%, mix {mix_red_pct:.0f}% red / {mix_diesel_pct:.0f}% electrógeno / {mix_bess_pct:.0f}% BESS y costo ponderado {format_clp(costo_ponderado)}/kWh.</div>'.replace(",", "."),
             unsafe_allow_html=True,
         )
         if mix_total != 100:
@@ -15217,154 +15257,6 @@ def render_telecom_tower_eval_analysis():
             )
             fig_cost.update_layout(yaxis=dict(title="CLP/kWh", rangemode="tozero"))
             st.plotly_chart(tune_site_chart(fig_cost, 380), use_container_width=True, config={"displaylogo": False})
-
-        status_df = (
-            site_data_view.assign(Estado=site_data_view["Estado"].replace("", "Sin estado"))
-            .groupby(["Sección", "Estado"], as_index=False)
-            .size()
-        )
-        priority_df = (
-            site_data_view.assign(Prioridad=site_data_view["Prioridad"].replace("", "Sin prioridad"))
-            .groupby(["Sección", "Prioridad"], as_index=False)
-            .size()
-        )
-        control_left, control_right = st.columns(2)
-        with control_left:
-            st.markdown('<p class="telecom-panel-title">Gobernanza de datos por sección</p><p class="telecom-panel-sub">Control ejecutivo de variables automáticas, editables y pendientes por validar.</p>', unsafe_allow_html=True)
-            fig_status = px.bar(
-                status_df,
-                x="size",
-                y="Sección",
-                color="Estado",
-                orientation="h",
-                color_discrete_map={
-                    "Automático": blue_5,
-                    "Editable": blue_2,
-                    "Por validar": blue_4,
-                    "Sin estado": blue_1,
-                },
-                text="size",
-            )
-            fig_status.update_traces(textposition="inside", textfont=dict(color="#ffffff", size=12), hovertemplate="<b>%{y}</b><br>%{legendgroup}: %{x} variables<extra></extra>")
-            fig_status.update_layout(xaxis=dict(title="Variables", dtick=1), yaxis=dict(title=None, autorange="reversed"))
-            st.plotly_chart(tune_site_chart(fig_status, 360), use_container_width=True, config={"displaylogo": False})
-        with control_right:
-            st.markdown('<p class="telecom-panel-title">Mapa de riesgo de validación</p><p class="telecom-panel-sub">Cruce de prioridad y estado para enfocar los cierres técnicos antes de cliente.</p>', unsafe_allow_html=True)
-            risk_matrix = (
-                site_data_view.assign(
-                    Estado=site_data_view["Estado"].replace("", "Sin estado"),
-                    Prioridad=site_data_view["Prioridad"].replace("", "Sin prioridad"),
-                )
-                .pivot_table(index="Prioridad", columns="Estado", values="Variable", aggfunc="count", fill_value=0)
-            )
-            priority_order = [label for label in ["Alta", "Media", "Sin prioridad"] if label in risk_matrix.index]
-            status_order = [label for label in ["Por validar", "Editable", "Automático", "Sin estado"] if label in risk_matrix.columns]
-            risk_matrix = risk_matrix.reindex(index=priority_order, columns=status_order, fill_value=0)
-            fig_risk = go.Figure(
-                go.Heatmap(
-                    z=risk_matrix.values,
-                    x=risk_matrix.columns,
-                    y=risk_matrix.index,
-                    colorscale=[[0, "#F7FBFC"], [0.35, blue_2], [0.7, blue_3], [1, blue_4]],
-                    text=risk_matrix.values,
-                    texttemplate="%{text}",
-                    textfont=dict(color="#0f172a", size=14),
-                    hovertemplate="<b>%{y}</b><br>%{x}: %{z} variables<extra></extra>",
-                    showscale=False,
-                    xgap=4,
-                    ygap=4,
-                )
-            )
-            fig_risk.update_layout(xaxis=dict(title=None), yaxis=dict(title=None, autorange="reversed"))
-            st.plotly_chart(tune_site_chart(fig_risk, 360), use_container_width=True, config={"displaylogo": False})
-        if not high_pending_df.empty:
-            pending_view = high_pending_df[["Sección", "Variable", "Valor", "Fuente requerida", "Uso", "Comentario"]].copy()
-            pending_view["Valor"] = pending_view["Valor"].replace("", "Pendiente")
-            pending_rows = []
-            for _, row in pending_view.iterrows():
-                pending_rows.append(
-                    "<tr>"
-                    f'<td><b>{html.escape(str(row["Variable"]))}</b><br><span class="telecom-muted">{html.escape(str(row["Uso"]))}</span></td>'
-                    f'<td>{html.escape(str(row["Sección"]))}</td>'
-                    f'<td class="telecom-site-value">{html.escape(str(row["Valor"]))}</td>'
-                    f'<td>{html.escape(str(row["Fuente requerida"]))}</td>'
-                    f'<td>{html.escape(str(row["Comentario"]))}</td>'
-                    "</tr>"
-                )
-            st.markdown(
-                '<div class="telecom-site-critical">'
-                '<div class="telecom-site-critical-h">'
-                '<div><h4>Brechas críticas de validación</h4>'
-                '<p>Variables de prioridad alta que deben cerrarse antes de presentar una oferta vinculante.</p></div>'
-                f'<span class="telecom-site-critical-count">{len(pending_view)} pendientes</span>'
-                '</div>'
-                '<table class="telecom-site-table">'
-                '<thead><tr><th>Variable / Uso</th><th>Sección</th><th>Valor actual</th><th>Fuente requerida</th><th>Comentario</th></tr></thead>'
-                f'<tbody>{"".join(pending_rows)}</tbody>'
-                '</table>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-
-        def site_badge(status: str) -> str:
-            value = str(status or "Sin estado").strip()
-            css_class = "telecom-site-auto" if value == "Automático" else "telecom-site-edit" if value == "Editable" else "telecom-site-pending"
-            return f'<span class="{css_class}">{html.escape(value)}</span>'
-
-        def site_priority_badge(priority: str) -> str:
-            value = str(priority or "Sin prioridad").strip() or "Sin prioridad"
-            value_key = value.casefold()
-            if value_key == "alta":
-                css_class = "telecom-site-priority-high"
-            elif value_key == "media":
-                css_class = "telecom-site-priority-medium"
-            else:
-                css_class = "telecom-site-priority-low"
-            return f'<span class="{css_class}">{html.escape(value)}</span>'
-
-        section_notes = {
-            "Identificación y ubicación": "Datos base para trazabilidad, permisos, logística y validación del recurso eólico.",
-            "Consumo, suministro y costos energéticos": "Base financiera del caso: consumo, costos evitados y mix energético actual.",
-            "Supuestos de proyecto eólico": "Parámetros técnicos que afectan energía útil, LCOE, payback, excedentes e impacto.",
-        }
-        with st.expander("Tablas auditables de datos del sitio", expanded=False):
-            for section_name, section_df in site_sections_view.items():
-                if str(section_name) == "Identificación y ubicación":
-                    continue
-
-                row_html = []
-                for _, row in section_df.iterrows():
-                    value_text = str(row.get("Valor", "")).strip() or "Pendiente"
-                    unit_text = str(row.get("Unidad", "")).strip()
-                    value_cell = html.escape(value_text)
-                    if unit_text:
-                        value_cell = f'{value_cell}<br><span class="telecom-muted">{html.escape(unit_text)}</span>'
-                    row_html.append(
-                        "<tr>"
-                        f'<td><b>{html.escape(str(row.get("Variable", "")))}</b><br><span class="telecom-muted">{html.escape(str(row.get("Uso", "")))}</span></td>'
-                        f'<td class="telecom-site-value">{value_cell}</td>'
-                        f'<td>{html.escape(str(row.get("Fuente requerida", "")))}</td>'
-                        f'<td>{site_badge(str(row.get("Estado", "")))}</td>'
-                        f'<td>{site_priority_badge(str(row.get("Prioridad", "")))}</td>'
-                        f'<td>{html.escape(str(row.get("Comentario", "")))}</td>'
-                        "</tr>"
-                    )
-                st.markdown(
-                    '<div class="telecom-site-block">'
-                    '<div class="telecom-site-block-h">'
-                    '<div>'
-                    f'<h4>{html.escape(str(section_name))}</h4>'
-                    f'<p>{html.escape(section_notes.get(str(section_name), "Variables publicadas por la hoja fuente."))}</p>'
-                    '</div>'
-                    f'<span class="telecom-site-mini">{len(section_df)} variables</span>'
-                    '</div>'
-                    '<table class="telecom-site-table">'
-                    '<thead><tr><th>Variable / Uso</th><th>Valor</th><th>Fuente requerida</th><th>Estado</th><th>Prioridad</th><th>Comentario</th></tr></thead>'
-                    f'<tbody>{"".join(row_html)}</tbody>'
-                    '</table>'
-                    '</div>',
-                    unsafe_allow_html=True,
-                )
 
         section("01B · Consumo y carga", "Boleta, demanda mensual y perfil horario", "Lectura integrada dentro de Datos del sitio: boletas mensuales, tarifa red, perfil horario y salidas que alimentan el simulador.")
         bill_avg = float(billing_summary.get("Promedio mensual boletas") or billing_df["Consumo kWh"].mean() or 0.0)
@@ -16416,7 +16308,7 @@ def render_telecom_scenario_simulator(
     proposal_site_options = pd.DataFrame()
     proposal_catalog = pd.DataFrame()
     try:
-        site_url = telecom_published_csv_url("02_Datos_Sitio", EVALUACION_TELECOM_SITE_CSV_URL_DEFAULT, data_refresh_nonce)
+        site_url = TELECOM_SITE_MASTER_CSV_URL_DEFAULT
         wind_url = telecom_published_csv_url("04_Modelo_Eolico", EVALUACION_TELECOM_WIND_MODEL_CSV_URL_DEFAULT, data_refresh_nonce)
         sensitivity_url = telecom_published_csv_url("06_Sensibilidad", EVALUACION_TELECOM_SENSITIVITY_CSV_URL_DEFAULT, data_refresh_nonce)
         site_model = load_telecom_site_inputs_model(site_url, refresh_nonce=data_refresh_nonce + 20260623)
@@ -16451,7 +16343,7 @@ def render_telecom_scenario_simulator(
         proposal_catalog = load_propuesta_catalogo_tec(refresh_nonce=data_refresh_nonce)
         if not proposal_site_options.empty:
             source_badge = "PoP + modelo"
-            source_detail = "Selector 01_Inputs_Sitio"
+            source_detail = "Selector base maestra sitios"
     except Exception:
         proposal_site_options = pd.DataFrame()
         proposal_catalog = pd.DataFrame()
@@ -16572,7 +16464,7 @@ def render_telecom_scenario_simulator(
                 options=pop_options,
                 index=0,
                 key="sim6_pop_selector",
-                help="Lista cargada desde 01_Inputs_Sitio, columna A desde la fila 21.",
+                help="Lista cargada desde el CSV maestro de sitios.",
             )
             site_matches = proposal_site_options[proposal_site_options[pop_col].astype(str).str.strip() == selected_pop]
             if not site_matches.empty:
@@ -16700,7 +16592,7 @@ def render_telecom_scenario_simulator(
         default_om_pct = selected_site_numeric(["O&M anual", "OM anual", "Opex anual"], default_om_pct)
 
     if not proposal_catalog.empty:
-        capex_col = first_matching_column(proposal_catalog, ["CAPEX unitario", "CAPEX", "Inversión", "Inversion"])
+        capex_col = first_matching_column(proposal_catalog, ["CAPEX instalado CLP", "CAPEX instalado total", "CAPEX unitario", "CAPEX", "Inversión", "Inversion"])
         opex_col = first_matching_column(proposal_catalog, ["OPEX", "O&M", "OM anual"])
         for _, cat_row in proposal_catalog.iterrows():
             row_text = " ".join(clean_sheet_cell(value) for value in cat_row.tolist()).casefold()
@@ -22243,10 +22135,10 @@ def render_input_thousands_hint(value: float | int, prefix: str = ""):
 # NAVEGACIÓN PRINCIPAL
 # =========================
 input_cards = [
-    ("estado_actual", "1- Activo Tecnológico y Validación"),
-    ("escalamiento", "2- Capital Requerido y Ejecución CAPEX"),
-    ("valorizacion", "3-Análisis Financiero Basado en EBITDA"),
-    ("mercado", "4-Análisis de mercado"),
+    ("estado_actual", "01 · Validación Tecnológica"),
+    ("escalamiento", "02 · CAPEX y Ejecución"),
+    ("valorizacion", "03 · Valor Financiero"),
+    ("mercado", "04 · Mercado y Propuesta Comercial"),
 ]
 
 if "inputs_bloque_sel" not in st.session_state:
@@ -22445,7 +22337,7 @@ st.markdown(
     <div class="inputs-nav-shell">
       <div class="inputs-nav-head-k">MAPA DE LECTURA</div>
       <div class="inputs-nav-head-t">Selecciona el bloque estratégico que quieres revisar</div>
-      <div class="inputs-nav-head-s">La pantalla está organizada en cuatro vistas: activo tecnológico, capital requerido, estructura de valorización y análisis de mercado.</div>
+      <div class="inputs-nav-head-s">La pantalla está organizada en cuatro vistas: validación tecnológica, CAPEX y ejecución, valor financiero, y mercado con propuesta comercial.</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -22491,19 +22383,19 @@ if selected_input_block:
 
 input_block_copy = {
     "estado_actual": (
-        "1- Activo Tecnológico y Validación",
+        "01 · Validación Tecnológica",
         "Aquí consolidaremos el diagnóstico base del proyecto: situación actual, hitos alcanzados, brechas técnicas y supuestos iniciales del modelo.",
     ),
     "escalamiento": (
-        "2- Capital Requerido y Ejecución CAPEX",
+        "02 · CAPEX y Ejecución",
         "Este bloque quedará preparado para mostrar la ruta de escalamiento industrial, prioridades de inversión y asignación de fondos por etapa.",
     ),
     "valorizacion": (
-        "3-Análisis Financiero Basado en EBITDA",
+        "03 · Valor Financiero",
         "En esta sección se presenta el análisis financiero del proyecto a partir del EBITDA y su impacto en la valorización del negocio.",
     ),
     "mercado": (
-        "4-Análisis de mercado",
+        "04 · Mercado y Propuesta Comercial",
         "Aquí se concentra la evaluación eólica de torres telecom, ranking de sitios, inputs comerciales, CAPEX, LCOE y retorno para lectura de mercado.",
     ),
 }
