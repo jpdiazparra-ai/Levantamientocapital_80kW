@@ -342,17 +342,13 @@ TURBINE_CAPEX_RESUMEN_SOURCE_SHEETS = {
 }
 TURBINE_CAPEX_SUPPLY_INSTALLATION_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
-    "2PACX-1vQpqrrb_1Fz_T8dn7l6jUZMJLAOsvr3ZkK4hAi0V6hiDaLCLR-EcPTjmntIzQAmxM_2QIEQZFeSJ_dx/"
+    "2PACX-1vRo_vlYwhR8AoqqouuaUznBNOoaYljJMBWFSRfhbSz2f4OM8NTakIyb8upT-De0uM3NlaCOmM6ulhZl/"
     "pub?output=csv"
 )
 TURBINE_CAPEX_SUPPLY_INSTALLATION_PUB_BASE_URL = TURBINE_CAPEX_SUPPLY_INSTALLATION_CSV_URL_DEFAULT.split("?")[0]
 TURBINE_CAPEX_SUPPLY_INSTALLATION_PUBHTML_URL = f"{TURBINE_CAPEX_SUPPLY_INSTALLATION_PUB_BASE_URL}html"
-TURBINE_CAPEX_SUPPLY_INSTALLATION_SOURCE_VERSION = 20260701
-TURBINE_CAPEX_SUPPLY_INSTALLATION_SOURCE_SHEETS = {
-    "00_Resumen": "493779795",
-    "01_Modelos": "379449010",
-    "04_CAPEX_WBS": "1160601534",
-}
+TURBINE_CAPEX_SUPPLY_INSTALLATION_SOURCE_VERSION = 20260702
+TURBINE_CAPEX_SUPPLY_INSTALLATION_SOURCE_SHEETS = {}
 TURBINE_POWER_CURVE_SHEETS = {
     "VAWT 10 kW": {"sheet": "GVH-10KW", "curve_column": "GVH-10KW", "rated_kw": 10.0},
     "VAWT 5 kW": {"sheet": "GVH-5KW", "curve_column": "GVH-5KW", "rated_kw": 5.0},
@@ -728,10 +724,15 @@ def load_turbine_capex_supply_installation(refresh_nonce: int = 0) -> pd.DataFra
     ).fillna("")
 
     header_idx = None
+    capex_total_keys = {
+        normalize_key("CAPEX instalado total"),
+        normalize_key("Total instalado CLP"),
+        normalize_key("Total instalado US$ eq."),
+    }
     for idx in range(len(raw.index)):
         row_values = [clean_sheet_cell(value) for value in raw.iloc[idx].tolist()]
         row_keys = {normalize_key(value) for value in row_values if value}
-        if normalize_key("Modelo") in row_keys and normalize_key("CAPEX instalado total") in row_keys:
+        if normalize_key("Modelo") in row_keys and row_keys.intersection(capex_total_keys):
             header_idx = idx
             break
     if header_idx is None:
@@ -755,35 +756,83 @@ def load_turbine_capex_supply_installation(refresh_nonce: int = 0) -> pd.DataFra
     def col(candidates: list[str]) -> str | None:
         return first_matching_column(df, candidates)
 
+    def exact_col(candidates: list[str]) -> str | None:
+        candidate_keys = {normalize_key(candidate) for candidate in candidates}
+        for column_name in df.columns:
+            if normalize_key(column_name) in candidate_keys:
+                return column_name
+        return None
+
     model_col = col(["Modelo"])
-    potencia_col = col(["Potencia kW"])
-    suministro_col = col(["Capex Suministro", "CAPEX suministro"])
-    montaje_col = col(["CAPEX montaje sin suministro", "CAPEX montaje"])
-    total_usd_col = col(["CAPEX instalado total"])
-    total_clp_col = col(["CAPEX instalado CLP"])
+    potencia_col = col(["Potencia kW", "Potencia instalada kW"])
+    suministro_usd_col = exact_col(["Suministro US$ ref.", "Suministro USD"])
+    suministro_clp_col = exact_col(["Suministro CLP"])
+    montaje_usd_col = exact_col(["CAPEX montaje sin suministro USD", "Montaje US$ ref.", "Montaje USD"])
+    montaje_clp_col = exact_col(["Montaje CLP"])
+    total_usd_col = col(["Total instalado US$ eq.", "CAPEX instalado total", "CAPEX instalado USD", "Total instalado USD"])
+    total_clp_col = col(["Total instalado CLP", "CAPEX instalado CLP"])
     factor_col = col(["Factor instalación", "Factor instalacion"])
-    pct_montaje_col = col(["% montaje sobre total", "montaje sobre total"])
+    pct_montaje_col = exact_col(["% montaje", "% montaje sobre total", "montaje sobre total"])
     usd_kw_col = col(["CAPEX instalado USD/kW"])
+    clp_kw_col = col(["CAPEX instalado CLP/kW"])
     montaje_usd_kw_col = col(["CAPEX montaje USD/kW"])
+    montaje_clp_kw_col = col(["CAPEX montaje CLP/kW"])
+
+    def numeric_series(column_name: str | None, parser=parse_money_clp_robusto) -> pd.Series:
+        if not column_name:
+            return pd.Series(np.nan, index=df.index, dtype="float64")
+        return pd.to_numeric(df[column_name].map(parser), errors="coerce")
 
     normalized = pd.DataFrame()
     normalized["Modelo fuente"] = df[model_col].map(clean_sheet_cell) if model_col else ""
     normalized["Modelo"] = normalized["Modelo fuente"].map(_turbine_capex_model_key)
-    normalized["Potencia kW"] = df[potencia_col].map(parse_model_number) if potencia_col else np.nan
-    normalized["CAPEX suministro USD"] = df[suministro_col].map(parse_money_clp_robusto) if suministro_col else np.nan
-    normalized["CAPEX montaje sin suministro USD"] = df[montaje_col].map(parse_money_clp_robusto) if montaje_col else np.nan
-    normalized["CAPEX instalado total USD"] = df[total_usd_col].map(parse_money_clp_robusto) if total_usd_col else np.nan
-    normalized["CAPEX instalado CLP"] = df[total_clp_col].map(parse_money_clp_robusto) if total_clp_col else np.nan
-    normalized["Factor instalación"] = df[factor_col].map(parse_model_number) if factor_col else np.nan
+    normalized["Potencia kW"] = numeric_series(potencia_col, parse_model_number)
+    normalized["CAPEX instalado total USD"] = numeric_series(total_usd_col, parse_model_number)
+    normalized["CAPEX instalado CLP"] = numeric_series(total_clp_col, parse_money_clp_robusto)
+    fx_rate = np.where(
+        normalized["CAPEX instalado total USD"] > 0,
+        normalized["CAPEX instalado CLP"] / normalized["CAPEX instalado total USD"],
+        np.nan,
+    )
+    suministro_usd = numeric_series(suministro_usd_col, parse_model_number)
+    suministro_clp = numeric_series(suministro_clp_col, parse_money_clp_robusto)
+    montaje_usd = numeric_series(montaje_usd_col, parse_model_number)
+    montaje_clp = numeric_series(montaje_clp_col, parse_money_clp_robusto)
+    normalized["CAPEX suministro CLP"] = suministro_clp.fillna(pd.Series(np.where(fx_rate > 0, suministro_usd * fx_rate, np.nan), index=df.index))
+    normalized["CAPEX montaje sin suministro CLP"] = montaje_clp.fillna(pd.Series(np.where(fx_rate > 0, montaje_usd * fx_rate, np.nan), index=df.index))
+    normalized["CAPEX suministro USD"] = suministro_usd.fillna(pd.Series(np.where(fx_rate > 0, suministro_clp / fx_rate, np.nan), index=df.index))
+    normalized["CAPEX montaje sin suministro USD"] = montaje_usd.fillna(pd.Series(np.where(fx_rate > 0, montaje_clp / fx_rate, np.nan), index=df.index))
+    normalized["Factor instalación"] = numeric_series(factor_col, parse_model_number)
     normalized["Montaje sobre total %"] = df[pct_montaje_col].map(lambda value: parse_model_percent(value) * 100.0) if pct_montaje_col else np.nan
-    normalized["CAPEX instalado USD/kW"] = df[usd_kw_col].map(parse_money_clp_robusto) if usd_kw_col else np.nan
-    normalized["CAPEX montaje USD/kW"] = df[montaje_usd_kw_col].map(parse_money_clp_robusto) if montaje_usd_kw_col else np.nan
+    installed_usd_kw = numeric_series(usd_kw_col, parse_money_clp_robusto)
+    installed_clp_kw = numeric_series(clp_kw_col, parse_money_clp_robusto)
+    mounted_usd_kw = numeric_series(montaje_usd_kw_col, parse_money_clp_robusto)
+    mounted_clp_kw = numeric_series(montaje_clp_kw_col, parse_money_clp_robusto)
+    normalized["CAPEX instalado USD/kW"] = installed_usd_kw.fillna(
+        pd.Series(np.where(fx_rate > 0, installed_clp_kw / fx_rate, np.nan), index=df.index)
+    )
+    normalized["CAPEX instalado USD/kW"] = normalized["CAPEX instalado USD/kW"].fillna(
+        pd.Series(
+            np.where(normalized["Potencia kW"] > 0, normalized["CAPEX instalado total USD"] / normalized["Potencia kW"], np.nan),
+            index=normalized.index,
+        )
+    )
+    normalized["CAPEX montaje USD/kW"] = mounted_usd_kw.fillna(
+        pd.Series(np.where(fx_rate > 0, mounted_clp_kw / fx_rate, np.nan), index=df.index)
+    )
+    normalized["CAPEX montaje USD/kW"] = normalized["CAPEX montaje USD/kW"].fillna(
+        pd.Series(
+            np.where(normalized["Potencia kW"] > 0, normalized["CAPEX montaje sin suministro USD"] / normalized["Potencia kW"], np.nan),
+            index=normalized.index,
+        )
+    )
     normalized = normalized[normalized["Modelo"].notna()].copy()
-    normalized["Suministro sobre total %"] = np.where(
+    suministro_pct = np.where(
         pd.to_numeric(normalized["CAPEX instalado total USD"], errors="coerce") > 0,
         pd.to_numeric(normalized["CAPEX suministro USD"], errors="coerce") / pd.to_numeric(normalized["CAPEX instalado total USD"], errors="coerce") * 100.0,
         np.nan,
     )
+    normalized["Suministro sobre total %"] = pd.Series(suministro_pct, index=normalized.index).fillna(100.0 - normalized["Montaje sobre total %"])
     normalized["Montaje / suministro x"] = np.where(
         pd.to_numeric(normalized["CAPEX suministro USD"], errors="coerce") > 0,
         pd.to_numeric(normalized["CAPEX montaje sin suministro USD"], errors="coerce") / pd.to_numeric(normalized["CAPEX suministro USD"], errors="coerce"),
@@ -837,7 +886,7 @@ def load_turbine_capex_supply_models(refresh_nonce: int = 0) -> pd.DataFrame:
 @st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_turbine_capex_wbs_long(refresh_nonce: int = 0) -> pd.DataFrame:
     raw = read_remote_csv(
-        turbine_capex_supply_installation_csv_url("04_CAPEX_WBS", refresh_nonce=refresh_nonce),
+        turbine_capex_supply_installation_csv_url("03_CAPEX_WBS_USD_CLP", refresh_nonce=refresh_nonce),
         refresh_nonce=refresh_nonce + TURBINE_CAPEX_SUPPLY_INSTALLATION_SOURCE_VERSION,
         dtype=str,
         header=None,
@@ -893,6 +942,7 @@ def load_turbine_capex_wbs_long(refresh_nonce: int = 0) -> pd.DataFrame:
                     "Sección": current_section,
                     "Tipo fila": row_type,
                     "Monto USD": float(amount or 0.0),
+                    "Monto CLP": float(amount or 0.0),
                     "Porcentaje": pct_value,
                     "Factor": factor_value,
                     "Valor bruto": raw_value,
@@ -903,6 +953,89 @@ def load_turbine_capex_wbs_long(refresh_nonce: int = 0) -> pd.DataFrame:
                 }
             )
     return pd.DataFrame(rows)
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_turbine_capex_mounting_detail(refresh_nonce: int = 0) -> pd.DataFrame:
+    raw = read_remote_csv(
+        turbine_capex_supply_installation_csv_url("04_Montaje_Detalle_CLP", refresh_nonce=refresh_nonce),
+        refresh_nonce=refresh_nonce + TURBINE_CAPEX_SUPPLY_INSTALLATION_SOURCE_VERSION,
+        dtype=str,
+        header=None,
+    ).fillna("")
+    header_idx = None
+    for idx in range(len(raw.index)):
+        row_values = [clean_sheet_cell(value) for value in raw.iloc[idx].tolist()]
+        row_keys = {normalize_key(value) for value in row_values if value}
+        if normalize_key("ID") in row_keys and normalize_key("Modelo") in row_keys and normalize_key("Costo total CLP") in row_keys:
+            header_idx = idx
+            break
+    if header_idx is None:
+        return pd.DataFrame()
+
+    headers = [clean_sheet_cell(value) or f"Campo {col_idx + 1}" for col_idx, value in enumerate(raw.iloc[header_idx].tolist())]
+    df = raw.iloc[header_idx + 1 :].copy()
+    df = df.iloc[:, : len(headers)]
+    df.columns = headers
+    df = df[df["ID"].map(clean_sheet_cell).astype(bool)].copy() if "ID" in df.columns else df
+    if df.empty:
+        return pd.DataFrame()
+
+    def detail_col(candidates: list[str]) -> str | None:
+        candidate_keys = {normalize_key(candidate) for candidate in candidates}
+        for column_name in df.columns:
+            if normalize_key(column_name) in candidate_keys:
+                return column_name
+        return first_matching_column(df, candidates)
+
+    model_col = detail_col(["Modelo"])
+    if not model_col:
+        return pd.DataFrame()
+
+    numeric_specs = {
+        "Potencia kW": (detail_col(["Potencia kW"]), parse_model_number),
+        "N° turbinas sitio": (detail_col(["N° turbinas sitio", "N turbinas sitio"]), parse_model_number),
+        "EXW unitario US$": (detail_col(["EXW unitario US$"]), parse_model_number),
+        "Cantidad recurso": (detail_col(["Cantidad recurso"]), parse_model_number),
+        "Personas": (detail_col(["Personas"]), parse_model_number),
+        "Días": (detail_col(["Días", "Dias"]), parse_model_number),
+        "Horas/día": (detail_col(["Horas/día", "Horas dia"]), parse_model_number),
+        "Tarifa CLP / Factor %": (detail_col(["Tarifa CLP / Factor %", "Tarifa"]), parse_float_local),
+        "Factor modelo": (detail_col(["Factor modelo"]), parse_model_number),
+        "Factor sitio": (detail_col(["Factor sitio"]), parse_model_number),
+        "Costo base CLP": (detail_col(["Costo base CLP"]), parse_money_clp_robusto),
+        "Costo total CLP": (detail_col(["Costo total CLP"]), parse_money_clp_robusto),
+        "Base indirectos CLP": (detail_col(["Base indirectos CLP"]), parse_money_clp_robusto),
+        "Base imprevistos CLP": (detail_col(["Base imprevistos CLP"]), parse_money_clp_robusto),
+    }
+
+    normalized = pd.DataFrame()
+    text_columns = [
+        "ID",
+        "WBS destino",
+        "Partida WBS destino",
+        "Área",
+        "Actividad",
+        "Tipo costo",
+        "Recurso",
+        "Unidad",
+        "Tipo cálculo",
+        "Fuente / supuesto",
+        "Revisión",
+        "Base indirectos",
+    ]
+    for output_col in text_columns:
+        source_col = detail_col([output_col])
+        normalized[output_col] = df[source_col].map(clean_sheet_cell) if source_col else ""
+
+    normalized["Modelo fuente"] = df[model_col].map(clean_sheet_cell)
+    normalized["Modelo"] = normalized["Modelo fuente"].map(_turbine_capex_model_key)
+    for output_col, (source_col, parser) in numeric_specs.items():
+        normalized[output_col] = pd.to_numeric(df[source_col].map(parser), errors="coerce") if source_col else np.nan
+    normalized["HH calculadas"] = normalized["Personas"].fillna(0) * normalized["Días"].fillna(0) * normalized["Horas/día"].fillna(0)
+    normalized["Factor combinado"] = normalized["Factor modelo"].fillna(1) * normalized["Factor sitio"].fillna(1)
+    normalized = normalized[normalized["Modelo"].notna()].copy()
+    return normalized.reset_index(drop=True)
 
 
 @st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
@@ -11325,13 +11458,16 @@ def _telecom_score(series: pd.Series, higher_is_better: bool = False) -> pd.Seri
 def render_telecom_capex_supply_installation_tab() -> None:
     capex_df = load_turbine_capex_supply_installation(refresh_nonce=data_refresh_nonce).copy()
     wbs_df = load_turbine_capex_wbs_long(refresh_nonce=data_refresh_nonce).copy()
+    mounting_detail_df = load_turbine_capex_mounting_detail(refresh_nonce=data_refresh_nonce).copy()
     if capex_df.empty:
         st.warning("No se pudo leer la fuente CAPEX de suministro e instalación.")
         return
 
     for col in [
         "Potencia kW",
+        "CAPEX suministro CLP",
         "CAPEX suministro USD",
+        "CAPEX montaje sin suministro CLP",
         "CAPEX montaje sin suministro USD",
         "CAPEX instalado total USD",
         "CAPEX instalado CLP",
@@ -11370,10 +11506,13 @@ def render_telecom_capex_supply_installation_tab() -> None:
     capex_gap = proposal_capex - installed_total_clp if np.isfinite(proposal_capex) else np.nan
     capex_gap_pct = capex_gap / installed_total_clp * 100.0 if np.isfinite(capex_gap) and installed_total_clp > 0 else np.nan
     selected_wbs = wbs_df[wbs_df["Modelo"].astype(str).eq(recommended_model)].copy() if not wbs_df.empty else pd.DataFrame()
-    for required_col in ["Tipo fila", "Partida", "Clasificación", "Monto USD", "Criterio", "Criterio Resumen", "Criterio cálculo", "Nota", "Nivel"]:
+    for required_col in ["Tipo fila", "Partida", "Clasificación", "Monto USD", "Monto CLP", "Criterio", "Criterio Resumen", "Criterio cálculo", "Nota", "Nivel"]:
         if required_col not in selected_wbs.columns:
             selected_wbs[required_col] = pd.Series(dtype=object)
-    selected_wbs["Monto CLP"] = selected_wbs["Monto USD"] * exchange_rate if np.isfinite(exchange_rate) else np.nan
+    selected_wbs["Monto CLP"] = pd.to_numeric(selected_wbs["Monto CLP"], errors="coerce").fillna(
+        pd.to_numeric(selected_wbs["Monto USD"], errors="coerce")
+    )
+    selected_wbs["Monto USD"] = selected_wbs["Monto CLP"] / exchange_rate if np.isfinite(exchange_rate) and exchange_rate > 0 else np.nan
 
     def fmt_usd(value: object) -> str:
         num = parse_float_local(value, np.nan)
@@ -11437,9 +11576,9 @@ def render_telecom_capex_supply_installation_tab() -> None:
     kpis_html = "".join(
         [
             f'<div class="capex-kpi" style="--accent:{palette["orange"]};"><span>Modelo recomendado</span><b>{html.escape(recommended_model)}</b><small>{recommended_units} unidad(es) desde pestaña 04</small></div>',
-            f'<div class="capex-kpi" style="--accent:{palette["blue"]};"><span>CAPEX instalado unitario</span><b>{fmt_clp_mm(installed_unit_clp)}</b><small>{fmt_usd(selected_row.get("CAPEX instalado total USD"))} total instalado</small></div>',
+            f'<div class="capex-kpi" style="--accent:{palette["blue"]};"><span>CAPEX instalado unitario</span><b>{fmt_clp_mm(installed_unit_clp)}</b><small>{format_clp(installed_unit_clp)} total instalado</small></div>',
             f'<div class="capex-kpi" style="--accent:{palette["sky"]};"><span>Montaje local</span><b>{fmt_pct(selected_row.get("Montaje sobre total %"))}</b><small>{fmt_x(selected_row.get("Montaje / suministro x"))} sobre suministro</small></div>',
-            f'<div class="capex-kpi" style="--accent:{palette["ink"]};"><span>Paquete proveedor EXW</span><b>{fmt_usd(selected_row.get("CAPEX suministro USD"))}</b><small>{fmt_pct(selected_row.get("Suministro sobre total %"))} del CAPEX instalado</small></div>',
+            f'<div class="capex-kpi" style="--accent:{palette["ink"]};"><span>Paquete proveedor EXW</span><b>{format_clp(selected_row.get("CAPEX suministro CLP"))}</b><small>{fmt_pct(selected_row.get("Suministro sobre total %"))} del CAPEX instalado</small></div>',
         ]
     )
     st.markdown(
@@ -11449,7 +11588,7 @@ def render_telecom_capex_supply_installation_tab() -> None:
             <div>
               <p class="capex-k">CAPEX · Suministro e instalación</p>
               <h3 class="capex-t">Análisis CAPEX de {html.escape(recommended_model)}</h3>
-              <p class="capex-s">Vista monográfica de la turbina recomendada por la propuesta técnico-económica. Integra CAPEX suministro, montaje, OOCC, logística, gestión e imprevistos desde 04_CAPEX_WBS.</p>
+              <p class="capex-s">Vista monográfica de la turbina recomendada por la propuesta técnico-económica. Integra CAPEX suministro, montaje, OOCC, logística, gestión e imprevistos desde 03_CAPEX_WBS_USD_CLP.</p>
             </div>
             <div class="capex-kpi-grid">{kpis_html}</div>
           </div>
@@ -11485,9 +11624,9 @@ def render_telecom_capex_supply_installation_tab() -> None:
         unsafe_allow_html=True,
     )
 
-    subtotal_df = selected_wbs[(selected_wbs["Tipo fila"].eq("Subtotal")) & (selected_wbs["Monto USD"] > 0)].copy()
+    subtotal_df = selected_wbs[(selected_wbs["Tipo fila"].eq("Subtotal")) & (selected_wbs["Monto CLP"] > 0)].copy()
     subtotal_df = subtotal_df[~subtotal_df["Partida"].str.contains("TOTAL|REFERENCIAL", case=False, na=False)].copy()
-    detail_df = selected_wbs[(selected_wbs["Tipo fila"].eq("Detalle")) & (selected_wbs["Monto USD"] > 0)].copy()
+    detail_df = selected_wbs[(selected_wbs["Tipo fila"].eq("Detalle")) & (selected_wbs["Monto CLP"] > 0)].copy()
     kpi_df = selected_wbs[selected_wbs["Tipo fila"].eq("KPI")].copy()
 
     def capex_area_from_row(row: pd.Series) -> str:
@@ -11513,29 +11652,26 @@ def render_telecom_capex_supply_installation_tab() -> None:
         [
             {
                 "Área CAPEX": "CAPEX suministro",
-                "Monto USD": float(selected_row.get("CAPEX suministro USD", 0.0) or 0.0),
-                "Monto CLP": float(selected_row.get("CAPEX suministro USD", 0.0) or 0.0) * exchange_rate if np.isfinite(exchange_rate) else np.nan,
+                "Monto CLP": float(selected_row.get("CAPEX suministro CLP", 0.0) or 0.0),
                 "Alcance": "Paquete proveedor EXW: turbina, torre/mástil y eléctricos principales.",
             },
             {
                 "Área CAPEX": "CAPEX montaje",
-                "Monto USD": float(selected_row.get("CAPEX montaje sin suministro USD", 0.0) or 0.0),
-                "Monto CLP": float(selected_row.get("CAPEX montaje sin suministro USD", 0.0) or 0.0) * exchange_rate if np.isfinite(exchange_rate) else np.nan,
+                "Monto CLP": float(selected_row.get("CAPEX montaje sin suministro CLP", 0.0) or 0.0),
                 "Alcance": "Instalación local: montaje, OOCC, logística, gestión e imprevistos.",
             },
         ]
     )
     macro_area_df["Participación %"] = np.where(
-        installed_unit_usd > 0,
-        macro_area_df["Monto USD"] / installed_unit_usd * 100.0,
+        installed_unit_clp > 0,
+        macro_area_df["Monto CLP"] / installed_unit_clp * 100.0,
         np.nan,
     )
 
     summary_table = macro_area_df.copy()
-    summary_table["Monto USD"] = summary_table["Monto USD"].map(fmt_usd)
     summary_table["Monto CLP"] = summary_table["Monto CLP"].map(format_clp)
     summary_table["Participación"] = macro_area_df["Participación %"].map(fmt_pct)
-    summary_table = summary_table[["Área CAPEX", "Monto USD", "Monto CLP", "Participación", "Alcance"]]
+    summary_table = summary_table[["Área CAPEX", "Monto CLP", "Participación", "Alcance"]]
 
     st.markdown('<p class="capex-panel-title">Costo instalado por área CAPEX</p><p class="capex-panel-sub">Primer corte de lectura: separa el costo de suministro tecnológico del costo de montaje e instalación local para la turbina recomendada.</p>', unsafe_allow_html=True)
     fig_area = go.Figure()
@@ -11544,23 +11680,23 @@ def render_telecom_capex_supply_installation_tab() -> None:
         if area_row.empty:
             continue
         fig_area.add_trace(go.Bar(
-            x=area_row["Monto USD"],
+            x=area_row["Monto CLP"],
             y=[recommended_model],
             orientation="h",
             name=area_name,
             marker_color=area_color,
-            text=[f'{fmt_usd(area_row["Monto USD"].iloc[0])} · {fmt_pct(area_row["Participación %"].iloc[0])}'],
+            text=[f'{format_clp(area_row["Monto CLP"].iloc[0])} · {fmt_pct(area_row["Participación %"].iloc[0])}'],
             textposition="inside",
             insidetextanchor="middle",
-            customdata=np.stack([area_row["Alcance"], area_row["Monto CLP"]], axis=-1),
-            hovertemplate="<b>%{fullData.name}</b><br>Monto: %{x:,.0f} USD<br>CLP eq.: %{customdata[1]:,.0f}<br>%{customdata[0]}<extra></extra>",
+            customdata=np.stack([area_row["Alcance"]], axis=-1),
+            hovertemplate="<b>%{fullData.name}</b><br>Monto: $%{x:,.0f} CLP<br>%{customdata[0]}<extra></extra>",
         ))
     fig_area.update_layout(
         barmode="stack",
         height=230,
         margin=dict(l=10, r=20, t=14, b=34),
         legend=dict(orientation="h", y=1.16, x=0, title=None),
-        xaxis=dict(title="USD instalados", gridcolor=palette["grid"]),
+        xaxis=dict(title="CLP instalados", gridcolor=palette["grid"]),
         yaxis=dict(title=None),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -11572,20 +11708,20 @@ def render_telecom_capex_supply_installation_tab() -> None:
     if not subtotal_df.empty:
         st.markdown(
             '<p class="capex-panel-title">Costo por bloque WBS y área CAPEX</p>'
-            '<p class="capex-panel-sub">Lectura desde 04_CAPEX_WBS: compara los subtotales principales desde la columna B y separa suministro versus montaje según Criterio Resumen.</p>',
+            '<p class="capex-panel-sub">Lectura desde 03_CAPEX_WBS_USD_CLP: compara los subtotales principales desde la columna B y separa suministro versus montaje según Criterio Resumen.</p>',
             unsafe_allow_html=True,
         )
         block_df = subtotal_df.copy()
-        block_df = block_df[block_df["Monto USD"] > 0].sort_values("Monto USD", ascending=True)
+        block_df = block_df[block_df["Monto CLP"] > 0].sort_values("Monto CLP", ascending=True)
         block_df["Bloque WBS"] = block_df["Partida"].map(lambda value: short_label(value, 48))
         fig_blocks = px.bar(
             block_df,
-            x="Monto USD",
+            x="Monto CLP",
             y="Bloque WBS",
             color="Área CAPEX",
             orientation="h",
             color_discrete_map={"CAPEX suministro": palette["blue"], "CAPEX montaje": palette["orange"]},
-            text=block_df["Monto USD"].map(fmt_usd),
+            text=block_df["Monto CLP"].map(format_clp),
             custom_data=["Partida", "Clasificación", "Criterio Resumen", "Criterio cálculo"],
         )
         fig_blocks.update_traces(
@@ -11594,7 +11730,7 @@ def render_telecom_capex_supply_installation_tab() -> None:
             hovertemplate=(
                 "<b>%{customdata[0]}</b><br>"
                 "Área: %{fullData.name}<br>"
-                "Monto: %{x:,.0f} USD<br>"
+                "Monto: $%{x:,.0f} CLP<br>"
                 "Clasificación: %{customdata[1]}<br>"
                 "Criterio resumen: %{customdata[2]}<br>"
                 "Criterio cálculo: %{customdata[3]}<extra></extra>"
@@ -11604,7 +11740,7 @@ def render_telecom_capex_supply_installation_tab() -> None:
             height=max(360, min(620, 110 + 38 * len(block_df))),
             margin=dict(l=10, r=74, t=18, b=42),
             legend=dict(orientation="h", y=1.12, x=0, title=None),
-            xaxis=dict(title="USD", gridcolor=palette["grid"]),
+            xaxis=dict(title="CLP", gridcolor=palette["grid"]),
             yaxis=dict(title=None),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
@@ -11613,23 +11749,23 @@ def render_telecom_capex_supply_installation_tab() -> None:
 
     left, right = st.columns([1.12, 0.88])
     with left:
-        st.markdown('<p class="capex-panel-title">Componentes de suministro desde WBS</p><p class="capex-panel-sub">Detalle anclado a 04_CAPEX_WBS: partidas con Criterio Resumen = Capex Suministro para la turbina recomendada.</p>', unsafe_allow_html=True)
-        supply_wbs_df = detail_df[detail_df["Área CAPEX"].eq("CAPEX suministro") & (detail_df["Monto USD"] > 0)].copy()
+        st.markdown('<p class="capex-panel-title">Componentes de suministro desde WBS</p><p class="capex-panel-sub">Detalle anclado a 03_CAPEX_WBS_USD_CLP: partidas con Criterio Resumen = Capex Suministro para la turbina recomendada.</p>', unsafe_allow_html=True)
+        supply_wbs_df = detail_df[detail_df["Área CAPEX"].eq("CAPEX suministro") & (detail_df["Monto CLP"] > 0)].copy()
         if not supply_wbs_df.empty:
-            supply_wbs_df = supply_wbs_df.sort_values("Monto USD", ascending=True)
+            supply_wbs_df = supply_wbs_df.sort_values("Monto CLP", ascending=True)
             fig_supply = go.Figure(go.Bar(
-                x=supply_wbs_df["Monto USD"],
+                x=supply_wbs_df["Monto CLP"],
                 y=supply_wbs_df["Partida"].map(lambda value: short_label(value, 44)),
                 orientation="h",
                 name="CAPEX suministro",
                 marker_color=palette["blue"],
-                text=[fmt_usd(v) for v in supply_wbs_df["Monto USD"]],
+                text=[format_clp(v) for v in supply_wbs_df["Monto CLP"]],
                 textposition="outside",
                 cliponaxis=False,
                 customdata=np.stack([supply_wbs_df["Clasificación"], supply_wbs_df["Criterio cálculo"], supply_wbs_df["Nota"]], axis=-1),
                 hovertemplate=(
                     "<b>%{y}</b><br>Área: CAPEX suministro<br>"
-                    "Valor %{x:,.0f} USD<br>"
+                    "Valor $%{x:,.0f} CLP<br>"
                     "Clasificación: %{customdata[0]}<br>"
                     "Criterio cálculo: %{customdata[1]}<br>"
                     "%{customdata[2]}<extra></extra>"
@@ -11640,14 +11776,14 @@ def render_telecom_capex_supply_installation_tab() -> None:
                 margin=dict(l=10, r=42, t=20, b=42),
                 showlegend=True,
                 legend=dict(orientation="h", y=1.12, x=0, title=None),
-                xaxis=dict(title="USD WBS", gridcolor=palette["grid"]),
+                xaxis=dict(title="CLP WBS", gridcolor=palette["grid"]),
                 yaxis=dict(title=None),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
             )
             st.plotly_chart(fig_supply, use_container_width=True, config={"displaylogo": False})
         else:
-            st.info("No hay partidas de suministro positivas en 04_CAPEX_WBS para el modelo seleccionado.")
+            st.info("No hay partidas de suministro positivas en 03_CAPEX_WBS_USD_CLP para el modelo seleccionado.")
     with right:
         st.markdown('<p class="capex-panel-title">Construcción del CAPEX instalado</p><p class="capex-panel-sub">Cascada WBS desde suministro EXW hasta CAPEX instalado referencial.</p>', unsafe_allow_html=True)
         waterfall_items = subtotal_df.copy()
@@ -11655,17 +11791,17 @@ def render_telecom_capex_supply_installation_tab() -> None:
             waterfall_items["Etiqueta"] = waterfall_items["Partida"].map(lambda value: short_label(value, 24))
             fig_waterfall = go.Figure(go.Waterfall(
                 x=waterfall_items["Etiqueta"].tolist() + ["Total instalado"],
-                y=waterfall_items["Monto USD"].tolist() + [float(selected_row.get("CAPEX instalado total USD", 0.0) or 0.0)],
+                y=waterfall_items["Monto CLP"].tolist() + [installed_unit_clp],
                 measure=["relative"] * len(waterfall_items) + ["total"],
                 name="CAPEX suministro / montaje",
                 showlegend=False,
                 connector={"line": {"color": "rgba(41,50,65,.35)"}},
                 increasing={"marker": {"color": palette["orange"]}},
                 totals={"marker": {"color": palette["ink"]}},
-                text=[fmt_usd(v) for v in waterfall_items["Monto USD"].tolist()] + [fmt_usd(selected_row.get("CAPEX instalado total USD"))],
+                text=[format_clp(v) for v in waterfall_items["Monto CLP"].tolist()] + [format_clp(installed_unit_clp)],
                 textposition="outside",
                 customdata=np.stack([waterfall_items["Área CAPEX"]], axis=-1).tolist() + [["Total instalado"]],
-                hovertemplate="<b>%{x}</b><br>Área: %{customdata[0]}<br>%{y:,.0f} USD<extra></extra>",
+                hovertemplate="<b>%{x}</b><br>Área: %{customdata[0]}<br>$%{y:,.0f} CLP<extra></extra>",
             ))
             fig_waterfall.add_trace(go.Scatter(x=[None], y=[None], mode="markers", name="CAPEX suministro", marker=dict(color=palette["blue"], size=10)))
             fig_waterfall.add_trace(go.Scatter(x=[None], y=[None], mode="markers", name="CAPEX montaje", marker=dict(color=palette["orange"], size=10)))
@@ -11675,7 +11811,7 @@ def render_telecom_capex_supply_installation_tab() -> None:
                 showlegend=True,
                 legend=dict(orientation="h", y=1.14, x=0, title=None),
                 xaxis=dict(title=None, tickangle=-35),
-                yaxis=dict(title="USD", gridcolor=palette["grid"]),
+                yaxis=dict(title="CLP", gridcolor=palette["grid"]),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
             )
@@ -11686,17 +11822,17 @@ def render_telecom_capex_supply_installation_tab() -> None:
     c1, c2 = st.columns(2)
     with c1:
         st.markdown('<p class="capex-panel-title">Pareto WBS de partidas críticas</p><p class="capex-panel-sub">Top partidas positivas del WBS, con separación visual entre suministro y montaje. Permite ver qué líneas explican el CAPEX instalado.</p>', unsafe_allow_html=True)
-        pareto_df = detail_df[detail_df["Monto USD"] > 0].copy()
-        pareto_df = pareto_df.sort_values("Monto USD", ascending=False).head(14)
+        pareto_df = detail_df[detail_df["Monto CLP"] > 0].copy()
+        pareto_df = pareto_df.sort_values("Monto CLP", ascending=False).head(14)
         if not pareto_df.empty:
-            pareto_df = pareto_df.sort_values("Monto USD", ascending=True)
+            pareto_df = pareto_df.sort_values("Monto CLP", ascending=True)
             fig_pareto = px.bar(
                 pareto_df,
-                x="Monto USD",
+                x="Monto CLP",
                 y=pareto_df["Partida"].map(lambda value: short_label(value, 46)),
                 color="Área CAPEX",
                 orientation="h",
-                text=[fmt_usd(v) for v in pareto_df["Monto USD"]],
+                text=[format_clp(v) for v in pareto_df["Monto CLP"]],
                 color_discrete_map={"CAPEX suministro": palette["blue"], "CAPEX montaje": palette["orange"]},
                 custom_data=["Partida", "Clasificación", "Criterio Resumen", "Criterio cálculo"],
             )
@@ -11706,7 +11842,7 @@ def render_telecom_capex_supply_installation_tab() -> None:
                 hovertemplate=(
                     "<b>%{customdata[0]}</b><br>"
                     "Área: %{fullData.name}<br>"
-                    "Monto %{x:,.0f} USD<br>"
+                    "Monto $%{x:,.0f} CLP<br>"
                     "Clasificación: %{customdata[1]}<br>"
                     "Criterio resumen: %{customdata[2]}<br>"
                     "Criterio cálculo: %{customdata[3]}<extra></extra>"
@@ -11717,7 +11853,7 @@ def render_telecom_capex_supply_installation_tab() -> None:
                 margin=dict(l=10, r=48, t=20, b=42),
                 showlegend=True,
                 legend=dict(orientation="h", y=1.10, x=0, title=None),
-                xaxis=dict(title="USD", gridcolor=palette["grid"]),
+                xaxis=dict(title="CLP", gridcolor=palette["grid"]),
                 yaxis=dict(title=None),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
@@ -11727,20 +11863,20 @@ def render_telecom_capex_supply_installation_tab() -> None:
             st.info("No hay partidas WBS positivas para graficar.")
     with c2:
         st.markdown('<p class="capex-panel-title">Mapa de naturaleza del CAPEX</p><p class="capex-panel-sub">Burbujas por clasificación y área. Tamaño y eje Y representan monto; eje X muestra cantidad de partidas.</p>', unsafe_allow_html=True)
-        class_df = detail_df[detail_df["Monto USD"] > 0].groupby(["Área CAPEX", "Clasificación"], as_index=False).agg(
-            Monto_USD=("Monto USD", "sum"),
+        class_df = detail_df[detail_df["Monto CLP"] > 0].groupby(["Área CAPEX", "Clasificación"], as_index=False).agg(
+            Monto_CLP=("Monto CLP", "sum"),
             Partidas=("Partida", "count"),
-        ).sort_values("Monto_USD", ascending=False)
+        ).sort_values("Monto_CLP", ascending=False)
         if not class_df.empty:
             fig_class = px.scatter(
                 class_df,
                 x="Partidas",
-                y="Monto_USD",
-                size="Monto_USD",
+                y="Monto_CLP",
+                size="Monto_CLP",
                 color="Área CAPEX",
                 text="Clasificación",
                 color_discrete_map={"CAPEX suministro": palette["blue"], "CAPEX montaje": palette["orange"]},
-                hover_data={"Monto_USD": ":,.0f", "Partidas": True, "Área CAPEX": True, "Clasificación": True},
+                hover_data={"Monto_CLP": ":,.0f", "Partidas": True, "Área CAPEX": True, "Clasificación": True},
             )
             fig_class.update_traces(textposition="top center", marker=dict(line=dict(color="#FFFFFF", width=1.6)))
             fig_class.update_layout(
@@ -11749,7 +11885,7 @@ def render_telecom_capex_supply_installation_tab() -> None:
                 showlegend=True,
                 legend=dict(orientation="h", y=1.10, x=0, title=None),
                 xaxis=dict(title="N° partidas", gridcolor=palette["grid"], rangemode="tozero"),
-                yaxis=dict(title="USD", gridcolor=palette["grid"], rangemode="tozero"),
+                yaxis=dict(title="CLP", gridcolor=palette["grid"], rangemode="tozero"),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
             )
@@ -11757,15 +11893,15 @@ def render_telecom_capex_supply_installation_tab() -> None:
         else:
             st.info("No hay clasificación WBS positiva para graficar.")
 
-    hierarchy_base_df = detail_df[detail_df["Monto USD"] > 0].copy()
+    hierarchy_base_df = detail_df[detail_df["Monto CLP"] > 0].copy()
     if not hierarchy_base_df.empty:
-        hierarchy_base_df = hierarchy_base_df.sort_values("Monto USD", ascending=False).reset_index(drop=True)
+        hierarchy_base_df = hierarchy_base_df.sort_values("Monto CLP", ascending=False).reset_index(drop=True)
         hierarchy_base_df["_rank"] = np.arange(1, len(hierarchy_base_df) + 1)
-        materiality_usd = max(
-            float(hierarchy_base_df["Monto USD"].sum() or 0.0) * 0.012,
-            float(installed_unit_usd or 0.0) * 0.018,
+        materiality_clp = max(
+            float(hierarchy_base_df["Monto CLP"].sum() or 0.0) * 0.012,
+            float(installed_unit_clp or 0.0) * 0.018,
         )
-        major_mask = (hierarchy_base_df["_rank"] <= 18) | (hierarchy_base_df["Monto USD"] >= materiality_usd)
+        major_mask = (hierarchy_base_df["_rank"] <= 18) | (hierarchy_base_df["Monto CLP"] >= materiality_clp)
         hierarchy_df = hierarchy_base_df[major_mask].copy()
         minor_df = hierarchy_base_df[~major_mask].copy()
         if not minor_df.empty:
@@ -11773,11 +11909,11 @@ def render_telecom_capex_supply_installation_tab() -> None:
                 minor_df.groupby(["Área CAPEX", "Clasificación"], as_index=False)
                 .agg(
                     **{
-                        "Monto USD": ("Monto USD", "sum"),
+                        "Monto CLP": ("Monto CLP", "sum"),
                         "Partidas agrupadas": ("Partida", "count"),
                     }
                 )
-                .sort_values("Monto USD", ascending=False)
+                .sort_values("Monto CLP", ascending=False)
             )
             grouped_minor["Partida"] = grouped_minor["Partidas agrupadas"].map(lambda value: f"Otros ({int(value)} partidas menores)")
             grouped_minor["Nivel"] = "Agrupado"
@@ -11786,11 +11922,11 @@ def render_telecom_capex_supply_installation_tab() -> None:
             grouped_minor["Criterio Resumen"] = "Partidas menores agrupadas"
             grouped_minor["Criterio cálculo"] = "Suma de partidas WBS bajo umbral visual"
             grouped_minor["Nota"] = "El detalle completo permanece en la tabla auditable inferior."
-            grouped_minor["Valor bruto"] = grouped_minor["Monto USD"].map(fmt_usd)
+            grouped_minor["Valor bruto"] = grouped_minor["Monto CLP"].map(format_clp)
             hierarchy_df = pd.concat([hierarchy_df, grouped_minor[hierarchy_df.columns.intersection(grouped_minor.columns)]], ignore_index=True)
 
         hierarchy_df["Partida corta"] = hierarchy_df["Partida"].map(lambda value: short_label(value, 42))
-        hierarchy_df["Monto etiqueta"] = hierarchy_df["Monto USD"].map(fmt_usd)
+        hierarchy_df["Monto etiqueta"] = hierarchy_df["Monto CLP"].map(format_clp)
         st.markdown(
             '<p class="capex-panel-title">Mapa jerárquico WBS</p>'
             '<p class="capex-panel-sub">Área → clasificación → partida. El mapa muestra las partidas materiales y agrupa partidas menores para lectura clara; el detalle completo queda en la tabla auditable.</p>',
@@ -11799,14 +11935,14 @@ def render_telecom_capex_supply_installation_tab() -> None:
         fig_tree = px.treemap(
             hierarchy_df,
             path=[px.Constant("CAPEX instalado"), "Área CAPEX", "Clasificación", "Partida corta"],
-            values="Monto USD",
+            values="Monto CLP",
             color="Área CAPEX",
             color_discrete_map={"CAPEX suministro": palette["blue"], "CAPEX montaje": palette["orange"]},
             custom_data=["Partida", "Monto etiqueta", "Criterio Resumen", "Criterio cálculo", "Valor bruto"],
         )
         fig_tree.update_traces(
             maxdepth=4,
-            texttemplate="<b>%{label}</b><br>US$%{value:,.0f}<br>%{percentParent:.0%} del nivel",
+            texttemplate="<b>%{label}</b><br>$%{value:,.0f}<br>%{percentParent:.0%} del nivel",
             textfont=dict(size=13),
             marker=dict(line=dict(color="#FFFFFF", width=1.8)),
             tiling=dict(packing="squarify"),
@@ -11830,12 +11966,12 @@ def render_telecom_capex_supply_installation_tab() -> None:
     if not subtotal_df.empty:
         st.markdown('<p class="capex-panel-title">Distribución ejecutiva por bloque WBS</p><p class="capex-panel-sub">Participación de cada bloque sobre el CAPEX instalado de la turbina seleccionada.</p>', unsafe_allow_html=True)
         donut_df = subtotal_df.copy()
-        donut_df["% Total"] = np.where(installed_unit_usd > 0, donut_df["Monto USD"] / installed_unit_usd * 100.0, np.nan)
+        donut_df["% Total"] = np.where(installed_unit_clp > 0, donut_df["Monto CLP"] / installed_unit_clp * 100.0, np.nan)
         donut_df["Etiqueta"] = donut_df.apply(lambda row: f"{row['Área CAPEX']} · {short_label(row['Partida'], 30)}", axis=1)
         fig_donut = px.pie(
             donut_df,
             names="Etiqueta",
-            values="Monto USD",
+            values="Monto CLP",
             hole=0.58,
             color="Área CAPEX",
             color_discrete_map={"CAPEX suministro": palette["blue"], "CAPEX montaje": palette["orange"]},
@@ -11843,7 +11979,7 @@ def render_telecom_capex_supply_installation_tab() -> None:
         fig_donut.update_traces(
             textinfo="percent",
             marker=dict(line=dict(color="#FFFFFF", width=2)),
-            hovertemplate="<b>%{label}</b><br>Monto %{value:,.0f} USD<br>Participación %{percent}<extra></extra>",
+            hovertemplate="<b>%{label}</b><br>Monto $%{value:,.0f} CLP<br>Participación %{percent}<extra></extra>",
         )
         fig_donut.update_layout(
             height=390,
@@ -11854,11 +11990,194 @@ def render_telecom_capex_supply_installation_tab() -> None:
         )
         st.plotly_chart(fig_donut, use_container_width=True, config={"displaylogo": False})
 
-    st.markdown('<p class="capex-panel-title">WBS auditable de la turbina seleccionada</p><p class="capex-panel-sub">Partidas desde 04_CAPEX_WBS para el modelo recomendado. Los montos cero se mantienen para evidenciar alcance excluido, incluido o no aplicable.</p>', unsafe_allow_html=True)
+    selected_mounting = mounting_detail_df[mounting_detail_df["Modelo"].astype(str).eq(recommended_model)].copy() if not mounting_detail_df.empty else pd.DataFrame()
+    if not selected_mounting.empty:
+        for numeric_col in [
+            "Costo total CLP",
+            "Costo base CLP",
+            "Base indirectos CLP",
+            "Base imprevistos CLP",
+            "HH calculadas",
+            "Días",
+            "Horas/día",
+            "Personas",
+            "Cantidad recurso",
+            "Tarifa CLP / Factor %",
+            "Factor modelo",
+            "Factor sitio",
+            "Factor combinado",
+        ]:
+            selected_mounting[numeric_col] = pd.to_numeric(selected_mounting.get(numeric_col, np.nan), errors="coerce")
+        mounting_positive = selected_mounting[selected_mounting["Costo total CLP"] > 0].copy()
+        total_mounting_detail = float(mounting_positive["Costo total CLP"].sum() or 0.0)
+        total_hh = float(mounting_positive["HH calculadas"].sum() or 0.0)
+        total_days = float(mounting_positive["Días"].fillna(0).sum() or 0.0)
+        factor_weights = mounting_positive["Costo total CLP"].fillna(0)
+        factor_values = mounting_positive["Factor combinado"].replace([np.inf, -np.inf], np.nan).fillna(1)
+        weighted_factor = float(np.average(factor_values, weights=factor_weights)) if factor_weights.sum() > 0 else float(factor_values.mean() or 0.0)
+        dominant_area = "-"
+        if not mounting_positive.empty:
+            dominant_area = str(
+                mounting_positive.groupby("Área")["Costo total CLP"].sum().sort_values(ascending=False).index[0]
+            )
+
+        st.markdown(
+            '<p class="capex-panel-title">Detalle de montaje: factores, horas y recursos</p>'
+            '<p class="capex-panel-sub">Lectura desde 04_Montaje_Detalle_CLP. Descompone el CAPEX montaje por área, tipo de costo, recurso, HH, días, tarifas y factores aplicados para la turbina seleccionada.</p>',
+            unsafe_allow_html=True,
+        )
+        detail_cards = [
+            ("Montaje detalle", format_clp(total_mounting_detail), "Suma de Costo total CLP"),
+            ("HH calculadas", f"{total_hh:,.1f}".replace(",", ".").replace(".", ",", 1), "Personas x días x horas/día"),
+            ("Días recurso", f"{total_days:,.1f}".replace(",", ".").replace(".", ",", 1), "Suma de días declarados"),
+            ("Factor ponderado", fmt_x(weighted_factor), f"Área dominante: {dominant_area}"),
+        ]
+        st.markdown(
+            '<div class="capex-why">'
+            + "".join(
+                f'<div class="capex-why-card"><span>{html.escape(label)}</span><b>{html.escape(value)}</b><p>{html.escape(note)}</p></div>'
+                for label, value, note in detail_cards
+            )
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+
+        detail_left, detail_right = st.columns([1.08, 0.92])
+        with detail_left:
+            area_cost_df = (
+                mounting_positive.groupby(["Área", "Tipo costo"], as_index=False)
+                .agg(
+                    **{
+                        "Costo total CLP": ("Costo total CLP", "sum"),
+                        "HH calculadas": ("HH calculadas", "sum"),
+                        "Partidas": ("ID", "count"),
+                    }
+                )
+                .sort_values("Costo total CLP", ascending=True)
+            )
+            if not area_cost_df.empty:
+                fig_mounting_area = px.bar(
+                    area_cost_df,
+                    x="Costo total CLP",
+                    y="Área",
+                    color="Tipo costo",
+                    orientation="h",
+                    text=area_cost_df["Costo total CLP"].map(format_clp),
+                    custom_data=["Tipo costo", "HH calculadas", "Partidas"],
+                )
+                fig_mounting_area.update_traces(
+                    textposition="outside",
+                    cliponaxis=False,
+                    hovertemplate=(
+                        "<b>%{y}</b><br>"
+                        "Tipo costo: %{customdata[0]}<br>"
+                        "Monto: $%{x:,.0f} CLP<br>"
+                        "HH: %{customdata[1]:,.1f}<br>"
+                        "Partidas: %{customdata[2]}<extra></extra>"
+                    ),
+                )
+                fig_mounting_area.update_layout(
+                    height=max(360, min(560, 120 + 44 * area_cost_df["Área"].nunique())),
+                    margin=dict(l=10, r=76, t=16, b=42),
+                    legend=dict(orientation="h", y=1.12, x=0, title=None),
+                    xaxis=dict(title="CLP montaje", gridcolor=palette["grid"]),
+                    yaxis=dict(title=None),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                )
+                st.plotly_chart(fig_mounting_area, use_container_width=True, config={"displaylogo": False})
+        with detail_right:
+            scatter_df = mounting_positive[mounting_positive["Costo total CLP"] > 0].copy()
+            scatter_df["Actividad corta"] = scatter_df["Actividad"].map(lambda value: short_label(value, 42))
+            if not scatter_df.empty:
+                fig_mounting_factors = px.scatter(
+                    scatter_df,
+                    x="Factor combinado",
+                    y="Tarifa CLP / Factor %",
+                    size="Costo total CLP",
+                    color="Tipo costo",
+                    hover_name="Actividad corta",
+                    custom_data=["Recurso", "Días", "Horas/día", "Personas", "Costo total CLP", "Factor modelo", "Factor sitio"],
+                )
+                fig_mounting_factors.update_traces(
+                    marker=dict(line=dict(color="#FFFFFF", width=1.2)),
+                    hovertemplate=(
+                        "<b>%{hovertext}</b><br>"
+                        "Recurso: %{customdata[0]}<br>"
+                        "Factor combinado: %{x:.2f}x<br>"
+                        "Tarifa / factor: %{y:,.2f}<br>"
+                        "Días: %{customdata[1]:,.2f}<br>"
+                        "Horas/día: %{customdata[2]:,.2f}<br>"
+                        "Personas: %{customdata[3]:,.2f}<br>"
+                        "Costo total: $%{customdata[4]:,.0f} CLP<br>"
+                        "Factor modelo: %{customdata[5]:,.2f}x<br>"
+                        "Factor sitio: %{customdata[6]:,.2f}x<extra></extra>"
+                    ),
+                )
+                fig_mounting_factors.update_layout(
+                    height=390,
+                    margin=dict(l=10, r=20, t=16, b=42),
+                    legend=dict(orientation="h", y=1.12, x=0, title=None),
+                    xaxis=dict(title="Factor modelo x sitio", gridcolor=palette["grid"], rangemode="tozero"),
+                    yaxis=dict(title="Tarifa CLP / factor %", gridcolor=palette["grid"], rangemode="tozero"),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                )
+                st.plotly_chart(fig_mounting_factors, use_container_width=True, config={"displaylogo": False})
+
+        top_mounting = mounting_positive.sort_values("Costo total CLP", ascending=False).head(14).copy()
+        if not top_mounting.empty:
+            top_mounting_table = top_mounting[
+                [
+                    "Área",
+                    "Tipo costo",
+                    "Actividad",
+                    "Recurso",
+                    "Tipo cálculo",
+                    "Personas",
+                    "Días",
+                    "Horas/día",
+                    "Tarifa CLP / Factor %",
+                    "Factor modelo",
+                    "Factor sitio",
+                    "Costo base CLP",
+                    "Costo total CLP",
+                    "Fuente / supuesto",
+                ]
+            ].copy()
+
+            def format_tariff_or_factor(row: pd.Series) -> str:
+                value = parse_float_local(row.get("Tarifa CLP / Factor %"), np.nan)
+                if not np.isfinite(value):
+                    return "-"
+                unit_text = normalize_key(row.get("Unidad", ""))
+                calc_text = normalize_key(row.get("Tipo cálculo", ""))
+                if "%" in str(row.get("Unidad", "")) or "exw" in unit_text or "directos" in calc_text:
+                    return fmt_pct(value * 100 if value <= 1 else value, digits=2)
+                return format_clp(value)
+
+            top_mounting_table["Tarifa CLP / Factor %"] = top_mounting.apply(format_tariff_or_factor, axis=1)
+            for amount_col in ["Costo base CLP", "Costo total CLP"]:
+                top_mounting_table[amount_col] = top_mounting_table[amount_col].map(format_clp)
+            for number_col in ["Personas", "Días", "Horas/día"]:
+                top_mounting_table[number_col] = top_mounting_table[number_col].map(lambda value: "-" if not np.isfinite(parse_float_local(value, np.nan)) else f"{parse_float_local(value, 0):.2f}".replace(".", ","))
+            for factor_col in ["Factor modelo", "Factor sitio"]:
+                top_mounting_table[factor_col] = top_mounting_table[factor_col].map(fmt_x)
+            st.markdown(
+                '<p class="capex-panel-title">Partidas críticas de montaje</p>'
+                '<p class="capex-panel-sub">Top partidas por Costo total CLP, incluyendo factores y supuestos usados en 04_Montaje_Detalle_CLP.</p>',
+                unsafe_allow_html=True,
+            )
+            st.dataframe(top_mounting_table, use_container_width=True, hide_index=True, height=420)
+    else:
+        st.info("No hay detalle de montaje disponible en 04_Montaje_Detalle_CLP para el modelo seleccionado.")
+
+    st.markdown('<p class="capex-panel-title">WBS auditable de la turbina seleccionada</p><p class="capex-panel-sub">Partidas desde 03_CAPEX_WBS_USD_CLP para el modelo recomendado. Los montos cero se mantienen para evidenciar alcance excluido, incluido o no aplicable.</p>', unsafe_allow_html=True)
     wbs_table = selected_wbs[
-        ["Nivel", "Partida", "Clasificación", "Valor bruto", "Criterio Resumen", "Criterio cálculo", "Nota"]
+        ["Nivel", "Partida", "Clasificación", "Monto CLP", "Valor bruto", "Criterio Resumen", "Criterio cálculo", "Nota"]
     ].copy() if not selected_wbs.empty else pd.DataFrame()
     if not wbs_table.empty:
+        wbs_table["Monto CLP"] = wbs_table["Monto CLP"].map(format_clp)
         st.dataframe(wbs_table, use_container_width=True, hide_index=True, height=430)
     st.markdown("</div>", unsafe_allow_html=True)
 
