@@ -347,8 +347,10 @@ TURBINE_CAPEX_SUPPLY_INSTALLATION_CSV_URL_DEFAULT = (
 )
 TURBINE_CAPEX_SUPPLY_INSTALLATION_PUB_BASE_URL = TURBINE_CAPEX_SUPPLY_INSTALLATION_CSV_URL_DEFAULT.split("?")[0]
 TURBINE_CAPEX_SUPPLY_INSTALLATION_PUBHTML_URL = f"{TURBINE_CAPEX_SUPPLY_INSTALLATION_PUB_BASE_URL}html"
-TURBINE_CAPEX_SUPPLY_INSTALLATION_SOURCE_VERSION = 20260702
-TURBINE_CAPEX_SUPPLY_INSTALLATION_SOURCE_SHEETS = {}
+TURBINE_CAPEX_SUPPLY_INSTALLATION_SOURCE_VERSION = 20260703
+TURBINE_CAPEX_SUPPLY_INSTALLATION_SOURCE_SHEETS = {
+    "07_Cronograma_Ejecucion": "703548266",
+}
 TURBINE_POWER_CURVE_SHEETS = {
     "VAWT 10 kW": {"sheet": "GVH-10KW", "curve_column": "GVH-10KW", "rated_kw": 10.0},
     "VAWT 5 kW": {"sheet": "GVH-5KW", "curve_column": "GVH-5KW", "rated_kw": 5.0},
@@ -1036,6 +1038,93 @@ def load_turbine_capex_mounting_detail(refresh_nonce: int = 0) -> pd.DataFrame:
     normalized["Factor combinado"] = normalized["Factor modelo"].fillna(1) * normalized["Factor sitio"].fillna(1)
     normalized = normalized[normalized["Modelo"].notna()].copy()
     return normalized.reset_index(drop=True)
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_turbine_project_schedule(refresh_nonce: int = 0) -> tuple[pd.DataFrame, dict[str, str]]:
+    raw = read_remote_csv(
+        turbine_capex_supply_installation_csv_url("07_Cronograma_Ejecucion", refresh_nonce=refresh_nonce),
+        refresh_nonce=refresh_nonce + TURBINE_CAPEX_SUPPLY_INSTALLATION_SOURCE_VERSION,
+        dtype=str,
+        header=None,
+    ).fillna("")
+
+    meta: dict[str, str] = {"Título": clean_sheet_cell(raw.iat[0, 0]) if raw.shape[0] and raw.shape[1] else ""}
+    for row_idx in range(min(11, raw.shape[0])):
+        row_values = [clean_sheet_cell(value) for value in raw.iloc[row_idx].tolist()]
+        for col_idx in range(0, min(len(row_values) - 1, 14), 2):
+            label = row_values[col_idx]
+            value = row_values[col_idx + 1] if col_idx + 1 < len(row_values) else ""
+            if label and value:
+                meta[label] = value
+        if len(row_values) > 2 and row_values[0] and row_values[2]:
+            meta[row_values[0]] = row_values[2]
+        if len(row_values) > 5 and row_values[4] and row_values[5]:
+            meta[row_values[4]] = row_values[5]
+
+    header_idx = None
+    for idx in range(len(raw.index)):
+        row_values = [clean_sheet_cell(value) for value in raw.iloc[idx].tolist()]
+        row_keys = {normalize_key(value) for value in row_values if value}
+        if normalize_key("ID") in row_keys and normalize_key("Actividad") in row_keys and normalize_key("Inicio día") in row_keys:
+            header_idx = idx
+            break
+    if header_idx is None:
+        return pd.DataFrame(), meta
+
+    headers = [clean_sheet_cell(value) or f"Campo {col_idx + 1}" for col_idx, value in enumerate(raw.iloc[header_idx].tolist())]
+    df = raw.iloc[header_idx + 1 :].copy()
+    df = df.iloc[:, : len(headers)]
+    df.columns = headers
+    if "ID" in df.columns:
+        df = df[df["ID"].map(clean_sheet_cell).astype(bool)].copy()
+    if df.empty:
+        return pd.DataFrame(), meta
+
+    def schedule_col(candidates: list[str]) -> str | None:
+        candidate_keys = {normalize_key(candidate) for candidate in candidates}
+        for column_name in df.columns:
+            if normalize_key(column_name) in candidate_keys:
+                return column_name
+        return first_matching_column(df, candidates)
+
+    numeric_specs = {
+        "Inicio día": schedule_col(["Inicio día", "Inicio dia", "Inicio"]),
+        "Duración": schedule_col(["Duración", "Duracion", "Días", "Dias"]),
+        "Fin día": schedule_col(["Fin día", "Fin dia", "Fin"]),
+    }
+    text_specs = {
+        "ID": schedule_col(["ID"]),
+        "Bloque": schedule_col(["Bloque"]),
+        "Alcance": schedule_col(["Alcance"]),
+        "Actividad": schedule_col(["Actividad"]),
+        "Predecesora": schedule_col(["Predecesora", "Predecesoras"]),
+        "Solape": schedule_col(["Solape"]),
+        "Ruta crítica": schedule_col(["Ruta crítica", "Ruta critica"]),
+        "Responsable": schedule_col(["Responsable"]),
+        "Entregable técnico": schedule_col(["Entregable técnico", "Entregable tecnico", "Entregable"]),
+        "Criterio aceptación / supuesto": schedule_col(["Criterio aceptación / supuesto", "Criterio aceptacion / supuesto", "Criterio"]),
+        "Riesgo / control": schedule_col(["Riesgo / control", "Riesgo"]),
+        "Nota": schedule_col(["Nota"]),
+    }
+
+    normalized = pd.DataFrame()
+    for output_col, source_col in text_specs.items():
+        normalized[output_col] = df[source_col].map(clean_sheet_cell) if source_col else ""
+    for output_col, source_col in numeric_specs.items():
+        normalized[output_col] = pd.to_numeric(df[source_col].map(parse_model_number), errors="coerce") if source_col else np.nan
+
+    normalized["Duración"] = normalized["Duración"].fillna(1).clip(lower=1)
+    normalized["Inicio día"] = normalized["Inicio día"].fillna(1).clip(lower=1)
+    normalized["Fin día"] = normalized["Fin día"].fillna(normalized["Inicio día"] + normalized["Duración"] - 1)
+    normalized["Duración calculada"] = (normalized["Fin día"] - normalized["Inicio día"] + 1).clip(lower=1)
+    normalized["Tiene solape"] = normalized["Solape"].map(lambda value: normalize_key(value) in {"si", "sí", "yes", "true"})
+    normalized["Es ruta crítica"] = normalized["Ruta crítica"].map(lambda value: normalize_key(value) in {"si", "sí", "yes", "true"})
+    normalized["Orden"] = np.arange(len(normalized)) + 1
+    normalized["Etiqueta"] = normalized["ID"].astype(str) + " · " + normalized["Actividad"].astype(str).map(lambda value: textwrap.shorten(value, width=58, placeholder="..."))
+    normalized["Día medio"] = normalized["Inicio día"] + normalized["Duración calculada"] / 2.0
+    normalized = normalized.sort_values(["Inicio día", "Fin día", "Orden"]).reset_index(drop=True)
+    return normalized, meta
 
 
 @st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
@@ -12169,6 +12258,301 @@ def render_telecom_capex_supply_installation_tab() -> None:
                 unsafe_allow_html=True,
             )
             st.dataframe(top_mounting_table, use_container_width=True, hide_index=True, height=420)
+
+        wbs_mount_total = float(
+            selected_wbs[
+                selected_wbs["Partida"].str.contains("TOTAL CAPEX MONTAJE", case=False, na=False)
+                & selected_wbs["Tipo fila"].eq("Total")
+            ]["Monto CLP"].sum()
+            or 0.0
+        )
+        reconciliation_gap = total_mounting_detail - wbs_mount_total
+        reconciliation_pct = reconciliation_gap / wbs_mount_total * 100.0 if wbs_mount_total > 0 else np.nan
+        reconciliation_status = "Cuadra" if abs(reconciliation_gap) <= 1000 else "Revisar"
+        selected_power_kw = parse_float_local(selected_row.get("Potencia kW"), np.nan)
+        has_selected_power = np.isfinite(selected_power_kw) and selected_power_kw > 0
+        productivity_cards = [
+            ("Conciliación WBS", reconciliation_status, f"Diferencia {format_clp(reconciliation_gap)} ({fmt_pct(reconciliation_pct)})"),
+            ("CLP montaje/kW", format_clp(total_mounting_detail / selected_power_kw) if has_selected_power else "-", "Costo de instalación por potencia"),
+            ("HH/kW", f"{(total_hh / selected_power_kw):.1f}".replace(".", ",") if has_selected_power else "-", "Intensidad de mano de obra"),
+            ("CLP/HH", format_clp(total_mounting_detail / total_hh) if total_hh > 0 else "-", "Productividad económica del montaje"),
+        ]
+        st.markdown(
+            '<p class="capex-panel-title">Control de ingeniería: conciliación y productividad</p>'
+            '<p class="capex-panel-sub">Cruza 03_CAPEX_WBS_USD_CLP contra 04_Montaje_Detalle_CLP y normaliza el montaje por kW, HH y días para revisar consistencia técnica.</p>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="capex-why">'
+            + "".join(
+                f'<div class="capex-why-card"><span>{html.escape(label)}</span><b>{html.escape(value)}</b><p>{html.escape(note)}</p></div>'
+                for label, value, note in productivity_cards
+            )
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+
+        mounting_by_model = pd.DataFrame()
+        if not mounting_detail_df.empty:
+            mounting_all = mounting_detail_df.copy()
+            for numeric_col in ["Costo total CLP", "HH calculadas", "Días", "Potencia kW", "Factor combinado"]:
+                mounting_all[numeric_col] = pd.to_numeric(mounting_all.get(numeric_col, np.nan), errors="coerce")
+            mounting_by_model = (
+                mounting_all[mounting_all["Costo total CLP"] > 0]
+                .groupby("Modelo", as_index=False)
+                .agg(
+                    **{
+                        "Potencia kW": ("Potencia kW", "max"),
+                        "Montaje CLP": ("Costo total CLP", "sum"),
+                        "HH": ("HH calculadas", "sum"),
+                        "Días": ("Días", "sum"),
+                        "Factor ponderado": ("Factor combinado", "mean"),
+                    }
+                )
+            )
+            mounting_by_model["CLP/kW"] = np.where(mounting_by_model["Potencia kW"] > 0, mounting_by_model["Montaje CLP"] / mounting_by_model["Potencia kW"], np.nan)
+            mounting_by_model["HH/kW"] = np.where(mounting_by_model["Potencia kW"] > 0, mounting_by_model["HH"] / mounting_by_model["Potencia kW"], np.nan)
+            mounting_by_model["_order"] = mounting_by_model["Modelo"].map({"VAWT 0.5 kW": 0, "VAWT 1 kW": 1, "VAWT 3 kW": 2, "VAWT 5 kW": 3, "VAWT 10 kW": 4}).fillna(99)
+            mounting_by_model = mounting_by_model.sort_values("_order").drop(columns="_order")
+
+        if not mounting_by_model.empty:
+            st.markdown(
+                '<p class="capex-panel-title">Curva de escalamiento técnico por modelo</p>'
+                '<p class="capex-panel-sub">Evalúa si montaje, HH y costo por kW escalan de forma razonable entre tamaños de turbina.</p>',
+                unsafe_allow_html=True,
+            )
+            fig_scale = go.Figure()
+            fig_scale.add_trace(go.Bar(
+                x=mounting_by_model["Modelo"],
+                y=mounting_by_model["Montaje CLP"],
+                name="Montaje CLP",
+                marker_color=palette["orange"],
+                text=mounting_by_model["Montaje CLP"].map(format_clp),
+                textposition="outside",
+                customdata=np.stack([mounting_by_model["CLP/kW"], mounting_by_model["HH/kW"], mounting_by_model["HH"]], axis=-1),
+                hovertemplate="<b>%{x}</b><br>Montaje: $%{y:,.0f} CLP<br>CLP/kW: $%{customdata[0]:,.0f}<br>HH/kW: %{customdata[1]:,.1f}<br>HH: %{customdata[2]:,.1f}<extra></extra>",
+            ))
+            fig_scale.add_trace(go.Scatter(
+                x=mounting_by_model["Modelo"],
+                y=mounting_by_model["CLP/kW"],
+                name="CLP/kW",
+                mode="lines+markers+text",
+                yaxis="y2",
+                line=dict(color=palette["blue"], width=3),
+                text=mounting_by_model["CLP/kW"].map(lambda value: fmt_clp_mm(value) if np.isfinite(value) else "-"),
+                textposition="top center",
+                hovertemplate="<b>%{x}</b><br>CLP/kW: $%{y:,.0f}<extra></extra>",
+            ))
+            fig_scale.update_layout(
+                height=430,
+                margin=dict(l=10, r=50, t=18, b=46),
+                legend=dict(orientation="h", y=1.14, x=0, title=None),
+                yaxis=dict(title="Montaje CLP", gridcolor=palette["grid"]),
+                yaxis2=dict(title="CLP/kW", overlaying="y", side="right", showgrid=False),
+                xaxis=dict(title=None),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_scale, use_container_width=True, config={"displaylogo": False})
+
+        factor_bridge_df = mounting_positive[mounting_positive["Costo total CLP"] > 0].copy()
+        if not factor_bridge_df.empty:
+            base_total = float(factor_bridge_df["Costo base CLP"].fillna(0).sum())
+            after_model_total = float((factor_bridge_df["Costo base CLP"].fillna(0) * factor_bridge_df["Factor modelo"].fillna(1)).sum())
+            after_site_total = float(factor_bridge_df["Costo total CLP"].fillna(0).sum())
+            bridge_values = [base_total, after_model_total - base_total, after_site_total - after_model_total, after_site_total]
+            fig_bridge = go.Figure(go.Waterfall(
+                x=["Costo base", "Factor modelo", "Factor sitio", "Costo total"],
+                y=bridge_values,
+                measure=["absolute", "relative", "relative", "total"],
+                text=[format_clp(value) for value in bridge_values],
+                textposition="outside",
+                connector={"line": {"color": "rgba(41,50,65,.35)"}},
+                increasing={"marker": {"color": palette["orange"]}},
+                decreasing={"marker": {"color": palette["blue"]}},
+                totals={"marker": {"color": palette["ink"]}},
+                hovertemplate="<b>%{x}</b><br>$%{y:,.0f} CLP<extra></extra>",
+            ))
+            fig_bridge.update_layout(
+                title=None,
+                height=360,
+                margin=dict(l=10, r=20, t=20, b=46),
+                yaxis=dict(title="CLP", gridcolor=palette["grid"]),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.markdown(
+                '<p class="capex-panel-title">Puente de factores del montaje</p>'
+                '<p class="capex-panel-sub">Separa cuánto explica el costo base y cuánto agregan los factores de modelo y sitio hasta llegar al costo total.</p>',
+                unsafe_allow_html=True,
+            )
+            st.plotly_chart(fig_bridge, use_container_width=True, config={"displaylogo": False})
+
+        base_breakdown = pd.DataFrame(
+            [
+                {"Componente": "Directo base", "Monto CLP": float(mounting_positive["Costo base CLP"].fillna(0).sum())},
+                {"Componente": "Base indirectos", "Monto CLP": float(mounting_positive["Base indirectos CLP"].fillna(0).sum())},
+                {"Componente": "Base imprevistos", "Monto CLP": float(mounting_positive["Base imprevistos CLP"].fillna(0).sum())},
+            ]
+        )
+        base_breakdown = base_breakdown[base_breakdown["Monto CLP"] > 0].copy()
+        if not base_breakdown.empty:
+            fig_base = px.pie(
+                base_breakdown,
+                names="Componente",
+                values="Monto CLP",
+                hole=0.55,
+                color="Componente",
+                color_discrete_sequence=[palette["blue"], palette["sky"], palette["orange"]],
+            )
+            fig_base.update_traces(
+                textinfo="percent+label",
+                hovertemplate="<b>%{label}</b><br>Monto $%{value:,.0f} CLP<br>%{percent}<extra></extra>",
+            )
+            fig_base.update_layout(
+                height=360,
+                margin=dict(l=10, r=10, t=10, b=10),
+                paper_bgcolor="rgba(0,0,0,0)",
+            )
+            st.markdown(
+                '<p class="capex-panel-title">Directos, indirectos e imprevistos</p>'
+                '<p class="capex-panel-sub">Control de composición del montaje: cuánto es costo directo y cuánto corresponde a bases de indirectos e imprevistos.</p>',
+                unsafe_allow_html=True,
+            )
+            st.plotly_chart(fig_base, use_container_width=True, config={"displaylogo": False})
+
+        resource_df = (
+            mounting_positive.groupby(["Recurso", "Tipo costo"], as_index=False)
+            .agg(
+                **{
+                    "Costo total CLP": ("Costo total CLP", "sum"),
+                    "HH calculadas": ("HH calculadas", "sum"),
+                    "Días": ("Días", "sum"),
+                    "Partidas": ("ID", "count"),
+                }
+            )
+            .sort_values("Costo total CLP", ascending=False)
+            .head(16)
+        )
+        if not resource_df.empty:
+            resource_df = resource_df.sort_values("Costo total CLP", ascending=True)
+            st.markdown(
+                '<p class="capex-panel-title">Recursos críticos de montaje</p>'
+                '<p class="capex-panel-sub">Ranking de recursos que dominan el costo, con HH, días y cantidad de partidas asociadas.</p>',
+                unsafe_allow_html=True,
+            )
+            fig_resources = px.bar(
+                resource_df,
+                x="Costo total CLP",
+                y="Recurso",
+                color="Tipo costo",
+                orientation="h",
+                text=resource_df["Costo total CLP"].map(format_clp),
+                custom_data=["HH calculadas", "Días", "Partidas"],
+            )
+            fig_resources.update_traces(
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate="<b>%{y}</b><br>Monto $%{x:,.0f} CLP<br>HH %{customdata[0]:,.1f}<br>Días %{customdata[1]:,.1f}<br>Partidas %{customdata[2]}<extra></extra>",
+            )
+            fig_resources.update_layout(
+                height=520,
+                margin=dict(l=10, r=80, t=18, b=42),
+                legend=dict(orientation="h", y=1.10, x=0, title=None),
+                xaxis=dict(title="CLP", gridcolor=palette["grid"]),
+                yaxis=dict(title=None),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_resources, use_container_width=True, config={"displaylogo": False})
+
+        trace_df = (
+            mounting_positive.groupby(["WBS destino", "Partida WBS destino"], as_index=False)
+            .agg(
+                **{
+                    "Costo detalle CLP": ("Costo total CLP", "sum"),
+                    "Partidas detalle": ("ID", "count"),
+                    "HH": ("HH calculadas", "sum"),
+                }
+            )
+            .sort_values("Costo detalle CLP", ascending=False)
+        )
+        if not trace_df.empty:
+            wbs_subtotals = selected_wbs[selected_wbs["Tipo fila"].isin(["Subtotal", "Total"])][["Partida", "Monto CLP"]].copy()
+            trace_df["Partida key"] = trace_df["Partida WBS destino"].map(normalize_key)
+            wbs_subtotals["Partida key"] = wbs_subtotals["Partida"].map(normalize_key)
+            trace_df = trace_df.merge(wbs_subtotals[["Partida key", "Monto CLP"]], on="Partida key", how="left")
+            trace_df = trace_df.rename(columns={"Monto CLP": "Monto WBS CLP"})
+            trace_df["Diferencia CLP"] = trace_df["Costo detalle CLP"] - trace_df["Monto WBS CLP"].fillna(trace_df["Costo detalle CLP"])
+            trace_table = trace_df.head(18).copy()
+            for amount_col in ["Costo detalle CLP", "Monto WBS CLP", "Diferencia CLP"]:
+                trace_table[amount_col] = trace_table[amount_col].map(format_clp)
+            trace_table["HH"] = trace_table["HH"].map(lambda value: "-" if not np.isfinite(parse_float_local(value, np.nan)) else f"{parse_float_local(value, 0):.1f}".replace(".", ","))
+            st.markdown(
+                '<p class="capex-panel-title">Trazabilidad WBS destino vs detalle</p>'
+                '<p class="capex-panel-sub">Cruza cada WBS destino del detalle de montaje contra las partidas agregadas de 03_CAPEX_WBS_USD_CLP para auditar origen y concentración.</p>',
+                unsafe_allow_html=True,
+            )
+            st.dataframe(
+                trace_table[["WBS destino", "Partida WBS destino", "Costo detalle CLP", "Monto WBS CLP", "Diferencia CLP", "Partidas detalle", "HH"]],
+                use_container_width=True,
+                hide_index=True,
+                height=430,
+            )
+
+        risk_df = mounting_positive.copy()
+        if not risk_df.empty:
+            def engineering_risk(row: pd.Series) -> str:
+                text = normalize_key(" ".join([str(row.get("Tipo costo", "")), str(row.get("Actividad", "")), str(row.get("Fuente / supuesto", "")), str(row.get("Revisión", ""))]))
+                amount = parse_float_local(row.get("Costo total CLP"), 0.0)
+                if "opcional" in text or "revisar" in text or "validar" in text or amount >= total_mounting_detail * 0.10:
+                    return "Alto"
+                if "reserva" in text or "supuesto" in text or amount >= total_mounting_detail * 0.04:
+                    return "Medio"
+                return "Bajo"
+
+            risk_df["Riesgo ingeniería"] = risk_df.apply(engineering_risk, axis=1)
+            risk_summary = (
+                risk_df.groupby(["Riesgo ingeniería", "Área"], as_index=False)
+                .agg(
+                    **{
+                        "Costo total CLP": ("Costo total CLP", "sum"),
+                        "Partidas": ("ID", "count"),
+                    }
+                )
+                .sort_values("Costo total CLP", ascending=False)
+            )
+            st.markdown(
+                '<p class="capex-panel-title">Mapa de riesgo constructivo</p>'
+                '<p class="capex-panel-sub">Priorización de partidas por monto, opcionalidad, validaciones y supuestos de ingeniería para enfocar revisión técnica.</p>',
+                unsafe_allow_html=True,
+            )
+            fig_risk = px.bar(
+                risk_summary,
+                x="Costo total CLP",
+                y="Área",
+                color="Riesgo ingeniería",
+                orientation="h",
+                text=risk_summary["Costo total CLP"].map(format_clp),
+                category_orders={"Riesgo ingeniería": ["Alto", "Medio", "Bajo"]},
+                color_discrete_map={"Alto": "#E76F51", "Medio": "#F4A261", "Bajo": "#3D5A80"},
+                custom_data=["Partidas"],
+            )
+            fig_risk.update_traces(
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate="<b>%{y}</b><br>Riesgo: %{fullData.name}<br>Monto $%{x:,.0f} CLP<br>Partidas %{customdata[0]}<extra></extra>",
+            )
+            fig_risk.update_layout(
+                height=430,
+                margin=dict(l=10, r=80, t=18, b=42),
+                legend=dict(orientation="h", y=1.10, x=0, title=None),
+                xaxis=dict(title="CLP", gridcolor=palette["grid"]),
+                yaxis=dict(title=None),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_risk, use_container_width=True, config={"displaylogo": False})
     else:
         st.info("No hay detalle de montaje disponible en 04_Montaje_Detalle_CLP para el modelo seleccionado.")
 
@@ -12179,6 +12563,524 @@ def render_telecom_capex_supply_installation_tab() -> None:
     if not wbs_table.empty:
         wbs_table["Monto CLP"] = wbs_table["Monto CLP"].map(format_clp)
         st.dataframe(wbs_table, use_container_width=True, hide_index=True, height=430)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_project_execution_pro_gantt(
+    schedule_df: pd.DataFrame,
+    block_colors: dict[str, str],
+    title: str = "Cronograma nivel pro",
+) -> None:
+    if schedule_df.empty:
+        return
+
+    dfc = schedule_df.copy()
+    for col in ["Inicio día", "Fin día", "Duración calculada"]:
+        dfc[col] = pd.to_numeric(dfc[col], errors="coerce")
+    dfc = dfc[dfc["Inicio día"].notna() & dfc["Fin día"].notna()].copy()
+    if dfc.empty:
+        return
+
+    block_order = {"Hito": 0, "Suministro": 1, "Logística": 2, "Montaje": 3, "Comisionamiento": 4}
+    dfc["_block_order"] = dfc["Bloque"].map(block_order).fillna(99)
+    dfc = dfc.sort_values(["_block_order", "Inicio día", "Fin día", "Orden"])
+
+    window_start = max(1.0, float(dfc["Inicio día"].min()) - 2.0)
+    window_end = float(dfc["Fin día"].max()) + 4.0
+    window_days = max(window_end - window_start, 1.0)
+
+    def pct(day_value: object) -> float:
+        day_num = parse_float_local(day_value, window_start)
+        return max(0.0, min(100.0, ((day_num - window_start) / window_days) * 100.0))
+
+    total_days = max(float(dfc["Fin día"].max() - dfc["Inicio día"].min() + 1), 1.0)
+    band_step = max(20, int(math.ceil(total_days / 6 / 10) * 10))
+    band_starts = list(range(int(dfc["Inicio día"].min()), int(dfc["Fin día"].max()) + 1, band_step))
+    band_labels = []
+    for start_day in band_starts:
+        end_day = min(start_day + band_step - 1, int(dfc["Fin día"].max()))
+        left = pct(start_day)
+        width = max(2.0, pct(end_day + 1) - left)
+        band_labels.append(
+            f'<div class="gantt-month-cell" style="left:{left:.4f}%;width:{width:.4f}%;">DÍA {start_day}-{end_day}</div>'
+        )
+
+    tick_step = max(10, int(math.ceil(total_days / 12 / 5) * 5))
+    ticks = list(range(int(dfc["Inicio día"].min()), int(dfc["Fin día"].max()) + 1, tick_step))
+    tick_labels = "".join(
+        f'<div class="gantt-week-label" style="left:{min(98.6, pct(tick)):.4f}%;">{tick}</div>'
+        for tick in ticks
+    )
+
+    today_day = parse_float_local(st.session_state.get("project_execution_today_day", np.nan), np.nan)
+    show_today = np.isfinite(today_day) and window_start <= today_day <= window_end
+    today_left = pct(today_day) if show_today else 0.0
+    row_today_marker = f'<span class="gantt-today-in-row" style="left:{today_left:.4f}%;"></span>' if show_today else ""
+    today_marker = f'<div class="gantt-today-label" style="left:{today_left:.4f}%;">Hoy</div>' if show_today else ""
+
+    group_fragments = []
+    for block, block_df in dfc.groupby("Bloque", sort=False):
+        block_name = str(block or "Sin bloque")
+        line_color = block_colors.get(block_name, "#64748b")
+        line_icon = gantt_line_icon_svg(block_name, line_color)
+        task_rows = []
+        for _, row in block_df.sort_values(["Inicio día", "Fin día", "Orden"]).iterrows():
+            start_day = float(row["Inicio día"])
+            end_day = float(row["Fin día"])
+            duration_days = max(float(row.get("Duración calculada", end_day - start_day + 1)), 1.0)
+            left = pct(start_day)
+            width = max(1.5, pct(end_day + 1) - left)
+            bar_color = line_color
+            is_milestone = block_name == "Hito" or duration_days <= 1.0
+            is_critical = bool(row.get("Es ruta crítica"))
+            milestone_class = " is-milestone" if is_milestone else ""
+            badges = []
+            if is_milestone:
+                badges.append('<span class="gantt-milestone-badge">Hito</span>')
+            if is_critical:
+                badges.append('<span class="gantt-milestone-badge">Crítica</span>')
+            if bool(row.get("Tiene solape")):
+                badges.append('<span class="gantt-milestone-badge">Solape</span>')
+            task_text = str(row.get("Actividad", ""))
+            task_label = format_gantt_task_label(task_text, max_chars=46, max_lines=2)
+            end_label = f"Día {end_day:.0f}"
+            tooltip_lines = [
+                f"{row.get('ID', '')} · {task_text}",
+                f"Bloque: {block_name}",
+                f"Alcance: {row.get('Alcance', '')}",
+                f"Responsable: {row.get('Responsable', '')}",
+                f"Inicio: día {start_day:.0f}",
+                f"Fin: día {end_day:.0f}",
+                f"Duración: {duration_days:.0f} días",
+                f"Ruta crítica: {row.get('Ruta crítica', '')}",
+                f"Solape: {row.get('Solape', '')}",
+                f"Riesgo/control: {row.get('Riesgo / control', '')}",
+            ]
+            tooltip = "&#10;".join(html.escape(str(line), quote=True) for line in tooltip_lines)
+            date_left = min(96.0, left + width + 1.2)
+            task_rows.append(
+                f'<div class="gantt-task-cell{milestone_class}">'
+                f'<span class="gantt-task-dot" style="background-color:{line_color};"></span>'
+                f'<div class="gantt-task-label"><b>{html.escape(str(row.get("ID", "")))}</b> · {task_label}{"".join(badges)}</div>'
+                f'</div>'
+                f'<div class="gantt-bar-cell">'
+                f'{row_today_marker}'
+                f'<span class="gantt-bar{milestone_class}" title="{tooltip}" aria-label="{tooltip}" '
+                f'style="--bar-color:{bar_color};background-color:{bar_color};left:{left:.4f}%;width:{width:.4f}%;"></span>'
+                f'<span class="gantt-end-date" style="left:{date_left:.4f}%;">{html.escape(end_label)}</span>'
+                f'</div>'
+            )
+        group_fragments.append(
+            f'<div class="gantt-line-block{" compact" if len(block_df) <= 2 else ""}" style="--rows:{len(block_df)};--line-color:{line_color};">'
+            f'<div class="gantt-line-panel">'
+            f'<div class="gantt-line-icon">{line_icon}</div>'
+            f'<div><div class="gantt-line-name">{html.escape(block_name)}</div>'
+            f'<div class="gantt-line-count">{len(block_df)} {"tarea" if len(block_df) == 1 else "tareas"}</div></div>'
+            f'</div>'
+            f'{"".join(task_rows)}'
+            f'</div>'
+        )
+
+    legend_items = "".join(
+        f'<span><i class="gantt-swatch" style="background:{html.escape(color)};"></i>{html.escape(str(block))}</span>'
+        for block, color in block_colors.items()
+    )
+    chart_html = textwrap.dedent(
+        f"""
+        <div class="gantt-toolbar">
+          <div class="gantt-legend-row">
+            <div class="gantt-legend-label">Bloques</div>
+            <div class="gantt-mini-legend">{legend_items}</div>
+          </div>
+          <div class="gantt-symbol-legend">
+            <span><i class="gantt-diamond filled"></i> Hito / crítica</span>
+            <span><i class="gantt-diamond"></i> Fin de tarea</span>
+          </div>
+        </div>
+        <div class="gantt-chart-card">
+          <div class="gantt-custom-wrap">
+            <div class="gantt-custom-title">{html.escape(title)}</div>
+            <div class="gantt-custom-scroll">
+              <div class="gantt-grid">
+                <div class="gantt-board-head">
+                  <div class="gantt-left-head">Bloque / Actividad</div>
+                  <div class="gantt-time-head">{''.join(band_labels)}{tick_labels}{today_marker}</div>
+                </div>{''.join(group_fragments)}
+              </div>
+            </div>
+          </div>
+        </div>
+        """
+    ).strip()
+    st.markdown(chart_html, unsafe_allow_html=True)
+
+
+def render_telecom_project_execution_tab() -> None:
+    schedule_df, schedule_meta = load_turbine_project_schedule(refresh_nonce=data_refresh_nonce)
+    if schedule_df.empty:
+        st.warning("No se pudo leer 07_Cronograma_Ejecucion.")
+        return
+
+    def fmt_day(value: object) -> str:
+        num = parse_float_local(value, np.nan)
+        return "-" if not np.isfinite(num) else f"Día {num:.0f}".replace(".", ",")
+
+    def fmt_num(value: object, digits: int = 0) -> str:
+        num = parse_float_local(value, np.nan)
+        return "-" if not np.isfinite(num) else f"{num:,.{digits}f}".replace(",", ".")
+
+    palette = {
+        "Hito": "#293241",
+        "Suministro": "#3d5a80",
+        "Logística": "#98c1d9",
+        "Montaje": "#ee6c4d",
+        "Comisionamiento": "#2a9d8f",
+    }
+    default_color = "#64748b"
+    block_colors = {block: palette.get(str(block), default_color) for block in schedule_df["Bloque"].dropna().unique()}
+
+    start_min = float(schedule_df["Inicio día"].min())
+    finish_max = float(schedule_df["Fin día"].max())
+    calendar_days = finish_max - start_min + 1
+    duration_sum = float(schedule_df["Duración calculada"].sum())
+    overlap_saving = duration_sum - calendar_days
+    critical_df = schedule_df[schedule_df["Es ruta crítica"]].copy()
+    overlap_df = schedule_df[schedule_df["Tiene solape"]].copy()
+    no_overlap_df = schedule_df[~schedule_df["Tiene solape"]].copy()
+    sheet_calendar_days = parse_float_local(schedule_meta.get("Días calendario reales"), np.nan)
+    sheet_duration_sum = parse_float_local(schedule_meta.get("Días si se sumaran tareas"), np.nan)
+    meta_model = schedule_meta.get("Modelo seleccionado", "Cronograma publicado")
+    meta_units = schedule_meta.get("Cantidad turbinas sitio", "1")
+    meta_factor = schedule_meta.get("Factor sitio compuesto", "-")
+
+    daily_rows = []
+    for day in range(int(start_min), int(finish_max) + 1):
+        active = schedule_df[(schedule_df["Inicio día"] <= day) & (schedule_df["Fin día"] >= day)]
+        daily_rows.append(
+            {
+                "Día": day,
+                "Tareas activas": int(len(active)),
+                "Ruta crítica activa": int(active["Es ruta crítica"].sum()),
+                "Bloques activos": int(active["Bloque"].nunique()),
+            }
+        )
+    daily_df = pd.DataFrame(daily_rows)
+    max_parallel = int(daily_df["Tareas activas"].max()) if not daily_df.empty else 0
+    peak_days = daily_df[daily_df["Tareas activas"].eq(max_parallel)]["Día"].tolist() if max_parallel else []
+    peak_label = f"Días {min(peak_days):.0f}-{max(peak_days):.0f}" if peak_days else "-"
+    consistency_gap = calendar_days - sheet_calendar_days if np.isfinite(sheet_calendar_days) else np.nan
+    duration_gap = duration_sum - sheet_duration_sum if np.isfinite(sheet_duration_sum) else np.nan
+    consistency_status = "Revisar" if (
+        (np.isfinite(consistency_gap) and abs(consistency_gap) > 1)
+        or (np.isfinite(duration_gap) and abs(duration_gap) > 1)
+    ) else "Cuadra"
+
+    def classify_schedule_risk(row: pd.Series) -> str:
+        text = normalize_key(" ".join([str(row.get("Riesgo / control", "")), str(row.get("Nota", "")), str(row.get("Actividad", ""))]))
+        amount_like_duration = parse_float_local(row.get("Duración calculada"), 0.0)
+        if bool(row.get("Es ruta crítica")) and (
+            amount_like_duration >= 10
+            or any(token in text for token in ["lead time", "aduana", "izaje", "sincronizacion", "falla", "atraso", "seguridad"])
+        ):
+            return "Alto"
+        if bool(row.get("Es ruta crítica")) or any(token in text for token in ["control", "validar", "documentacion", "permiso", "reproceso"]):
+            return "Medio"
+        return "Bajo"
+
+    risk_df = schedule_df.copy()
+    risk_df["Riesgo tiempo"] = risk_df.apply(classify_schedule_risk, axis=1)
+
+    render_inputs_gantt_design_css()
+    st.markdown(
+        """
+        <style>
+        .exec-wrap{max-width:1480px;margin:0 auto;padding-top:4px;color:#293241;}
+        .exec-hero{border:1px solid rgba(203,213,225,.78);border-radius:22px;background:#fff;box-shadow:0 10px 28px rgba(15,23,42,.06);padding:18px 20px;margin:8px 0 14px;}
+        .exec-hero-grid{display:grid;grid-template-columns:minmax(310px,1.2fr) minmax(620px,1.8fr);gap:16px;align-items:stretch;}
+        .exec-k{font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#3d5a80;margin:0 0 7px;}
+        .exec-t{font-size:30px;line-height:1.04;font-weight:950;color:#293241;margin:0;}
+        .exec-s{font-size:13px;line-height:1.42;color:#475569;font-weight:750;margin:8px 0 0;max-width:780px;}
+        .exec-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+        .exec-kpi{border:1px solid rgba(203,213,225,.78);border-left:5px solid var(--accent);border-radius:17px;background:#F8FAFC;padding:12px 13px;min-height:94px;}
+        .exec-kpi span{display:block;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;color:#64748B;}
+        .exec-kpi b{display:block;font-size:22px;line-height:1.05;color:#293241;margin:7px 0 4px;font-weight:950;overflow-wrap:anywhere;}
+        .exec-kpi small{display:block;font-size:11px;line-height:1.25;color:#475569;font-weight:750;}
+        .exec-note{border:1px solid rgba(238,108,77,.32);border-left:6px solid #ee6c4d;border-radius:16px;background:#FFF8F5;padding:12px 14px;margin:10px 0 14px;color:#293241;font-size:12px;line-height:1.42;font-weight:800;}
+        .exec-panel-title{margin:0 0 4px;font-size:17px;line-height:1.15;font-weight:950;color:#293241;}
+        .exec-panel-sub{margin:0 0 10px;font-size:12px;line-height:1.35;color:#64748B;font-weight:750;}
+        .exec-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 14px;}
+        .exec-card{border:1px solid rgba(203,213,225,.75);border-radius:18px;background:#fff;box-shadow:0 10px 28px rgba(15,23,42,.045);padding:13px 15px;}
+        .exec-card span{display:block;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
+        .exec-card b{display:block;color:#293241;font-size:18px;line-height:1.1;font-weight:950;margin-bottom:5px;}
+        .exec-card p{margin:0;color:#475569;font-size:11.5px;line-height:1.34;font-weight:750;}
+        @media(max-width:1100px){.exec-hero-grid{grid-template-columns:1fr}.exec-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        @media(max-width:900px){.exec-card-grid{grid-template-columns:1fr;}}
+        @media(max-width:720px){.exec-kpi-grid{grid-template-columns:1fr}.exec-t{font-size:24px;}}
+        </style>
+        <div class="exec-wrap">
+        """,
+        unsafe_allow_html=True,
+    )
+
+    kpis_html = "".join(
+        [
+            f'<div class="exec-kpi" style="--accent:#3d5a80;"><span>Modelo / sitio</span><b>{html.escape(str(meta_model))}</b><small>{html.escape(str(meta_units))} turbina(s) · factor sitio {html.escape(str(meta_factor))}</small></div>',
+            f'<div class="exec-kpi" style="--accent:#ee6c4d;"><span>Calendario calculado</span><b>{fmt_num(calendar_days)} días</b><small>MAX(fin)-MIN(inicio)+1 desde actividades.</small></div>',
+            f'<div class="exec-kpi" style="--accent:#98c1d9;"><span>Ahorro por solape</span><b>{fmt_num(overlap_saving)} días</b><small>{len(overlap_df)} tareas traslapadas de {len(schedule_df)}.</small></div>',
+            f'<div class="exec-kpi" style="--accent:#293241;"><span>Ruta crítica</span><b>{len(critical_df)} tareas</b><small>{fmt_num(float(critical_df["Duración calculada"].sum()))} días de tareas críticas.</small></div>',
+        ]
+    )
+    st.markdown(
+        f"""
+        <div class="exec-hero">
+          <div class="exec-hero-grid">
+            <div>
+              <p class="exec-k">06 · Ejecución de proyecto</p>
+              <h3 class="exec-t">Cronograma ejecutivo y ruta crítica</h3>
+              <p class="exec-s">Lectura desde 07_Cronograma_Ejecucion. La vista transforma el rango A1:O en Gantt, carga paralela, responsabilidades, solapes, ruta crítica, riesgos y tabla auditable para discusión de plazo.</p>
+            </div>
+            <div class="exec-kpi-grid">{kpis_html}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="exec-card-grid">'
+        f'<div class="exec-card"><span>Control resumen hoja</span><b>{html.escape(consistency_status)}</b><p>Calendario: hoja {fmt_num(sheet_calendar_days)} vs cálculo {fmt_num(calendar_days)}. Duraciones: hoja {fmt_num(sheet_duration_sum)} vs suma {fmt_num(duration_sum)}.</p></div>'
+        f'<div class="exec-card"><span>Máxima simultaneidad</span><b>{max_parallel} tareas</b><p>Peak de ejecución en {html.escape(peak_label)}. Sirve para revisar sobrecarga de ingeniería, proveedor y montaje.</p></div>'
+        f'<div class="exec-card"><span>Secuencia crítica</span><b>{fmt_day(float(critical_df["Fin día"].max()) if not critical_df.empty else np.nan)}</b><p>Último cierre crítico según columna Ruta crítica. Requiere control de gates y predecesoras.</p></div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    if (np.isfinite(consistency_gap) and abs(consistency_gap) > 1) or (np.isfinite(duration_gap) and abs(duration_gap) > 1):
+        st.markdown(
+            f'<div class="exec-note"><b>Control de consistencia:</b> la regla publicada indica Días calendario = MAX(fin)-MIN(inicio)+1. Con las tareas actuales el calendario es {fmt_num(calendar_days)} días vs {fmt_num(sheet_calendar_days)} informado; además la suma de duraciones es {fmt_num(duration_sum)} días vs {fmt_num(sheet_duration_sum)} informado. Conviene corregir el resumen superior o confirmar si esas celdas excluyen lead time de suministro/logística.</div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown(
+        '<p class="exec-panel-title">Gantt ejecutivo de ejecución</p>'
+        '<p class="exec-panel-sub">Diseño nivel pro del sub bloque 2, adaptado a días calendario del cronograma 07. Agrupa por bloque, muestra hitos, ruta crítica, solapes y tooltip técnico por actividad.</p>',
+        unsafe_allow_html=True,
+    )
+    render_project_execution_pro_gantt(
+        schedule_df,
+        block_colors=block_colors,
+        title="Cronograma nivel pro · 07_Cronograma_Ejecucion",
+    )
+
+    left_col, right_col = st.columns([1.08, 0.92])
+    with left_col:
+        block_summary = (
+            schedule_df.groupby("Bloque", as_index=False)
+            .agg(
+                **{
+                    "Días tarea": ("Duración calculada", "sum"),
+                    "Inicio": ("Inicio día", "min"),
+                    "Fin": ("Fin día", "max"),
+                    "Tareas": ("ID", "count"),
+                    "Críticas": ("Es ruta crítica", "sum"),
+                }
+            )
+        )
+        block_summary["Span calendario"] = block_summary["Fin"] - block_summary["Inicio"] + 1
+        block_summary = block_summary.sort_values("Inicio")
+        fig_blocks = go.Figure()
+        fig_blocks.add_trace(
+            go.Bar(
+                x=block_summary["Bloque"],
+                y=block_summary["Span calendario"],
+                name="Span calendario",
+                marker_color=block_summary["Bloque"].map(lambda value: block_colors.get(value, default_color)),
+                text=block_summary["Span calendario"].map(lambda value: f"{value:.0f}d"),
+                textposition="outside",
+                customdata=block_summary[["Días tarea", "Tareas", "Críticas", "Inicio", "Fin"]],
+                hovertemplate="<b>%{x}</b><br>Span: %{y:.0f} días<br>Días tarea: %{customdata[0]:.0f}<br>Tareas: %{customdata[1]}<br>Críticas: %{customdata[2]}<br>Ventana: día %{customdata[3]:.0f} a %{customdata[4]:.0f}<extra></extra>",
+            )
+        )
+        fig_blocks.add_trace(
+            go.Scatter(
+                x=block_summary["Bloque"],
+                y=block_summary["Días tarea"],
+                name="Días tarea",
+                mode="lines+markers+text",
+                line=dict(color="#293241", width=3),
+                text=block_summary["Días tarea"].map(lambda value: f"{value:.0f}d"),
+                textposition="top center",
+                hovertemplate="<b>%{x}</b><br>Días tarea: %{y:.0f}<extra></extra>",
+            )
+        )
+        fig_blocks.update_layout(
+            height=390,
+            margin=dict(l=10, r=20, t=18, b=48),
+            legend=dict(orientation="h", y=1.13, x=0, title=None),
+            yaxis=dict(title="Días", gridcolor="rgba(61,90,128,.16)"),
+            xaxis=dict(title=None),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.markdown('<p class="exec-panel-title">Tiempo por bloque</p><p class="exec-panel-sub">Compara duración sumada de tareas contra ventana calendario real por bloque.</p>', unsafe_allow_html=True)
+        st.plotly_chart(fig_blocks, use_container_width=True, config={"displaylogo": False})
+    with right_col:
+        fig_daily = go.Figure()
+        fig_daily.add_trace(
+            go.Scatter(
+                x=daily_df["Día"],
+                y=daily_df["Tareas activas"],
+                name="Tareas activas",
+                mode="lines",
+                fill="tozeroy",
+                line=dict(color="#3d5a80", width=3),
+                hovertemplate="Día %{x}<br>Tareas activas: %{y}<extra></extra>",
+            )
+        )
+        fig_daily.add_trace(
+            go.Scatter(
+                x=daily_df["Día"],
+                y=daily_df["Ruta crítica activa"],
+                name="Ruta crítica activa",
+                mode="lines",
+                line=dict(color="#ee6c4d", width=2.5),
+                hovertemplate="Día %{x}<br>Críticas activas: %{y}<extra></extra>",
+            )
+        )
+        fig_daily.update_layout(
+            height=390,
+            margin=dict(l=10, r=20, t=18, b=48),
+            legend=dict(orientation="h", y=1.13, x=0, title=None),
+            yaxis=dict(title="Tareas simultáneas", gridcolor="rgba(61,90,128,.16)", rangemode="tozero"),
+            xaxis=dict(title="Día calendario"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.markdown('<p class="exec-panel-title">Carga paralela del cronograma</p><p class="exec-panel-sub">Permite ver concentración de frentes y presión de coordinación por día.</p>', unsafe_allow_html=True)
+        st.plotly_chart(fig_daily, use_container_width=True, config={"displaylogo": False})
+
+    resp_summary = (
+        schedule_df.groupby("Responsable", as_index=False)
+        .agg(
+            **{
+                "Días tarea": ("Duración calculada", "sum"),
+                "Tareas": ("ID", "count"),
+                "Críticas": ("Es ruta crítica", "sum"),
+                "Primer día": ("Inicio día", "min"),
+                "Último día": ("Fin día", "max"),
+            }
+        )
+        .sort_values("Días tarea", ascending=False)
+        .head(14)
+    )
+    if not resp_summary.empty:
+        resp_summary = resp_summary.sort_values("Días tarea", ascending=True)
+        fig_resp = px.bar(
+            resp_summary,
+            x="Días tarea",
+            y="Responsable",
+            orientation="h",
+            color="Críticas",
+            color_continuous_scale=["#98c1d9", "#ee6c4d"],
+            text=resp_summary["Días tarea"].map(lambda value: f"{value:.0f}d"),
+            custom_data=["Tareas", "Críticas", "Primer día", "Último día"],
+        )
+        fig_resp.update_traces(
+            textposition="outside",
+            cliponaxis=False,
+            hovertemplate="<b>%{y}</b><br>Días tarea: %{x:.0f}<br>Tareas: %{customdata[0]}<br>Críticas: %{customdata[1]}<br>Ventana: día %{customdata[2]:.0f} a %{customdata[3]:.0f}<extra></extra>",
+        )
+        fig_resp.update_layout(
+            height=460,
+            margin=dict(l=10, r=70, t=18, b=42),
+            coloraxis_colorbar=dict(title="Críticas"),
+            xaxis=dict(title="Días tarea", gridcolor="rgba(61,90,128,.16)"),
+            yaxis=dict(title=None),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.markdown('<p class="exec-panel-title">Carga por responsable</p><p class="exec-panel-sub">Identifica quién concentra días, tareas y frentes críticos para revisar disponibilidad y gobernanza.</p>', unsafe_allow_html=True)
+        st.plotly_chart(fig_resp, use_container_width=True, config={"displaylogo": False})
+
+    risk_summary = (
+        risk_df.groupby(["Riesgo tiempo", "Bloque"], as_index=False)
+        .agg(**{"Días tarea": ("Duración calculada", "sum"), "Tareas": ("ID", "count")})
+        .sort_values("Días tarea", ascending=False)
+    )
+    if not risk_summary.empty:
+        fig_risk = px.bar(
+            risk_summary,
+            x="Días tarea",
+            y="Bloque",
+            color="Riesgo tiempo",
+            orientation="h",
+            text=risk_summary["Días tarea"].map(lambda value: f"{value:.0f}d"),
+            category_orders={"Riesgo tiempo": ["Alto", "Medio", "Bajo"]},
+            color_discrete_map={"Alto": "#E76F51", "Medio": "#F4A261", "Bajo": "#3D5A80"},
+            custom_data=["Tareas"],
+        )
+        fig_risk.update_traces(
+            textposition="outside",
+            cliponaxis=False,
+            hovertemplate="<b>%{y}</b><br>Riesgo: %{fullData.name}<br>Días tarea: %{x:.0f}<br>Tareas: %{customdata[0]}<extra></extra>",
+        )
+        fig_risk.update_layout(
+            height=390,
+            margin=dict(l=10, r=70, t=18, b=42),
+            legend=dict(orientation="h", y=1.14, x=0, title=None),
+            xaxis=dict(title="Días tarea", gridcolor="rgba(61,90,128,.16)"),
+            yaxis=dict(title=None),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.markdown('<p class="exec-panel-title">Mapa de riesgo de plazo</p><p class="exec-panel-sub">Priorización por ruta crítica, duración, lead time, logística, izaje, sincronización y controles declarados.</p>', unsafe_allow_html=True)
+        st.plotly_chart(fig_risk, use_container_width=True, config={"displaylogo": False})
+
+    gate_table = schedule_df[
+        schedule_df["Es ruta crítica"] | schedule_df["Bloque"].isin(["Hito", "Comisionamiento"]) | schedule_df["Nota"].astype(str).str.contains("Gate|Hito|clave|despacho|SAT", case=False, na=False)
+    ].copy()
+    gate_table = gate_table.sort_values(["Fin día", "Inicio día"]).head(18)
+    if not gate_table.empty:
+        gate_table["Inicio"] = gate_table["Inicio día"].map(fmt_day)
+        gate_table["Fin"] = gate_table["Fin día"].map(fmt_day)
+        gate_table["Duración"] = gate_table["Duración calculada"].map(lambda value: f"{value:.0f} días")
+        st.markdown('<p class="exec-panel-title">Gates y controles principales</p><p class="exec-panel-sub">Puntos de control que deben cerrarse para sostener plazo, seguridad y aceptación técnica.</p>', unsafe_allow_html=True)
+        st.dataframe(
+            gate_table[["ID", "Bloque", "Actividad", "Inicio", "Fin", "Duración", "Responsable", "Entregable técnico", "Riesgo / control"]],
+            use_container_width=True,
+            hide_index=True,
+            height=430,
+        )
+
+    audit_table = schedule_df.copy()
+    audit_table["Inicio"] = audit_table["Inicio día"].map(fmt_day)
+    audit_table["Fin"] = audit_table["Fin día"].map(fmt_day)
+    audit_table["Duración"] = audit_table["Duración calculada"].map(lambda value: f"{value:.0f} días")
+    audit_table["Riesgo tiempo"] = risk_df["Riesgo tiempo"]
+    st.markdown('<p class="exec-panel-title">Cronograma auditable</p><p class="exec-panel-sub">Tabla completa normalizada desde 07_Cronograma_Ejecucion para revisión de predecesoras, solapes, ruta crítica, responsables y supuestos.</p>', unsafe_allow_html=True)
+    st.dataframe(
+        audit_table[
+            [
+                "ID",
+                "Bloque",
+                "Alcance",
+                "Actividad",
+                "Predecesora",
+                "Inicio",
+                "Duración",
+                "Fin",
+                "Solape",
+                "Ruta crítica",
+                "Responsable",
+                "Riesgo tiempo",
+                "Entregable técnico",
+                "Criterio aceptación / supuesto",
+                "Riesgo / control",
+                "Nota",
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True,
+        height=520,
+    )
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -15011,6 +15913,7 @@ def render_telecom_tower_eval_analysis():
         "03 Producción por Turbina",
         "04 Recomendación Comercial",
         "05 CAPEX Instalado",
+        "06 Ejecución de proyecto",
     ]
     telecom_market_tab_aliases = {
         "01 Sitio y Demanda": "01 Perfil del Sitio",
@@ -15018,6 +15921,8 @@ def render_telecom_tower_eval_analysis():
         "03 Curva Técnica y Producción": "03 Producción por Turbina",
         "04 Propuesta Técnico-Económica": "04 Recomendación Comercial",
         "CAPEX": "05 CAPEX Instalado",
+        "Ejecución": "06 Ejecución de proyecto",
+        "06 Cronograma": "06 Ejecución de proyecto",
     }
     for nav_key in ("telecom_market_tab_selector", "telecom_market_tab_selector__sticky"):
         current_tab_value = st.session_state.get(nav_key)
@@ -15751,6 +16656,10 @@ def render_telecom_tower_eval_analysis():
 
     if selected_telecom_market_tab == "05 CAPEX Instalado":
         render_telecom_capex_supply_installation_tab()
+        return
+
+    if selected_telecom_market_tab == "06 Ejecución de proyecto":
+        render_telecom_project_execution_tab()
         return
 
     alternatives["Alternativa"] = pd.Categorical(alternatives["Alternativa"], categories=turbine_order, ordered=True)
