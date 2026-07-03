@@ -35,6 +35,7 @@ try:
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import cm
     from reportlab.lib import colors
+    from reportlab.graphics.shapes import Circle, Drawing, Line, Polygon, Rect, String
     REPORTLAB_AVAILABLE = True
 except ModuleNotFoundError:
     REPORTLAB_AVAILABLE = False
@@ -298,6 +299,11 @@ EVALUACION_TELECOM_SENSITIVITY_CSV_URL_DEFAULT = (
 TELECOM_SITE_MASTER_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vTnHc4N1Uf0KAY-AnYRGKml7pcwL8CrdHXv0DUgEn-h7X0bM5ujhqeypd64FK17mfCK3zSFSXkNe14j/"
+    "pub?output=csv"
+)
+TELECOM_10KW_POWER_TECH_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vSqf8EYbthVQC_VXshBkh_kAH5UhJAYSEJD7FDlWnjtflAJHSwfgCwjIuaDvkLUPGX_N_rsskZWw3Lk/"
     "pub?output=csv"
 )
 INGENIERIA_PILOTO_10KW_CACHE_VERSION = 3
@@ -2439,6 +2445,852 @@ def format_clp(x: float) -> str:
 
 def format_usd(x: float) -> str:
     return f"US${x:,.0f}".replace(",", ".")
+
+
+def _fmt_report_mm_clp(value: object) -> str:
+    number = parse_float_local(value, np.nan)
+    if not np.isfinite(number):
+        return "-"
+    return f"{number / 1_000_000:,.1f} MM CLP".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _fmt_report_num(value: object, digits: int = 1, suffix: str = "") -> str:
+    number = parse_float_local(value, np.nan)
+    if not np.isfinite(number):
+        return "-"
+    return f"{number:,.{digits}f}{suffix}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _fmt_report_pct(value: object, digits: int = 1) -> str:
+    return _fmt_report_num(value, digits=digits, suffix="%")
+
+
+def _pdf_short_label(value: object, max_chars: int = 42) -> str:
+    text = clean_sheet_cell(value)
+    if len(text) <= max_chars:
+        return text
+    return text[: max(0, max_chars - 1)].rstrip() + "…"
+
+
+def _pdf_color(hex_value: str):
+    return colors.HexColor(hex_value)
+
+
+def _pdf_styles():
+    styles = getSampleStyleSheet()
+    styles["Title"].fontName = "Helvetica-Bold"
+    styles["Title"].fontSize = 21
+    styles["Title"].leading = 25
+    styles["Title"].textColor = _pdf_color("#26364A")
+    styles["Heading1"].fontName = "Helvetica-Bold"
+    styles["Heading1"].fontSize = 15
+    styles["Heading1"].leading = 18
+    styles["Heading1"].spaceBefore = 10
+    styles["Heading1"].spaceAfter = 6
+    styles["Heading1"].textColor = _pdf_color("#2F5D7C")
+    styles["Heading2"].fontName = "Helvetica-Bold"
+    styles["Heading2"].fontSize = 11
+    styles["Heading2"].leading = 14
+    styles["Heading2"].textColor = _pdf_color("#26364A")
+    styles["BodyText"].fontName = "Helvetica"
+    styles["BodyText"].fontSize = 9
+    styles["BodyText"].leading = 12
+    styles["BodyText"].textColor = _pdf_color("#364152")
+    return styles
+
+
+def _pdf_header_footer(canvas, doc):
+    canvas.saveState()
+    canvas.setStrokeColor(_pdf_color("#D8DEE8"))
+    canvas.line(1.35 * cm, A4[1] - 1.15 * cm, A4[0] - 1.35 * cm, A4[1] - 1.15 * cm)
+    canvas.setFont("Helvetica", 7.5)
+    canvas.setFillColor(_pdf_color("#697386"))
+    canvas.drawString(1.35 * cm, 0.85 * cm, "Levantamiento capital 80 kW · Informe generado desde dashboard")
+    canvas.drawRightString(A4[0] - 1.35 * cm, 0.85 * cm, f"Página {doc.page}")
+    canvas.restoreState()
+
+
+def _pdf_table(rows: list[list[object]], col_widths: list[float] | None = None, header: bool = True, font_size: int = 8) -> Table:
+    clean_rows = [[Paragraph(str(cell), _pdf_styles()["BodyText"]) if isinstance(cell, str) and len(cell) > 44 else cell for cell in row] for row in rows]
+    table = Table(clean_rows, colWidths=col_widths, repeatRows=1 if header else 0)
+    style = [
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), font_size),
+        ("TEXTCOLOR", (0, 0), (-1, -1), _pdf_color("#26364A")),
+        ("GRID", (0, 0), (-1, -1), 0.35, _pdf_color("#D8DEE8")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]
+    if header and rows:
+        style.extend(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), _pdf_color("#2F5D7C")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ]
+        )
+    table.setStyle(TableStyle(style))
+    return table
+
+
+def _pdf_kpi_grid(items: list[tuple[str, str, str]], columns: int = 3) -> Table:
+    cells = []
+    for label, value, note in items:
+        cells.append(
+            Paragraph(
+                f'<font size="7" color="#697386">{html.escape(label.upper())}</font><br/>'
+                f'<font size="14" color="#26364A"><b>{html.escape(value)}</b></font><br/>'
+                f'<font size="7.5" color="#697386">{html.escape(note)}</font>',
+                _pdf_styles()["BodyText"],
+            )
+        )
+    while len(cells) % columns:
+        cells.append("")
+    rows = [cells[idx : idx + columns] for idx in range(0, len(cells), columns)]
+    table = Table(rows, colWidths=[(A4[0] - 3.0 * cm) / columns] * columns)
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), _pdf_color("#F7F9FC")),
+                ("BOX", (0, 0), (-1, -1), 0.35, _pdf_color("#D8DEE8")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.35, _pdf_color("#D8DEE8")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+    return table
+
+
+def _pdf_bar_chart(
+    data: pd.DataFrame,
+    label_col: str,
+    value_col: str,
+    title: str,
+    width: float = 16.5 * cm,
+    row_h: float = 0.45 * cm,
+    value_formatter=None,
+) -> Drawing:
+    plot_df = data[[label_col, value_col]].dropna().copy()
+    plot_df[value_col] = pd.to_numeric(plot_df[value_col], errors="coerce")
+    plot_df = plot_df[plot_df[value_col] > 0].sort_values(value_col, ascending=True).tail(8)
+    height = max(3.0 * cm, 1.4 * cm + len(plot_df) * row_h)
+    drawing = Drawing(width, height)
+    drawing.add(String(0, height - 0.35 * cm, title, fontName="Helvetica-Bold", fontSize=10, fillColor=_pdf_color("#26364A")))
+    if plot_df.empty:
+        drawing.add(String(0, height / 2, "Sin datos positivos.", fontSize=8, fillColor=_pdf_color("#697386")))
+        return drawing
+    max_value = float(plot_df[value_col].max() or 1.0)
+    label_w = 6.0 * cm
+    bar_x = label_w + 0.25 * cm
+    bar_w = width - bar_x - 2.0 * cm
+    palette = ["#2F5D7C", "#4F7F73", "#7A6F9B", "#B08A3C", "#6B7A8F", "#C66B4A", "#3F6E99", "#8B6B61"]
+    for idx, (_, row) in enumerate(plot_df.iterrows()):
+        y = 0.35 * cm + idx * row_h
+        label = _pdf_short_label(str(row[label_col]), 34)
+        value = float(row[value_col])
+        bw = max(0.05 * cm, bar_w * value / max_value)
+        value_label = value_formatter(value) if callable(value_formatter) else _fmt_report_mm_clp(value)
+        drawing.add(String(0, y + 0.08 * cm, label, fontSize=7.2, fillColor=_pdf_color("#364152")))
+        drawing.add(Rect(bar_x, y, bw, 0.22 * cm, fillColor=_pdf_color(palette[idx % len(palette)]), strokeColor=None))
+        drawing.add(String(bar_x + bw + 0.08 * cm, y + 0.03 * cm, value_label, fontSize=7, fillColor=_pdf_color("#26364A")))
+    return drawing
+
+
+def _pdf_gantt_chart(schedule_df: pd.DataFrame, width: float = 16.5 * cm) -> Drawing:
+    if schedule_df.empty:
+        return _pdf_bar_chart(pd.DataFrame(columns=["Bloque", "Duración"]), "Bloque", "Duración", "Cronograma")
+    data = schedule_df.copy()
+    if "Duración calculada" not in data.columns:
+        data["Duración calculada"] = data.get("Duración", np.nan)
+    for col in ["Inicio día", "Fin día", "Duración calculada"]:
+        data[col] = pd.to_numeric(data.get(col, np.nan), errors="coerce")
+    data = data.dropna(subset=["Inicio día", "Fin día"]).copy()
+    if data.empty:
+        return _pdf_bar_chart(pd.DataFrame(columns=["Bloque", "Duración"]), "Bloque", "Duración", "Cronograma")
+    block_order = {"Hito": 0, "Suministro": 1, "Logística": 2, "Montaje": 3, "Comisionamiento": 4}
+    data["_block_order"] = data.get("Bloque", pd.Series(dtype=str)).map(block_order).fillna(99)
+    data["_critical_rank"] = data.get("Es ruta crítica", False).map(lambda value: 0 if bool(value) else 1) if isinstance(data.get("Es ruta crítica", False), pd.Series) else 1
+    data = data.sort_values(["_block_order", "Inicio día", "Fin día", "_critical_rank"])
+
+    row_h = 0.48 * cm if len(data) > 24 else 0.62 * cm
+    label_font = 5.2 if len(data) > 24 else 6.0
+    badge_font = 4.3 if len(data) > 24 else 4.8
+    header_h = 1.35 * cm
+    title_h = 0.58 * cm
+    height = max(5.5 * cm, title_h + header_h + len(data) * row_h + 0.35 * cm)
+    drawing = Drawing(width, height)
+    drawing.add(String(0, height - 0.35 * cm, "Cronograma nivel pro · 07_Cronograma_Ejecucion", fontName="Helvetica-Bold", fontSize=10, fillColor=_pdf_color("#26364A")))
+    if data.empty:
+        drawing.add(String(0, height / 2, "Sin actividades calendarizadas.", fontSize=8, fillColor=_pdf_color("#697386")))
+        return drawing
+
+    min_day = max(1.0, float(schedule_df["Inicio día"].min()))
+    max_day = float(schedule_df["Fin día"].max())
+    span = max(max_day - min_day + 1.0, 1.0)
+    block_w = 2.05 * cm
+    activity_w = 4.35 * cm
+    time_x = block_w + activity_w
+    time_w = width - time_x - 0.08 * cm
+    header_top = height - title_h
+    header_y = header_top - header_h
+    body_top = header_y
+    body_bottom = 0.25 * cm
+    body_h = len(data) * row_h
+    block_colors = {
+        "Hito": "#293241",
+        "Suministro": "#3D5A80",
+        "Logística": "#739CB8",
+        "Montaje": "#E76F51",
+        "Comisionamiento": "#2A9D8F",
+    }
+    grid_color = _pdf_color("#E5ECF5")
+    text_color = _pdf_color("#293241")
+    muted_color = _pdf_color("#6B778C")
+
+    drawing.add(Rect(0, header_y, width, header_h, fillColor=_pdf_color("#FFFFFF"), strokeColor=grid_color, strokeWidth=0.6))
+    drawing.add(String(0.22 * cm, header_y + 0.55 * cm, "BLOQUE / ACTIVIDAD", fontName="Helvetica-Bold", fontSize=6.5, fillColor=muted_color))
+    drawing.add(Line(block_w, body_bottom, block_w, header_top, strokeColor=grid_color, strokeWidth=0.6))
+    drawing.add(Line(time_x, body_bottom, time_x, header_top, strokeColor=grid_color, strokeWidth=0.7))
+
+    band_count = 6
+    band_span = max(1, int(math.ceil(span / band_count)))
+    band_starts = list(range(int(min_day), int(max_day) + 1, band_span))
+    if len(band_starts) > band_count:
+        band_starts = band_starts[:band_count]
+    for idx, start_day in enumerate(band_starts):
+        end_day = int(max_day) if idx == len(band_starts) - 1 else min(int(max_day), start_day + band_span - 1)
+        left = time_x + ((start_day - min_day) / span) * time_w
+        right = time_x + ((end_day - min_day + 1.0) / span) * time_w
+        drawing.add(Line(left, body_bottom, left, header_top, strokeColor=grid_color, strokeWidth=0.55))
+        drawing.add(String(left + 0.08 * cm, header_y + 0.86 * cm, f"DÍA {start_day}-{end_day}", fontName="Helvetica-Bold", fontSize=6.3, fillColor=muted_color))
+        if idx == len(band_starts) - 1:
+            drawing.add(Line(right, body_bottom, right, header_top, strokeColor=grid_color, strokeWidth=0.55))
+
+    tick_count = 11
+    tick_step = max(1, int(math.ceil(span / tick_count / 5.0) * 5))
+    for tick in range(int(min_day), int(max_day) + 1, tick_step):
+        x = time_x + ((tick - min_day) / span) * time_w
+        drawing.add(Line(x, header_y, x, header_y + 0.34 * cm, strokeColor=grid_color, strokeWidth=0.45))
+        drawing.add(String(x - 0.05 * cm, header_y + 0.24 * cm, f"{tick}", fontName="Helvetica-Bold", fontSize=5.8, fillColor=text_color))
+
+    grouped_ranges = []
+    start_idx = 0
+    current_block = None
+    for idx, (_, row) in enumerate(data.iterrows()):
+        block = str(row.get("Bloque", "Sin bloque") or "Sin bloque")
+        if current_block is None:
+            current_block = block
+            start_idx = idx
+        elif block != current_block:
+            grouped_ranges.append((current_block, start_idx, idx - 1))
+            current_block = block
+            start_idx = idx
+    if current_block is not None:
+        grouped_ranges.append((current_block, start_idx, len(data) - 1))
+
+    for block, start_i, end_i in grouped_ranges:
+        group_top = body_top - start_i * row_h
+        group_bottom = body_top - (end_i + 1) * row_h
+        fill = _pdf_color("#F8FAFC" if start_i % 2 == 0 else "#FFFFFF")
+        color = _pdf_color(block_colors.get(block, "#64748B"))
+        drawing.add(Rect(0, group_bottom, block_w, group_top - group_bottom, fillColor=fill, strokeColor=grid_color, strokeWidth=0.5))
+        drawing.add(Circle(0.48 * cm, group_bottom + (group_top - group_bottom) / 2 + 0.1 * cm, 0.11 * cm, fillColor=None, strokeColor=color, strokeWidth=1.5))
+        drawing.add(String(0.92 * cm, group_bottom + (group_top - group_bottom) / 2 + 0.18 * cm, block.upper()[:16], fontName="Helvetica-Bold", fontSize=6.2, fillColor=color))
+        drawing.add(String(0.92 * cm, group_bottom + (group_top - group_bottom) / 2 - 0.05 * cm, f"{end_i - start_i + 1} tareas", fontName="Helvetica-Bold", fontSize=5.5, fillColor=muted_color))
+
+    for idx, (_, row) in enumerate(data.iterrows()):
+        y = body_top - (idx + 1) * row_h
+        y_mid = y + row_h / 2
+        drawing.add(Rect(block_w, y, width - block_w, row_h, fillColor=_pdf_color("#FFFFFF"), strokeColor=grid_color, strokeWidth=0.45))
+        start = float(row["Inicio día"])
+        end = float(row["Fin día"])
+        duration = max(float(row.get("Duración calculada", end - start + 1.0) or 1.0), 1.0)
+        block = str(row.get("Bloque", "Sin bloque") or "Sin bloque")
+        color = _pdf_color(block_colors.get(block, "#64748B"))
+        is_milestone = block == "Hito" or duration <= 1.0
+        is_critical = bool(row.get("Es ruta crítica", False))
+        has_overlap = bool(row.get("Tiene solape", False))
+        task_id = _pdf_short_label(str(row.get("ID", "")), 7)
+        label = _pdf_short_label(str(row.get("Actividad", "")), 48)
+        drawing.add(Circle(block_w + 0.18 * cm, y_mid, 0.045 * cm, fillColor=color, strokeColor=color))
+        drawing.add(String(block_w + 0.38 * cm, y + row_h - 0.22 * cm, f"{task_id} · {label}", fontName="Helvetica-Bold", fontSize=label_font, fillColor=text_color))
+        badge_x = block_w + 0.38 * cm
+        if is_critical:
+            drawing.add(Rect(badge_x, y + 0.06 * cm, 0.78 * cm, 0.17 * cm, fillColor=_pdf_color("#EEF2F8"), strokeColor=None))
+            drawing.add(String(badge_x + 0.08 * cm, y + 0.10 * cm, "CRÍTICA", fontName="Helvetica-Bold", fontSize=badge_font, fillColor=text_color))
+            badge_x += 0.86 * cm
+        if has_overlap:
+            drawing.add(Rect(badge_x, y + 0.06 * cm, 0.72 * cm, 0.17 * cm, fillColor=_pdf_color("#EEF2F8"), strokeColor=None))
+            drawing.add(String(badge_x + 0.08 * cm, y + 0.10 * cm, "SOLAPE", fontName="Helvetica-Bold", fontSize=badge_font, fillColor=text_color))
+
+        x = time_x + ((start - min_day) / span) * time_w
+        x_end = time_x + ((end - min_day + 1.0) / span) * time_w
+        bw = max(0.10 * cm, x_end - x)
+        bar_h = 0.13 * cm if is_milestone else 0.16 * cm
+        bar_y = y_mid - bar_h / 2
+        drawing.add(Rect(x, bar_y, bw, bar_h, fillColor=color, strokeColor=None))
+        drawing.add(Circle(x + 0.06 * cm, y_mid, 0.045 * cm, fillColor=_pdf_color("#DDE7F2"), strokeColor=None))
+        diamond_size = 0.09 * cm
+        drawing.add(
+            Polygon(
+                [
+                    x_end,
+                    y_mid + diamond_size,
+                    x_end + diamond_size,
+                    y_mid,
+                    x_end,
+                    y_mid - diamond_size,
+                    x_end - diamond_size,
+                    y_mid,
+                ],
+                fillColor=_pdf_color("#FFFFFF"),
+                strokeColor=color,
+                strokeWidth=1.2,
+            )
+        )
+        if is_critical:
+            drawing.add(Line(x, bar_y - 0.045 * cm, x_end, bar_y - 0.045 * cm, strokeColor=_pdf_color("#E76F51"), strokeWidth=0.8))
+        drawing.add(String(min(width - 0.92 * cm, x_end + 0.12 * cm), y_mid - 0.05 * cm, f"Día {end:.0f}", fontName="Helvetica-Bold", fontSize=5.6, fillColor=muted_color))
+
+    drawing.add(String(time_x, 0.07 * cm, f"Ventana: día {min_day:.0f} a día {max_day:.0f}", fontName="Helvetica-Bold", fontSize=6.0, fillColor=muted_color))
+    return drawing
+
+
+def _pdf_scatter_chart(
+    data: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    label_col: str,
+    title: str,
+    x_label: str,
+    y_label: str,
+    width: float = 16.5 * cm,
+    height: float = 7.2 * cm,
+) -> Drawing:
+    plot_df = data[[x_col, y_col, label_col]].dropna().copy() if {x_col, y_col, label_col}.issubset(data.columns) else pd.DataFrame()
+    if not plot_df.empty:
+        plot_df[x_col] = pd.to_numeric(plot_df[x_col], errors="coerce")
+        plot_df[y_col] = pd.to_numeric(plot_df[y_col], errors="coerce")
+        plot_df = plot_df.dropna(subset=[x_col, y_col])
+    drawing = Drawing(width, height)
+    drawing.add(String(0, height - 0.35 * cm, title, fontName="Helvetica-Bold", fontSize=10, fillColor=_pdf_color("#26364A")))
+    if plot_df.empty:
+        drawing.add(String(0, height / 2, "Sin datos suficientes.", fontSize=8, fillColor=_pdf_color("#697386")))
+        return drawing
+    left = 2.25 * cm
+    bottom = 1.1 * cm
+    plot_w = width - left - 0.65 * cm
+    plot_h = height - bottom - 0.9 * cm
+    x_min, x_max = float(plot_df[x_col].min()), float(plot_df[x_col].max())
+    y_min, y_max = float(plot_df[y_col].min()), float(plot_df[y_col].max())
+    if math.isclose(x_min, x_max):
+        x_min *= 0.9
+        x_max *= 1.1 if x_max else 1.0
+    if math.isclose(y_min, y_max):
+        y_min *= 0.9
+        y_max *= 1.1 if y_max else 1.0
+    x_pad = (x_max - x_min) * 0.08
+    y_pad = (y_max - y_min) * 0.08
+    x_min -= x_pad
+    x_max += x_pad
+    y_min -= y_pad
+    y_max += y_pad
+    grid_color = _pdf_color("#D8DEE8")
+    drawing.add(Line(left, bottom, left + plot_w, bottom, strokeColor=grid_color, strokeWidth=0.7))
+    drawing.add(Line(left, bottom, left, bottom + plot_h, strokeColor=grid_color, strokeWidth=0.7))
+    for idx in range(5):
+        gx = left + plot_w * idx / 4
+        gy = bottom + plot_h * idx / 4
+        drawing.add(Line(gx, bottom, gx, bottom + plot_h, strokeColor=_pdf_color("#EEF2F8"), strokeWidth=0.45))
+        drawing.add(Line(left, gy, left + plot_w, gy, strokeColor=_pdf_color("#EEF2F8"), strokeWidth=0.45))
+    palette = ["#2F5D7C", "#4F7F73", "#7A6F9B", "#B08A3C", "#C66B4A", "#3F6E99"]
+    for idx, (_, row) in enumerate(plot_df.iterrows()):
+        x = left + ((float(row[x_col]) - x_min) / max(x_max - x_min, 1e-9)) * plot_w
+        y = bottom + ((float(row[y_col]) - y_min) / max(y_max - y_min, 1e-9)) * plot_h
+        color = _pdf_color(palette[idx % len(palette)])
+        drawing.add(Circle(x, y, 0.075 * cm, fillColor=color, strokeColor=None))
+        drawing.add(String(min(width - 2.1 * cm, x + 0.12 * cm), y + 0.03 * cm, _pdf_short_label(row[label_col], 18), fontName="Helvetica-Bold", fontSize=6, fillColor=_pdf_color("#26364A")))
+    drawing.add(String(left, 0.38 * cm, x_label, fontSize=6.5, fillColor=_pdf_color("#697386")))
+    drawing.add(String(0, bottom + plot_h + 0.05 * cm, y_label, fontSize=6.5, fillColor=_pdf_color("#697386")))
+    drawing.add(String(left, bottom - 0.30 * cm, _fmt_report_num(x_min, 0), fontSize=5.8, fillColor=_pdf_color("#697386")))
+    drawing.add(String(left + plot_w - 0.6 * cm, bottom - 0.30 * cm, _fmt_report_num(x_max, 0), fontSize=5.8, fillColor=_pdf_color("#697386")))
+    return drawing
+
+
+def _pdf_line_chart(
+    data: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    title: str,
+    x_label: str,
+    y_label: str,
+    width: float = 16.5 * cm,
+    height: float = 6.3 * cm,
+    value_formatter=None,
+) -> Drawing:
+    plot_df = data[[x_col, y_col]].dropna().copy() if {x_col, y_col}.issubset(data.columns) else pd.DataFrame()
+    if not plot_df.empty:
+        plot_df[x_col] = pd.to_numeric(plot_df[x_col], errors="coerce")
+        plot_df[y_col] = pd.to_numeric(plot_df[y_col], errors="coerce")
+        plot_df = plot_df.dropna().sort_values(x_col)
+    drawing = Drawing(width, height)
+    drawing.add(String(0, height - 0.35 * cm, title, fontName="Helvetica-Bold", fontSize=10, fillColor=_pdf_color("#26364A")))
+    if plot_df.empty:
+        drawing.add(String(0, height / 2, "Sin datos suficientes.", fontSize=8, fillColor=_pdf_color("#697386")))
+        return drawing
+    left = 1.55 * cm
+    bottom = 1.0 * cm
+    plot_w = width - left - 0.75 * cm
+    plot_h = height - bottom - 0.85 * cm
+    x_min, x_max = float(plot_df[x_col].min()), float(plot_df[x_col].max())
+    y_min, y_max = min(0.0, float(plot_df[y_col].min())), float(plot_df[y_col].max())
+    if math.isclose(x_min, x_max):
+        x_max = x_min + 1.0
+    if math.isclose(y_min, y_max):
+        y_max = y_min + 1.0
+    grid_color = _pdf_color("#E5ECF5")
+    axis_color = _pdf_color("#D8DEE8")
+    drawing.add(Line(left, bottom, left + plot_w, bottom, strokeColor=axis_color, strokeWidth=0.7))
+    drawing.add(Line(left, bottom, left, bottom + plot_h, strokeColor=axis_color, strokeWidth=0.7))
+    for idx in range(5):
+        gx = left + plot_w * idx / 4
+        gy = bottom + plot_h * idx / 4
+        drawing.add(Line(gx, bottom, gx, bottom + plot_h, strokeColor=grid_color, strokeWidth=0.45))
+        drawing.add(Line(left, gy, left + plot_w, gy, strokeColor=grid_color, strokeWidth=0.45))
+    points = []
+    for _, row in plot_df.iterrows():
+        x = left + ((float(row[x_col]) - x_min) / max(x_max - x_min, 1e-9)) * plot_w
+        y = bottom + ((float(row[y_col]) - y_min) / max(y_max - y_min, 1e-9)) * plot_h
+        points.append((x, y, float(row[y_col])))
+    for idx in range(len(points) - 1):
+        drawing.add(Line(points[idx][0], points[idx][1], points[idx + 1][0], points[idx + 1][1], strokeColor=_pdf_color("#2F5D7C"), strokeWidth=1.8))
+    for idx, (x, y, value) in enumerate(points):
+        if idx % max(1, len(points) // 8) == 0 or idx == len(points) - 1:
+            drawing.add(Circle(x, y, 0.045 * cm, fillColor=_pdf_color("#2F5D7C"), strokeColor=None))
+    max_idx = int(np.argmax([p[2] for p in points]))
+    max_x, max_y, max_value = points[max_idx]
+    label = value_formatter(max_value) if callable(value_formatter) else _fmt_report_num(max_value, 2)
+    drawing.add(Circle(max_x, max_y, 0.085 * cm, fillColor=_pdf_color("#E76F51"), strokeColor=_pdf_color("#FFFFFF"), strokeWidth=0.7))
+    drawing.add(String(min(width - 2.6 * cm, max_x + 0.12 * cm), max_y + 0.06 * cm, f"Máx. {label}", fontName="Helvetica-Bold", fontSize=6.2, fillColor=_pdf_color("#26364A")))
+    drawing.add(String(left, 0.34 * cm, x_label, fontSize=6.5, fillColor=_pdf_color("#697386")))
+    drawing.add(String(0, bottom + plot_h + 0.04 * cm, y_label, fontSize=6.5, fillColor=_pdf_color("#697386")))
+    return drawing
+
+
+def _telecom_report_context(refresh_nonce: int = 0) -> dict:
+    dashboard_url = telecom_published_csv_url("01_Dashboard", EVALUACION_TELECOM_CSV_URL_DEFAULT, refresh_nonce)
+    wind_resource_url = telecom_published_csv_url("05_Recurso_Eolico", EVALUACION_TELECOM_WIND_RESOURCE_CSV_URL_DEFAULT, refresh_nonce)
+    model = load_telecom_tower_eval_model(dashboard_url, refresh_nonce=refresh_nonce)
+    alternatives = model.get("alternatives", pd.DataFrame()).copy()
+    summary = model.get("summary", {}) or {}
+    recommended_state = st.session_state.get("telecom_00_analysis_recommended", {}) or {}
+    rec_model = str(recommended_state.get("Alternativa", "") or summary.get("tecnologia_recomendada", "") or "").strip()
+    if not rec_model and not alternatives.empty:
+        rec_model = str(alternatives.sort_values("Payback híbrido años", na_position="last").iloc[0].get("Alternativa", "VAWT 10 kW"))
+    if not rec_model:
+        rec_model = "VAWT 10 kW"
+    capex_df = load_turbine_capex_supply_installation(refresh_nonce=refresh_nonce).copy()
+    wbs_df = load_turbine_capex_wbs_long(refresh_nonce=refresh_nonce).copy()
+    mounting_df = load_turbine_capex_mounting_detail(refresh_nonce=refresh_nonce).copy()
+    schedule_df, schedule_meta = load_turbine_project_schedule(refresh_nonce=refresh_nonce)
+    resource_model = load_telecom_wind_resource_model(wind_resource_url, refresh_nonce=refresh_nonce)
+    resource_df = resource_model.get("data", pd.DataFrame()).copy()
+    if rec_model not in set(capex_df.get("Modelo", pd.Series(dtype=str)).astype(str)) and not capex_df.empty:
+        rec_model = "VAWT 10 kW" if "VAWT 10 kW" in set(capex_df["Modelo"].astype(str)) else str(capex_df["Modelo"].iloc[-1])
+    capex_row = capex_df[capex_df["Modelo"].astype(str).eq(rec_model)].iloc[0] if not capex_df.empty and rec_model in set(capex_df["Modelo"].astype(str)) else pd.Series(dtype=object)
+    rec_alt = alternatives[alternatives.get("Alternativa", pd.Series(dtype=str)).astype(str).eq(rec_model)].iloc[0] if not alternatives.empty and rec_model in set(alternatives["Alternativa"].astype(str)) else pd.Series(dtype=object)
+    selected_wbs = wbs_df[wbs_df["Modelo"].astype(str).eq(rec_model)].copy() if not wbs_df.empty else pd.DataFrame()
+    selected_mounting = mounting_df[mounting_df["Modelo"].astype(str).eq(rec_model)].copy() if not mounting_df.empty else pd.DataFrame()
+    return {
+        "summary": summary,
+        "alternatives": alternatives,
+        "recommended_model": rec_model,
+        "recommended_state": recommended_state,
+        "recommended_alternative": rec_alt,
+        "capex": capex_df,
+        "capex_row": capex_row,
+        "wbs": selected_wbs,
+        "mounting": selected_mounting,
+        "schedule": schedule_df,
+        "schedule_meta": schedule_meta,
+        "resource": resource_df,
+        "resource_model": resource_model,
+    }
+
+
+def _resource_value(resource_df: pd.DataFrame, variable: str, default: float = np.nan) -> float:
+    if resource_df.empty or "Variable" not in resource_df.columns:
+        return default
+    match = resource_df[resource_df["Variable"].astype(str).str.casefold() == variable.casefold()]
+    if match.empty:
+        return default
+    value = match.iloc[0].get("Valor numérico", np.nan)
+    return parse_float_local(value, default)
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_telecom_10kw_power_technical_model(url: str, refresh_nonce: int = 0) -> dict:
+    def empty_model(error: Exception | None = None) -> dict:
+        return {
+            "summary": pd.DataFrame(),
+            "inputs": pd.DataFrame(),
+            "curve": pd.DataFrame(),
+            "source_warning": "" if error is None else str(error),
+        }
+
+    try:
+        raw = read_remote_csv(url, refresh_nonce=refresh_nonce + 20260702, header=None, dtype=str).fillna("")
+    except Exception as exc:
+        return empty_model(exc)
+
+    if raw.empty:
+        return empty_model()
+
+    def cell(row: int, col: int) -> str:
+        try:
+            return clean_sheet_cell(raw.iat[row, col])
+        except Exception:
+            return ""
+
+    summary_header_idx = None
+    inputs_header_idx = None
+    curve_header_idx = None
+    for idx in range(len(raw.index)):
+        values = [cell(idx, col) for col in range(raw.shape[1])]
+        keys = {normalize_key(value) for value in values if value}
+        if normalize_key("Modelo") in keys and normalize_key("Potencia nominal kW") in keys:
+            summary_header_idx = idx
+        if normalize_key("Input clave") in keys and normalize_key("Valor") in keys:
+            inputs_header_idx = idx
+        if normalize_key("V (m/s)") in keys:
+            curve_header_idx = idx
+
+    summary_df = pd.DataFrame()
+    if summary_header_idx is not None:
+        headers = [cell(summary_header_idx, col) or f"Campo {col + 1}" for col in range(raw.shape[1])]
+        rows = []
+        for row_idx in range(summary_header_idx + 1, len(raw.index)):
+            model_name = cell(row_idx, 0)
+            if not model_name:
+                break
+            if normalize_key(model_name).startswith("input clave"):
+                break
+            rows.append({headers[col_idx]: cell(row_idx, col_idx) for col_idx in range(len(headers))})
+        summary_df = pd.DataFrame(rows)
+        if not summary_df.empty:
+            for col in ["Potencia nominal kW", "AEP estimado kWh/año"]:
+                if col in summary_df.columns:
+                    summary_df[col] = summary_df[col].map(parse_float_local)
+            for col in ["Factor planta", "Cp nominal", "% Betz"]:
+                if col in summary_df.columns:
+                    summary_df[col] = summary_df[col].map(lambda value: parse_percent_local(value, np.nan) * 100.0)
+
+    inputs_df = pd.DataFrame()
+    if inputs_header_idx is not None:
+        headers = [cell(inputs_header_idx, col) or f"Campo {col + 1}" for col in range(raw.shape[1])]
+        rows = []
+        for row_idx in range(inputs_header_idx + 1, len(raw.index)):
+            input_name = cell(row_idx, 0)
+            if not input_name:
+                break
+            if normalize_key(input_name).startswith("v (m/s)"):
+                break
+            rows.append({headers[col_idx]: cell(row_idx, col_idx) for col_idx in range(len(headers))})
+        inputs_df = pd.DataFrame(rows)
+        if not inputs_df.empty and "Valor" in inputs_df.columns:
+            inputs_df["Valor numérico"] = inputs_df["Valor"].map(lambda value: parse_percent_local(value, np.nan) * 100.0 if "%" in str(value) else parse_float_local(value, np.nan))
+
+    curve_df = pd.DataFrame()
+    if curve_header_idx is not None:
+        headers = [cell(curve_header_idx, col) or f"Campo {col + 1}" for col in range(raw.shape[1])]
+        rows = []
+        for row_idx in range(curve_header_idx + 1, len(raw.index)):
+            speed = parse_float_local(cell(row_idx, 0), np.nan)
+            if not np.isfinite(speed):
+                continue
+            record = {"V (m/s)": speed}
+            for col_idx, header in enumerate(headers[1:], start=1):
+                if not header or normalize_key(header) == "nota":
+                    continue
+                value = parse_float_local(cell(row_idx, col_idx), np.nan)
+                if np.isfinite(value):
+                    record[header] = value
+            rows.append(record)
+        curve_df = pd.DataFrame(rows)
+
+    return {
+        "summary": summary_df,
+        "inputs": inputs_df,
+        "curve": curve_df,
+        "source_warning": "",
+    }
+
+
+def _build_telecom_pdf(executive: bool = True, refresh_nonce: int = 0) -> bytes:
+    if not REPORTLAB_AVAILABLE:
+        return b""
+    ctx = _telecom_report_context(refresh_nonce=refresh_nonce)
+    styles = _pdf_styles()
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=1.35 * cm, rightMargin=1.35 * cm, topMargin=1.55 * cm, bottomMargin=1.25 * cm)
+    story = []
+    title = "Informe ejecutivo eólico telecom" if executive else "Anexo técnico auditable eólico telecom"
+    rec_model = ctx["recommended_model"]
+    summary = ctx["summary"]
+    rec_alt = ctx["recommended_alternative"]
+    capex_row = ctx["capex_row"]
+    resource_df = ctx["resource"]
+    schedule_df = ctx["schedule"].copy()
+    wbs_df = ctx["wbs"].copy()
+    mounting_df = ctx["mounting"].copy()
+    generated_at = time.strftime("%d-%m-%Y %H:%M")
+    story.append(Paragraph(title, styles["Title"]))
+    story.append(Paragraph(f"Turbina seleccionada: <b>{html.escape(rec_model)}</b> · Generado: {generated_at}", styles["BodyText"]))
+    story.append(Spacer(1, 0.25 * cm))
+    capex_clp = parse_float_local(capex_row.get("CAPEX instalado CLP", capex_row.get("CAPEX instalado total CLP", summary.get("capex_recomendado", np.nan))), np.nan)
+    supply_clp = parse_float_local(capex_row.get("CAPEX suministro CLP", np.nan), np.nan)
+    mounting_clp = parse_float_local(capex_row.get("CAPEX montaje sin suministro CLP", np.nan), np.nan)
+    energy_kwh = parse_float_local(rec_alt.get("Energía útil anual kWh", summary.get("energia_util_anual_kwh", np.nan)), np.nan)
+    payback = parse_float_local(rec_alt.get("Payback híbrido años", summary.get("payback_hibrido", np.nan)), np.nan)
+    lcoe = parse_float_local(rec_alt.get("LCOE CLP/kWh", summary.get("lcoe", np.nan)), np.nan)
+    fp = _resource_value(resource_df, "Factor planta preliminar", parse_float_local(ctx["recommended_state"].get("FP aplicado %", np.nan), np.nan))
+    wind_speed = _resource_value(resource_df, "Velocidad media medición", np.nan)
+    schedule_days = parse_float_local(ctx["schedule_meta"].get("Duración calendario estimada", np.nan), np.nan)
+    if not np.isfinite(schedule_days) and not schedule_df.empty:
+        schedule_days = parse_float_local(schedule_df["Fin día"].max(), np.nan)
+    story.append(
+        _pdf_kpi_grid(
+            [
+                ("Modelo recomendado", rec_model, "Selección técnico-económica"),
+                ("CAPEX instalado", _fmt_report_mm_clp(capex_clp), "Suministro + montaje"),
+                ("Producción anual", f"{_fmt_report_num(energy_kwh, 0)} kWh", "Energía útil anual"),
+                ("Factor planta", _fmt_report_pct(fp), "Recurso eólico activo"),
+                ("Payback", _fmt_report_num(payback, 1, " años"), "Híbrido / modelo económico"),
+                ("Plazo ejecución", _fmt_report_num(schedule_days, 0, " días"), "Cronograma de proyecto"),
+            ],
+            columns=3,
+        )
+    )
+    story.append(Spacer(1, 0.35 * cm))
+    story.append(Paragraph("Lectura ejecutiva", styles["Heading1"]))
+    executive_note = (
+        f"El caso recomendado considera {html.escape(rec_model)} con CAPEX instalado de {_fmt_report_mm_clp(capex_clp)}. "
+        f"La lectura energética usa factor planta { _fmt_report_pct(fp) } y velocidad media { _fmt_report_num(wind_speed, 2, ' m/s') }. "
+        f"El cronograma consolida un plazo de {_fmt_report_num(schedule_days, 0, ' días')} y debe validarse contra permisos, logística, proveedor y disponibilidad de cuadrillas."
+    )
+    story.append(Paragraph(executive_note, styles["BodyText"]))
+    story.append(Spacer(1, 0.25 * cm))
+    alternatives = ctx["alternatives"].copy()
+    capex_df = ctx["capex"].copy()
+    capex_split = pd.DataFrame(
+        [
+            {"Área": "Suministro", "Monto": supply_clp},
+            {"Área": "Montaje", "Monto": mounting_clp},
+        ]
+    )
+
+    if executive:
+        story.append(PageBreak())
+        story.append(Paragraph(f"Alternativa recomendada · {html.escape(rec_model)}", styles["Heading1"]))
+        story.append(Paragraph("El informe se enfoca solo en la alternativa recomendada por el análisis. El orden parte por recurso eólico y producción, luego aterriza alcance y construcción del CAPEX instalado.", styles["BodyText"]))
+        curve_summary_session = pd.DataFrame(st.session_state.get("telecom_03_curve_active_summary_df", []) or st.session_state.get("telecom_03_curve_summary_df", []))
+        curve_points_session = pd.DataFrame(st.session_state.get("telecom_03_curve_points_df", []))
+        selected_curve_summary = curve_summary_session[curve_summary_session.get("Modelo", pd.Series(dtype=str)).astype(str).eq(rec_model)].copy() if not curve_summary_session.empty else pd.DataFrame()
+        selected_curve_points = curve_points_session[curve_points_session.get("Modelo", pd.Series(dtype=str)).astype(str).eq(rec_model)].copy() if not curve_points_session.empty else pd.DataFrame()
+        if selected_curve_points.empty:
+            try:
+                turbine_curves = load_turbine_power_curves(refresh_nonce=refresh_nonce)
+                curve_meta = turbine_curves.get(rec_model, {})
+                selected_curve_points = curve_meta.get("curve", pd.DataFrame()).copy()
+                selected_curve_summary = pd.DataFrame(
+                    [
+                        {
+                            "Modelo": rec_model,
+                            "Pn nominal kW": curve_meta.get("rated_kw", rec_alt.get("Potencia unitaria kW", np.nan)),
+                            "Altura total turbina m": curve_meta.get("total_height_m", np.nan),
+                            "Altura efectiva viento m": curve_meta.get("effective_wind_height_m", np.nan),
+                            "Velocidad interpolada m/s": wind_speed,
+                            "FP curva %": fp,
+                            "Energía anual kWh": energy_kwh,
+                            "Pmax curva kW": parse_float_local(selected_curve_points["Potencia kW"].max(), np.nan) if not selected_curve_points.empty and "Potencia kW" in selected_curve_points.columns else np.nan,
+                        }
+                    ]
+                )
+            except Exception:
+                selected_curve_points = pd.DataFrame()
+        selected_curve_row = selected_curve_summary.iloc[0] if not selected_curve_summary.empty else pd.Series(dtype=object)
+        monthly_generation = parse_float_local(ctx["recommended_state"].get("Generación mensual kWh", np.nan), np.nan)
+        if not np.isfinite(monthly_generation):
+            monthly_generation = energy_kwh / 12.0 if np.isfinite(energy_kwh) else np.nan
+        monthly_consumption = parse_float_local(
+            ctx["recommended_state"].get("Consumo mensual kWh", ctx["summary"].get("consumo_mensual_kwh", ctx["summary"].get("consumo_mensual_modelo", np.nan))),
+            np.nan,
+        )
+        coverage_pct = monthly_generation / monthly_consumption * 100.0 if np.isfinite(monthly_generation) and np.isfinite(monthly_consumption) and monthly_consumption > 0 else parse_float_local(ctx["recommended_state"].get("Cobertura real %", np.nan), np.nan)
+
+        story.append(Paragraph("Bloque 1 · Resumen ejecutivo del recurso", styles["Heading1"]))
+        resource_kpis = [
+            ("Velocidad media", _fmt_report_num(wind_speed, 2, " m/s"), "Recurso activo para la alternativa recomendada"),
+            ("Factor planta", _fmt_report_pct(fp), "FP aplicado / curva real disponible"),
+            ("Energía anual", f"{_fmt_report_num(energy_kwh, 0)} kWh", "Producción útil anual estimada"),
+            ("Generación mensual", f"{_fmt_report_num(monthly_generation, 0)} kWh", f"Cobertura {_fmt_report_pct(coverage_pct)}"),
+            ("CAPEX instalado", _fmt_report_mm_clp(capex_clp), "Costo total seleccionado"),
+            ("Payback", _fmt_report_num(payback, 1, " años"), "Retorno estimado"),
+        ]
+        story.append(_pdf_kpi_grid(resource_kpis, columns=3))
+        story.append(Spacer(1, 0.22 * cm))
+
+        story.append(Paragraph("Bloque 2 · Calidad y distribución del viento", styles["Heading1"]))
+        if not resource_df.empty:
+            resource_rows = [["Variable", "Valor", "Unidad", "Fuente requerida", "Uso"]]
+            for _, row in resource_df.head(10).iterrows():
+                resource_rows.append([
+                    _pdf_short_label(row.get("Variable", ""), 28),
+                    _pdf_short_label(row.get("Valor", ""), 14),
+                    _pdf_short_label(row.get("Unidad", ""), 10),
+                    _pdf_short_label(row.get("Fuente requerida", ""), 34),
+                    _pdf_short_label(row.get("Uso", ""), 28),
+                ])
+            story.append(_pdf_table(resource_rows, col_widths=[4.1 * cm, 1.9 * cm, 1.5 * cm, 4.9 * cm, 3.7 * cm], font_size=6.8))
+            story.append(Spacer(1, 0.18 * cm))
+            resource_numeric = resource_df[pd.to_numeric(resource_df["Valor numérico"], errors="coerce").notna()].copy()
+            resource_numeric["Valor numérico"] = pd.to_numeric(resource_numeric["Valor numérico"], errors="coerce")
+            story.append(_pdf_bar_chart(resource_numeric, "Variable", "Valor numérico", "Calidad visual del recurso", row_h=0.34 * cm, value_formatter=lambda value: _fmt_report_num(value, 2)))
+        story.append(PageBreak())
+
+        story.append(Paragraph("Curvas GREEF de potencia real", styles["Heading1"]))
+        if not selected_curve_points.empty:
+            curve_x = "V (m/s)" if "V (m/s)" in selected_curve_points.columns else "Velocidad m/s"
+            curve_y = "P real kW" if "P real kW" in selected_curve_points.columns else "Potencia kW"
+            story.append(_pdf_line_chart(selected_curve_points, curve_x, curve_y, f"Curva real de potencia · {rec_model}", "Velocidad viento (m/s)", "Potencia real (kW)", value_formatter=lambda value: _fmt_report_num(value, 2, " kW")))
+        else:
+            story.append(Paragraph("No hay curva GREEF disponible para la alternativa recomendada.", styles["BodyText"]))
+        story.append(Spacer(1, 0.22 * cm))
+        story.append(Paragraph("Factor de planta por curva real", styles["Heading1"]))
+        fp_rows = [
+            ["Indicador", "Valor", "Lectura"],
+            ["FP curva real", _fmt_report_pct(selected_curve_row.get("FP curva %", fp)), "Integración de curva GREEF con recurso activo."],
+            ["Potencia nominal", _fmt_report_num(selected_curve_row.get("Pn nominal kW", rec_alt.get("Potencia unitaria kW", np.nan)), 1, " kW"), "Base de cálculo de factor de planta."],
+            ["Altura efectiva viento", _fmt_report_num(selected_curve_row.get("Altura efectiva viento m", np.nan), 1, " m"), "Altura usada para interpolar recurso."],
+            ["Pmax curva", _fmt_report_num(selected_curve_row.get("Pmax curva kW", np.nan), 2, " kW"), "Máximo observado en curva publicada."],
+            ["Energía anual curva", f"{_fmt_report_num(selected_curve_row.get('Energía anual kWh', energy_kwh), 0)} kWh", "Producción anual por turbina."],
+        ]
+        story.append(_pdf_table(fp_rows, col_widths=[4.3 * cm, 3.3 * cm, 8.6 * cm], font_size=7.5))
+        story.append(Spacer(1, 0.22 * cm))
+        story.append(Paragraph(f"Generación mensual y consumo · {html.escape(rec_model)}", styles["Heading1"]))
+        gen_consumption = pd.DataFrame(
+            [
+                {"Concepto": "Generación mensual", "kWh": monthly_generation},
+                {"Concepto": "Consumo mensual", "kWh": monthly_consumption},
+                {"Concepto": "Excedente / brecha", "kWh": monthly_generation - monthly_consumption if np.isfinite(monthly_generation) and np.isfinite(monthly_consumption) else np.nan},
+            ]
+        )
+        story.append(_pdf_bar_chart(gen_consumption.dropna(), "Concepto", "kWh", f"Balance mensual · {rec_model}", row_h=0.44 * cm, value_formatter=lambda value: f"{_fmt_report_num(value, 0)} kWh"))
+        story.append(PageBreak())
+
+        story.append(Paragraph("Costo instalado por área CAPEX", styles["Heading1"]))
+        story.append(_pdf_bar_chart(capex_split, "Área", "Monto", "Costo instalado por área CAPEX"))
+        story.append(Spacer(1, 0.18 * cm))
+        story.append(Paragraph("Tabla ejecutiva de alcance CAPEX", styles["Heading1"]))
+        scope_rows = [
+            ["Área CAPEX", "Monto CLP", "Participación", "Alcance"],
+            ["CAPEX suministro", format_clp(supply_clp), _fmt_report_pct(supply_clp / capex_clp * 100.0 if np.isfinite(supply_clp) and np.isfinite(capex_clp) and capex_clp else np.nan), "Paquete proveedor EXW: turbina, torre/mástil y eléctricos principales."],
+            ["CAPEX montaje", format_clp(mounting_clp), _fmt_report_pct(mounting_clp / capex_clp * 100.0 if np.isfinite(mounting_clp) and np.isfinite(capex_clp) and capex_clp else np.nan), "Instalación local: montaje, OOCC, logística, gestión e imprevistos."],
+        ]
+        story.append(_pdf_table(scope_rows, col_widths=[3.3 * cm, 3.0 * cm, 2.5 * cm, 7.4 * cm], font_size=7.3))
+        story.append(Spacer(1, 0.18 * cm))
+        story.append(Paragraph("Costo por bloque WBS y área CAPEX", styles["Heading1"]))
+        if not wbs_df.empty:
+            wbs_pos = wbs_df[(wbs_df["Tipo fila"].eq("Subtotal")) & (wbs_df["Monto CLP"] > 0)].copy()
+            if "Criterio Resumen" in wbs_pos.columns:
+                wbs_pos["Bloque CAPEX"] = wbs_pos["Criterio Resumen"].fillna("").astype(str) + " · " + wbs_pos["Partida"].astype(str)
+            else:
+                wbs_pos["Bloque CAPEX"] = wbs_pos["Partida"].astype(str)
+            story.append(_pdf_bar_chart(wbs_pos, "Bloque CAPEX", "Monto CLP", "Costo por bloque WBS y área CAPEX", row_h=0.40 * cm))
+            story.append(Spacer(1, 0.18 * cm))
+            story.append(Paragraph("Componentes de suministro desde WBS", styles["Heading1"]))
+            supply_wbs = wbs_df[(wbs_df["Monto CLP"] > 0) & wbs_df["Criterio Resumen"].astype(str).str.contains("suministro", case=False, na=False)].copy()
+            story.append(_pdf_bar_chart(supply_wbs, "Partida", "Monto CLP", "Componentes de suministro desde WBS", row_h=0.38 * cm))
+            story.append(Spacer(1, 0.18 * cm))
+        story.append(Paragraph("Construcción del CAPEX instalado", styles["Heading1"]))
+        capex_build = pd.DataFrame(
+            [
+                {"Componente": "Suministro", "Monto": supply_clp},
+                {"Componente": "Montaje / instalación", "Monto": mounting_clp},
+                {"Componente": "CAPEX instalado", "Monto": capex_clp},
+            ]
+        )
+        story.append(_pdf_bar_chart(capex_build, "Componente", "Monto", "Construcción del CAPEX instalado", row_h=0.42 * cm))
+    else:
+        story.append(_pdf_bar_chart(capex_split, "Área", "Monto", "CAPEX instalado por alcance"))
+        story.append(Spacer(1, 0.25 * cm))
+        if not wbs_df.empty:
+            wbs_pos = wbs_df[(wbs_df["Tipo fila"].eq("Subtotal")) & (wbs_df["Monto CLP"] > 0)].copy()
+            story.append(_pdf_bar_chart(wbs_pos, "Partida", "Monto CLP", "Distribución por bloque WBS"))
+        if not schedule_df.empty:
+            story.append(Spacer(1, 0.25 * cm))
+            story.append(_pdf_gantt_chart(schedule_df))
+
+    story.append(PageBreak())
+    story.append(Paragraph("Costos, plazos y riesgos", styles["Heading1"]))
+    risk_rows = [["Riesgo / validación", "Criterio de revisión"]]
+    risk_rows.extend(
+        [
+            ["Recurso eólico", "Validar velocidad media, Weibull, turbulencia y factor planta con fuente trazable."],
+            ["CAPEX montaje", "Conciliar detalle 04 contra WBS 03 y mantener costo validado como base comercial."],
+            ["Cronograma", "Confirmar ruta crítica, solapes, permisos, proveedor y ventanas de acceso al sitio."],
+            ["Oferta final", "Bloquear alcance suministro vs montaje, contingencias e indirectos antes de cerrar precio."],
+        ]
+    )
+    story.append(_pdf_table(risk_rows, col_widths=[5.1 * cm, 11.1 * cm], font_size=8))
+    if not executive:
+        story.append(PageBreak())
+        story.append(Paragraph("Anexo CAPEX WBS", styles["Heading1"]))
+        wbs_table_df = wbs_df[wbs_df["Monto CLP"] > 0].copy().head(24)
+        rows = [["Nivel", "Partida", "Tipo", "Criterio", "Monto CLP"]]
+        for _, row in wbs_table_df.iterrows():
+            rows.append([str(row.get("Nivel", "")), _pdf_short_label(str(row.get("Partida", "")), 56), str(row.get("Tipo fila", "")), str(row.get("Criterio Resumen", "")), format_clp(float(row.get("Monto CLP", 0.0) or 0.0))])
+        story.append(_pdf_table(rows, col_widths=[1.4 * cm, 6.9 * cm, 2.0 * cm, 3.1 * cm, 2.8 * cm], font_size=7))
+        story.append(PageBreak())
+        story.append(Paragraph("Anexo cronograma", styles["Heading1"]))
+        sched = schedule_df.copy().head(28)
+        rows = [["Bloque", "Actividad", "Inicio", "Fin", "Duración", "Responsable", "Riesgo/control"]]
+        for _, row in sched.iterrows():
+            rows.append([
+                _pdf_short_label(str(row.get("Bloque", "")), 22),
+                _pdf_short_label(str(row.get("Actividad", "")), 42),
+                _fmt_report_num(row.get("Inicio día"), 0),
+                _fmt_report_num(row.get("Fin día"), 0),
+                _fmt_report_num(row.get("Duración"), 0),
+                _pdf_short_label(str(row.get("Responsable", "")), 22),
+                _pdf_short_label(str(row.get("Riesgo/control", "")), 46),
+            ])
+        story.append(_pdf_table(rows, col_widths=[2.4 * cm, 4.3 * cm, 1.3 * cm, 1.3 * cm, 1.6 * cm, 2.4 * cm, 3.2 * cm], font_size=6.8))
+        if not mounting_df.empty:
+            story.append(PageBreak())
+            story.append(Paragraph("Anexo montaje y productividad", styles["Heading1"]))
+            for col in ["Costo total CLP", "HH calculadas", "Días"]:
+                mounting_df[col] = pd.to_numeric(mounting_df.get(col, np.nan), errors="coerce")
+            by_resource = (
+                mounting_df[mounting_df["Costo total CLP"] > 0]
+                .groupby("Recurso", as_index=False)
+                .agg(**{"Costo total CLP": ("Costo total CLP", "sum"), "HH": ("HH calculadas", "sum"), "Días": ("Días", "sum")})
+                .sort_values("Costo total CLP", ascending=False)
+                .head(14)
+            )
+            rows = [["Recurso", "Costo detalle", "HH", "Días"]]
+            for _, row in by_resource.iterrows():
+                rows.append([_pdf_short_label(str(row.get("Recurso", "")), 48), format_clp(float(row.get("Costo total CLP", 0.0) or 0.0)), _fmt_report_num(row.get("HH"), 1), _fmt_report_num(row.get("Días"), 1)])
+            story.append(_pdf_table(rows, col_widths=[7.5 * cm, 3.2 * cm, 2.3 * cm, 2.3 * cm], font_size=7.5))
+    doc.build(story, onFirstPage=_pdf_header_footer, onLaterPages=_pdf_header_footer)
+    return buffer.getvalue()
 
 
 def parse_money_usd_robusto(x: str) -> float:
@@ -12055,25 +12907,67 @@ def render_telecom_capex_supply_installation_tab() -> None:
     if not subtotal_df.empty:
         st.markdown('<p class="capex-panel-title">Distribución ejecutiva por bloque WBS</p><p class="capex-panel-sub">Participación de cada bloque sobre el CAPEX instalado de la turbina seleccionada.</p>', unsafe_allow_html=True)
         donut_df = subtotal_df.copy()
+        donut_df = donut_df.sort_values("Monto CLP", ascending=False).reset_index(drop=True)
         donut_df["% Total"] = np.where(installed_unit_clp > 0, donut_df["Monto CLP"] / installed_unit_clp * 100.0, np.nan)
-        donut_df["Etiqueta"] = donut_df.apply(lambda row: f"{row['Área CAPEX']} · {short_label(row['Partida'], 30)}", axis=1)
-        fig_donut = px.pie(
-            donut_df,
-            names="Etiqueta",
-            values="Monto CLP",
-            hole=0.58,
-            color="Área CAPEX",
-            color_discrete_map={"CAPEX suministro": palette["blue"], "CAPEX montaje": palette["orange"]},
-        )
-        fig_donut.update_traces(
-            textinfo="percent",
-            marker=dict(line=dict(color="#FFFFFF", width=2)),
-            hovertemplate="<b>%{label}</b><br>Monto $%{value:,.0f} CLP<br>Participación %{percent}<extra></extra>",
+        donut_df["Bloque WBS"] = donut_df["Partida"].map(lambda value: short_label(value, 34))
+        donut_df["Monto etiqueta"] = donut_df["Monto CLP"].map(format_clp)
+        donut_palette = [
+            "#2F5D7C",
+            "#4F7F73",
+            "#7A6F9B",
+            "#B08A3C",
+            "#6B7A8F",
+            "#C66B4A",
+            "#3F6E99",
+            "#8B6B61",
+            "#5E6C84",
+            "#8A7B3F",
+        ]
+        fig_donut = go.Figure(
+            go.Pie(
+                labels=donut_df["Bloque WBS"],
+                values=donut_df["Monto CLP"],
+                hole=0.62,
+                sort=False,
+                direction="clockwise",
+                marker=dict(colors=donut_palette[: len(donut_df)], line=dict(color="#FFFFFF", width=2.4)),
+                text=donut_df["% Total"].map(lambda value: fmt_pct(value) if np.isfinite(value) and value >= 5 else ""),
+                textinfo="text",
+                textposition="inside",
+                insidetextorientation="radial",
+                pull=[0.025 if idx == 0 else 0 for idx in range(len(donut_df))],
+                customdata=np.stack(
+                    [
+                        donut_df["Área CAPEX"],
+                        donut_df["Monto etiqueta"],
+                        donut_df["% Total"],
+                        donut_df["Criterio Resumen"],
+                    ],
+                    axis=-1,
+                ),
+                hovertemplate=(
+                    "<b>%{label}</b><br>"
+                    "Área: %{customdata[0]}<br>"
+                    "Monto: %{customdata[1]}<br>"
+                    "Participación: %{customdata[2]:.1f}%<br>"
+                    "Criterio: %{customdata[3]}<extra></extra>"
+                ),
+            )
         )
         fig_donut.update_layout(
-            height=390,
-            margin=dict(l=10, r=10, t=10, b=10),
-            legend=dict(orientation="v", y=0.5, x=1.02),
+            height=430,
+            margin=dict(l=10, r=10, t=18, b=18),
+            legend=dict(orientation="v", y=0.5, x=1.02, font=dict(size=12, color=palette["ink"]), itemsizing="constant"),
+            annotations=[
+                dict(
+                    text=f"<b>{fmt_clp_mm(float(donut_df['Monto CLP'].sum()))}</b><br><span style='font-size:12px;color:#697386'>bloques WBS</span>",
+                    x=0.5,
+                    y=0.5,
+                    font=dict(size=16, color=palette["ink"]),
+                    showarrow=False,
+                )
+            ],
+            uniformtext=dict(minsize=11, mode="hide"),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
         )
@@ -12100,182 +12994,26 @@ def render_telecom_capex_supply_installation_tab() -> None:
         mounting_positive = selected_mounting[selected_mounting["Costo total CLP"] > 0].copy()
         total_mounting_detail = float(mounting_positive["Costo total CLP"].sum() or 0.0)
         total_hh = float(mounting_positive["HH calculadas"].sum() or 0.0)
-        total_days = float(mounting_positive["Días"].fillna(0).sum() or 0.0)
-        factor_weights = mounting_positive["Costo total CLP"].fillna(0)
-        factor_values = mounting_positive["Factor combinado"].replace([np.inf, -np.inf], np.nan).fillna(1)
-        weighted_factor = float(np.average(factor_values, weights=factor_weights)) if factor_weights.sum() > 0 else float(factor_values.mean() or 0.0)
-        dominant_area = "-"
-        if not mounting_positive.empty:
-            dominant_area = str(
-                mounting_positive.groupby("Área")["Costo total CLP"].sum().sort_values(ascending=False).index[0]
-            )
-
-        st.markdown(
-            '<p class="capex-panel-title">Detalle de montaje: factores, horas y recursos</p>'
-            '<p class="capex-panel-sub">Lectura desde 04_Montaje_Detalle_CLP. Descompone el CAPEX montaje por área, tipo de costo, recurso, HH, días, tarifas y factores aplicados para la turbina seleccionada.</p>',
-            unsafe_allow_html=True,
-        )
-        detail_cards = [
-            ("Montaje detalle", format_clp(total_mounting_detail), "Suma de Costo total CLP"),
-            ("HH calculadas", f"{total_hh:,.1f}".replace(",", ".").replace(".", ",", 1), "Personas x días x horas/día"),
-            ("Días recurso", f"{total_days:,.1f}".replace(",", ".").replace(".", ",", 1), "Suma de días declarados"),
-            ("Factor ponderado", fmt_x(weighted_factor), f"Área dominante: {dominant_area}"),
-        ]
-        st.markdown(
-            '<div class="capex-why">'
-            + "".join(
-                f'<div class="capex-why-card"><span>{html.escape(label)}</span><b>{html.escape(value)}</b><p>{html.escape(note)}</p></div>'
-                for label, value, note in detail_cards
-            )
-            + "</div>",
-            unsafe_allow_html=True,
-        )
-
-        detail_left, detail_right = st.columns([1.08, 0.92])
-        with detail_left:
-            area_cost_df = (
-                mounting_positive.groupby(["Área", "Tipo costo"], as_index=False)
-                .agg(
-                    **{
-                        "Costo total CLP": ("Costo total CLP", "sum"),
-                        "HH calculadas": ("HH calculadas", "sum"),
-                        "Partidas": ("ID", "count"),
-                    }
-                )
-                .sort_values("Costo total CLP", ascending=True)
-            )
-            if not area_cost_df.empty:
-                fig_mounting_area = px.bar(
-                    area_cost_df,
-                    x="Costo total CLP",
-                    y="Área",
-                    color="Tipo costo",
-                    orientation="h",
-                    text=area_cost_df["Costo total CLP"].map(format_clp),
-                    custom_data=["Tipo costo", "HH calculadas", "Partidas"],
-                )
-                fig_mounting_area.update_traces(
-                    textposition="outside",
-                    cliponaxis=False,
-                    hovertemplate=(
-                        "<b>%{y}</b><br>"
-                        "Tipo costo: %{customdata[0]}<br>"
-                        "Monto: $%{x:,.0f} CLP<br>"
-                        "HH: %{customdata[1]:,.1f}<br>"
-                        "Partidas: %{customdata[2]}<extra></extra>"
-                    ),
-                )
-                fig_mounting_area.update_layout(
-                    height=max(360, min(560, 120 + 44 * area_cost_df["Área"].nunique())),
-                    margin=dict(l=10, r=76, t=16, b=42),
-                    legend=dict(orientation="h", y=1.12, x=0, title=None),
-                    xaxis=dict(title="CLP montaje", gridcolor=palette["grid"]),
-                    yaxis=dict(title=None),
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                )
-                st.plotly_chart(fig_mounting_area, use_container_width=True, config={"displaylogo": False})
-        with detail_right:
-            scatter_df = mounting_positive[mounting_positive["Costo total CLP"] > 0].copy()
-            scatter_df["Actividad corta"] = scatter_df["Actividad"].map(lambda value: short_label(value, 42))
-            if not scatter_df.empty:
-                fig_mounting_factors = px.scatter(
-                    scatter_df,
-                    x="Factor combinado",
-                    y="Tarifa CLP / Factor %",
-                    size="Costo total CLP",
-                    color="Tipo costo",
-                    hover_name="Actividad corta",
-                    custom_data=["Recurso", "Días", "Horas/día", "Personas", "Costo total CLP", "Factor modelo", "Factor sitio"],
-                )
-                fig_mounting_factors.update_traces(
-                    marker=dict(line=dict(color="#FFFFFF", width=1.2)),
-                    hovertemplate=(
-                        "<b>%{hovertext}</b><br>"
-                        "Recurso: %{customdata[0]}<br>"
-                        "Factor combinado: %{x:.2f}x<br>"
-                        "Tarifa / factor: %{y:,.2f}<br>"
-                        "Días: %{customdata[1]:,.2f}<br>"
-                        "Horas/día: %{customdata[2]:,.2f}<br>"
-                        "Personas: %{customdata[3]:,.2f}<br>"
-                        "Costo total: $%{customdata[4]:,.0f} CLP<br>"
-                        "Factor modelo: %{customdata[5]:,.2f}x<br>"
-                        "Factor sitio: %{customdata[6]:,.2f}x<extra></extra>"
-                    ),
-                )
-                fig_mounting_factors.update_layout(
-                    height=390,
-                    margin=dict(l=10, r=20, t=16, b=42),
-                    legend=dict(orientation="h", y=1.12, x=0, title=None),
-                    xaxis=dict(title="Factor modelo x sitio", gridcolor=palette["grid"], rangemode="tozero"),
-                    yaxis=dict(title="Tarifa CLP / factor %", gridcolor=palette["grid"], rangemode="tozero"),
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                )
-                st.plotly_chart(fig_mounting_factors, use_container_width=True, config={"displaylogo": False})
-
-        top_mounting = mounting_positive.sort_values("Costo total CLP", ascending=False).head(14).copy()
-        if not top_mounting.empty:
-            top_mounting_table = top_mounting[
-                [
-                    "Área",
-                    "Tipo costo",
-                    "Actividad",
-                    "Recurso",
-                    "Tipo cálculo",
-                    "Personas",
-                    "Días",
-                    "Horas/día",
-                    "Tarifa CLP / Factor %",
-                    "Factor modelo",
-                    "Factor sitio",
-                    "Costo base CLP",
-                    "Costo total CLP",
-                    "Fuente / supuesto",
-                ]
-            ].copy()
-
-            def format_tariff_or_factor(row: pd.Series) -> str:
-                value = parse_float_local(row.get("Tarifa CLP / Factor %"), np.nan)
-                if not np.isfinite(value):
-                    return "-"
-                unit_text = normalize_key(row.get("Unidad", ""))
-                calc_text = normalize_key(row.get("Tipo cálculo", ""))
-                if "%" in str(row.get("Unidad", "")) or "exw" in unit_text or "directos" in calc_text:
-                    return fmt_pct(value * 100 if value <= 1 else value, digits=2)
-                return format_clp(value)
-
-            top_mounting_table["Tarifa CLP / Factor %"] = top_mounting.apply(format_tariff_or_factor, axis=1)
-            for amount_col in ["Costo base CLP", "Costo total CLP"]:
-                top_mounting_table[amount_col] = top_mounting_table[amount_col].map(format_clp)
-            for number_col in ["Personas", "Días", "Horas/día"]:
-                top_mounting_table[number_col] = top_mounting_table[number_col].map(lambda value: "-" if not np.isfinite(parse_float_local(value, np.nan)) else f"{parse_float_local(value, 0):.2f}".replace(".", ","))
-            for factor_col in ["Factor modelo", "Factor sitio"]:
-                top_mounting_table[factor_col] = top_mounting_table[factor_col].map(fmt_x)
-            st.markdown(
-                '<p class="capex-panel-title">Partidas críticas de montaje</p>'
-                '<p class="capex-panel-sub">Top partidas por Costo total CLP, incluyendo factores y supuestos usados en 04_Montaje_Detalle_CLP.</p>',
-                unsafe_allow_html=True,
-            )
-            st.dataframe(top_mounting_table, use_container_width=True, hide_index=True, height=420)
-
         wbs_mount_total = float(
             selected_wbs[
                 selected_wbs["Partida"].str.contains("TOTAL CAPEX MONTAJE", case=False, na=False)
                 & selected_wbs["Tipo fila"].eq("Total")
+                & selected_wbs["Criterio Resumen"].map(normalize_key).str.contains("capexmontaje|montaje", na=False)
             ]["Monto CLP"].sum()
             or 0.0
         )
-        reconciliation_gap = total_mounting_detail - wbs_mount_total
-        reconciliation_pct = reconciliation_gap / wbs_mount_total * 100.0 if wbs_mount_total > 0 else np.nan
+        validated_mounting_clp = wbs_mount_total if wbs_mount_total > 0 else total_mounting_detail
+        reconciliation_gap = total_mounting_detail - validated_mounting_clp
+        reconciliation_pct = reconciliation_gap / validated_mounting_clp * 100.0 if validated_mounting_clp > 0 else np.nan
         reconciliation_status = "Cuadra" if abs(reconciliation_gap) <= 1000 else "Revisar"
         selected_power_kw = parse_float_local(selected_row.get("Potencia kW"), np.nan)
         has_selected_power = np.isfinite(selected_power_kw) and selected_power_kw > 0
         productivity_cards = [
-            ("Conciliación WBS", reconciliation_status, f"Diferencia {format_clp(reconciliation_gap)} ({fmt_pct(reconciliation_pct)})"),
-            ("CLP montaje/kW", format_clp(total_mounting_detail / selected_power_kw) if has_selected_power else "-", "Costo de instalación por potencia"),
+            ("Montaje WBS validado", format_clp(validated_mounting_clp), "03_CAPEX_WBS_USD_CLP · criterio CAPEX montaje"),
+            ("Conciliación 04 vs WBS", reconciliation_status, f"Diferencia {format_clp(reconciliation_gap)} ({fmt_pct(reconciliation_pct)})"),
+            ("CLP montaje/kW", format_clp(validated_mounting_clp / selected_power_kw) if has_selected_power else "-", "Costo WBS validado por potencia"),
             ("HH/kW", f"{(total_hh / selected_power_kw):.1f}".replace(".", ",") if has_selected_power else "-", "Intensidad de mano de obra"),
-            ("CLP/HH", format_clp(total_mounting_detail / total_hh) if total_hh > 0 else "-", "Productividad económica del montaje"),
+            ("CLP/HH", format_clp(validated_mounting_clp / total_hh) if total_hh > 0 else "-", "Productividad con costo WBS validado"),
         ]
         st.markdown(
             '<p class="capex-panel-title">Control de ingeniería: conciliación y productividad</p>'
@@ -12291,25 +13029,59 @@ def render_telecom_capex_supply_installation_tab() -> None:
             + "</div>",
             unsafe_allow_html=True,
         )
+        mounting_cost_scale = validated_mounting_clp / total_mounting_detail if total_mounting_detail > 0 and validated_mounting_clp > 0 else 1.0
+        for source_col, target_col in [
+            ("Costo total CLP", "Costo total validado CLP"),
+            ("Costo base CLP", "Costo base validado CLP"),
+            ("Base indirectos CLP", "Base indirectos validada CLP"),
+            ("Base imprevistos CLP", "Base imprevistos validada CLP"),
+        ]:
+            mounting_positive[target_col] = mounting_positive[source_col].fillna(0) * mounting_cost_scale
 
         mounting_by_model = pd.DataFrame()
+        wbs_mount_by_model = pd.DataFrame()
+        if not wbs_df.empty:
+            wbs_mount_all = wbs_df.copy()
+            wbs_mount_all["Criterio montaje"] = wbs_mount_all["Criterio Resumen"].map(normalize_key)
+            wbs_mount_by_model = (
+                wbs_mount_all[
+                    wbs_mount_all["Tipo fila"].eq("Total")
+                    & wbs_mount_all["Partida"].str.contains("TOTAL CAPEX MONTAJE", case=False, na=False)
+                    & wbs_mount_all["Criterio montaje"].str.contains("capexmontaje|montaje", na=False)
+                    & (wbs_mount_all["Monto CLP"] > 0)
+                ]
+                .groupby("Modelo", as_index=False)
+                .agg(**{"Montaje CLP": ("Monto CLP", "sum")})
+            )
         if not mounting_detail_df.empty:
             mounting_all = mounting_detail_df.copy()
             for numeric_col in ["Costo total CLP", "HH calculadas", "Días", "Potencia kW", "Factor combinado"]:
                 mounting_all[numeric_col] = pd.to_numeric(mounting_all.get(numeric_col, np.nan), errors="coerce")
-            mounting_by_model = (
+            mounting_detail_by_model = (
                 mounting_all[mounting_all["Costo total CLP"] > 0]
                 .groupby("Modelo", as_index=False)
                 .agg(
                     **{
                         "Potencia kW": ("Potencia kW", "max"),
-                        "Montaje CLP": ("Costo total CLP", "sum"),
+                        "Montaje detalle CLP": ("Costo total CLP", "sum"),
                         "HH": ("HH calculadas", "sum"),
                         "Días": ("Días", "sum"),
                         "Factor ponderado": ("Factor combinado", "mean"),
                     }
                 )
             )
+            if not wbs_mount_by_model.empty:
+                mounting_by_model = wbs_mount_by_model.merge(mounting_detail_by_model, on="Modelo", how="left")
+            else:
+                mounting_by_model = mounting_detail_by_model.rename(columns={"Montaje detalle CLP": "Montaje CLP"})
+        elif not wbs_mount_by_model.empty:
+            mounting_by_model = wbs_mount_by_model.copy()
+        if not mounting_by_model.empty:
+            if "Potencia kW" not in mounting_by_model.columns or mounting_by_model["Potencia kW"].isna().all():
+                power_by_model = capex_df[["Modelo", "Potencia kW"]].copy() if {"Modelo", "Potencia kW"}.issubset(capex_df.columns) else pd.DataFrame()
+                if not power_by_model.empty:
+                    power_by_model["Potencia kW"] = pd.to_numeric(power_by_model["Potencia kW"], errors="coerce")
+                    mounting_by_model = mounting_by_model.merge(power_by_model, on="Modelo", how="left", suffixes=("", " fuente"))
             mounting_by_model["CLP/kW"] = np.where(mounting_by_model["Potencia kW"] > 0, mounting_by_model["Montaje CLP"] / mounting_by_model["Potencia kW"], np.nan)
             mounting_by_model["HH/kW"] = np.where(mounting_by_model["Potencia kW"] > 0, mounting_by_model["HH"] / mounting_by_model["Potencia kW"], np.nan)
             mounting_by_model["_order"] = mounting_by_model["Modelo"].map({"VAWT 0.5 kW": 0, "VAWT 1 kW": 1, "VAWT 3 kW": 2, "VAWT 5 kW": 3, "VAWT 10 kW": 4}).fillna(99)
@@ -12318,7 +13090,7 @@ def render_telecom_capex_supply_installation_tab() -> None:
         if not mounting_by_model.empty:
             st.markdown(
                 '<p class="capex-panel-title">Curva de escalamiento técnico por modelo</p>'
-                '<p class="capex-panel-sub">Evalúa si montaje, HH y costo por kW escalan de forma razonable entre tamaños de turbina.</p>',
+                '<p class="capex-panel-sub">Evalúa el montaje WBS validado desde 03_CAPEX_WBS_USD_CLP marcado como CAPEX montaje, junto con HH del detalle 04.</p>',
                 unsafe_allow_html=True,
             )
             fig_scale = go.Figure()
@@ -12355,11 +13127,13 @@ def render_telecom_capex_supply_installation_tab() -> None:
             )
             st.plotly_chart(fig_scale, use_container_width=True, config={"displaylogo": False})
 
-        factor_bridge_df = mounting_positive[mounting_positive["Costo total CLP"] > 0].copy()
+        factor_bridge_df = mounting_positive[mounting_positive["Costo total validado CLP"] > 0].copy()
         if not factor_bridge_df.empty:
-            base_total = float(factor_bridge_df["Costo base CLP"].fillna(0).sum())
-            after_model_total = float((factor_bridge_df["Costo base CLP"].fillna(0) * factor_bridge_df["Factor modelo"].fillna(1)).sum())
-            after_site_total = float(factor_bridge_df["Costo total CLP"].fillna(0).sum())
+            base_total_raw = float(factor_bridge_df["Costo base CLP"].fillna(0).sum())
+            after_model_total_raw = float((factor_bridge_df["Costo base CLP"].fillna(0) * factor_bridge_df["Factor modelo"].fillna(1)).sum())
+            base_total = base_total_raw * mounting_cost_scale
+            after_model_total = after_model_total_raw * mounting_cost_scale
+            after_site_total = float(factor_bridge_df["Costo total validado CLP"].fillna(0).sum())
             bridge_values = [base_total, after_model_total - base_total, after_site_total - after_model_total, after_site_total]
             fig_bridge = go.Figure(go.Waterfall(
                 x=["Costo base", "Factor modelo", "Factor sitio", "Costo total"],
@@ -12383,16 +13157,16 @@ def render_telecom_capex_supply_installation_tab() -> None:
             )
             st.markdown(
                 '<p class="capex-panel-title">Puente de factores del montaje</p>'
-                '<p class="capex-panel-sub">Separa cuánto explica el costo base y cuánto agregan los factores de modelo y sitio hasta llegar al costo total.</p>',
+                '<p class="capex-panel-sub">Separa costo base y factores de modelo/sitio usando montos normalizados al CAPEX montaje validado en 03_CAPEX_WBS_USD_CLP.</p>',
                 unsafe_allow_html=True,
             )
             st.plotly_chart(fig_bridge, use_container_width=True, config={"displaylogo": False})
 
         base_breakdown = pd.DataFrame(
             [
-                {"Componente": "Directo base", "Monto CLP": float(mounting_positive["Costo base CLP"].fillna(0).sum())},
-                {"Componente": "Base indirectos", "Monto CLP": float(mounting_positive["Base indirectos CLP"].fillna(0).sum())},
-                {"Componente": "Base imprevistos", "Monto CLP": float(mounting_positive["Base imprevistos CLP"].fillna(0).sum())},
+                {"Componente": "Directo base", "Monto CLP": float(mounting_positive["Costo base validado CLP"].fillna(0).sum())},
+                {"Componente": "Base indirectos", "Monto CLP": float(mounting_positive["Base indirectos validada CLP"].fillna(0).sum())},
+                {"Componente": "Base imprevistos", "Monto CLP": float(mounting_positive["Base imprevistos validada CLP"].fillna(0).sum())},
             ]
         )
         base_breakdown = base_breakdown[base_breakdown["Monto CLP"] > 0].copy()
@@ -12416,7 +13190,7 @@ def render_telecom_capex_supply_installation_tab() -> None:
             )
             st.markdown(
                 '<p class="capex-panel-title">Directos, indirectos e imprevistos</p>'
-                '<p class="capex-panel-sub">Control de composición del montaje: cuánto es costo directo y cuánto corresponde a bases de indirectos e imprevistos.</p>',
+                '<p class="capex-panel-sub">Control de composición del montaje con montos normalizados al total WBS marcado como CAPEX montaje.</p>',
                 unsafe_allow_html=True,
             )
             st.plotly_chart(fig_base, use_container_width=True, config={"displaylogo": False})
@@ -12425,29 +13199,29 @@ def render_telecom_capex_supply_installation_tab() -> None:
             mounting_positive.groupby(["Recurso", "Tipo costo"], as_index=False)
             .agg(
                 **{
-                    "Costo total CLP": ("Costo total CLP", "sum"),
+                    "Costo validado CLP": ("Costo total validado CLP", "sum"),
                     "HH calculadas": ("HH calculadas", "sum"),
                     "Días": ("Días", "sum"),
                     "Partidas": ("ID", "count"),
                 }
             )
-            .sort_values("Costo total CLP", ascending=False)
+            .sort_values("Costo validado CLP", ascending=False)
             .head(16)
         )
         if not resource_df.empty:
-            resource_df = resource_df.sort_values("Costo total CLP", ascending=True)
+            resource_df = resource_df.sort_values("Costo validado CLP", ascending=True)
             st.markdown(
                 '<p class="capex-panel-title">Recursos críticos de montaje</p>'
-                '<p class="capex-panel-sub">Ranking de recursos que dominan el costo, con HH, días y cantidad de partidas asociadas.</p>',
+                '<p class="capex-panel-sub">Ranking de recursos que dominan el costo WBS validado, manteniendo HH, días y partidas desde 04_Montaje_Detalle_CLP.</p>',
                 unsafe_allow_html=True,
             )
             fig_resources = px.bar(
                 resource_df,
-                x="Costo total CLP",
+                x="Costo validado CLP",
                 y="Recurso",
                 color="Tipo costo",
                 orientation="h",
-                text=resource_df["Costo total CLP"].map(format_clp),
+                text=resource_df["Costo validado CLP"].map(format_clp),
                 custom_data=["HH calculadas", "Días", "Partidas"],
             )
             fig_resources.update_traces(
@@ -12470,12 +13244,13 @@ def render_telecom_capex_supply_installation_tab() -> None:
             mounting_positive.groupby(["WBS destino", "Partida WBS destino"], as_index=False)
             .agg(
                 **{
-                    "Costo detalle CLP": ("Costo total CLP", "sum"),
+                    "Costo detalle validado CLP": ("Costo total validado CLP", "sum"),
+                    "Costo detalle bruto CLP": ("Costo total CLP", "sum"),
                     "Partidas detalle": ("ID", "count"),
                     "HH": ("HH calculadas", "sum"),
                 }
             )
-            .sort_values("Costo detalle CLP", ascending=False)
+            .sort_values("Costo detalle validado CLP", ascending=False)
         )
         if not trace_df.empty:
             wbs_subtotals = selected_wbs[selected_wbs["Tipo fila"].isin(["Subtotal", "Total"])][["Partida", "Monto CLP"]].copy()
@@ -12483,18 +13258,18 @@ def render_telecom_capex_supply_installation_tab() -> None:
             wbs_subtotals["Partida key"] = wbs_subtotals["Partida"].map(normalize_key)
             trace_df = trace_df.merge(wbs_subtotals[["Partida key", "Monto CLP"]], on="Partida key", how="left")
             trace_df = trace_df.rename(columns={"Monto CLP": "Monto WBS CLP"})
-            trace_df["Diferencia CLP"] = trace_df["Costo detalle CLP"] - trace_df["Monto WBS CLP"].fillna(trace_df["Costo detalle CLP"])
+            trace_df["Diferencia CLP"] = trace_df["Costo detalle validado CLP"] - trace_df["Monto WBS CLP"].fillna(trace_df["Costo detalle validado CLP"])
             trace_table = trace_df.head(18).copy()
-            for amount_col in ["Costo detalle CLP", "Monto WBS CLP", "Diferencia CLP"]:
+            for amount_col in ["Costo detalle validado CLP", "Costo detalle bruto CLP", "Monto WBS CLP", "Diferencia CLP"]:
                 trace_table[amount_col] = trace_table[amount_col].map(format_clp)
             trace_table["HH"] = trace_table["HH"].map(lambda value: "-" if not np.isfinite(parse_float_local(value, np.nan)) else f"{parse_float_local(value, 0):.1f}".replace(".", ","))
             st.markdown(
                 '<p class="capex-panel-title">Trazabilidad WBS destino vs detalle</p>'
-                '<p class="capex-panel-sub">Cruza cada WBS destino del detalle de montaje contra las partidas agregadas de 03_CAPEX_WBS_USD_CLP para auditar origen y concentración.</p>',
+                '<p class="capex-panel-sub">Cruza cada WBS destino contra 03_CAPEX_WBS_USD_CLP usando costo detalle normalizado al total CAPEX montaje validado.</p>',
                 unsafe_allow_html=True,
             )
             st.dataframe(
-                trace_table[["WBS destino", "Partida WBS destino", "Costo detalle CLP", "Monto WBS CLP", "Diferencia CLP", "Partidas detalle", "HH"]],
+                trace_table[["WBS destino", "Partida WBS destino", "Costo detalle validado CLP", "Costo detalle bruto CLP", "Monto WBS CLP", "Diferencia CLP", "Partidas detalle", "HH"]],
                 use_container_width=True,
                 hide_index=True,
                 height=430,
@@ -12504,10 +13279,10 @@ def render_telecom_capex_supply_installation_tab() -> None:
         if not risk_df.empty:
             def engineering_risk(row: pd.Series) -> str:
                 text = normalize_key(" ".join([str(row.get("Tipo costo", "")), str(row.get("Actividad", "")), str(row.get("Fuente / supuesto", "")), str(row.get("Revisión", ""))]))
-                amount = parse_float_local(row.get("Costo total CLP"), 0.0)
-                if "opcional" in text or "revisar" in text or "validar" in text or amount >= total_mounting_detail * 0.10:
+                amount = parse_float_local(row.get("Costo total validado CLP"), 0.0)
+                if "opcional" in text or "revisar" in text or "validar" in text or amount >= validated_mounting_clp * 0.10:
                     return "Alto"
-                if "reserva" in text or "supuesto" in text or amount >= total_mounting_detail * 0.04:
+                if "reserva" in text or "supuesto" in text or amount >= validated_mounting_clp * 0.04:
                     return "Medio"
                 return "Bajo"
 
@@ -12516,24 +13291,24 @@ def render_telecom_capex_supply_installation_tab() -> None:
                 risk_df.groupby(["Riesgo ingeniería", "Área"], as_index=False)
                 .agg(
                     **{
-                        "Costo total CLP": ("Costo total CLP", "sum"),
+                        "Costo validado CLP": ("Costo total validado CLP", "sum"),
                         "Partidas": ("ID", "count"),
                     }
                 )
-                .sort_values("Costo total CLP", ascending=False)
+                .sort_values("Costo validado CLP", ascending=False)
             )
             st.markdown(
                 '<p class="capex-panel-title">Mapa de riesgo constructivo</p>'
-                '<p class="capex-panel-sub">Priorización de partidas por monto, opcionalidad, validaciones y supuestos de ingeniería para enfocar revisión técnica.</p>',
+                '<p class="capex-panel-sub">Priorización por costo normalizado al CAPEX montaje validado, opcionalidad, validaciones y supuestos de ingeniería.</p>',
                 unsafe_allow_html=True,
             )
             fig_risk = px.bar(
                 risk_summary,
-                x="Costo total CLP",
+                x="Costo validado CLP",
                 y="Área",
                 color="Riesgo ingeniería",
                 orientation="h",
-                text=risk_summary["Costo total CLP"].map(format_clp),
+                text=risk_summary["Costo validado CLP"].map(format_clp),
                 category_orders={"Riesgo ingeniería": ["Alto", "Medio", "Bajo"]},
                 color_discrete_map={"Alto": "#E76F51", "Medio": "#F4A261", "Bajo": "#3D5A80"},
                 custom_data=["Partidas"],
@@ -13855,6 +14630,688 @@ def load_telecom_tower_eval_model(url: str, refresh_nonce: int = 0) -> dict:
         "source_warning": "",
         "source_mode": "remote",
     }
+
+
+def render_telecom_executive_summary_tab() -> None:
+    try:
+        ctx = _telecom_report_context(refresh_nonce=data_refresh_nonce)
+    except Exception as exc:
+        st.error(f"No se pudo consolidar el resumen ejecutivo: {exc}")
+        return
+
+    rec_model = ctx["recommended_model"]
+    summary = ctx.get("summary", {}) or {}
+    rec_alt = ctx.get("recommended_alternative", pd.Series(dtype=object))
+    capex_row = ctx.get("capex_row", pd.Series(dtype=object))
+    resource_df = ctx.get("resource", pd.DataFrame()).copy()
+    schedule_df = ctx.get("schedule", pd.DataFrame()).copy()
+    schedule_meta = ctx.get("schedule_meta", {}) or {}
+    wbs_df = ctx.get("wbs", pd.DataFrame()).copy()
+    mounting_df = ctx.get("mounting", pd.DataFrame()).copy()
+
+    def num(value: object, default: float = np.nan) -> float:
+        return parse_float_local(value, default)
+
+    def fmt_num(value: object, digits: int = 1, suffix: str = "") -> str:
+        parsed = num(value)
+        if not np.isfinite(parsed):
+            return "-"
+        return f"{parsed:,.{digits}f}{suffix}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def fmt_kwh(value: object) -> str:
+        parsed = num(value)
+        if not np.isfinite(parsed):
+            return "-"
+        return f"{parsed:,.0f} kWh".replace(",", ".")
+
+    def fmt_pct(value: object, digits: int = 1) -> str:
+        parsed = num(value)
+        if not np.isfinite(parsed):
+            return "-"
+        return f"{parsed:,.{digits}f}%".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def fmt_clp(value: object) -> str:
+        parsed = num(value)
+        if not np.isfinite(parsed):
+            return "-"
+        return format_clp(parsed)
+
+    def fmt_mm_clp(value: object) -> str:
+        parsed = num(value)
+        if not np.isfinite(parsed):
+            return "-"
+        return f"{parsed / 1_000_000:,.1f} MM CLP".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def series_get(row: pd.Series, keys: list[str], default: object = np.nan) -> object:
+        for key in keys:
+            if key in row.index:
+                value = row.get(key)
+                if not (isinstance(value, float) and np.isnan(value)):
+                    return value
+        return default
+
+    capex_clp = num(series_get(capex_row, ["CAPEX instalado CLP", "CAPEX instalado total CLP"], summary.get("capex_recomendado", np.nan)))
+    supply_clp = num(series_get(capex_row, ["CAPEX suministro CLP"], np.nan))
+    mounting_clp = num(series_get(capex_row, ["CAPEX montaje sin suministro CLP"], np.nan))
+    power_kw = num(series_get(capex_row, ["Potencia kW"], rec_alt.get("Potencia unitaria kW", np.nan) if isinstance(rec_alt, pd.Series) else np.nan))
+    annual_energy = num(rec_alt.get("Energía útil anual kWh", summary.get("energia_util_anual_kwh", np.nan)) if isinstance(rec_alt, pd.Series) else np.nan)
+    payback = num(rec_alt.get("Payback híbrido años", summary.get("payback_hibrido", np.nan)) if isinstance(rec_alt, pd.Series) else np.nan)
+    lcoe = num(rec_alt.get("LCOE CLP/kWh", summary.get("lcoe", np.nan)) if isinstance(rec_alt, pd.Series) else np.nan)
+    co2 = num(rec_alt.get("CO2 evitado t/año", summary.get("co2_evitado_t_anio", np.nan)) if isinstance(rec_alt, pd.Series) else np.nan)
+    fp = _resource_value(resource_df, "Factor planta preliminar", num(ctx.get("recommended_state", {}).get("FP aplicado %", np.nan)))
+    wind_speed = _resource_value(resource_df, "Velocidad media medición", np.nan)
+    active_wind_outputs = st.session_state.get("telecom_09_viento_outputs", {}) or {}
+    active_wind_fp = num(active_wind_outputs.get("factor_planta_recomendado", np.nan))
+    active_wind_speed = num(active_wind_outputs.get("velocidad_media_recomendada", np.nan))
+    active_wind_energy_ref = num(active_wind_outputs.get("energia_anual_neta_por_turbina", np.nan))
+    active_wind_ref_kw = num(active_wind_outputs.get("potencia_referencia_kw", 10.0), 10.0)
+    active_wind_column = str(active_wind_outputs.get("altura_columna_recomendada", "") or "").strip()
+    active_wind_source = str(active_wind_outputs.get("fuente_csv", "CSV de recurso eólico") or "CSV de recurso eólico").strip()
+    active_wind_valid = bool(np.isfinite(active_wind_fp) and active_wind_fp > 0)
+    if active_wind_valid:
+        fp = active_wind_fp
+        if np.isfinite(active_wind_speed):
+            wind_speed = active_wind_speed
+        annual_energy = power_kw * 8760.0 * (active_wind_fp / 100.0) if np.isfinite(power_kw) and power_kw > 0 else active_wind_energy_ref
+        if np.isfinite(active_wind_energy_ref) and np.isfinite(active_wind_ref_kw) and active_wind_ref_kw > 0 and np.isfinite(power_kw) and power_kw > 0:
+            annual_energy = active_wind_energy_ref * (power_kw / active_wind_ref_kw)
+        resource_override_rows = [
+            {"Variable": "Velocidad media medición", "Valor": f"{wind_speed:.2f}", "Unidad": "m/s", "Fuente requerida": active_wind_source, "Uso": "Recurso eólico cargado", "Bloque": "Recurso activo", "Valor numérico": wind_speed},
+            {"Variable": "Factor planta preliminar", "Valor": f"{fp:.1f}%", "Unidad": "%", "Fuente requerida": active_wind_source, "Uso": "Recurso eólico cargado", "Bloque": "Recurso activo", "Valor numérico": fp},
+            {"Variable": "Energía anual neta por turbina", "Valor": f"{annual_energy:.0f}", "Unidad": "kWh/año", "Fuente requerida": active_wind_source, "Uso": "Producción recalculada", "Bloque": "Recurso activo", "Valor numérico": annual_energy},
+        ]
+        resource_df = pd.concat([pd.DataFrame(resource_override_rows), resource_df], ignore_index=True)
+    monthly_generation = num(ctx.get("recommended_state", {}).get("Generación mensual kWh", np.nan))
+    if active_wind_valid and np.isfinite(annual_energy):
+        monthly_profile = pd.DataFrame(active_wind_outputs.get("perfil_mensual_alturas", []))
+        monthly_generation = annual_energy / 12.0
+        if not monthly_profile.empty and {"Columna", "Mes", "Energía mensual neta kWh por turbina"}.issubset(monthly_profile.columns):
+            active_monthly = monthly_profile[monthly_profile["Columna"].astype(str).eq(active_wind_column)].copy()
+            if active_monthly.empty and "Altura m" in monthly_profile.columns and np.isfinite(num(active_wind_outputs.get("altura_objetivo_m", np.nan))):
+                target_height = num(active_wind_outputs.get("altura_objetivo_m", np.nan))
+                active_monthly = monthly_profile[pd.to_numeric(monthly_profile.get("Altura m", np.nan), errors="coerce").round(3).eq(round(target_height, 3))].copy()
+            if not active_monthly.empty:
+                active_monthly["Energía mensual neta kWh por turbina"] = pd.to_numeric(active_monthly["Energía mensual neta kWh por turbina"], errors="coerce")
+                monthly_sum_ref = active_monthly["Energía mensual neta kWh por turbina"].sum()
+                if np.isfinite(monthly_sum_ref) and monthly_sum_ref > 0 and np.isfinite(active_wind_ref_kw) and active_wind_ref_kw > 0 and np.isfinite(power_kw):
+                    monthly_generation = monthly_sum_ref / 12.0 * (power_kw / active_wind_ref_kw)
+    if not np.isfinite(monthly_generation) and np.isfinite(annual_energy):
+        monthly_generation = annual_energy / 12.0
+    monthly_consumption = num(
+        ctx.get("recommended_state", {}).get(
+            "Consumo mensual kWh",
+            summary.get("consumo_mensual_kwh", summary.get("consumo_mensual", np.nan)),
+        )
+    )
+    coverage_pct = monthly_generation / monthly_consumption * 100.0 if np.isfinite(monthly_generation) and np.isfinite(monthly_consumption) and monthly_consumption > 0 else num(ctx.get("recommended_state", {}).get("Cobertura real %", np.nan))
+    schedule_days = num(schedule_meta.get("Duración calendario estimada", schedule_meta.get("Días calendario reales", np.nan)))
+    if not np.isfinite(schedule_days) and not schedule_df.empty:
+        schedule_days = num(schedule_df["Fin día"].max())
+
+    try:
+        curve_summary_df = pd.DataFrame(st.session_state.get("telecom_03_curve_active_summary_df", []) or st.session_state.get("telecom_03_curve_summary_df", []))
+        curve_points_df = pd.DataFrame(st.session_state.get("telecom_03_curve_points_df", []))
+        selected_curve_summary = curve_summary_df[curve_summary_df.get("Modelo", pd.Series(dtype=str)).astype(str).eq(rec_model)].copy() if not curve_summary_df.empty else pd.DataFrame()
+        selected_curve_points = curve_points_df[curve_points_df.get("Modelo", pd.Series(dtype=str)).astype(str).eq(rec_model)].copy() if not curve_points_df.empty else pd.DataFrame()
+        if selected_curve_points.empty:
+            turbine_curves = load_turbine_power_curves(refresh_nonce=data_refresh_nonce)
+            curve_meta = turbine_curves.get(rec_model, {})
+            selected_curve_points = curve_meta.get("curve", pd.DataFrame()).copy()
+            selected_curve_summary = pd.DataFrame(
+                [
+                    {
+                        "Modelo": rec_model,
+                        "Pn nominal kW": curve_meta.get("rated_kw", power_kw),
+                        "Altura total turbina m": curve_meta.get("total_height_m", np.nan),
+                        "Altura efectiva viento m": curve_meta.get("effective_wind_height_m", np.nan),
+                        "FP curva %": fp,
+                        "Energía anual kWh": annual_energy,
+                        "Pmax curva kW": selected_curve_points["Potencia kW"].max() if not selected_curve_points.empty and "Potencia kW" in selected_curve_points.columns else np.nan,
+                    }
+                ]
+            )
+    except Exception:
+        selected_curve_points = pd.DataFrame()
+        selected_curve_summary = pd.DataFrame()
+
+    selected_curve_row = selected_curve_summary.iloc[0] if not selected_curve_summary.empty else pd.Series(dtype=object)
+    turbine_height = num(series_get(selected_curve_row, ["Altura total turbina m"], np.nan))
+    effective_height = num(series_get(selected_curve_row, ["Altura efectiva viento m"], np.nan))
+    pmax_curve = num(series_get(selected_curve_row, ["Pmax curva kW"], np.nan))
+    fp_curve = num(series_get(selected_curve_row, ["FP curva %"], fp))
+    production_summary_active = not selected_curve_summary.empty and np.isfinite(fp_curve)
+    production_energy = num(series_get(selected_curve_row, ["Energía anual kWh"], np.nan))
+    if production_summary_active:
+        fp = fp_curve
+        if np.isfinite(production_energy):
+            annual_energy = production_energy
+            monthly_generation = annual_energy / 12.0
+        if np.isfinite(monthly_generation) and np.isfinite(monthly_consumption) and monthly_consumption > 0:
+            coverage_pct = monthly_generation / monthly_consumption * 100.0
+    elif active_wind_valid:
+        fp_curve = fp
+
+    st.markdown(
+        """
+        <style>
+        .exec7-wrap{max-width:1500px;margin:0 auto;color:#293241;}
+        .exec7-hero{border:1px solid rgba(203,213,225,.78);border-radius:20px;background:#fff;box-shadow:0 14px 34px rgba(15,23,42,.07);padding:20px 22px;margin:8px 0 16px;}
+        .exec7-grid{display:grid;grid-template-columns:minmax(330px,1.15fr) minmax(620px,1.85fr);gap:18px;align-items:stretch;}
+        .exec7-kicker{font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#3d5a80;margin:0 0 7px;}
+        .exec7-title{font-size:31px;line-height:1.04;font-weight:950;color:#293241;margin:0;}
+        .exec7-lead{font-size:13px;line-height:1.45;color:#475569;font-weight:760;margin:10px 0 0;max-width:850px;}
+        .exec7-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+        .exec7-kpi{border:1px solid rgba(203,213,225,.78);border-left:5px solid var(--accent);border-radius:15px;background:#F8FAFC;padding:12px 13px;min-height:95px;}
+        .exec7-kpi span{display:block;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;color:#64748B;}
+        .exec7-kpi b{display:block;font-size:21px;line-height:1.08;color:#293241;margin:7px 0 4px;font-weight:950;overflow-wrap:anywhere;}
+        .exec7-kpi small{display:block;font-size:11px;line-height:1.25;color:#475569;font-weight:750;}
+        .exec7-section{margin:18px 0 10px;}
+        .exec7-section h3{margin:0 0 4px;font-size:20px;line-height:1.14;font-weight:950;color:#293241;}
+        .exec7-section p{margin:0;color:#64748B;font-size:12.5px;line-height:1.38;font-weight:760;}
+        .exec7-note{border:1px solid rgba(61,90,128,.22);border-left:6px solid #3d5a80;border-radius:16px;background:#F8FAFC;padding:13px 15px;margin:10px 0 14px;color:#293241;font-size:12.5px;line-height:1.45;font-weight:780;}
+        .exec7-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 14px;}
+        .exec7-card{border:1px solid rgba(203,213,225,.75);border-radius:16px;background:#fff;box-shadow:0 10px 25px rgba(15,23,42,.045);padding:12px 14px;}
+        .exec7-card span{display:block;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
+        .exec7-card b{display:block;color:#293241;font-size:17px;line-height:1.1;font-weight:950;margin-bottom:4px;}
+        .exec7-card p{margin:0;color:#475569;font-size:11.5px;line-height:1.32;font-weight:730;}
+        @media(max-width:1100px){.exec7-grid{grid-template-columns:1fr}.exec7-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.exec7-cards{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        @media(max-width:720px){.exec7-kpis,.exec7-cards{grid-template-columns:1fr}.exec7-title{font-size:24px;}}
+        </style>
+        <div class="exec7-wrap">
+        """,
+        unsafe_allow_html=True,
+    )
+
+    kpis_html = "".join(
+        [
+            f'<div class="exec7-kpi" style="--accent:#3d5a80;"><span>Turbina recomendada</span><b>{html.escape(rec_model)}</b><small>{fmt_num(power_kw, 1, " kW")} nominales para el sitio.</small></div>',
+            f'<div class="exec7-kpi" style="--accent:#2a9d8f;"><span>Producción anual</span><b>{fmt_kwh(annual_energy)}</b><small>Cobertura mensual estimada {fmt_pct(coverage_pct)}.</small></div>',
+            f'<div class="exec7-kpi" style="--accent:#ee6c4d;"><span>CAPEX instalado</span><b>{fmt_mm_clp(capex_clp)}</b><small>Suministro + montaje local.</small></div>',
+            f'<div class="exec7-kpi" style="--accent:#293241;"><span>Factor planta</span><b>{fmt_pct(fp_curve)}</b><small>Consistente con curva técnica activa.</small></div>',
+            f'<div class="exec7-kpi" style="--accent:#98c1d9;"><span>Payback</span><b>{fmt_num(payback, 1, " años")}</b><small>LCOE {fmt_clp(lcoe)}/kWh.</small></div>',
+            f'<div class="exec7-kpi" style="--accent:#8b5cf6;"><span>Plazo de proyecto</span><b>{fmt_num(schedule_days, 0, " días")}</b><small>Secuencia desde compra hasta cierre técnico.</small></div>',
+        ]
+    )
+    st.markdown(
+        f"""
+        <div class="exec7-hero">
+          <div class="exec7-grid">
+            <div>
+              <p class="exec7-kicker">07 · Resumen ejecutivo</p>
+              <h2 class="exec7-title">Recomendación técnica, energética y económica para {html.escape(rec_model)}</h2>
+              <p class="exec7-lead">La alternativa recomendada concentra la mejor lectura integral entre recurso eólico disponible, curva real de potencia, cobertura energética, costo instalado y plazo de implementación. La decisión debe cerrarse validando ingeniería de detalle, logística, montaje y condiciones reales del sitio.</p>
+            </div>
+            <div class="exec7-kpis">{kpis_html}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<div class="exec7-note"><b>Conclusión de ingeniería:</b> {html.escape(rec_model)} es la alternativa base para propuesta porque combina potencia instalada de {fmt_num(power_kw, 1, " kW")}, producción anual de {fmt_kwh(annual_energy)}, CAPEX de {fmt_mm_clp(capex_clp)} y plazo estimado de {fmt_num(schedule_days, 0, " días")}. La recomendación no debe cerrarse solo por CAPEX; requiere confirmar curva de potencia, altura efectiva de viento, fundaciones, izaje, protecciones eléctricas y capacidad de ejecución en terreno.</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="exec7-section"><h3>1. Conveniencia técnica y energética</h3><p>Evalúa si la turbina seleccionada convierte el recurso eólico del sitio en energía útil suficiente para justificar el alcance técnico.</p></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="exec7-cards">'
+        f'<div class="exec7-card"><span>Velocidad de diseño</span><b>{fmt_num(wind_speed, 2, " m/s")}</b><p>Base para interpolar potencia y producción esperada.</p></div>'
+        f'<div class="exec7-card"><span>Altura efectiva</span><b>{fmt_num(effective_height, 1, " m")}</b><p>Controla la exposición real del rotor al perfil de viento.</p></div>'
+        f'<div class="exec7-card"><span>Potencia máxima curva</span><b>{fmt_num(pmax_curve, 1, " kW")}</b><p>Referencia técnica de la curva de potencia disponible.</p></div>'
+        f'<div class="exec7-card"><span>CO2 evitado</span><b>{fmt_num(co2, 1, " t/año")}</b><p>Beneficio ambiental asociado a energía desplazada.</p></div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    chart_col, table_col = st.columns([1.2, 0.8])
+    with chart_col:
+        if not selected_curve_points.empty and {"Velocidad m/s", "Potencia kW"}.issubset(selected_curve_points.columns):
+            curve_df = selected_curve_points.copy()
+            curve_df["Velocidad m/s"] = pd.to_numeric(curve_df["Velocidad m/s"], errors="coerce")
+            curve_df["Potencia kW"] = pd.to_numeric(curve_df["Potencia kW"], errors="coerce")
+            curve_df = curve_df.dropna(subset=["Velocidad m/s", "Potencia kW"]).sort_values("Velocidad m/s")
+            interpolated_kw = np.interp(wind_speed, curve_df["Velocidad m/s"], curve_df["Potencia kW"]) if np.isfinite(wind_speed) and len(curve_df) >= 2 else np.nan
+            fig_curve = go.Figure()
+            fig_curve.add_trace(
+                go.Scatter(
+                    x=curve_df["Velocidad m/s"],
+                    y=curve_df["Potencia kW"],
+                    mode="lines+markers",
+                    name="Curva real",
+                    line=dict(color="#3d5a80", width=3),
+                    marker=dict(size=6),
+                    hovertemplate="Viento %{x:.2f} m/s<br>Potencia %{y:.2f} kW<extra></extra>",
+                )
+            )
+            if np.isfinite(interpolated_kw):
+                fig_curve.add_trace(
+                    go.Scatter(
+                        x=[wind_speed],
+                        y=[interpolated_kw],
+                        mode="markers+text",
+                        name="Punto operativo",
+                        marker=dict(size=13, color="#ee6c4d", line=dict(color="white", width=2)),
+                        text=[f"{interpolated_kw:.1f} kW"],
+                        textposition="top center",
+                        hovertemplate="Viento medio %{x:.2f} m/s<br>Potencia interpolada %{y:.2f} kW<extra></extra>",
+                    )
+                )
+            fig_curve.update_layout(
+                height=390,
+                margin=dict(l=10, r=20, t=18, b=45),
+                legend=dict(orientation="h", y=1.12, x=0, title=None),
+                xaxis=dict(title="Velocidad de viento (m/s)", gridcolor="rgba(61,90,128,.16)"),
+                yaxis=dict(title="Potencia real (kW)", gridcolor="rgba(61,90,128,.16)"),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_curve, use_container_width=True, config={"displaylogo": False})
+    with table_col:
+        tech_table = pd.DataFrame(
+            [
+                {"Indicador": "Modelo recomendado", "Valor": rec_model},
+                {"Indicador": "Potencia nominal", "Valor": fmt_num(power_kw, 1, " kW")},
+                {"Indicador": "Altura total turbina", "Valor": fmt_num(turbine_height, 1, " m")},
+                {"Indicador": "Altura efectiva viento", "Valor": fmt_num(effective_height, 1, " m")},
+                {"Indicador": "Factor planta", "Valor": fmt_pct(fp_curve)},
+                {"Indicador": "Energía anual", "Valor": fmt_kwh(annual_energy)},
+                {"Indicador": "Generación mensual", "Valor": fmt_kwh(monthly_generation)},
+                {"Indicador": "Consumo mensual", "Valor": fmt_kwh(monthly_consumption)},
+            ]
+        )
+        st.dataframe(tech_table, use_container_width=True, hide_index=True)
+
+    gen_df = pd.DataFrame(
+        [
+            {"Concepto": "Generación mensual", "kWh/mes": monthly_generation},
+            {"Concepto": "Consumo mensual", "kWh/mes": monthly_consumption},
+        ]
+    ).dropna()
+    if not gen_df.empty:
+        fig_gen = px.bar(
+            gen_df,
+            x="Concepto",
+            y="kWh/mes",
+            text=gen_df["kWh/mes"].map(lambda value: f"{value:,.0f}".replace(",", ".")),
+            color="Concepto",
+            color_discrete_map={"Generación mensual": "#2a9d8f", "Consumo mensual": "#293241"},
+        )
+        fig_gen.update_traces(textposition="outside", cliponaxis=False, hovertemplate="<b>%{x}</b><br>%{y:,.0f} kWh/mes<extra></extra>")
+        fig_gen.update_layout(
+            height=330,
+            showlegend=False,
+            margin=dict(l=10, r=20, t=18, b=45),
+            yaxis=dict(title="kWh/mes", gridcolor="rgba(61,90,128,.16)"),
+            xaxis=dict(title=None),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig_gen, use_container_width=True, config={"displaylogo": False})
+
+    st.markdown('<div class="exec7-section"><h3>2. CAPEX instalado y alcance técnico</h3><p>Separa suministro tecnológico, instalación local y bloques WBS para identificar dónde se concentra el costo y qué debe auditarse antes de compra.</p></div>', unsafe_allow_html=True)
+    capex_split = pd.DataFrame(
+        [
+            {"Área CAPEX": "Suministro", "Monto CLP": supply_clp},
+            {"Área CAPEX": "Montaje local", "Monto CLP": mounting_clp},
+        ]
+    ).dropna()
+    capex_col, wbs_col = st.columns([0.9, 1.1])
+    with capex_col:
+        if not capex_split.empty:
+            fig_capex = px.bar(
+                capex_split,
+                x="Área CAPEX",
+                y="Monto CLP",
+                color="Área CAPEX",
+                text=capex_split["Monto CLP"].map(lambda value: fmt_mm_clp(value)),
+                color_discrete_map={"Suministro": "#3d5a80", "Montaje local": "#ee6c4d"},
+            )
+            fig_capex.update_traces(textposition="outside", cliponaxis=False, hovertemplate="<b>%{x}</b><br>%{y:,.0f} CLP<extra></extra>")
+            fig_capex.update_layout(
+                height=360,
+                showlegend=False,
+                margin=dict(l=10, r=20, t=18, b=45),
+                yaxis=dict(title="CLP", gridcolor="rgba(61,90,128,.16)"),
+                xaxis=dict(title=None),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_capex, use_container_width=True, config={"displaylogo": False})
+    with wbs_col:
+        wbs_summary = pd.DataFrame()
+        if not wbs_df.empty and {"Tipo fila", "Sección", "Monto CLP"}.issubset(wbs_df.columns):
+            wbs_summary = (
+                wbs_df[wbs_df["Tipo fila"].eq("Subtotal")]
+                .groupby("Sección", as_index=False)["Monto CLP"]
+                .sum()
+                .sort_values("Monto CLP", ascending=True)
+                .tail(10)
+            )
+        if not wbs_summary.empty:
+            fig_wbs = px.bar(
+                wbs_summary,
+                x="Monto CLP",
+                y="Sección",
+                orientation="h",
+                text=wbs_summary["Monto CLP"].map(lambda value: fmt_mm_clp(value)),
+                color="Monto CLP",
+                color_continuous_scale=["#98c1d9", "#3d5a80"],
+            )
+            fig_wbs.update_traces(textposition="outside", cliponaxis=False, hovertemplate="<b>%{y}</b><br>%{x:,.0f} CLP<extra></extra>")
+            fig_wbs.update_layout(
+                height=360,
+                margin=dict(l=10, r=75, t=18, b=45),
+                coloraxis_showscale=False,
+                xaxis=dict(title="CLP", gridcolor="rgba(61,90,128,.16)"),
+                yaxis=dict(title=None),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_wbs, use_container_width=True, config={"displaylogo": False})
+    scope_table = pd.DataFrame(
+        [
+            {"Área": "Suministro tecnológico", "Monto": fmt_clp(supply_clp), "Lectura de ingeniería": "Turbina, torre/mástil, controlador, inversor y eléctricos principales del paquete proveedor."},
+            {"Área": "Montaje e integración local", "Monto": fmt_clp(mounting_clp), "Lectura de ingeniería": "Obras civiles, logística, montaje electromecánico, indirectos, seguridad e imprevistos."},
+            {"Área": "CAPEX instalado", "Monto": fmt_clp(capex_clp), "Lectura de ingeniería": "Base de inversión que debe reconciliarse con alcance WBS y condiciones reales del sitio."},
+        ]
+    )
+    st.dataframe(scope_table, use_container_width=True, hide_index=True)
+
+    if not mounting_df.empty:
+        st.markdown('<div class="exec7-section"><h3>3. Detalle de CAPEX montaje por área</h3><p>Lee el montaje local como estructura de alcance: áreas CAPEX, tipo de costo y recursos que explican el monto. La prioridad es detectar concentración de costo y frentes que requieren cotización o control de productividad.</p></div>', unsafe_allow_html=True)
+        mounting_cost_df = mounting_df.copy()
+        mounting_cost_df["Costo total CLP"] = pd.to_numeric(mounting_cost_df["Costo total CLP"], errors="coerce").fillna(0.0)
+        mounting_cost_df["HH calculadas"] = pd.to_numeric(mounting_cost_df["HH calculadas"], errors="coerce").fillna(0.0)
+        mounting_cost_df["Área montaje"] = mounting_cost_df["Área"].replace("", "Sin área").fillna("Sin área")
+        mounting_cost_df["Tipo costo montaje"] = mounting_cost_df["Tipo costo"].replace("", "Sin tipo").fillna("Sin tipo")
+        mounting_cost_df["Recurso montaje"] = mounting_cost_df["Recurso"].replace("", "Sin recurso").fillna("Sin recurso")
+        area_summary = (
+            mounting_cost_df.groupby(["Área montaje"], as_index=False)
+            .agg(**{"Costo CLP": ("Costo total CLP", "sum"), "HH": ("HH calculadas", "sum"), "Partidas": ("ID", "count")})
+            .sort_values("Costo CLP", ascending=False)
+        )
+        mounting_positive = mounting_cost_df[mounting_cost_df["Costo total CLP"] > 0].copy()
+        detail_col_a, detail_col_b = st.columns([1.15, 0.85])
+        with detail_col_a:
+            if not mounting_positive.empty:
+                fig_tree = px.treemap(
+                    mounting_positive,
+                    path=["Área montaje", "Tipo costo montaje", "Recurso montaje"],
+                    values="Costo total CLP",
+                    color="Área montaje",
+                    color_discrete_sequence=["#3d5a80", "#2a9d8f", "#98c1d9", "#ee6c4d", "#64748b", "#8b5cf6"],
+                    custom_data=["HH calculadas", "ID"],
+                )
+                fig_tree.update_traces(
+                    textinfo="label+percent parent",
+                    hovertemplate="<b>%{label}</b><br>Costo: %{value:,.0f} CLP<br>Participación padre: %{percentParent:.1%}<extra></extra>",
+                )
+                fig_tree.update_layout(
+                    height=470,
+                    margin=dict(l=0, r=0, t=18, b=0),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                )
+                st.plotly_chart(fig_tree, use_container_width=True, config={"displaylogo": False})
+        with detail_col_b:
+            if not area_summary.empty:
+                pareto = area_summary.sort_values("Costo CLP", ascending=False).copy()
+                total_mounting_area = float(pareto["Costo CLP"].sum() or 1.0)
+                pareto["Participación %"] = pareto["Costo CLP"] / total_mounting_area * 100.0
+                pareto["Acumulado %"] = pareto["Participación %"].cumsum()
+                fig_pareto = go.Figure()
+                fig_pareto.add_trace(
+                    go.Bar(
+                        x=pareto["Área montaje"],
+                        y=pareto["Costo CLP"],
+                        name="Costo por área",
+                        marker_color="#3d5a80",
+                        text=pareto["Costo CLP"].map(lambda value: fmt_mm_clp(value)),
+                        textposition="outside",
+                        customdata=pareto[["HH", "Partidas", "Participación %"]],
+                        hovertemplate="<b>%{x}</b><br>Costo: %{y:,.0f} CLP<br>Participación: %{customdata[2]:.1f}%<br>HH: %{customdata[0]:.1f}<br>Partidas: %{customdata[1]}<extra></extra>",
+                    )
+                )
+                fig_pareto.add_trace(
+                    go.Scatter(
+                        x=pareto["Área montaje"],
+                        y=pareto["Acumulado %"],
+                        name="Acumulado",
+                        mode="lines+markers+text",
+                        yaxis="y2",
+                        line=dict(color="#ee6c4d", width=3),
+                        marker=dict(size=8),
+                        text=pareto["Acumulado %"].map(lambda value: f"{value:.0f}%"),
+                        textposition="top center",
+                        hovertemplate="<b>%{x}</b><br>Acumulado: %{y:.1f}%<extra></extra>",
+                    )
+                )
+                fig_pareto.update_layout(
+                    height=470,
+                    margin=dict(l=10, r=55, t=18, b=78),
+                    legend=dict(orientation="h", y=1.13, x=0, title=None),
+                    xaxis=dict(title=None, tickangle=-25),
+                    yaxis=dict(title="CLP", gridcolor="rgba(61,90,128,.16)"),
+                    yaxis2=dict(title="Acumulado", overlaying="y", side="right", range=[0, 105], ticksuffix="%", showgrid=False),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                )
+                st.plotly_chart(fig_pareto, use_container_width=True, config={"displaylogo": False})
+                top_area = pareto.iloc[0]
+                st.markdown(
+                    f'<div class="exec7-note"><b>Lectura CAPEX montaje:</b> el área dominante es {html.escape(str(top_area["Área montaje"]))}, con {fmt_mm_clp(top_area["Costo CLP"])} y {fmt_pct(top_area["Participación %"])} del montaje local. Esta área debe concentrar la revisión de alcance, productividad, logística y respaldo de cotización.</div>',
+                    unsafe_allow_html=True,
+                )
+
+    st.markdown('<div class="exec7-section"><h3>4. Línea de tiempo del proyecto</h3><p>Ordena la ejecución por frentes, ruta crítica y solapes para discutir factibilidad del plazo con proveedor, logística y montaje.</p></div>', unsafe_allow_html=True)
+    if not schedule_df.empty:
+        render_inputs_gantt_design_css()
+        palette = {
+            "Hito": "#293241",
+            "Suministro": "#3d5a80",
+            "Logística": "#98c1d9",
+            "Montaje": "#ee6c4d",
+            "Comisionamiento": "#2a9d8f",
+        }
+        block_colors = {block: palette.get(str(block), "#64748b") for block in schedule_df["Bloque"].dropna().unique()}
+        render_project_execution_pro_gantt(
+            schedule_df,
+            block_colors=block_colors,
+            title="Secuencia ejecutiva de implementación",
+        )
+        block_summary = (
+            schedule_df.groupby("Bloque", as_index=False)
+            .agg(**{"Inicio": ("Inicio día", "min"), "Fin": ("Fin día", "max"), "Días tarea": ("Duración calculada", "sum"), "Tareas": ("ID", "count"), "Críticas": ("Es ruta crítica", "sum")})
+            .sort_values("Inicio")
+        )
+        block_summary["Span calendario"] = block_summary["Fin"] - block_summary["Inicio"] + 1
+        fig_blocks = px.bar(
+            block_summary,
+            x="Bloque",
+            y="Span calendario",
+            color="Bloque",
+            text=block_summary["Span calendario"].map(lambda value: f"{value:.0f} días"),
+            color_discrete_map=block_colors,
+            custom_data=["Días tarea", "Tareas", "Críticas", "Inicio", "Fin"],
+        )
+        fig_blocks.update_traces(textposition="outside", cliponaxis=False, hovertemplate="<b>%{x}</b><br>Span: %{y:.0f} días<br>Días tarea: %{customdata[0]:.0f}<br>Tareas: %{customdata[1]}<br>Críticas: %{customdata[2]}<br>Ventana: día %{customdata[3]:.0f} a %{customdata[4]:.0f}<extra></extra>")
+        fig_blocks.update_layout(
+            height=350,
+            showlegend=False,
+            margin=dict(l=10, r=25, t=18, b=45),
+            yaxis=dict(title="Días", gridcolor="rgba(61,90,128,.16)"),
+            xaxis=dict(title=None),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig_blocks, use_container_width=True, config={"displaylogo": False})
+        timeline_table = block_summary.copy()
+        timeline_table["Inicio"] = timeline_table["Inicio"].map(lambda value: f"Día {value:.0f}")
+        timeline_table["Fin"] = timeline_table["Fin"].map(lambda value: f"Día {value:.0f}")
+        timeline_table["Span calendario"] = timeline_table["Span calendario"].map(lambda value: f"{value:.0f} días")
+        timeline_table["Días tarea"] = timeline_table["Días tarea"].map(lambda value: f"{value:.0f} días")
+        st.dataframe(timeline_table[["Bloque", "Inicio", "Fin", "Span calendario", "Días tarea", "Tareas", "Críticas"]], use_container_width=True, hide_index=True)
+
+    closures = pd.DataFrame(
+        [
+            {"Frente": "Recurso eólico", "Control requerido": "Confirmar velocidad media, rugosidad, altura efectiva y distribución de viento antes de congelar producción.", "Impacto": "Energía anual, factor planta y cobertura."},
+            {"Frente": "Turbina y curva real", "Control requerido": "Validar curva de potencia, cut-in/cut-out, potencia máxima y compatibilidad eléctrica del paquete.", "Impacto": "Rendimiento técnico y confiabilidad."},
+            {"Frente": "CAPEX instalado", "Control requerido": "Reconciliar suministro, montaje, indirectos e imprevistos con el alcance WBS y cotizaciones.", "Impacto": "Presupuesto de inversión y contingencia."},
+            {"Frente": "Montaje", "Control requerido": "Revisar horas hombre, cuadrillas, equipos de izaje, logística y permisos de acceso.", "Impacto": "Productividad, seguridad y plazo."},
+            {"Frente": "Cronograma", "Control requerido": "Asegurar hitos de compra, fabricación, despacho, obra civil, montaje, comisionamiento y aceptación.", "Impacto": "Fecha de puesta en servicio."},
+        ]
+    )
+    st.markdown('<div class="exec7-section"><h3>5. Cierres técnicos para propuesta</h3><p>Lista de controles mínimos que deben resolverse antes de presentar oferta final o pasar a ingeniería de detalle.</p></div>', unsafe_allow_html=True)
+    st.dataframe(closures, use_container_width=True, hide_index=True)
+
+    technical_model = load_telecom_10kw_power_technical_model(
+        TELECOM_10KW_POWER_TECH_CSV_URL_DEFAULT,
+        refresh_nonce=data_refresh_nonce,
+    )
+    tech_summary = technical_model.get("summary", pd.DataFrame()).copy()
+    tech_inputs = technical_model.get("inputs", pd.DataFrame()).copy()
+    tech_curve = technical_model.get("curve", pd.DataFrame()).copy()
+    ten_kw_row = pd.Series(dtype=object)
+    if not tech_summary.empty and "Modelo" in tech_summary.columns:
+        ten_kw_match = tech_summary[tech_summary["Modelo"].astype(str).map(normalize_key).str.contains("10kw|10 kw", regex=True, na=False)]
+        if not ten_kw_match.empty:
+            ten_kw_row = ten_kw_match.iloc[0]
+    ten_kw_curve_col = None
+    if not tech_curve.empty:
+        for candidate in tech_curve.columns:
+            if normalize_key(candidate) in {normalize_key("GVH-10KW"), normalize_key("VAWT 10 kW")} or "10kw" in normalize_key(candidate):
+                ten_kw_curve_col = candidate
+                break
+
+    if ten_kw_curve_col and "V (m/s)" in tech_curve.columns:
+        aep_10kw = num(ten_kw_row.get("AEP estimado kWh/año", np.nan))
+        fp_10kw = num(ten_kw_row.get("Factor planta", np.nan))
+        cp_10kw = num(ten_kw_row.get("Cp nominal", np.nan))
+        betz_10kw = num(ten_kw_row.get("% Betz", np.nan))
+        nominal_10kw = num(ten_kw_row.get("Potencia nominal kW", 10.0), 10.0)
+        curve_10kw = tech_curve[["V (m/s)", ten_kw_curve_col]].copy()
+        curve_10kw.columns = ["Viento m/s", "Potencia kW"]
+        curve_10kw["Viento m/s"] = pd.to_numeric(curve_10kw["Viento m/s"], errors="coerce")
+        curve_10kw["Potencia kW"] = pd.to_numeric(curve_10kw["Potencia kW"], errors="coerce")
+        curve_10kw = curve_10kw.dropna().sort_values("Viento m/s")
+        p_at_site = np.interp(wind_speed, curve_10kw["Viento m/s"], curve_10kw["Potencia kW"]) if np.isfinite(wind_speed) and len(curve_10kw) >= 2 else np.nan
+        pmax_10kw = float(curve_10kw["Potencia kW"].max()) if not curve_10kw.empty else np.nan
+        rated_rows = curve_10kw[curve_10kw["Potencia kW"].ge(nominal_10kw)]
+        rated_speed = float(rated_rows["Viento m/s"].iloc[0]) if not rated_rows.empty else np.nan
+        if active_wind_valid:
+            fp_10kw = active_wind_fp
+            aep_10kw = nominal_10kw * 8760.0 * active_wind_fp / 100.0
+            if np.isfinite(active_wind_energy_ref) and np.isfinite(active_wind_ref_kw) and active_wind_ref_kw > 0:
+                aep_10kw = active_wind_energy_ref * (nominal_10kw / active_wind_ref_kw)
+        monthly_10kw = aep_10kw / 12.0 if np.isfinite(aep_10kw) else np.nan
+
+        input_lookup = {}
+        if not tech_inputs.empty and {"Input clave", "Valor", "Unidad"}.issubset(tech_inputs.columns):
+            for _, row in tech_inputs.iterrows():
+                input_lookup[normalize_key(row.get("Input clave", ""))] = row
+        weibull_k = num(input_lookup.get(normalize_key("Weibull k"), pd.Series()).get("Valor numérico", np.nan)) if input_lookup else np.nan
+        weibull_c = num(input_lookup.get(normalize_key("Weibull c"), pd.Series()).get("Valor numérico", np.nan)) if input_lookup else np.nan
+        net_factor = num(input_lookup.get(normalize_key("Factor neto"), pd.Series()).get("Valor numérico", np.nan)) if input_lookup else np.nan
+        air_density = num(input_lookup.get(normalize_key("ρ aire"), input_lookup.get(normalize_key("rho aire"), pd.Series())).get("Valor numérico", np.nan)) if input_lookup else np.nan
+
+        st.markdown(
+            '<div class="exec7-section"><h3>6. Análisis técnico 10 kW: curva de potencia, generación y recurso</h3>'
+            '<p>Lectura específica de la turbina 10 kW con curva real, producción anual estimada e inputs eólicos usados para interpretar el desempeño esperado en sitio.</p></div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="exec7-cards">'
+            f'<div class="exec7-card"><span>AEP estimado</span><b>{fmt_kwh(aep_10kw)}</b><p>Equivale a {fmt_kwh(monthly_10kw)} por mes en promedio.</p></div>'
+            f'<div class="exec7-card"><span>Factor planta 10 kW</span><b>{fmt_pct(fp_10kw)}</b><p>Lectura neta según distribución eólica y curva aplicada.</p></div>'
+            f'<div class="exec7-card"><span>Potencia a viento sitio</span><b>{fmt_num(p_at_site, 2, " kW")}</b><p>Interpolada a {fmt_num(wind_speed, 2, " m/s")} de viento medio disponible.</p></div>'
+            f'<div class="exec7-card"><span>Régimen nominal</span><b>{fmt_num(rated_speed, 1, " m/s")}</b><p>Velocidad desde la cual la curva alcanza {fmt_num(nominal_10kw, 0, " kW")}.</p></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        tech_col_a, tech_col_b = st.columns([1.12, 0.88])
+        with tech_col_a:
+            fig_10kw = go.Figure()
+            fig_10kw.add_trace(
+                go.Scatter(
+                    x=curve_10kw["Viento m/s"],
+                    y=curve_10kw["Potencia kW"],
+                    mode="lines+markers",
+                    name="Curva 10 kW",
+                    line=dict(color="#3d5a80", width=3),
+                    marker=dict(size=6),
+                    hovertemplate="Viento %{x:.1f} m/s<br>Potencia %{y:.2f} kW<extra></extra>",
+                )
+            )
+            if np.isfinite(p_at_site):
+                fig_10kw.add_trace(
+                    go.Scatter(
+                        x=[wind_speed],
+                        y=[p_at_site],
+                        mode="markers+text",
+                        name="Punto recurso",
+                        marker=dict(size=14, color="#ee6c4d", line=dict(width=2, color="#fff")),
+                        text=[f"{p_at_site:.2f} kW"],
+                        textposition="top center",
+                        hovertemplate="Viento medio %{x:.2f} m/s<br>Potencia interpolada %{y:.2f} kW<extra></extra>",
+                    )
+                )
+            if np.isfinite(nominal_10kw):
+                fig_10kw.add_hline(y=nominal_10kw, line_dash="dot", line_color="#2a9d8f", annotation_text="Potencia nominal", annotation_position="top left")
+            if np.isfinite(pmax_10kw):
+                fig_10kw.add_hline(y=pmax_10kw, line_dash="dash", line_color="#64748b", annotation_text="Pmax curva", annotation_position="bottom right")
+            fig_10kw.update_layout(
+                height=430,
+                margin=dict(l=10, r=25, t=18, b=48),
+                legend=dict(orientation="h", y=1.13, x=0, title=None),
+                xaxis=dict(title="Velocidad de viento (m/s)", gridcolor="rgba(61,90,128,.16)"),
+                yaxis=dict(title="Potencia eléctrica (kW)", gridcolor="rgba(61,90,128,.16)"),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_10kw, use_container_width=True, config={"displaylogo": False})
+        with tech_col_b:
+            if not tech_summary.empty and {"Modelo", "AEP estimado kWh/año"}.issubset(tech_summary.columns):
+                summary_plot = tech_summary.dropna(subset=["AEP estimado kWh/año"]).copy()
+                if active_wind_valid and "Potencia nominal kW" in summary_plot.columns:
+                    summary_plot["AEP estimado kWh/año"] = pd.to_numeric(summary_plot["Potencia nominal kW"], errors="coerce") * 8760.0 * active_wind_fp / 100.0
+                fig_aep = px.bar(
+                    summary_plot,
+                    x="Modelo",
+                    y="AEP estimado kWh/año",
+                    color="Modelo",
+                    text=summary_plot["AEP estimado kWh/año"].map(lambda value: fmt_kwh(value).replace(" kWh", "")),
+                    color_discrete_sequence=["#98c1d9", "#3d5a80", "#2a9d8f", "#ee6c4d", "#64748b"],
+                )
+                fig_aep.update_traces(textposition="outside", cliponaxis=False, hovertemplate="<b>%{x}</b><br>AEP %{y:,.0f} kWh/año<extra></extra>")
+                fig_aep.update_layout(
+                    height=430,
+                    showlegend=False,
+                    margin=dict(l=10, r=25, t=18, b=58),
+                    xaxis=dict(title=None),
+                    yaxis=dict(title="kWh/año", gridcolor="rgba(61,90,128,.16)"),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                )
+                st.plotly_chart(fig_aep, use_container_width=True, config={"displaylogo": False})
+        tech_table = pd.DataFrame(
+            [
+                {"Indicador": "Modelo curva", "Valor": str(ten_kw_row.get("Modelo", "GVH-10KW"))},
+                {"Indicador": "Potencia nominal", "Valor": fmt_num(nominal_10kw, 1, " kW")},
+                {"Indicador": "Potencia máxima curva", "Valor": fmt_num(pmax_10kw, 1, " kW")},
+                {"Indicador": "Velocidad nominal aproximada", "Valor": fmt_num(rated_speed, 1, " m/s")},
+                {"Indicador": "Velocidad media disponible", "Valor": fmt_num(wind_speed, 2, " m/s")},
+                {"Indicador": "Weibull k / c", "Valor": f"{fmt_num(weibull_k, 2)} / {fmt_num(weibull_c, 2, ' m/s')}"},
+                {"Indicador": "Densidad de aire", "Valor": fmt_num(air_density, 3, " kg/m³")},
+                {"Indicador": "Factor neto", "Valor": fmt_num(net_factor, 3)},
+                {"Indicador": "Cp nominal / Betz", "Valor": f"{fmt_pct(cp_10kw)} / {fmt_pct(betz_10kw)}"},
+            ]
+        )
+        st.dataframe(tech_table, use_container_width=True, hide_index=True)
+        st.markdown(
+            f'<div class="exec7-note"><b>Lectura técnica 10 kW:</b> con viento medio de {fmt_num(wind_speed, 2, " m/s")}, la curva entrega una potencia interpolada de {fmt_num(p_at_site, 2, " kW")}. La generación anual estimada es {fmt_kwh(aep_10kw)}, con factor planta {fmt_pct(fp_10kw)}. Para cierre de ingeniería conviene validar que la altura efectiva, rugosidad, turbulencia y disponibilidad real sostengan el Weibull k={fmt_num(weibull_k, 2)} y c={fmt_num(weibull_c, 2, " m/s")} usados en la estimación.</div>',
+            unsafe_allow_html=True,
+        )
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_telecom_tower_eval_analysis():
@@ -15914,6 +17371,7 @@ def render_telecom_tower_eval_analysis():
         "04 Recomendación Comercial",
         "05 CAPEX Instalado",
         "06 Ejecución de proyecto",
+        "07 Resumen Ejecutivo",
     ]
     telecom_market_tab_aliases = {
         "01 Sitio y Demanda": "01 Perfil del Sitio",
@@ -15923,6 +17381,8 @@ def render_telecom_tower_eval_analysis():
         "CAPEX": "05 CAPEX Instalado",
         "Ejecución": "06 Ejecución de proyecto",
         "06 Cronograma": "06 Ejecución de proyecto",
+        "Resumen Ejecutivo": "07 Resumen Ejecutivo",
+        "07 Resumen": "07 Resumen Ejecutivo",
     }
     for nav_key in ("telecom_market_tab_selector", "telecom_market_tab_selector__sticky"):
         current_tab_value = st.session_state.get(nav_key)
@@ -15934,12 +17394,46 @@ def render_telecom_tower_eval_analysis():
             sticky_tab = telecom_market_tab_aliases[sticky_tab]
         if sticky_tab in telecom_market_tabs:
             st.session_state["telecom_market_tab_selector"] = sticky_tab
-    selected_telecom_market_tab = render_single_select_pills_compat(
-        "Vista de análisis de mercado",
-        telecom_market_tabs,
-        default=telecom_market_tabs[0],
-        key="telecom_market_tab_selector",
-    )
+    tab_col, pdf_exec_col, pdf_annex_col = st.columns([0.64, 0.18, 0.18], vertical_alignment="bottom")
+    with tab_col:
+        selected_telecom_market_tab = render_single_select_pills_compat(
+            "Vista de análisis de mercado",
+            telecom_market_tabs,
+            default=telecom_market_tabs[0],
+            key="telecom_market_tab_selector",
+        )
+    with pdf_exec_col:
+        if REPORTLAB_AVAILABLE:
+            try:
+                executive_pdf_bytes = _build_telecom_pdf(executive=True, refresh_nonce=data_refresh_nonce)
+                st.download_button(
+                    "PDF ejecutivo",
+                    data=executive_pdf_bytes,
+                    file_name="Informe_ejecutivo_eolico_telecom.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="download_telecom_exec_pdf",
+                )
+            except Exception as exc:
+                st.caption(f"PDF no disponible: {exc}")
+        else:
+            st.caption("PDF no disponible")
+    with pdf_annex_col:
+        if REPORTLAB_AVAILABLE:
+            try:
+                annex_pdf_bytes = _build_telecom_pdf(executive=False, refresh_nonce=data_refresh_nonce)
+                st.download_button(
+                    "Anexo técnico",
+                    data=annex_pdf_bytes,
+                    file_name="Anexo_tecnico_eolico_telecom.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="download_telecom_annex_pdf",
+                )
+            except Exception as exc:
+                st.caption(f"Anexo no disponible: {exc}")
+        else:
+            st.caption("Anexo no disponible")
 
     def _analysis_context_state() -> dict:
         ctx = st.session_state.get("telecom_00_analysis_context", {}) or {}
@@ -16660,6 +18154,10 @@ def render_telecom_tower_eval_analysis():
 
     if selected_telecom_market_tab == "06 Ejecución de proyecto":
         render_telecom_project_execution_tab()
+        return
+
+    if selected_telecom_market_tab == "07 Resumen Ejecutivo":
+        render_telecom_executive_summary_tab()
         return
 
     alternatives["Alternativa"] = pd.Categorical(alternatives["Alternativa"], categories=turbine_order, ordered=True)
