@@ -22,7 +22,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from pathlib import Path
 
 try:
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import A4, landscape
     from reportlab.platypus import (
         SimpleDocTemplate,
         Paragraph,
@@ -382,7 +382,7 @@ GANTT_DATE_COL_START = "Inicio (AAAA-MM-DD)"
 GANTT_DATE_COL_END_PLAN = "Fin plan (AAAA-MM-DD)"
 GANTT_DATE_COL_END_REAL = "Fin real"
 ASPAS_FRP_GANTT_PHASE_OPTION = "Fabricación ASPAS frp"
-GANTT_PROJECT_SOURCE_VERSION = 4
+GANTT_PROJECT_SOURCE_VERSION = 6
 GANTT_COLUMN_ALIASES = {
     "LÃ\xadnea": "Línea",
     "MÃ©todo": "Método",
@@ -1372,6 +1372,13 @@ def parse_money_clp_robusto(x: str) -> float:
         return 0.0
 
 
+def gantt_selected_funds_series(df: pd.DataFrame) -> pd.Series:
+    funds_col = "Presupuesto Base (CLP)" if "Presupuesto Base (CLP)" in df.columns else "Monto" if "Monto" in df.columns else None
+    if not funds_col:
+        return pd.Series(0.0, index=df.index)
+    return df[funds_col].apply(parse_money_clp_robusto)
+
+
 def build_google_sheet_xlsx_candidates(url: str) -> list[str]:
     """Genera candidatos de URL XLSX a partir de una URL publicada de Google Sheets."""
     parsed = urlparse(url)
@@ -1509,6 +1516,31 @@ def build_restante_piloto_10kw_view(url: str, refresh_nonce: int = 0) -> pd.Data
             df_view = df_view.iloc[1:].reset_index(drop=True)
 
     return df_view
+
+
+def get_brecha_piloto_10kw_clp(refresh_nonce: int = 0) -> float:
+    """Capital Segunda Etapa, matching the embedded executive summary source."""
+    df_gantt = load_project_gantt_data(
+        GANTT_PROJECT_CSV_URL_DEFAULT,
+        refresh_nonce=refresh_nonce,
+    )
+    required_cols = {"ETAPA", GANTT_DATE_COL_START, "Monto"}
+    if df_gantt.empty or not required_cols.issubset(df_gantt.columns):
+        return 0.0
+
+    scheduled = df_gantt[df_gantt[GANTT_DATE_COL_START].notna()].copy()
+    second_stage_mask = (
+        scheduled["ETAPA"]
+        .fillna("")
+        .astype(str)
+        .map(normalize_key)
+        .str.contains("segunda", na=False)
+    )
+    scheduled = scheduled[second_stage_mask].copy()
+    if scheduled.empty:
+        return 0.0
+
+    return float(scheduled["Monto"].apply(parse_money_clp_robusto).sum() or 0.0)
 
 
 @st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
@@ -2211,7 +2243,7 @@ def first_matching_column(df: pd.DataFrame, candidates: list[str]) -> str | None
     candidate_keys = [normalize_key(candidate) for candidate in candidates]
     for col in df.columns:
         col_key = normalize_key(col)
-        if any(candidate_key and (candidate_key == col_key or candidate_key in col_key or col_key in candidate_key) for candidate_key in candidate_keys):
+        if any(candidate_key and col_key and (candidate_key == col_key or candidate_key in col_key or col_key in candidate_key) for candidate_key in candidate_keys):
             return col
     return None
 
@@ -4866,9 +4898,9 @@ def gantt_process_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+@st.cache_data(show_spinner=False, ttl=60)
 def load_project_gantt_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
-    df = read_remote_csv(url, refresh_nonce=refresh_nonce + GANTT_PROJECT_SOURCE_VERSION, encoding="utf-8-sig")
+    df = read_remote_csv(url, refresh_nonce=refresh_nonce + GANTT_PROJECT_SOURCE_VERSION + int(time.time() // 60), encoding="utf-8-sig")
     df.columns = [GANTT_COLUMN_ALIASES.get(str(c).strip(), str(c).strip()) for c in df.columns]
     return gantt_process_df(df)
 
@@ -5822,6 +5854,15 @@ def render_inputs_gantt_design_css() -> None:
             font-weight:900;letter-spacing:0;
         }
         .gantt-subtitle{margin:6px 0 0 0;color:#748198;font-size:12px;line-height:1.45;}
+        .gantt-download-btn{
+            display:inline-flex;align-items:center;justify-content:center;
+            margin-top:12px;padding:8px 12px;border-radius:10px;
+            background:#0F766E;color:#FFFFFF!important;text-decoration:none!important;
+            font-size:11px;font-weight:900;letter-spacing:.03em;
+            box-shadow:0 10px 22px rgba(15,118,110,.18);
+            border:1px solid rgba(15,118,110,.22);
+        }
+        .gantt-download-btn:hover{background:#115E59;color:#FFFFFF!important;}
         .gantt-progress{
             min-width:266px;border:1px solid rgba(226,232,240,.95);border-radius:14px;
             padding:11px 13px;display:grid;grid-template-columns:46px 1fr 1px 1.1fr;
@@ -6068,9 +6109,124 @@ def render_inputs_gantt_design_css() -> None:
     )
 
 
+def _gantt_filtered_summary_rows(df: pd.DataFrame, date_mode: str = "Real") -> list[tuple[str, str]]:
+    summary = _gantt_summary(df, date_mode=date_mode)
+    selected_funds = gantt_selected_funds_series(df)
+    return [
+        ("Avance del bloque", f"{int(summary['progress_pct'])}%"),
+        ("Tareas atrasadas", str(int(summary["overdue_tasks"]))),
+        ("Vence pronto", str(int(summary["due_soon_tasks"]))),
+        ("Actividades visibles", str(int(summary["total_tasks"]))),
+        ("Líneas activas", str(int(summary["active_lines"]))),
+        ("Hitos de control", str(int(summary["milestones"]))),
+        ("Dependencias", str(int(summary["dependencies"]))),
+        ("Ventana de ejecución", str(summary["window_note"])),
+        ("Días hábiles ventana", str(int(summary["window_days"]))),
+        ("Fondos seleccionados", format_clp(float(selected_funds.sum() or 0.0))),
+        ("Partidas con monto", str(int((selected_funds > 0).sum()))),
+        ("Modo fechas", date_mode),
+    ]
+
+
+def _build_gantt_pdf_schedule(df: pd.DataFrame, date_mode: str = "Real") -> pd.DataFrame:
+    dfp = df.copy()
+    dfp["_start"] = pd.to_datetime(dfp.get(GANTT_DATE_COL_START), errors="coerce")
+    dfp["_end_plan"] = pd.to_datetime(dfp.get(GANTT_DATE_COL_END_PLAN), errors="coerce")
+    dfp["_end_real"] = pd.to_datetime(dfp.get(GANTT_DATE_COL_END_REAL), errors="coerce")
+    dfp["_start"] = dfp["_start"].fillna(dfp["_end_real"]).fillna(dfp["_end_plan"])
+    dfp["_end"] = dfp["_end_real"] if date_mode == "Real" else dfp["_end_plan"]
+    dfp["_end"] = dfp["_end"].fillna(dfp["_end_plan"]).fillna(dfp["_end_real"]).fillna(dfp["_start"])
+    bad = dfp["_end"] <= dfp["_start"]
+    dfp.loc[bad, "_end"] = dfp.loc[bad, "_start"] + pd.Timedelta(days=1)
+    dfp = dfp[dfp["_start"].notna() & dfp["_end"].notna()].copy()
+    if dfp.empty:
+        return pd.DataFrame(columns=["ID", "Bloque", "Actividad", "Inicio día", "Fin día", "Duración calculada", "Es ruta crítica"])
+
+    origin = dfp["_start"].min().normalize()
+    line = dfp["Línea"] if "Línea" in dfp.columns else dfp["Fase"] if "Fase" in dfp.columns else pd.Series("Cronograma", index=dfp.index)
+    activity = dfp["Tarea / Entregable"] if "Tarea / Entregable" in dfp.columns else pd.Series("", index=dfp.index)
+    task_id = dfp["ID"] if "ID" in dfp.columns else pd.Series(range(1, len(dfp) + 1), index=dfp.index)
+    critical_source = (
+        dfp["Ruta crítica"] if "Ruta crítica" in dfp.columns
+        else dfp["Es ruta crítica"] if "Es ruta crítica" in dfp.columns
+        else dfp["Hito (S/N)"] if "Hito (S/N)" in dfp.columns
+        else pd.Series(False, index=dfp.index)
+    )
+    schedule = pd.DataFrame(index=dfp.index)
+    schedule["ID"] = task_id.astype(str)
+    schedule["Bloque"] = line.fillna("Cronograma").astype(str).str.strip().replace({"": "Cronograma", "nan": "Cronograma", "None": "Cronograma"})
+    schedule["Actividad"] = activity.fillna("").astype(str)
+    schedule["Inicio día"] = (dfp["_start"].dt.normalize() - origin).dt.days + 1
+    schedule["Fin día"] = (dfp["_end"].dt.normalize() - origin).dt.days + 1
+    schedule["Fin día"] = schedule[["Inicio día", "Fin día"]].max(axis=1)
+    schedule["Duración calculada"] = (schedule["Fin día"] - schedule["Inicio día"] + 1).clip(lower=1)
+    schedule["Es ruta crítica"] = critical_source.astype(str).str.contains("si|sí|true|crit|hito", case=False, na=False)
+    schedule = schedule.sort_values(["Inicio día", "Fin día", "ID"]).reset_index(drop=True)
+    return schedule
+
+
+def build_gantt_filtered_export_pdf(df: pd.DataFrame, date_mode: str = "Real") -> bytes:
+    if not REPORTLAB_AVAILABLE:
+        raise RuntimeError("ReportLab no está disponible para generar PDF.")
+
+    buffer = BytesIO()
+    page_size = landscape(A4)
+    margin = 1.15 * cm
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=page_size,
+        leftMargin=margin,
+        rightMargin=margin,
+        topMargin=margin,
+        bottomMargin=margin,
+        title="Cronograma y Resumen Ejecutivo - Filtro Activo",
+    )
+    styles = _pdf_styles()
+    doc_width = page_size[0] - doc.leftMargin - doc.rightMargin
+    story: list[object] = []
+
+    story.append(Paragraph("Cronograma · Filtro activo", styles["Title"]))
+    story.append(Paragraph("Descarga generada con el cronograma visible y el Resumen Ejecutivo · Filtro activo.", styles["BodyText"]))
+    story.append(Spacer(1, 0.25 * cm))
+    story.append(Paragraph("Resumen Ejecutivo · Filtro activo", styles["Heading1"]))
+    summary_rows = [["Indicador", "Valor"], *_gantt_filtered_summary_rows(df, date_mode=date_mode)]
+    story.append(_pdf_table(summary_rows, col_widths=[7.2 * cm, doc_width - 7.2 * cm], header=True, font_size=8))
+
+    schedule_df = _build_gantt_pdf_schedule(df, date_mode=date_mode)
+    if schedule_df.empty:
+        story.append(Spacer(1, 0.35 * cm))
+        story.append(Paragraph("Cronograma", styles["Heading1"]))
+        story.append(Paragraph("No hay actividades calendarizadas para el filtro activo.", styles["BodyText"]))
+    else:
+        story.append(PageBreak())
+        chunk_size = 30
+        total_chunks = int(math.ceil(len(schedule_df) / chunk_size))
+        for idx in range(total_chunks):
+            if idx > 0:
+                story.append(PageBreak())
+            chunk = schedule_df.iloc[idx * chunk_size : (idx + 1) * chunk_size].copy()
+            title = "Imagen del cronograma" if total_chunks == 1 else f"Imagen del cronograma · página {idx + 1} de {total_chunks}"
+            story.append(Paragraph(title, styles["Heading1"]))
+            story.append(_pdf_gantt_chart(chunk, width=doc_width))
+            story.append(Spacer(1, 0.12 * cm))
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
 def render_inputs_gantt_header(df: pd.DataFrame, date_mode: str = "Real") -> None:
     summary = _gantt_summary(df, date_mode=date_mode)
     progress = int(summary["progress_pct"])
+    try:
+        export_bytes = build_gantt_filtered_export_pdf(df, date_mode=date_mode)
+        export_b64 = base64.b64encode(export_bytes).decode()
+        download_link = (
+            f'<a class="gantt-download-btn" '
+            f'href="data:application/pdf;base64,{export_b64}" '
+            f'download="cronograma_resumen_filtro_activo.pdf">Descargar PDF</a>'
+        )
+    except Exception:
+        download_link = ""
     st.markdown(
         f"""
         <div class="gantt-shell">
@@ -6083,6 +6239,7 @@ def render_inputs_gantt_header(df: pd.DataFrame, date_mode: str = "Real") -> Non
             <div>
               <h2 class="gantt-title">Cronograma</h2>
               <p class="gantt-subtitle">Ruta de ejecución, hitos y validación del piloto 10 kW para seguimiento de liberación de capital.</p>
+              {download_link}
             </div>
           </div>
           <div class="gantt-progress">
@@ -6129,7 +6286,7 @@ def render_inputs_gantt_kpis(df: pd.DataFrame, date_mode: str = "Real") -> None:
     st.markdown(f'<div class="gantt-kpi-band">{cards_html}</div>', unsafe_allow_html=True)
 
 
-def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real") -> str:
+def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real") -> tuple[str, str]:
     def normalized_group(value: object) -> str:
         if pd.isna(value):
             return "Sin clasificación"
@@ -6152,7 +6309,7 @@ def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real"
 
     with st.container(border=True):
         st.markdown('<span class="gantt-controls-marker"></span>', unsafe_allow_html=True)
-        legend_col, horizon_col, symbol_col = st.columns([3.4, 2.0, 2.2])
+        legend_col, horizon_col, view_col, symbol_col = st.columns([3.0, 1.85, 2.15, 2.0])
         with legend_col:
             st.markdown(
                 f'<div class="gantt-control-label">Barras por {html.escape(color_field)}</div>'
@@ -6182,6 +6339,15 @@ def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real"
                 key="inputs_gantt_time_range",
                 help="Muestra actividades que intersectan el horizonte contado desde el inicio del bloque filtrado.",
             )
+        with view_col:
+            gantt_view_mode = st.radio(
+                "Vista Gantt",
+                ["Por línea", "Secuencia tareas"],
+                index=0,
+                horizontal=True,
+                key="inputs_gantt_view_mode",
+                help="Secuencia tareas muestra solo las tareas visibles, ordenadas por inicio, fin e ID.",
+            )
         with symbol_col:
             st.markdown(
                 '<div class="gantt-control-symbols">'
@@ -6191,7 +6357,7 @@ def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real"
                 '</div>',
                 unsafe_allow_html=True,
             )
-    return time_range
+    return time_range, gantt_view_mode
 
 
 def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Real") -> None:
@@ -6216,6 +6382,10 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
     delayed_df = dfk[dfk["_observed_delay"] > 0].copy()
     open_delay_df = dfk[dfk["_open_delay"] > 0].copy()
     comparable_df = dfk[dfk["_end_plan"].notna() & dfk["_end_real"].notna()].copy()
+    dfk["_selected_funds"] = gantt_selected_funds_series(dfk)
+    selected_funds_total = float(dfk["_selected_funds"].sum() or 0.0)
+    selected_funds_count = int((dfk["_selected_funds"] > 0).sum())
+    selected_funds_display = f"${selected_funds_total / 1_000_000:.1f}MM".replace(".", ",")
 
     total_tasks = int(len(dfk))
     comparable_tasks = int(len(comparable_df))
@@ -6305,13 +6475,14 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
         .gantt-exec-sub{{font-size:13px;line-height:1.45;color:#64748B;font-weight:750;margin:8px 0 0 0;max-width:820px;}}
         .gantt-exec-badge{{border-radius:999px;background:{posture_color};color:#FFFFFF;padding:10px 14px;font-size:11px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;box-shadow:0 14px 28px rgba(15,23,42,.12);}}
         .gantt-exec-grid{{display:grid;grid-template-columns:1.08fr .92fr;gap:18px;align-items:stretch;}}
-        .gantt-exec-score{{border-radius:24px;background:#071427;color:#FFFFFF;padding:24px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;align-items:center;box-shadow:0 24px 48px rgba(7,20,39,.18);}}
+        .gantt-exec-score{{border-radius:24px;background:#071427;color:#FFFFFF;padding:24px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:18px;align-items:center;box-shadow:0 24px 48px rgba(7,20,39,.18);}}
         .gantt-exec-score-main span{{display:block;color:#7DD3C7;font-size:12px;font-weight:950;letter-spacing:.10em;text-transform:uppercase;margin-bottom:8px;}}
         .gantt-exec-score-main b{{display:block;font-size:72px;line-height:.85;font-weight:950;letter-spacing:-.055em;color:#FFFFFF;}}
         .gantt-exec-score-main p{{margin:10px 0 0 0;color:#CBD5E1;font-size:13px;font-weight:800;}}
         .gantt-exec-metric{{border-left:1px solid rgba(255,255,255,.16);padding-left:18px;min-height:112px;display:flex;flex-direction:column;justify-content:center;}}
         .gantt-exec-metric span{{font-size:11px;color:#94A3B8;font-weight:950;letter-spacing:.08em;text-transform:uppercase;}}
         .gantt-exec-metric b{{font-size:42px;line-height:1;color:#14B8A6;font-weight:950;margin:8px 0 5px;}}
+        .gantt-exec-metric.funds b{{font-size:clamp(25px,2vw,38px);letter-spacing:-.04em;white-space:normal;overflow-wrap:anywhere;}}
         .gantt-exec-metric p{{margin:0;color:#CBD5E1;font-size:12px;font-weight:800;line-height:1.35;}}
         .gantt-exec-insights{{display:grid;grid-template-columns:1fr;gap:11px;}}
         .gantt-exec-insight{{border-radius:20px;background:rgba(255,255,255,.82);padding:16px 18px;box-shadow:0 12px 28px rgba(15,23,42,.065);}}
@@ -6340,6 +6511,7 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
                   <div class="gantt-exec-score-main"><span>Atraso calendario</span><b>{total_delay_days}</b><p>días únicos entre fin plan y fin real, sin duplicar solapes</p></div>
                   <div class="gantt-exec-metric"><span>Carga de atraso</span><b>{task_delay_days}</b><p>días-tarea acumulados para análisis operativo</p></div>
                   <div class="gantt-exec-metric"><span>Cumplimiento comparables</span><b>{on_time_pct:.0f}%</b><p>{on_time_tasks} de {comparable_tasks} con cierre en plazo o anticipado</p></div>
+                  <div class="gantt-exec-metric funds"><span>Fondos seleccionados</span><b>{selected_funds_display}</b><p>{selected_funds_count} partidas con monto en el filtro activo</p></div>
                 </div>
                 <div class="gantt-exec-read"><i>↘</i><div><b>{html.escape(executive_read)}</b><span>Promedio por tarea atrasada: {avg_delay_days:.1f} días. Atraso abierto potencial: {open_delay_days} días calendario / {open_delay_task_days} días-tarea.</span></div></div>
               </div>
@@ -7396,7 +7568,11 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
     )
 
 
-def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etapa seleccionada") -> None:
+def render_inputs_gantt_cost_analysis(
+    df: pd.DataFrame,
+    scope_label: str = "etapa seleccionada",
+    pilot_total_reference_clp: float | None = None,
+) -> None:
     required_cols = {"Costo piloto", "Costo comercial"}
     if df.empty or not required_cols.issubset(df.columns):
         return
@@ -7430,7 +7606,9 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
 
     total_piloto = float(cost_df["Costo piloto Num"].sum() or 0)
     total_comercial = float(cost_df["Costo comercial Num"].sum() or 0)
-    if abs(total_piloto - GANTT_COSTO_PILOTO_TOTAL_CLP) <= 10:
+    if pilot_total_reference_clp is not None and np.isfinite(float(pilot_total_reference_clp)) and float(pilot_total_reference_clp) > 0:
+        total_piloto = float(pilot_total_reference_clp)
+    elif abs(total_piloto - GANTT_COSTO_PILOTO_TOTAL_CLP) <= 10:
         total_piloto = float(GANTT_COSTO_PILOTO_TOTAL_CLP)
     if abs(total_comercial - GANTT_COSTO_COMERCIAL_TOTAL_CLP) <= 10:
         total_comercial = float(GANTT_COSTO_COMERCIAL_TOTAL_CLP)
@@ -7734,53 +7912,53 @@ def render_inputs_gantt_cost_analysis(df: pd.DataFrame, scope_label: str = "etap
         <style>
         .costpro-wrap{{font-family:inherit;color:#071427;margin:18px 0 10px;width:100%;max-width:100%;overflow:hidden;box-sizing:border-box;}}
         .costpro-wrap *{{box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;}}
-        .costpro-shell{{position:relative;width:100%;max-width:100%;min-width:0;overflow:hidden;border-radius:28px;background:radial-gradient(circle at 96% 6%,rgba(20,184,166,.15),transparent 24%),linear-gradient(135deg,#FFFFFF 0%,#F8FAFC 56%,#ECFDF9 100%);box-shadow:0 22px 50px rgba(15,23,42,.09);padding:24px;}}
-        .costpro-head{{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:22px;}}
-        .costpro-kicker{{margin:0 0 7px 0;font-size:11px;font-weight:950;letter-spacing:.16em;text-transform:uppercase;color:#0F766E;}}
-        .costpro-title{{margin:0;font-size:clamp(27px,2.2vw,42px);line-height:.98;font-weight:950;letter-spacing:.005em;color:#071427;text-transform:uppercase;}}
-        .costpro-sub{{margin:9px 0 0 0;color:#64748B;font-size:13px;font-weight:800;line-height:1.36;max-width:790px;}}
-        .costpro-brand{{display:flex;align-items:center;gap:10px;min-width:0;border-radius:999px;background:#071427;color:#FFFFFF;padding:11px 15px;font-size:11px;font-weight:950;letter-spacing:.10em;text-transform:uppercase;white-space:normal;box-shadow:0 14px 34px rgba(7,20,39,.18);}}
+        .costpro-shell{{position:relative;width:100%;max-width:100%;min-width:0;overflow:hidden;border-radius:24px;background:radial-gradient(circle at 96% 6%,rgba(20,184,166,.12),transparent 23%),linear-gradient(135deg,#FFFFFF 0%,#F8FAFC 58%,#ECFDF9 100%);box-shadow:0 18px 40px rgba(15,23,42,.075);padding:20px;}}
+        .costpro-head{{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:16px;}}
+        .costpro-kicker{{margin:0 0 6px 0;font-size:10px;font-weight:950;letter-spacing:.15em;text-transform:uppercase;color:#0F766E;}}
+        .costpro-title{{margin:0;font-size:clamp(24px,1.75vw,34px);line-height:1.08;font-weight:950;letter-spacing:0;color:#071427;text-transform:uppercase;}}
+        .costpro-sub{{margin:7px 0 0 0;color:#64748B;font-size:12.5px;font-weight:800;line-height:1.34;max-width:780px;}}
+        .costpro-brand{{display:flex;align-items:center;gap:9px;min-width:0;border-radius:999px;background:#071427;color:#FFFFFF;padding:9px 13px;font-size:10px;font-weight:950;letter-spacing:.09em;text-transform:uppercase;white-space:normal;box-shadow:0 12px 26px rgba(7,20,39,.16);}}
         .costpro-brand i{{width:9px;height:9px;border-radius:50%;background:#14B8A6;box-shadow:0 0 0 6px rgba(20,184,166,.16);}}
-        .costpro-hero{{display:grid;grid-template-columns:minmax(0,1.34fr) minmax(0,.86fr);gap:18px;align-items:stretch;width:100%;min-width:0;}}
-        .costpro-transform{{min-width:0;border-radius:24px;background:#071427;color:#FFFFFF;padding:22px;box-shadow:0 22px 46px rgba(7,20,39,.17);display:grid;grid-template-columns:minmax(0,1fr) 82px minmax(0,1fr);grid-template-rows:auto auto;gap:15px;align-items:center;overflow:hidden;}}
-        .costpro-big-cost{{min-width:0;border-radius:22px;background:rgba(255,255,255,.07);padding:18px 19px;min-height:148px;display:flex;flex-direction:column;justify-content:center;overflow:hidden;}}
-        .costpro-big-cost span{{display:block;font-size:11px;font-weight:950;letter-spacing:.11em;text-transform:uppercase;color:#94A3B8;margin-bottom:12px;}}
-        .costpro-big-cost b{{display:block;font-size:clamp(34px,3.5vw,64px);line-height:.92;font-weight:950;letter-spacing:-.045em;color:#FFFFFF;white-space:normal;}}
-        .costpro-big-cost small{{display:block;margin-top:13px;color:#CBD5E1;font-size:13px;font-weight:850;}}
+        .costpro-hero{{display:grid;grid-template-columns:minmax(0,1.16fr) minmax(0,.84fr);gap:16px;align-items:start;width:100%;min-width:0;}}
+        .costpro-transform{{min-width:0;border-radius:22px;background:#071427;color:#FFFFFF;padding:18px;box-shadow:0 18px 38px rgba(7,20,39,.15);display:grid;grid-template-columns:minmax(0,1fr) 64px minmax(0,1fr);grid-template-rows:auto auto;gap:12px;align-items:center;align-content:start;overflow:hidden;}}
+        .costpro-big-cost{{min-width:0;border-radius:18px;background:rgba(255,255,255,.07);padding:16px 17px;min-height:118px;display:flex;flex-direction:column;justify-content:center;overflow:hidden;}}
+        .costpro-big-cost span{{display:block;font-size:10px;font-weight:950;letter-spacing:.10em;text-transform:uppercase;color:#94A3B8;margin-bottom:10px;}}
+        .costpro-big-cost b{{display:block;font-size:clamp(30px,2.65vw,50px);line-height:.96;font-weight:950;letter-spacing:-.035em;color:#FFFFFF;white-space:normal;}}
+        .costpro-big-cost small{{display:block;margin-top:11px;color:#CBD5E1;font-size:12px;font-weight:850;}}
         .costpro-big-cost.commercial{{background:linear-gradient(145deg,rgba(20,184,166,.20),rgba(255,255,255,.08));outline:1px solid rgba(20,184,166,.26);}}
         .costpro-big-cost.commercial b{{color:#7DD3C7;}}
-        .costpro-flow{{height:82px;width:82px;min-width:82px;border-radius:50%;background:#FFFFFF;color:#0F766E;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:950;box-shadow:0 18px 34px rgba(0,0,0,.16);}}
-        .costpro-save{{grid-column:1 / 4;min-width:0;border-radius:22px;background:linear-gradient(90deg,#0F766E 0%,#14B8A6 100%);display:grid;grid-template-columns:minmax(0,.58fr) minmax(0,1fr) minmax(0,.42fr);gap:15px;align-items:center;padding:16px 18px;overflow:hidden;}}
-        .costpro-save span{{font-size:11px;font-weight:950;letter-spacing:.12em;text-transform:uppercase;color:#D7FFFA;}}
-        .costpro-save b{{font-size:clamp(34px,3vw,56px);line-height:.94;font-weight:950;letter-spacing:-.045em;color:#FFFFFF;}}
-        .costpro-save p{{margin:0;color:#ECFEFF;font-size:13px;line-height:1.32;font-weight:850;min-width:0;}}
-        .costpro-save strong{{justify-self:end;font-size:clamp(22px,1.9vw,34px);font-weight:950;color:#FFFFFF;white-space:normal;text-align:right;}}
-        .costpro-donut-card{{min-width:0;border-radius:24px;background:rgba(255,255,255,.88);padding:20px;box-shadow:0 16px 38px rgba(15,23,42,.08);display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;overflow:hidden;}}
+        .costpro-flow{{height:64px;width:64px;min-width:64px;border-radius:50%;background:#FFFFFF;color:#0F766E;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:950;box-shadow:0 14px 28px rgba(0,0,0,.14);}}
+        .costpro-save{{grid-column:1 / 4;min-width:0;border-radius:18px;background:linear-gradient(90deg,#0F766E 0%,#14B8A6 100%);display:grid;grid-template-columns:minmax(0,.52fr) minmax(0,1fr) minmax(0,.34fr);gap:12px;align-items:center;padding:13px 16px;overflow:hidden;}}
+        .costpro-save span{{font-size:10px;font-weight:950;letter-spacing:.11em;text-transform:uppercase;color:#D7FFFA;}}
+        .costpro-save b{{font-size:clamp(28px,2.2vw,42px);line-height:.98;font-weight:950;letter-spacing:-.035em;color:#FFFFFF;}}
+        .costpro-save p{{margin:0;color:#ECFEFF;font-size:12px;line-height:1.3;font-weight:850;min-width:0;}}
+        .costpro-save strong{{justify-self:end;font-size:clamp(20px,1.55vw,28px);font-weight:950;color:#FFFFFF;white-space:normal;text-align:right;}}
+        .costpro-donut-card{{min-width:0;border-radius:22px;background:rgba(255,255,255,.90);padding:17px;box-shadow:0 14px 32px rgba(15,23,42,.07);display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px;align-content:start;overflow:hidden;}}
         .costpro-panel-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-width:0;}}
-        .costpro-panel-head b{{display:block;color:#071427;font-size:18px;line-height:1.08;font-weight:950;}}
-        .costpro-panel-head small{{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:5px;}}
-        .costpro-chip{{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:8px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:normal;text-align:center;}}
-        .costpro-donut-grid{{display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1fr);gap:16px;align-items:center;width:100%;min-width:0;}}
-        .costpro-donut{{position:relative;width:clamp(210px,22vw,290px);max-width:100%;aspect-ratio:1/1;border-radius:50%;margin:auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.78),0 18px 34px rgba(15,23,42,.12);}}
+        .costpro-panel-head b{{display:block;color:#071427;font-size:16px;line-height:1.1;font-weight:950;}}
+        .costpro-panel-head small{{display:block;color:#64748B;font-size:10.5px;font-weight:850;margin-top:4px;}}
+        .costpro-chip{{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:7px 9px;font-size:9px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:normal;text-align:center;}}
+        .costpro-donut-grid{{display:grid;grid-template-columns:minmax(0,.78fr) minmax(0,1fr);gap:14px;align-items:center;width:100%;min-width:0;}}
+        .costpro-donut{{position:relative;width:clamp(180px,16vw,245px);max-width:100%;aspect-ratio:1/1;border-radius:50%;margin:auto;background:conic-gradient({donut_bg});box-shadow:inset 0 0 0 1px rgba(255,255,255,.78),0 16px 30px rgba(15,23,42,.10);}}
         .costpro-donut::after{{content:"";position:absolute;inset:29%;border-radius:50%;background:#FFFFFF;box-shadow:0 0 0 1px #E2E8F0;}}
         .costpro-donut-center{{position:absolute;inset:34% 18%;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}}
         .costpro-donut-center span{{font-size:10px;color:#64748B;font-weight:950;letter-spacing:.09em;text-transform:uppercase;}}
-        .costpro-donut-center b{{font-size:clamp(25px,2vw,34px);line-height:1;color:#071427;font-weight:950;margin:6px 0 3px;}}
-        .costpro-donut-center small{{font-size:11px;color:#0F766E;font-weight:950;}}
-        .costpro-legend{{display:grid;gap:7px;min-width:0;overflow:hidden;}}
-        .costpro-legend-row{{display:grid;grid-template-columns:12px minmax(0,1fr) minmax(58px,auto) 42px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(148,163,184,.20);min-width:0;}}
+        .costpro-donut-center b{{font-size:clamp(22px,1.65vw,30px);line-height:1;color:#071427;font-weight:950;margin:5px 0 3px;}}
+        .costpro-donut-center small{{font-size:10px;color:#0F766E;font-weight:950;}}
+        .costpro-legend{{display:grid;gap:5px;min-width:0;overflow:hidden;}}
+        .costpro-legend-row{{display:grid;grid-template-columns:11px minmax(0,1fr) minmax(54px,auto) 38px;gap:7px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(148,163,184,.20);min-width:0;}}
         .costpro-legend-row>span{{width:11px;height:11px;border-radius:50%;background:var(--c);}}
-        .costpro-legend-row b{{display:block;color:#071427;font-size:12px;line-height:1.12;font-weight:950;}}
-        .costpro-legend-row small{{display:block;color:#64748B;font-size:9px;font-weight:850;margin-top:3px;}}
-        .costpro-legend-row strong{{color:#071427;font-size:11px;font-weight:950;text-align:right;white-space:normal;}}
-        .costpro-legend-row em{{font-style:normal;color:#0F766E;font-size:11px;font-weight:950;text-align:right;}}
-        .costpro-legend-row i{{grid-column:2 / 5;height:6px;border-radius:999px;background:#E2E8F0;overflow:hidden;}}
+        .costpro-legend-row b{{display:block;color:#071427;font-size:11px;line-height:1.12;font-weight:950;}}
+        .costpro-legend-row small{{display:block;color:#64748B;font-size:8.5px;font-weight:850;margin-top:2px;}}
+        .costpro-legend-row strong{{color:#071427;font-size:10.5px;font-weight:950;text-align:right;white-space:normal;}}
+        .costpro-legend-row em{{font-style:normal;color:#0F766E;font-size:10.5px;font-weight:950;text-align:right;}}
+        .costpro-legend-row i{{grid-column:2 / 5;height:5px;border-radius:999px;background:#E2E8F0;overflow:hidden;}}
         .costpro-legend-row i u{{display:block;height:100%;width:var(--share);border-radius:999px;background:var(--c);}}
-        .costpro-strategy{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0;min-width:0;}}
-        .costpro-strategy-card{{min-width:0;border-radius:20px;background:#FFFFFF;padding:15px;display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;align-items:center;box-shadow:0 14px 28px rgba(15,23,42,.065);overflow:hidden;}}
-        .costpro-strategy-card span{{width:44px;height:44px;border-radius:15px;background:var(--c);color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:950;box-shadow:0 14px 24px rgba(15,23,42,.10);}}
-        .costpro-strategy-card b{{display:block;color:#071427;font-size:clamp(18px,1.35vw,26px);line-height:1;font-weight:950;letter-spacing:-.03em;white-space:normal;}}
-        .costpro-strategy-card small{{display:block;margin-top:6px;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.05em;text-transform:uppercase;line-height:1.25;}}
+        .costpro-strategy{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0;min-width:0;}}
+        .costpro-strategy-card{{min-width:0;border-radius:18px;background:#FFFFFF;padding:12px;display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;align-items:center;box-shadow:0 12px 24px rgba(15,23,42,.055);overflow:hidden;}}
+        .costpro-strategy-card span{{width:38px;height:38px;border-radius:13px;background:var(--c);color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:950;box-shadow:0 12px 20px rgba(15,23,42,.09);}}
+        .costpro-strategy-card b{{display:block;color:#071427;font-size:clamp(17px,1.1vw,22px);line-height:1;font-weight:950;letter-spacing:-.02em;white-space:normal;}}
+        .costpro-strategy-card small{{display:block;margin-top:5px;color:#64748B;font-size:9px;font-weight:950;letter-spacing:.05em;text-transform:uppercase;line-height:1.22;}}
         .costpro-bottom{{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,.65fr);gap:16px;align-items:stretch;min-width:0;}}
         .costpro-scope-panel,.costpro-insight-panel{{min-width:0;border-radius:24px;background:#FFFFFF;padding:18px;box-shadow:0 14px 32px rgba(15,23,42,.065);overflow:hidden;}}
         .costpro-scope-head{{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,.6fr) minmax(0,.6fr) minmax(0,.42fr);gap:11px;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;margin:12px 0 6px;}}
@@ -8382,6 +8560,7 @@ def render_inputs_gantt_custom_chart(
     date_mode: str,
     time_range: str = "Todo",
     title: str = "Cronograma",
+    sequence_tasks: bool = False,
 ) -> None:
     if df.empty:
         return
@@ -8456,7 +8635,7 @@ def render_inputs_gantt_custom_chart(
         for tick in ticks
     )
 
-    line_color_map = build_gantt_line_color_map(dfc)
+    line_color_map = {"Secuencia de tareas": "#0F766E"} if sequence_tasks else build_gantt_line_color_map(dfc)
     color_field = "Estado"
     default_color = "#64748b"
 
@@ -8472,10 +8651,15 @@ def render_inputs_gantt_custom_chart(
         group: _gantt_status_color(group) if group != "Sin clasificación" else default_color
         for group in visible_groups
     }
-    dfc["_line_group"] = dfc.get("Línea", pd.Series(index=dfc.index, dtype=object)).map(chart_color_group)
-    line_order = {name: index for index, name in enumerate(line_color_map)}
-    dfc["_line_order"] = dfc["_line_group"].map(line_order).fillna(len(line_order))
-    sort_columns = ["_line_order", "_line_group", "_start", "_end"]
+    if sequence_tasks:
+        dfc["_line_group"] = "Secuencia de tareas"
+        dfc["_line_order"] = 0
+        sort_columns = ["_start", "_end"]
+    else:
+        dfc["_line_group"] = dfc.get("Línea", pd.Series(index=dfc.index, dtype=object)).map(chart_color_group)
+        line_order = {name: index for index, name in enumerate(line_color_map)}
+        dfc["_line_order"] = dfc["_line_group"].map(line_order).fillna(len(line_order))
+        sort_columns = ["_line_order", "_line_group", "_start", "_end"]
     if "ID" in dfc.columns:
         sort_columns.append("ID")
     dfc = dfc.sort_values(sort_columns, na_position="last")
@@ -8510,6 +8694,7 @@ def render_inputs_gantt_custom_chart(
             duration_days = max(int((pd.Timestamp(row["_end"]) - pd.Timestamp(row["_start"])).days), 1)
             status_name = str(row.get("Estado", "")).strip() or "Sin estado"
             phase_name = str(row.get("Fase", "")).strip() or "Sin fase"
+            source_line_name = str(row.get("Línea", "")).strip() or "Sin línea"
             milestone_value = str(row.get("Hito (S/N)", "")).strip().upper()
             is_milestone = milestone_value in {"S", "SI", "SÍ", "X"}
             milestone_class = " is-milestone" if is_milestone else ""
@@ -8517,7 +8702,7 @@ def render_inputs_gantt_custom_chart(
             tooltip_lines = [
                 task_text,
                 f"Fase: {phase_name}",
-                f"Línea: {line_name}",
+                f"Línea: {source_line_name if sequence_tasks else line_name}",
                 f"Estado: {status_name}",
                 f"Inicio: {pd.Timestamp(row['_start']).strftime('%d-%m-%Y')}",
                 f"Término: {pd.Timestamp(row['_end']).strftime('%d-%m-%Y')}",
@@ -8555,6 +8740,7 @@ def render_inputs_gantt_custom_chart(
         f'<div class="gantt-today-label" style="left:{today_left:.4f}%;">Hoy</div>' if show_today else ""
     )
     rows_fragment = "".join(groups_html)
+    left_head_label = "Secuencia / Tarea" if sequence_tasks else "Línea / Tarea"
     chart_html = textwrap.dedent(
         f"""
         <div class="gantt-chart-card">
@@ -8563,7 +8749,7 @@ def render_inputs_gantt_custom_chart(
             <div class="gantt-custom-scroll">
               <div class="gantt-grid">
                 <div class="gantt-board-head">
-                  <div class="gantt-left-head">Línea / Tarea</div>
+                  <div class="gantt-left-head">{html.escape(left_head_label)}</div>
                   <div class="gantt-time-head">{''.join(month_labels)}{week_labels}{today_marker}</div>
                 </div>{rows_fragment}
               </div>
@@ -8868,18 +9054,18 @@ def render_inputs_project_gantt():
         return
 
     render_inputs_gantt_design_css()
-    header_mode = st.session_state.get("inputs_gantt_mode", "Real")
-    render_inputs_gantt_header(df_gantt, date_mode=header_mode)
+    gantt_header_slot = st.empty()
 
     has_linea = "Línea" in df_gantt.columns
+    metodo_col = first_matching_column(df_gantt, ["Método", "Metodo"])
     with st.container(border=True):
         st.markdown('<span class="gantt-filter-marker"></span>', unsafe_allow_html=True)
         st.markdown('<div class="gantt-panel-title">Filtros de análisis</div>', unsafe_allow_html=True)
         has_etapa = "ETAPA" in df_gantt.columns
         if has_linea:
-            c0, c1, c2, c3, c4 = st.columns([2.1, 3.0, 2.7, 2.3, 1.6]) if has_etapa else st.columns([3.2, 3.0, 2.5, 1.8])
+            c0, c1, c2, c3, c4 = st.columns([2.0, 2.6, 2.4, 2.0, 2.2]) if has_etapa else st.columns([3.0, 2.7, 2.2, 2.1])
         else:
-            c0, c1, c3, c4 = st.columns([2.1, 3.7, 2.4, 1.6]) if has_etapa else (None, *st.columns([4, 2.5, 1.8]))
+            c0, c1, c3, c4 = st.columns([2.0, 3.3, 2.2, 2.1]) if has_etapa else (None, *st.columns([3.7, 2.3, 2.1]))
         etapa_sel: list[str] = []
         if has_etapa:
             with c0:
@@ -8999,16 +9185,35 @@ def render_inputs_project_gantt():
                 placeholder="Todos los estados",
                 key="inputs_gantt_estado",
             )
+        metodo_sel: list[str] = []
         with c4:
-            mode_saved = st.session_state.pop("inputs_gantt_mode__sticky", None)
-            if mode_saved in ("Plan", "Real"):
-                st.session_state["inputs_gantt_mode"] = mode_saved
-            date_mode = st.radio(
-                "Fechas",
-                ["Plan", "Real"],
-                index=1,
-                horizontal=True,
-                key="inputs_gantt_mode",
+            date_mode = "Real"
+            metodos_df = df_gantt.copy()
+            if etapa_sel and has_etapa:
+                metodos_df = metodos_df[metodos_df["ETAPA"].astype(str).str.strip().isin(etapa_sel)].copy()
+            if fase_sel != "Todas" and "Fase" in metodos_df.columns:
+                metodos_df = metodos_df[metodos_df["Fase"].astype(str).str.strip() == fase_sel].copy()
+            if linea_sel and "Línea" in metodos_df.columns:
+                metodos_df = metodos_df[metodos_df["Línea"].astype(str).str.strip().isin(linea_sel)].copy()
+            if estado_sel and "Estado" in metodos_df.columns:
+                metodos_df = metodos_df[metodos_df["Estado"].astype(str).str.strip().isin(estado_sel)].copy()
+            metodos = sorted(
+                metodos_df[metodo_col].astype(str).str.strip().replace({"nan": np.nan, "None": np.nan, "": np.nan}).dropna().unique().tolist()
+            ) if metodo_col and metodo_col in metodos_df.columns else []
+            metodo_saved = st.session_state.pop("inputs_gantt_metodo__sticky", None)
+            if isinstance(metodo_saved, str) and metodo_saved in metodos:
+                st.session_state["inputs_gantt_metodo"] = [metodo_saved]
+            elif isinstance(metodo_saved, list):
+                st.session_state["inputs_gantt_metodo"] = [metodo for metodo in metodo_saved if metodo in metodos]
+            metodo_default = st.session_state.get("inputs_gantt_metodo", [])
+            if isinstance(metodo_default, str):
+                metodo_default = [] if metodo_default == "Todos" else [metodo_default]
+            st.session_state["inputs_gantt_metodo"] = [metodo for metodo in metodo_default if metodo in metodos]
+            metodo_sel = st.multiselect(
+                "Método",
+                metodos,
+                placeholder="Todos los métodos",
+                key="inputs_gantt_metodo",
             )
 
     stage_df = df_gantt.copy()
@@ -9022,11 +9227,13 @@ def render_inputs_project_gantt():
         plot_df = plot_df[plot_df["Línea"].astype(str).str.strip().isin(linea_sel)].copy()
     if estado_sel and "Estado" in plot_df.columns:
         plot_df = plot_df[plot_df["Estado"].astype(str).str.strip().isin(estado_sel)].copy()
+    if metodo_sel and metodo_col and metodo_col in plot_df.columns:
+        plot_df = plot_df[plot_df[metodo_col].astype(str).str.strip().isin(metodo_sel)].copy()
     if plot_df.empty:
+        with gantt_header_slot.container():
+            render_inputs_gantt_header(plot_df, date_mode=date_mode)
         st.info("No hay tareas para los filtros seleccionados.")
         return
-
-    render_inputs_gantt_kpis(plot_df, date_mode=date_mode)
 
     due_soon_only = bool(st.session_state.get("inputs_gantt_due_soon_only", False))
     if due_soon_only:
@@ -9035,19 +9242,29 @@ def render_inputs_project_gantt():
         st.info(f"Vista filtrada: {due_soon_count} actividades vencen en menos de 7 días.")
         plot_df = plot_df[due_soon_mask].copy()
         if plot_df.empty:
+            with gantt_header_slot.container():
+                render_inputs_gantt_header(plot_df, date_mode=date_mode)
             st.info("No hay actividades con vencimiento en menos de 7 días para los filtros seleccionados.")
             return
+
+    with gantt_header_slot.container():
+        render_inputs_gantt_header(plot_df, date_mode=date_mode)
+    render_inputs_gantt_kpis(plot_df, date_mode=date_mode)
 
     gantt_title = "Cronograma" if fase_sel == "Todas" else f"Cronograma {fase_sel}"
     if due_soon_only:
         gantt_title = f"{gantt_title} · Vencen en menos de 7 días"
-    time_range = render_inputs_gantt_chart_controls(plot_df, date_mode=date_mode)
+    time_range, gantt_view_mode = render_inputs_gantt_chart_controls(plot_df, date_mode=date_mode)
+    sequence_tasks = gantt_view_mode == "Secuencia tareas"
+    if sequence_tasks:
+        gantt_title = f"{gantt_title} · Secuencia de tareas"
     st.markdown('<span id="inputs-gantt-chart"></span>', unsafe_allow_html=True)
     render_inputs_gantt_custom_chart(
         plot_df,
         date_mode=date_mode,
         time_range=time_range,
         title=gantt_title,
+        sequence_tasks=sequence_tasks,
     )
     render_inputs_gantt_executive_summary(plot_df, date_mode=date_mode)
 
@@ -9118,6 +9335,338 @@ def render_pilotos_ana_embedded_view() -> None:
         st.error(f"No se pudo cargar la ruta de ejecución y validación 10 kW: {exc}")
 
 
+def _capex10_funds_selector_columns(df: pd.DataFrame) -> tuple[str | None, str | None]:
+    return first_matching_column(df, ["Método", "Metodo"]), first_matching_column(df, ["Responsable"])
+
+
+def _capex10_clean_filter_options(source_df: pd.DataFrame, column_name: str | None) -> list[str]:
+    if not column_name or column_name not in source_df.columns:
+        return []
+    values = (
+        source_df[column_name]
+        .astype(str)
+        .str.strip()
+        .replace({"": np.nan, "nan": np.nan, "None": np.nan})
+        .dropna()
+        .drop_duplicates()
+        .tolist()
+    )
+    return sorted(values, key=lambda value: str(value).casefold())
+
+
+def _capex10_selected_values(key: str) -> list[str]:
+    value = st.session_state.get(key, [])
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if value is None:
+        return []
+    text = str(value).strip()
+    return [text] if text else []
+
+
+def _capex10_sync_multiselect_state(key: str, options: list[str], default_values: list[str] | None = None) -> list[str]:
+    saved = st.session_state.pop(f"{key}__sticky", None)
+    used_existing_state = key in st.session_state
+    if saved is not None:
+        raw_values = saved if isinstance(saved, list) else [saved]
+    elif used_existing_state:
+        current = st.session_state.get(key, [])
+        raw_values = current if isinstance(current, list) else [current]
+    else:
+        raw_values = default_values or []
+    valid_values = [value for value in raw_values if value in options]
+    if not valid_values and default_values and saved is None and not used_existing_state:
+        valid_values = [value for value in default_values if value in options]
+    st.session_state[key] = valid_values
+    return valid_values
+
+
+def _capex10_unpaid_funds_source(df_gantt: pd.DataFrame) -> pd.DataFrame:
+    if "Estado.1" not in df_gantt.columns:
+        return pd.DataFrame()
+    unpaid_mask = df_gantt["Estado.1"].astype(str).str.strip().str.casefold().eq("no pagado")
+    return df_gantt[unpaid_mask].copy()
+
+
+def _capex10_apply_fund_filter(
+    df: pd.DataFrame,
+    *,
+    etapa_values: list[str] | None = None,
+    metodo_values: list[str] | None = None,
+    responsable_values: list[str] | None = None,
+    metodo_col: str | None = None,
+    responsable_col: str | None = None,
+) -> pd.DataFrame:
+    if df.empty:
+        return df.copy()
+    mask = pd.Series(True, index=df.index)
+    if etapa_values and "ETAPA" in df.columns:
+        mask &= df["ETAPA"].astype(str).str.strip().isin([str(value).strip() for value in etapa_values])
+    if metodo_values and metodo_col and metodo_col in df.columns:
+        mask &= df[metodo_col].astype(str).str.strip().isin([str(value).strip() for value in metodo_values])
+    if responsable_values and responsable_col and responsable_col in df.columns:
+        mask &= df[responsable_col].astype(str).str.strip().isin([str(value).strip() for value in responsable_values])
+    return df[mask].copy()
+
+
+def _capex10_filtered_funds_df(
+    df_gantt: pd.DataFrame,
+    selected_etapas: list[str],
+    selected_metodos: list[str],
+    selected_responsables: list[str],
+    *,
+    metodo_col: str | None = None,
+    responsable_col: str | None = None,
+) -> pd.DataFrame:
+    if metodo_col is None or responsable_col is None:
+        metodo_col, responsable_col = _capex10_funds_selector_columns(df_gantt)
+    funds_df = _capex10_unpaid_funds_source(df_gantt)
+    funds_df = _capex10_apply_fund_filter(
+        funds_df,
+        etapa_values=selected_etapas,
+        metodo_values=selected_metodos,
+        responsable_values=selected_responsables,
+        metodo_col=metodo_col,
+        responsable_col=responsable_col,
+    )
+    if "Presupuesto Base (CLP)" in funds_df.columns:
+        funds_df["Disponible_CLP"] = funds_df["Presupuesto Base (CLP)"].apply(parse_money_clp_robusto)
+    else:
+        funds_df["Disponible_CLP"] = 0.0
+    return funds_df
+
+
+def _capex10_funds_heading(selected_metodos: list[str]) -> str:
+    method_keys = {normalize_key(value) for value in selected_metodos}
+    has_hito_1 = any("hito1" in key for key in method_keys)
+    has_hito_2 = any("hito2" in key for key in method_keys)
+    if has_hito_1 and has_hito_2:
+        return "Fondos para cumplir proyecto completo. Pre montaje + instalación final"
+    if has_hito_1:
+        return "Fondos para cumplir HITO 1 = PRE MONTAJE EN GRUPO EC"
+    if has_hito_2:
+        return "Fondos para cumplir HITO 2 = montaje en instalaciones Entel"
+    return "Fondos faltantes para cumplir hitos, desglosados por fase y línea"
+
+
+def render_capex10_selected_cash_flow(funds_df: pd.DataFrame) -> None:
+    if funds_df.empty or "Disponible_CLP" not in funds_df.columns:
+        return
+    flow_df = funds_df[funds_df["Disponible_CLP"] > 0].copy()
+    if flow_df.empty:
+        return
+    date_col = GANTT_DATE_COL_START if GANTT_DATE_COL_START in flow_df.columns else None
+    fallback_col = GANTT_DATE_COL_END_PLAN if GANTT_DATE_COL_END_PLAN in flow_df.columns else None
+    if date_col:
+        flow_df["_cash_date"] = pd.to_datetime(flow_df[date_col], errors="coerce")
+    else:
+        flow_df["_cash_date"] = pd.NaT
+    if fallback_col:
+        flow_df["_cash_date"] = flow_df["_cash_date"].fillna(pd.to_datetime(flow_df[fallback_col], errors="coerce"))
+    flow_df["_cash_date"] = flow_df["_cash_date"].fillna(pd.Timestamp.today().normalize())
+    flow_df["_month"] = flow_df["_cash_date"].dt.to_period("M").dt.to_timestamp()
+    monthly = (
+        flow_df.groupby("_month", as_index=False)
+        .agg(
+            Flujo_CLP=("Disponible_CLP", "sum"),
+            Partidas=("Tarea / Entregable", "count"),
+        )
+        .sort_values("_month")
+    )
+    if monthly.empty:
+        return
+    monthly["Acumulado_CLP"] = monthly["Flujo_CLP"].cumsum()
+    total_clp = float(monthly["Flujo_CLP"].sum() or 0.0)
+    peak_row = monthly.loc[monthly["Flujo_CLP"].idxmax()]
+    month_labels = monthly["_month"].dt.strftime("%b %Y")
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=month_labels,
+            y=monthly["Flujo_CLP"] / 1_000_000,
+            name="Flujo mensual",
+            marker_color="#0F766E",
+            text=[format_clp(value) for value in monthly["Flujo_CLP"]],
+            textposition="outside",
+            hovertemplate="<b>%{x}</b><br>Flujo: %{text}<br>Partidas: %{customdata}<extra></extra>",
+            customdata=monthly["Partidas"],
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=month_labels,
+            y=monthly["Acumulado_CLP"] / 1_000_000,
+            name="Acumulado",
+            mode="lines+markers",
+            line=dict(color="#1E3A8A", width=3),
+            marker=dict(size=8, color="#FFFFFF", line=dict(color="#1E3A8A", width=2)),
+            hovertemplate="<b>%{x}</b><br>Acumulado: $%{y:.1f} MM<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        height=390,
+        barmode="group",
+        margin=dict(l=12, r=18, t=24, b=40),
+        legend=dict(orientation="h", y=1.08, x=0, title=None),
+        yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False),
+        xaxis=dict(title=None),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+    responsable_col = first_matching_column(flow_df, ["Responsable"])
+    fig_responsable = None
+    if responsable_col:
+        flow_df["_responsable"] = (
+            flow_df[responsable_col]
+            .astype(str)
+            .str.strip()
+            .replace({"": "Sin responsable", "nan": "Sin responsable", "None": "Sin responsable"})
+        )
+        responsible_summary = (
+            flow_df.groupby("_responsable", as_index=False)
+            .agg(
+                Flujo_CLP=("Disponible_CLP", "sum"),
+                Partidas=("Tarea / Entregable", "count"),
+            )
+            .sort_values("Flujo_CLP", ascending=True)
+        )
+        if not responsible_summary.empty:
+            responsible_summary["Monto_MM"] = responsible_summary["Flujo_CLP"] / 1_000_000
+            responsible_summary["Participacion"] = np.where(
+                total_clp > 0,
+                responsible_summary["Flujo_CLP"] / total_clp * 100.0,
+                0.0,
+            )
+            fig_responsable = go.Figure(
+                go.Bar(
+                    x=responsible_summary["Monto_MM"],
+                    y=responsible_summary["_responsable"],
+                    orientation="h",
+                    marker_color="#1E3A8A",
+                    text=[
+                        f"{format_clp(row.Flujo_CLP)} · {float(row.Participacion):.1f}%"
+                        for row in responsible_summary.itertuples(index=False)
+                    ],
+                    textposition="outside",
+                    customdata=np.stack([responsible_summary["Partidas"], responsible_summary["Participacion"]], axis=-1),
+                    hovertemplate=(
+                        "<b>%{y}</b><br>"
+                        "Fondos: %{text}<br>"
+                        "Partidas: %{customdata[0]}<br>"
+                        "Participación: %{customdata[1]:.1f}%<extra></extra>"
+                    ),
+                )
+            )
+            fig_responsable.update_layout(
+                height=max(260, min(440, 92 + 44 * len(responsible_summary))),
+                margin=dict(l=12, r=36, t=12, b=36),
+                showlegend=False,
+                xaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False),
+                yaxis=dict(title=None),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+    detail_columns = [
+        ("B", "Fase", "Fase"),
+        ("C", "Línea", "Línea"),
+        ("D", "Tarea / Entregable", "Tarea / Entregable"),
+        ("E", "Estado", "Estado"),
+        ("H", GANTT_DATE_COL_END_REAL, "Fin real"),
+        ("N", "Monto", "Monto"),
+        ("X", responsable_col or "Responsable", "Responsable"),
+    ]
+    available_detail_columns = [(letter, col, label) for letter, col, label in detail_columns if col and col in flow_df.columns]
+
+    def format_detail_cell(column_name: str, value: object) -> str:
+        if column_name in {GANTT_DATE_COL_END_REAL, GANTT_DATE_COL_START, GANTT_DATE_COL_END_PLAN}:
+            parsed = pd.to_datetime(value, errors="coerce")
+            return parsed.strftime("%d-%m-%Y") if pd.notna(parsed) else "-"
+        return str(value).strip() if str(value).strip() and str(value).strip().lower() not in {"nan", "none", "nat"} else "-"
+
+    detail_rows_html = ""
+    if available_detail_columns:
+        detail_source = flow_df.copy().sort_values(["_cash_date", "Fase", "Línea"], na_position="last")
+        for _, row in detail_source.iterrows():
+            cells = "".join(
+                f"<td>{html.escape(format_detail_cell(column_name, row.get(column_name, '')))}</td>"
+                for _letter, column_name, _label in available_detail_columns
+            )
+            detail_rows_html += f"<tr>{cells}</tr>"
+    detail_header_html = "".join(
+        f"<th><span>{html.escape(letter)}</span>{html.escape(label)}</th>"
+        for letter, _column_name, label in available_detail_columns
+    )
+    st.markdown(
+        f"""
+        <style>
+        .cashflow-wrap{{margin:18px 0 14px;border-radius:24px;background:#FFFFFF;border:1px solid rgba(203,213,225,.85);box-shadow:0 18px 42px rgba(15,23,42,.075);padding:20px;}}
+        .cashflow-head{{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:8px;}}
+        .cashflow-k{{margin:0 0 5px;color:#0F766E;font-size:11px;font-weight:950;letter-spacing:.15em;text-transform:uppercase;}}
+        .cashflow-title{{margin:0;color:#071427;font-size:26px;line-height:1.05;font-weight:950;letter-spacing:0;}}
+        .cashflow-sub{{margin:7px 0 0;color:#64748B;font-size:13px;font-weight:800;line-height:1.38;}}
+        .cashflow-kpis{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;min-width:360px;}}
+        .cashflow-kpi{{border-radius:18px;background:#F8FAFC;border:1px solid #E2E8F0;padding:12px 14px;}}
+        .cashflow-kpi span{{display:block;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;}}
+        .cashflow-kpi b{{display:block;color:#0F766E;font-size:22px;line-height:1.05;font-weight:950;margin-top:5px;}}
+        .cashflow-section-head{{margin:18px 0 4px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;border-top:1px solid rgba(226,232,240,.92);padding-top:16px;}}
+        .cashflow-section-head b{{display:block;color:#071427;font-size:18px;line-height:1.1;font-weight:950;}}
+        .cashflow-section-head span{{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}}
+        .cashflow-section-pill{{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:7px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}}
+        .cashflow-detail-wrap{{margin-top:14px;border-radius:18px;border:1px solid #E2E8F0;background:#FFFFFF;overflow:auto;max-height:360px;}}
+        .cashflow-detail-table{{width:100%;min-width:1040px;border-collapse:separate;border-spacing:0;font-size:11px;}}
+        .cashflow-detail-table th{{position:sticky;top:0;z-index:1;background:#F8FAFC;color:#334155;text-align:left;padding:10px 12px;border-bottom:1px solid #E2E8F0;font-weight:950;line-height:1.15;}}
+        .cashflow-detail-table th span{{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-right:7px;border-radius:7px;background:#E6FFFA;color:#0F766E;font-size:10px;font-weight:950;}}
+        .cashflow-detail-table td{{padding:9px 12px;border-bottom:1px solid #EEF2F7;color:#334155;font-weight:750;vertical-align:top;line-height:1.25;}}
+        .cashflow-detail-table tr:hover td{{background:#F8FAFC;}}
+        @media(max-width:900px){{.cashflow-head{{display:block;}}.cashflow-kpis{{grid-template-columns:1fr;min-width:0;margin-top:12px;}}}}
+        </style>
+        <div class="cashflow-wrap">
+          <div class="cashflow-head">
+            <div>
+              <p class="cashflow-k">Flujo de caja · selección activa</p>
+              <h2 class="cashflow-title">Fondos por ejecutar calendarizados</h2>
+              <p class="cashflow-sub">Proyección mensual construida con la misma selección activa de Etapa, Método y Responsable del cierre ejecutivo.</p>
+            </div>
+            <div class="cashflow-kpis">
+              <div class="cashflow-kpi"><span>Total flujo</span><b>{format_clp(total_clp)}</b></div>
+              <div class="cashflow-kpi"><span>Meses</span><b>{len(monthly)}</b></div>
+              <div class="cashflow-kpi"><span>Mayor mes</span><b>{format_clp(float(peak_row["Flujo_CLP"]))}</b></div>
+            </div>
+          </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displaylogo": False})
+    if fig_responsable is not None:
+        st.markdown(
+            """
+            <div class="cashflow-section-head">
+              <div><b>Fondos por responsable seleccionado</b><span>Distribución del flujo pendiente según la selección activa.</span></div>
+              <div class="cashflow-section-pill">Responsable</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.plotly_chart(fig_responsable, use_container_width=True, config={"displaylogo": False})
+        if detail_rows_html:
+            st.markdown(
+                f"""
+                <div class="cashflow-section-head">
+                  <div><b>Detalle de partidas seleccionadas</b><span>Columnas B, C, D, E, H, N y X de la hoja de control.</span></div>
+                  <div class="cashflow-section-pill">Tabla</div>
+                </div>
+                <div class="cashflow-detail-wrap">
+                  <table class="cashflow-detail-table">
+                    <thead><tr>{detail_header_html}</tr></thead>
+                    <tbody>{detail_rows_html}</tbody>
+                  </table>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 def render_capex10_available_funds_by_phase_line() -> None:
     try:
         df_gantt = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
@@ -9129,46 +9678,93 @@ def render_capex10_available_funds_by_phase_line() -> None:
     if df_gantt.empty or not required_cols.issubset(df_gantt.columns):
         return
 
-    etapa_values = (
-        df_gantt["ETAPA"]
-        .astype(str)
-        .str.strip()
-        .replace({"": np.nan, "nan": np.nan, "None": np.nan})
-        .dropna()
-        .drop_duplicates()
-        .tolist()
-    )
+    metodo_col, responsable_col = _capex10_funds_selector_columns(df_gantt)
+
+    etapa_values = _capex10_clean_filter_options(df_gantt, "ETAPA")
     etapa_options = sorted(
         etapa_values,
         key=lambda value: (0 if "segunda" in str(value).casefold() else 1, str(value).casefold()),
     )
     if not etapa_options:
         return
-    default_etapa_idx = next(
-        (idx for idx, value in enumerate(etapa_options) if "segunda" in str(value).casefold()),
-        0,
-    )
-    etapa_saved = st.session_state.pop("capex10_funds_etapa_selector__sticky", None)
-    if etapa_saved in etapa_options:
-        st.session_state["capex10_funds_etapa_selector"] = etapa_saved
-        default_etapa_idx = etapa_options.index(etapa_saved)
-    selected_etapa = st.selectbox(
-        "Etapa para fondos por ejecutar",
-        etapa_options,
-        index=default_etapa_idx,
-        key="capex10_funds_etapa_selector",
-        help="Filtra el cierre ejecutivo por la columna ETAPA y solo considera partidas No pagado.",
+    default_etapa = next(
+        (value for value in etapa_options if "segunda" in str(value).casefold()),
+        etapa_options[0],
     )
 
-    funds_df = df_gantt.copy()
-    etapa_mask = funds_df["ETAPA"].astype(str).str.strip().eq(str(selected_etapa).strip())
-    unpaid_mask = funds_df["Estado.1"].astype(str).str.strip().str.casefold().eq("no pagado")
-    funds_df = funds_df[etapa_mask & unpaid_mask].copy()
+    base_unpaid_df = _capex10_unpaid_funds_source(df_gantt)
+    current_etapas = _capex10_sync_multiselect_state("capex10_funds_etapa_selector", etapa_options, [default_etapa])
+    current_metodos = _capex10_sync_multiselect_state(
+        "capex10_funds_metodo_selector",
+        _capex10_clean_filter_options(base_unpaid_df, metodo_col),
+    )
+    current_responsables = _capex10_sync_multiselect_state(
+        "capex10_funds_responsable_selector",
+        _capex10_clean_filter_options(base_unpaid_df, responsable_col),
+    )
+    etapa_options = sorted(
+        _capex10_clean_filter_options(
+            _capex10_apply_fund_filter(base_unpaid_df, metodo_values=current_metodos, responsable_values=current_responsables, metodo_col=metodo_col, responsable_col=responsable_col),
+            "ETAPA",
+        ),
+        key=lambda value: (0 if "segunda" in str(value).casefold() else 1, str(value).casefold()),
+    ) or etapa_options
+    etapa_fallback = default_etapa if default_etapa in etapa_options else etapa_options[0]
+    current_etapas = _capex10_sync_multiselect_state("capex10_funds_etapa_selector", etapa_options, [etapa_fallback])
+    metodo_options = _capex10_clean_filter_options(
+        _capex10_apply_fund_filter(base_unpaid_df, etapa_values=current_etapas, responsable_values=current_responsables, metodo_col=metodo_col, responsable_col=responsable_col),
+        metodo_col,
+    )
+    current_metodos = _capex10_sync_multiselect_state("capex10_funds_metodo_selector", metodo_options)
+    responsable_options = _capex10_clean_filter_options(
+        _capex10_apply_fund_filter(base_unpaid_df, etapa_values=current_etapas, metodo_values=current_metodos, metodo_col=metodo_col, responsable_col=responsable_col),
+        responsable_col,
+    )
+    current_responsables = _capex10_sync_multiselect_state("capex10_funds_responsable_selector", responsable_options)
+
+    with st.container(border=True):
+        st.markdown(
+            '<div style="font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#0F766E;margin:0 0 8px 0;">Filtros de fondos faltantes</div>',
+            unsafe_allow_html=True,
+        )
+        filter_col_1, filter_col_2, filter_col_3 = st.columns(3)
+        with filter_col_1:
+            selected_etapas = st.multiselect(
+                "Etapa para fondos por ejecutar",
+                etapa_options,
+                key="capex10_funds_etapa_selector",
+                help="Filtra el cierre ejecutivo por la columna ETAPA y solo considera partidas No pagado.",
+            )
+        with filter_col_2:
+            selected_metodos = st.multiselect(
+                "Método",
+                metodo_options,
+                key="capex10_funds_metodo_selector",
+                placeholder="Todos",
+                help="Filtra por la columna V Método. Sin selección muestra todos los métodos.",
+            )
+        with filter_col_3:
+            selected_responsables = st.multiselect(
+                "Responsable",
+                responsable_options,
+                key="capex10_funds_responsable_selector",
+                placeholder="Todos",
+                help="Filtra por la columna X Responsable. Sin selección muestra todos los responsables.",
+            )
+
+    funds_df = _capex10_filtered_funds_df(
+        df_gantt,
+        selected_etapas,
+        selected_metodos,
+        selected_responsables,
+        metodo_col=metodo_col,
+        responsable_col=responsable_col,
+    )
 
     funds_df["Fase"] = funds_df["Fase"].astype(str).str.strip().replace({"": "Sin fase", "nan": "Sin fase", "None": "Sin fase"})
     funds_df["Línea"] = funds_df["Línea"].astype(str).str.strip().replace({"": "Sin línea", "nan": "Sin línea", "None": "Sin línea"})
-    funds_df["Disponible_CLP"] = funds_df["Presupuesto Base (CLP)"].apply(parse_money_clp_robusto)
     funds_df = funds_df[funds_df["Disponible_CLP"] > 0].copy()
+    st.session_state["capex10_funds_filtered_df"] = funds_df.copy()
     if funds_df.empty:
         return
 
@@ -9196,6 +9792,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
     line_count = int(grouped["Línea"].nunique())
     max_phase_label = html.escape(str(max_phase["Fase"])) if max_phase is not None else "-"
     total_disponible_fmt = format_clp(total_disponible)
+    funds_heading = _capex10_funds_heading(selected_metodos)
 
     st.markdown(
         f"""
@@ -9458,9 +10055,9 @@ def render_capex10_available_funds_by_phase_line() -> None:
                   </svg>
                 </div>
                 <div>
-                  <p class="capex10-funds-k">Cierre ejecutivo • fondos por ejecutar</p>
-                  <p class="capex10-funds-t">Fondos disponibles por gastar, desglosados por fase y línea</p>
-                  <p class="capex10-funds-s">Lectura de primer nivel para entender dónde queda concentrado el capital pendiente del piloto 10 kW y qué frentes explican el uso esperado de fondos.</p>
+                  <p class="capex10-funds-k">{html.escape(funds_heading)}</p>
+                  <p class="capex10-funds-t">Fondos faltantes para cumplir hitos, desglosados por fase y línea</p>
+                  <p class="capex10-funds-s">Lectura de primer nivel para entender dónde queda concentrado el capital pendiente para cumplir los hitos del piloto 10 kW y qué frentes explican el uso esperado de fondos.</p>
                 </div>
               </div>
               <div class="capex10-kpi-grid">
@@ -14791,6 +15388,23 @@ def render_telecom_executive_summary_tab() -> None:
     elif active_wind_valid:
         fp_curve = fp
 
+    fig_curve = None
+    fig_gen = None
+    fig_capex = None
+    fig_wbs = None
+    fig_tree = None
+    fig_pareto = None
+    fig_blocks = None
+    fig_10kw = None
+    fig_aep = None
+    fig_monthly_profile = None
+    fig_generation_audit = None
+    tech_table = pd.DataFrame()
+    scope_table = pd.DataFrame()
+    timeline_table = pd.DataFrame()
+    closures = pd.DataFrame()
+    tech_10kw_table = pd.DataFrame()
+
     st.markdown(
         """
         <style>
@@ -14821,6 +15435,7 @@ def render_telecom_executive_summary_tab() -> None:
         """,
         unsafe_allow_html=True,
     )
+    exec7_pdf_slot = st.empty()
 
     kpis_html = "".join(
         [
@@ -14920,6 +15535,177 @@ def render_telecom_executive_summary_tab() -> None:
             ]
         )
         st.dataframe(tech_table, use_container_width=True, hide_index=True)
+
+    def exec7_monthly_generation_df() -> pd.DataFrame:
+        month_labels = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sept", "Oct", "Nov", "Dic"]
+        monthly_rows = []
+        profile_df = pd.DataFrame(active_wind_outputs.get("perfil_mensual_alturas", []))
+        profile_generation = {}
+        if active_wind_valid and not profile_df.empty and {"Mes", "Energía mensual neta kWh por turbina"}.issubset(profile_df.columns):
+            active_profile = profile_df.copy()
+            if "Columna" in active_profile.columns and active_wind_column:
+                matching = active_profile[active_profile["Columna"].astype(str).eq(active_wind_column)].copy()
+                if not matching.empty:
+                    active_profile = matching
+            active_profile["Mes"] = pd.to_numeric(active_profile["Mes"], errors="coerce")
+            active_profile["Energía mensual neta kWh por turbina"] = pd.to_numeric(active_profile["Energía mensual neta kWh por turbina"], errors="coerce")
+            if np.isfinite(active_wind_ref_kw) and active_wind_ref_kw > 0 and np.isfinite(power_kw):
+                active_profile["Generación mensual kWh"] = active_profile["Energía mensual neta kWh por turbina"] * (power_kw / active_wind_ref_kw)
+            else:
+                active_profile["Generación mensual kWh"] = active_profile["Energía mensual neta kWh por turbina"]
+            profile_generation = (
+                active_profile.dropna(subset=["Mes", "Generación mensual kWh"])
+                .groupby("Mes")["Generación mensual kWh"]
+                .sum()
+                .to_dict()
+            )
+        for month_idx, month_name in enumerate(month_labels, start=1):
+            generation = parse_float_local(profile_generation.get(float(month_idx), np.nan), np.nan)
+            if not np.isfinite(generation):
+                generation = monthly_generation
+            covered = min(generation, monthly_consumption) if np.isfinite(generation) and np.isfinite(monthly_consumption) else np.nan
+            surplus = max(generation - monthly_consumption, 0.0) if np.isfinite(generation) and np.isfinite(monthly_consumption) else np.nan
+            gap = max(monthly_consumption - generation, 0.0) if np.isfinite(generation) and np.isfinite(monthly_consumption) else np.nan
+            coverage = generation / monthly_consumption * 100.0 if np.isfinite(generation) and np.isfinite(monthly_consumption) and monthly_consumption > 0 else np.nan
+            monthly_rows.append(
+                {
+                    "Mes": month_name,
+                    "Mes num": month_idx,
+                    "Generación kWh": generation,
+                    "Consumo sitio kWh": monthly_consumption,
+                    "Consumo cubierto kWh": covered,
+                    "Excedente kWh": surplus,
+                    "Brecha kWh": gap,
+                    "Balance kWh": generation - monthly_consumption if np.isfinite(generation) and np.isfinite(monthly_consumption) else np.nan,
+                    "Cobertura %": coverage,
+                    "Fuente": active_wind_source if profile_generation else "Promedio mensual calculado",
+                }
+            )
+        return pd.DataFrame(monthly_rows)
+
+    monthly_profile_df = exec7_monthly_generation_df()
+    if not monthly_profile_df.empty:
+        month_order = monthly_profile_df["Mes"].tolist()
+        fig_monthly_profile = go.Figure()
+        fig_monthly_profile.add_trace(
+            go.Bar(
+                x=monthly_profile_df["Mes"],
+                y=monthly_profile_df["Consumo sitio kWh"],
+                name="Consumo sitio",
+                marker_color="rgba(148,163,184,.28)",
+                offsetgroup="consumo",
+                customdata=np.stack([monthly_profile_df["Generación kWh"], monthly_profile_df["Cobertura %"], monthly_profile_df["Balance kWh"]], axis=-1),
+                hovertemplate="<b>%{x}</b><br>Consumo: %{y:,.0f} kWh<br>Generación: %{customdata[0]:,.0f} kWh<br>Cobertura: %{customdata[1]:.0f}%<br>Balance: %{customdata[2]:+,.0f} kWh<extra></extra>",
+            )
+        )
+        fig_monthly_profile.add_trace(
+            go.Bar(
+                x=monthly_profile_df["Mes"],
+                y=monthly_profile_df["Generación kWh"],
+                name="Generación",
+                marker_color="#2a9d8f",
+                offsetgroup="generacion",
+                customdata=np.stack([monthly_profile_df["Consumo cubierto kWh"], monthly_profile_df["Excedente kWh"], monthly_profile_df["Brecha kWh"], monthly_profile_df["Cobertura %"]], axis=-1),
+                hovertemplate="<b>%{x}</b><br>Generación: %{y:,.0f} kWh<br>Cubierto: %{customdata[0]:,.0f} kWh<br>Excedente: %{customdata[1]:,.0f} kWh<br>Brecha: %{customdata[2]:,.0f} kWh<br>Cobertura: %{customdata[3]:.0f}%<extra></extra>",
+            )
+        )
+        fig_monthly_profile.add_trace(
+            go.Bar(
+                x=monthly_profile_df["Mes"],
+                y=monthly_profile_df["Balance kWh"].abs(),
+                name="Brecha / excedente",
+                marker_color=np.where(monthly_profile_df["Balance kWh"] >= 0, "#98c1d9", "rgba(148,163,184,.55)"),
+                offsetgroup="balance",
+                customdata=np.stack([monthly_profile_df["Balance kWh"], monthly_profile_df["Excedente kWh"], monthly_profile_df["Brecha kWh"]], axis=-1),
+                hovertemplate="<b>%{x}</b><br>Balance: %{customdata[0]:+,.0f} kWh<br>Excedente: %{customdata[1]:,.0f} kWh<br>Brecha: %{customdata[2]:,.0f} kWh<extra></extra>",
+            )
+        )
+        fig_monthly_profile.add_trace(
+            go.Scatter(
+                x=monthly_profile_df["Mes"],
+                y=monthly_profile_df["Cobertura %"],
+                name="Cobertura",
+                yaxis="y2",
+                mode="lines+markers+text",
+                line=dict(color="#293241", width=3.2),
+                marker=dict(size=9, color="#ffffff", line=dict(color="#293241", width=2)),
+                text=[f"{value:.0f}%" if np.isfinite(value) else "" for value in monthly_profile_df["Cobertura %"]],
+                textposition="top center",
+                hovertemplate="<b>%{x}</b><br>Cobertura: %{y:.0f}%<extra></extra>",
+            )
+        )
+        annual_generation_profile = float(monthly_profile_df["Generación kWh"].sum() or 0.0)
+        annual_consumption_profile = float(monthly_profile_df["Consumo sitio kWh"].sum() or 0.0)
+        annual_coverage_profile = annual_generation_profile / annual_consumption_profile * 100.0 if annual_consumption_profile > 0 else np.nan
+        source_note = str(monthly_profile_df["Fuente"].iloc[0]) if not monthly_profile_df.empty else "Sin fuente"
+        fig_monthly_profile.add_annotation(
+            xref="paper",
+            yref="paper",
+            x=0.01,
+            y=1.18,
+            text=f"Fuente: {source_note}<br>Año: {annual_generation_profile:,.0f} kWh generados / {annual_consumption_profile:,.0f} kWh consumo · cobertura {annual_coverage_profile:.0f}%".replace(",", "."),
+            showarrow=False,
+            align="left",
+            bgcolor="rgba(255,255,255,.88)",
+            bordercolor="rgba(117,169,184,.35)",
+            borderwidth=1,
+            borderpad=4,
+            font=dict(color="#293241", size=11),
+        )
+        fig_monthly_profile.update_layout(
+            title=dict(text=f"Generación mensual y consumo · {rec_model}", x=0.01, xanchor="left", font=dict(size=18, color="#293241")),
+            height=430,
+            barmode="group",
+            legend=dict(orientation="h", y=1.10, x=0, title=None),
+            margin=dict(l=10, r=45, t=82, b=45),
+            xaxis=dict(title=None, categoryorder="array", categoryarray=month_order),
+            yaxis=dict(title="kWh/mes", rangemode="tozero", gridcolor="rgba(61,90,128,.16)"),
+            yaxis2=dict(title="Cobertura", overlaying="y", side="right", ticksuffix="%", rangemode="tozero", showgrid=False),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        generation_total = float(monthly_profile_df["Generación kWh"].sum() or 0.0)
+        consumption_total = float(monthly_profile_df["Consumo sitio kWh"].sum() or 0.0)
+        covered_total = float(monthly_profile_df["Consumo cubierto kWh"].sum() or 0.0)
+        surplus_total = float(monthly_profile_df["Excedente kWh"].sum() or 0.0)
+        gap_total = float(monthly_profile_df["Brecha kWh"].sum() or 0.0)
+        fig_generation_audit = go.Figure()
+        fig_generation_audit.add_trace(
+            go.Bar(
+                x=["Generación", "Consumo anual", "Consumo cubierto", "Excedente", "Brecha"],
+                y=[generation_total, consumption_total, covered_total, surplus_total, gap_total],
+                marker_color=["#2a9d8f", "rgba(148,163,184,.35)", "#98c1d9", "#ee6c4d", "rgba(148,163,184,.65)"],
+                text=[f"{value:,.0f}".replace(",", ".") for value in [generation_total, consumption_total, covered_total, surplus_total, gap_total]],
+                textposition="outside",
+                hovertemplate="<b>%{x}</b><br>%{y:,.0f} kWh/año<extra></extra>",
+            )
+        )
+        fig_generation_audit.add_annotation(
+            xref="paper",
+            yref="paper",
+            x=0.01,
+            y=1.14,
+            text="Auditoría anual: el balance separa cobertura útil, excedente y brecha.",
+            showarrow=False,
+            align="left",
+            font=dict(color="#293241", size=11),
+            bgcolor="rgba(255,255,255,.88)",
+            bordercolor="rgba(117,169,184,.35)",
+            borderwidth=1,
+            borderpad=4,
+        )
+        fig_generation_audit.update_layout(
+            title=dict(text=f"Balance anual generación/consumo · {rec_model}", x=0.01, xanchor="left", font=dict(size=18, color="#293241")),
+            height=330,
+            showlegend=False,
+            margin=dict(l=10, r=25, t=72, b=55),
+            xaxis=dict(title=None),
+            yaxis=dict(title="kWh/año", rangemode="tozero", gridcolor="rgba(61,90,128,.16)"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig_monthly_profile, use_container_width=True, config={"displaylogo": False})
+        st.plotly_chart(fig_generation_audit, use_container_width=True, config={"displaylogo": False})
 
     gen_df = pd.DataFrame(
         [
@@ -15311,6 +16097,209 @@ def render_telecom_executive_summary_tab() -> None:
             f'<div class="exec7-note"><b>Lectura técnica 10 kW:</b> con viento medio de {fmt_num(wind_speed, 2, " m/s")}, la curva entrega una potencia interpolada de {fmt_num(p_at_site, 2, " kW")}. La generación anual estimada es {fmt_kwh(aep_10kw)}, con factor planta {fmt_pct(fp_10kw)}. Para cierre de ingeniería conviene validar que la altura efectiva, rugosidad, turbulencia y disponibilidad real sostengan el Weibull k={fmt_num(weibull_k, 2)} y c={fmt_num(weibull_c, 2, " m/s")} usados en la estimación.</div>',
             unsafe_allow_html=True,
         )
+        tech_10kw_table = tech_table.copy()
+
+    def build_exec7_pdf() -> bytes:
+        if not REPORTLAB_AVAILABLE:
+            return b""
+
+        page_size = landscape(A4)
+        left_margin = 1.0 * cm
+        right_margin = 1.0 * cm
+        top_margin = 1.1 * cm
+        bottom_margin = 0.9 * cm
+        doc_width = page_size[0] - left_margin - right_margin - 0.5 * cm
+        styles = _pdf_styles()
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=page_size,
+            leftMargin=left_margin,
+            rightMargin=right_margin,
+            topMargin=top_margin,
+            bottomMargin=bottom_margin,
+        )
+        story = []
+
+        def header_footer(canvas, doc_obj):
+            canvas.saveState()
+            canvas.setStrokeColor(_pdf_color("#D8DEE8"))
+            canvas.line(left_margin, page_size[1] - 0.72 * cm, page_size[0] - right_margin, page_size[1] - 0.72 * cm)
+            canvas.setFont("Helvetica", 7.2)
+            canvas.setFillColor(_pdf_color("#697386"))
+            canvas.drawString(left_margin, 0.42 * cm, "07 · Resumen ejecutivo · CAPEX Piloto Eólico 80 kW")
+            canvas.drawRightString(page_size[0] - right_margin, 0.42 * cm, f"Página {doc_obj.page}")
+            canvas.restoreState()
+
+        def table_from_df(data: pd.DataFrame, columns: list[str], widths: list[float] | None = None, limit: int = 12) -> Table | None:
+            if data.empty:
+                return None
+            cols = [col for col in columns if col in data.columns]
+            if not cols:
+                return None
+            rows = [cols]
+            for _, row in data[cols].head(limit).iterrows():
+                rows.append([_pdf_short_label(row.get(col, ""), 72) for col in cols])
+            return _pdf_table(rows, col_widths=widths, font_size=6.9)
+
+        def fig_image(fig: go.Figure | None, title: str, width: float = doc_width, px_width: int = 1450):
+            if fig is None:
+                return Paragraph(f"{html.escape(title)}: figura no disponible.", styles["BodyText"])
+            try:
+                export_fig = go.Figure(fig)
+                layout_height = parse_float_local(export_fig.layout.height, 390.0)
+                px_height = int(max(260, layout_height))
+                export_fig.update_layout(width=px_width, height=px_height)
+                img_bytes = pio.to_image(export_fig, format="png", width=px_width, height=px_height, scale=2)
+                img = Image(BytesIO(img_bytes))
+                img.drawWidth = width
+                img.drawHeight = width * (px_height / px_width)
+                return img
+            except Exception as exc:
+                return Paragraph(f"{html.escape(title)}: no se pudo exportar la figura ({html.escape(str(exc))}).", styles["BodyText"])
+
+        def two_figs(left_fig, left_title: str, right_fig, right_title: str) -> Table:
+            gap = 0.45 * cm
+            col_w = (doc_width - gap) / 2
+            table = Table(
+                [
+                    [
+                        Paragraph(f"<b>{html.escape(left_title)}</b>", styles["BodyText"]),
+                        Paragraph(f"<b>{html.escape(right_title)}</b>", styles["BodyText"]),
+                    ],
+                    [fig_image(left_fig, left_title, width=col_w), fig_image(right_fig, right_title, width=col_w)],
+                ],
+                colWidths=[col_w, col_w],
+                hAlign="LEFT",
+            )
+            table.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 2),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                    ]
+                )
+            )
+            return table
+
+        story.append(Paragraph(f"07 · Resumen ejecutivo · {html.escape(rec_model)}", styles["Title"]))
+        story.append(
+            Paragraph(
+                "Descarga exclusiva de la página 07. Las figuras Plotly se exportan desde los mismos objetos renderizados en pantalla para conservar escala, colores, trazas, etiquetas y anotaciones.",
+                styles["BodyText"],
+            )
+        )
+        story.append(Spacer(1, 0.18 * cm))
+        story.append(
+            _pdf_kpi_grid(
+                [
+                    ("Turbina recomendada", rec_model, f"{fmt_num(power_kw, 1, ' kW')} nominales para el sitio"),
+                    ("Producción anual", fmt_kwh(annual_energy), f"Cobertura mensual estimada {fmt_pct(coverage_pct)}"),
+                    ("CAPEX instalado", fmt_mm_clp(capex_clp), "Suministro + montaje local"),
+                    ("Factor planta", fmt_pct(fp_curve), "Consistente con curva técnica activa"),
+                    ("Payback", fmt_num(payback, 1, " años"), f"LCOE {fmt_clp(lcoe)}/kWh"),
+                    ("Plazo de proyecto", fmt_num(schedule_days, 0, " días"), "Compra a cierre técnico"),
+                ],
+                columns=3,
+            )
+        )
+        story.append(Spacer(1, 0.16 * cm))
+        story.append(
+            Paragraph(
+                f"<b>Conclusión de ingeniería:</b> {html.escape(rec_model)} combina potencia instalada de {fmt_num(power_kw, 1, ' kW')}, producción anual de {fmt_kwh(annual_energy)}, CAPEX de {fmt_mm_clp(capex_clp)} y plazo estimado de {fmt_num(schedule_days, 0, ' días')}. La recomendación debe validarse con curva de potencia, altura efectiva, fundaciones, izaje, protecciones eléctricas y capacidad de ejecución en terreno.",
+                styles["BodyText"],
+            )
+        )
+
+        story.append(Paragraph("1. Conveniencia técnica y energética", styles["Heading1"]))
+        story.append(
+            _pdf_kpi_grid(
+                [
+                    ("Velocidad de diseño", fmt_num(wind_speed, 2, " m/s"), "Base para producción esperada"),
+                    ("Altura efectiva", fmt_num(effective_height, 1, " m"), "Exposición real del rotor"),
+                    ("Potencia máxima curva", fmt_num(pmax_curve, 1, " kW"), "Referencia técnica disponible"),
+                    ("CO2 evitado", fmt_num(co2, 1, " t/año"), "Energía desplazada"),
+                ],
+                columns=4,
+            )
+        )
+        story.append(Spacer(1, 0.12 * cm))
+        story.append(two_figs(fig_curve, "Curva real de potencia", fig_gen, "Generación vs consumo mensual"))
+        if fig_monthly_profile is not None or fig_generation_audit is not None:
+            story.append(Spacer(1, 0.12 * cm))
+            story.append(two_figs(fig_monthly_profile, f"Generación mensual y consumo · {rec_model}", fig_generation_audit, f"Balance anual generación/consumo · {rec_model}"))
+        tech_table_pdf = table_from_df(tech_table, ["Indicador", "Valor"], widths=[5.5 * cm, 5.0 * cm], limit=10)
+        if tech_table_pdf is not None:
+            story.append(Spacer(1, 0.08 * cm))
+            story.append(tech_table_pdf)
+
+        story.append(PageBreak())
+        story.append(Paragraph("2. CAPEX instalado y alcance técnico", styles["Heading1"]))
+        story.append(two_figs(fig_capex, "CAPEX suministro vs montaje", fig_wbs, "Bloques WBS principales"))
+        scope_table_pdf = table_from_df(scope_table, ["Área", "Monto", "Lectura de ingeniería"], widths=[4.2 * cm, 3.2 * cm, 18.3 * cm], limit=6)
+        if scope_table_pdf is not None:
+            story.append(Spacer(1, 0.1 * cm))
+            story.append(scope_table_pdf)
+
+        if fig_tree is not None or fig_pareto is not None:
+            story.append(PageBreak())
+            story.append(Paragraph("3. Detalle de CAPEX montaje por área", styles["Heading1"]))
+            story.append(two_figs(fig_tree, "Treemap de montaje local", fig_pareto, "Pareto de costo por área"))
+
+        story.append(PageBreak())
+        story.append(Paragraph("4. Línea de tiempo del proyecto", styles["Heading1"]))
+        if not schedule_df.empty:
+            gantt_pdf_df = schedule_df.copy()
+            if len(gantt_pdf_df) > 32:
+                story.append(Paragraph(f"Cronograma completo: {len(gantt_pdf_df)} actividades. Vista PDF: primeras 32 actividades para mantener legibilidad en A4 horizontal.", styles["BodyText"]))
+                gantt_pdf_df = gantt_pdf_df.head(32)
+                story.append(Spacer(1, 0.08 * cm))
+            story.append(_pdf_gantt_chart(gantt_pdf_df, width=doc_width))
+            if fig_blocks is not None:
+                story.append(Spacer(1, 0.12 * cm))
+                story.append(fig_image(fig_blocks, "Span calendario por bloque", width=doc_width * 0.72))
+        timeline_table_pdf = table_from_df(timeline_table, ["Bloque", "Inicio", "Fin", "Span calendario", "Días tarea", "Tareas", "Críticas"], limit=10)
+        if timeline_table_pdf is not None:
+            story.append(Spacer(1, 0.1 * cm))
+            story.append(timeline_table_pdf)
+
+        if not closures.empty:
+            story.append(PageBreak())
+            story.append(Paragraph("5. Cierres técnicos para propuesta", styles["Heading1"]))
+            closures_pdf = table_from_df(closures, ["Frente", "Control requerido", "Impacto"], widths=[4.0 * cm, 15.5 * cm, 6.2 * cm], limit=8)
+            if closures_pdf is not None:
+                story.append(closures_pdf)
+
+        if fig_10kw is not None or fig_aep is not None:
+            story.append(PageBreak())
+            story.append(Paragraph("6. Análisis técnico 10 kW", styles["Heading1"]))
+            story.append(two_figs(fig_10kw, "Curva técnica 10 kW", fig_aep, "AEP estimado por modelo"))
+            tech_10kw_pdf = table_from_df(tech_10kw_table, ["Indicador", "Valor"], widths=[6.0 * cm, 7.0 * cm], limit=12)
+            if tech_10kw_pdf is not None:
+                story.append(Spacer(1, 0.1 * cm))
+                story.append(tech_10kw_pdf)
+
+        doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
+        return buffer.getvalue()
+
+    if REPORTLAB_AVAILABLE:
+        try:
+            exec7_pdf_bytes = build_exec7_pdf()
+            exec7_pdf_slot.download_button(
+                "Descargar PDF · Resumen ejecutivo 07",
+                data=exec7_pdf_bytes,
+                file_name="07_resumen_ejecutivo_vawt_10kw.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="download_telecom_exec7_pdf",
+            )
+        except Exception as exc:
+            exec7_pdf_slot.caption(f"PDF resumen 07 no disponible: {exc}")
+    else:
+        exec7_pdf_slot.caption("PDF resumen 07 no disponible: falta reportlab.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -20383,12 +21372,12 @@ def render_inputs_capex_10kw_detail():
         .capex10-foot-ico{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eef4ff;color:#315d9b;font-size:20px;}
         .capex10-foot-k{font-size:11px;color:#587093;margin:0 0 4px 0;}
         .capex10-foot-v{font-size:12px;color:#18345c;margin:0;font-weight:600;}
-        .capex10-subnav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 16px 0;}
-        .capex10-subcard{border:1px solid #d9e2ee;border-radius:13px;background:linear-gradient(180deg,#fff,#f8fbff);padding:15px 16px;min-height:98px;box-shadow:0 10px 24px rgba(15,23,42,.045);}
+        .capex10-subnav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 16px 0;align-items:stretch;}
+        .capex10-subcard{border:1px solid #d9e2ee;border-radius:13px;background:linear-gradient(180deg,#fff,#f8fbff);padding:15px 16px;min-height:126px;height:100%;display:flex;flex-direction:column;box-shadow:0 10px 24px rgba(15,23,42,.045);}
         .capex10-subcard.active{border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.10),0 12px 28px rgba(15,23,42,.06);}
         .capex10-sub-k{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:0 0 7px 0;}
         .capex10-sub-t{font-size:15px;font-weight:950;color:#0b1730;line-height:1.15;margin:0 0 6px 0;}
-        .capex10-sub-s{font-size:11.5px;line-height:1.35;color:#475569;margin:0;}
+        .capex10-sub-s{font-size:11.5px;line-height:1.35;color:#475569;margin:0;flex:1;}
         .capex10-sens-shell{border:1px solid #d9e2ee;border-radius:18px;background:linear-gradient(135deg,#ffffff 0%,#f8fbff 58%,#eefdf9 100%);padding:22px 24px;margin:18px 0 0 0;box-shadow:0 14px 30px rgba(15,23,42,.055);}
         .capex10-sens-k{font-size:11px;font-weight:950;letter-spacing:.12em;text-transform:uppercase;color:#0f766e;margin:0 0 8px 0;}
         .capex10-sens-t{font-size:26px;line-height:1.08;font-weight:950;color:#071427;margin:0 0 8px 0;}
@@ -20410,10 +21399,12 @@ def render_inputs_capex_10kw_detail():
                 "inputs_gantt_fase",
                 "inputs_gantt_linea",
                 "inputs_gantt_estado",
+                "inputs_gantt_metodo",
                 "inputs_gantt_time_range",
                 "inputs_gantt_fase__sticky",
                 "inputs_gantt_linea__sticky",
                 "inputs_gantt_estado__sticky",
+                "inputs_gantt_metodo__sticky",
             ):
                 st.session_state.pop(gantt_key, None)
 
@@ -20488,7 +21479,6 @@ def render_inputs_capex_10kw_detail():
             render_control_cost_block(df_control_cost)
         return
 
-    render_pilotos_ana_embedded_view()
     render_capex10_available_funds_by_phase_line()
     try:
         df_gantt_costs = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
@@ -20502,7 +21492,13 @@ def render_inputs_capex_10kw_detail():
             """,
             unsafe_allow_html=True,
         )
-        render_inputs_gantt_cost_analysis(df_gantt_costs, scope_label="toda la hoja del cronograma")
+        render_capex10_selected_cash_flow(st.session_state.get("capex10_funds_filtered_df", pd.DataFrame()))
+        render_pilotos_ana_embedded_view()
+        render_inputs_gantt_cost_analysis(
+            df_gantt_costs,
+            scope_label="toda la hoja del cronograma",
+            pilot_total_reference_clp=get_brecha_piloto_10kw_clp(refresh_nonce=data_refresh_nonce),
+        )
     render_capex10_stage_line_detail_table()
     return
 
@@ -20662,7 +21658,13 @@ def render_inputs_capex_10kw_detail():
             """,
             unsafe_allow_html=True,
         )
-        render_inputs_gantt_cost_analysis(df_gantt_costs, scope_label="toda la hoja del cronograma")
+        render_capex10_selected_cash_flow(st.session_state.get("capex10_funds_filtered_df", pd.DataFrame()))
+        render_pilotos_ana_embedded_view()
+        render_inputs_gantt_cost_analysis(
+            df_gantt_costs,
+            scope_label="toda la hoja del cronograma",
+            pilot_total_reference_clp=get_brecha_piloto_10kw_clp(refresh_nonce=data_refresh_nonce),
+        )
     st.markdown(
         """
         <div style="clear:both;height:26px;"></div>
@@ -21925,9 +22927,11 @@ if st.sidebar.button("🔁 Actualizar datos desde URL"):
         "inputs_gantt_fase",
         "inputs_gantt_linea",
         "inputs_gantt_estado",
-        "inputs_gantt_mode",
+        "inputs_gantt_metodo",
         "inputs_gantt_time_range",
         "capex10_funds_etapa_selector",
+        "capex10_funds_metodo_selector",
+        "capex10_funds_responsable_selector",
         "capex10_stage_detail_etapa_selector",
         "telecom_market_tab_selector",
     ):
@@ -23168,11 +24172,8 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
     fx_default = float(fx_used) if np.isfinite(fx_used) and fx_used > 0 else parse_model_number(model_map.get("fxclpusd", 925))
     total_base_knowhow_clp, _, _, _ = get_valor_activo_tecnologico_construido(refresh_nonce=data_refresh_nonce)
     pre_money_actual_default = total_base_knowhow_clp / fx_default if fx_default > 0 and total_base_knowhow_clp > 0 else 0.0
-    capex_10kw_default = 0.0
     try:
-        df_restante_10kw = build_restante_piloto_10kw_view(RESTANTE_PILOTO_10KW_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
-        if not df_restante_10kw.empty:
-            capex_10kw_default = float(df_restante_10kw["Valor C"].sum() or 0.0)
+        capex_10kw_default = get_brecha_piloto_10kw_clp(refresh_nonce=data_refresh_nonce)
     except Exception:
         capex_10kw_default = 0.0
     inversion_clp_default = capex_10kw_default + float(capex_total_integrado_clp or 0.0)
@@ -25141,11 +26142,8 @@ elif selected_input_block == "escalamiento":
     if capex_selector_state_key not in st.session_state:
         st.session_state[capex_selector_state_key] = None
 
-    capex_10kw_val = 0.0
     try:
-        df_restante_10kw = build_restante_piloto_10kw_view(RESTANTE_PILOTO_10KW_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
-        if not df_restante_10kw.empty:
-            capex_10kw_val = float(df_restante_10kw["Valor C"].sum() or 0.0)
+        capex_10kw_val = get_brecha_piloto_10kw_clp(refresh_nonce=data_refresh_nonce)
     except Exception:
         capex_10kw_val = 0.0
 
