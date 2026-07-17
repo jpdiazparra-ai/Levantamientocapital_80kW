@@ -11120,26 +11120,113 @@ def render_capex10_available_funds_by_phase_line() -> None:
               <p class="capex10-lower-title">Detalle por fase y línea <span class="capex10-lower-muted">todo lo seleccionado</span></p>
               <div class="capex10-table-total-value">{total_disponible_fmt}</div>
             </div>
-            <div class="capex10-table-wrap">
-              <table class="capex10-funds-table">
-                <thead>
-                  <tr>
-                    <th>Fase</th>
-                    <th>Línea</th>
-                    <th>Partidas</th>
-                    <th>Disponible</th>
-                  </tr>
-                </thead>
-                <tbody>{table_rows_html}</tbody>
-              </table>
-              <div class="capex10-table-footer">
-                <div class="capex10-table-link">
-                  <span class="capex10-info-dot">▦</span>
-                  <span>{len(table_display)} líneas visibles según los filtros activos</span>
+            """,
+            unsafe_allow_html=True,
+        )
+        detail_interactive_df = funds_df.copy()
+        detail_responsible_col = responsable_col if responsable_col in detail_interactive_df.columns else None
+        detail_interactive_df["_responsable_detalle"] = (
+            detail_interactive_df[detail_responsible_col]
+            .astype(str)
+            .str.strip()
+            .replace({"": "Sin responsable", "nan": "Sin responsable", "None": "Sin responsable"})
+            if detail_responsible_col
+            else "Sin responsable"
+        )
+        detail_line_summary = (
+            detail_interactive_df.groupby(["_responsable_detalle", "Fase", "Línea"], as_index=False)
+            .agg(
+                Disponible_CLP=("Disponible_CLP", "sum"),
+                Partidas=("Tarea / Entregable", "count"),
+            )
+            .sort_values(["_responsable_detalle", "Disponible_CLP"], ascending=[True, False])
+        )
+        detail_responsible_summary = (
+            detail_line_summary.groupby("_responsable_detalle", as_index=False)
+            .agg(
+                Disponible_CLP=("Disponible_CLP", "sum"),
+                Lineas=("Línea", "nunique"),
+                Partidas=("Partidas", "sum"),
+            )
+            .sort_values("Disponible_CLP", ascending=False)
+        )
+        display_cols_candidates = [
+            ("Fase", "Fase"),
+            ("Línea", "Línea"),
+            ("Tarea / Entregable", "Tarea / Entregable"),
+            ("Estado.1", "Estado"),
+            (GANTT_DATE_COL_START, "Inicio"),
+            (GANTT_DATE_COL_END_PLAN, "Fin plan"),
+            (GANTT_DATE_COL_END_REAL, "Fin real"),
+            ("Disponible_CLP", "Disponible"),
+        ]
+        st.markdown(
+            """
+            <style>
+              .capex10-responsible-detail-head{
+                display:flex;align-items:center;justify-content:space-between;gap:12px;
+                border:1px solid rgba(203,213,225,.78);border-radius:14px;
+                background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
+                padding:10px 12px;margin:10px 0 8px;
+              }
+              .capex10-responsible-detail-head b{font-size:14px;color:#071427;font-weight:950;}
+              .capex10-responsible-detail-head span{font-size:11px;color:#64748B;font-weight:850;}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        for _, responsible_row in detail_responsible_summary.iterrows():
+            responsible_name = str(responsible_row["_responsable_detalle"])
+            st.markdown(
+                f"""
+                <div class="capex10-responsible-detail-head">
+                  <b>{html.escape(responsible_name)}</b>
+                  <span>{int(responsible_row["Lineas"])} líneas · {int(responsible_row["Partidas"])} partidas · {format_clp(float(responsible_row["Disponible_CLP"]))}</span>
                 </div>
-                <div class="capex10-table-total-label">Total disponible</div>
-                <div class="capex10-table-total-value">{total_disponible_fmt}</div>
+                """,
+                unsafe_allow_html=True,
+            )
+            responsible_lines = detail_line_summary[
+                detail_line_summary["_responsable_detalle"].eq(responsible_name)
+            ].copy()
+            for _, line_row in responsible_lines.iterrows():
+                phase_name = str(line_row["Fase"])
+                line_name = str(line_row["Línea"])
+                line_items = detail_interactive_df[
+                    detail_interactive_df["_responsable_detalle"].eq(responsible_name)
+                    & detail_interactive_df["Fase"].eq(phase_name)
+                    & detail_interactive_df["Línea"].eq(line_name)
+                ].copy()
+                line_items = line_items.sort_values(["Fase", "Línea", "Tarea / Entregable"], na_position="last")
+                detail_display = pd.DataFrame()
+                for source_col, display_col in display_cols_candidates:
+                    if source_col in line_items.columns:
+                        if source_col == "Disponible_CLP":
+                            detail_display[display_col] = line_items[source_col].apply(format_clp)
+                        elif source_col in {GANTT_DATE_COL_START, GANTT_DATE_COL_END_PLAN, GANTT_DATE_COL_END_REAL}:
+                            detail_display[display_col] = pd.to_datetime(line_items[source_col], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                        else:
+                            detail_display[display_col] = line_items[source_col].astype(str).replace({"nan": "-", "None": "-"})
+                expander_label = (
+                    f"{line_name} · {phase_name} · "
+                    f"{int(line_row['Partidas'])} partidas · {format_clp(float(line_row['Disponible_CLP']))}"
+                )
+                with st.expander(expander_label, expanded=False):
+                    st.dataframe(
+                        detail_display,
+                        use_container_width=True,
+                        hide_index=True,
+                        height=min(420, 38 + (len(detail_display) + 1) * 35),
+                    )
+        st.markdown(
+            f"""
+            <div class="capex10-table-footer">
+              <div class="capex10-table-link">
+                <span class="capex10-info-dot">▦</span>
+                <span>{len(detail_line_summary)} líneas visibles agrupadas por responsable según los filtros activos</span>
               </div>
+              <div class="capex10-table-total-label">Total disponible</div>
+              <div class="capex10-table-total-value">{total_disponible_fmt}</div>
             </div>
             """,
             unsafe_allow_html=True,
