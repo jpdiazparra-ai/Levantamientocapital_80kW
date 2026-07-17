@@ -9470,6 +9470,21 @@ def _capex10_responsible_color_map(responsibles: list[object]) -> dict[object, s
     }
 
 
+def _capex10_responsible_expander_style(responsible: object) -> tuple[str, str]:
+    key = normalize_key(str(responsible))
+    if key == "fw":
+        return "green", "🟢"
+    if key == "cimed":
+        return "red", "🔴"
+    if key == "jp":
+        return "violet", "🟣"
+    if key == "grupoec":
+        return "blue", "🔷"
+    if key == "imelsa":
+        return "blue", "🔵"
+    return "gray", "⚪"
+
+
 def render_capex10_investor_injection_cash_flow(
     funds_df: pd.DataFrame,
     responsible_scope_df: pd.DataFrame | None = None,
@@ -11308,9 +11323,17 @@ def render_capex10_available_funds_by_phase_line() -> None:
             responsible_start = pd.Timestamp(responsible_row["Inicio"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Inicio"]) else "-"
             responsible_end = pd.Timestamp(responsible_row["Fin_real"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Fin_real"]) else "-"
             responsible_color = _capex10_responsible_color(responsible_name)
+            responsible_label_color, responsible_icon = _capex10_responsible_expander_style(responsible_name)
+            responsible_expander_label = (
+                f":{responsible_label_color}[{responsible_name}] · "
+                f"{format_clp(responsible_total)} · "
+                f"{int(responsible_row['Lineas'])} líneas · "
+                f"{int(responsible_row['Partidas'])} partidas"
+            )
             with st.expander(
-                f"{responsible_name} · {format_clp(responsible_total)} · {int(responsible_row['Lineas'])} líneas · {int(responsible_row['Partidas'])} partidas",
+                responsible_expander_label,
                 expanded=False,
+                icon=responsible_icon,
             ):
                 st.markdown(
                     f"""
