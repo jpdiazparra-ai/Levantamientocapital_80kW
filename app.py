@@ -10892,15 +10892,6 @@ def render_capex10_available_funds_by_phase_line() -> None:
         .tolist()
     )
     line_color_map = {line: funds_colors[idx % len(funds_colors)] for idx, line in enumerate(line_order)}
-    legend_html = "".join(
-        f"""
-        <div class="capex10-dist-legend-item">
-          <span style="background:{line_color_map.get(line, '#64748B')};"></span>
-          <b>{html.escape(str(line))}</b>
-        </div>
-        """
-        for line in line_order
-    )
     table_display = grouped.copy()
     table_rows_html = "".join(
         f"""
@@ -10914,41 +10905,126 @@ def render_capex10_available_funds_by_phase_line() -> None:
         for _, row in table_display.iterrows()
     )
 
-    fig_funds = px.bar(
-        grouped,
-        x="Monto_MM",
-        y="Fase",
-        color="Línea",
-        orientation="h",
-        category_orders={"Fase": phase_order},
-        color_discrete_map=line_color_map,
-        labels={"Monto_MM": "Disponible por gastar (MM CLP)", "Fase": "", "Línea": "Línea"},
-        custom_data=["Disponible_CLP", "Partidas", "Participación", "Línea"],
+    phase_chart_order = (
+        phase_totals.sort_values("Disponible_CLP", ascending=False)["Fase"].tolist()
+        if not phase_totals.empty
+        else phase_order
     )
+    phase_totals_chart = (
+        grouped.groupby("Fase", as_index=False)
+        .agg(Disponible_CLP=("Disponible_CLP", "sum"), Partidas=("Partidas", "sum"))
+        .set_index("Fase")
+        .reindex(phase_chart_order)
+        .reset_index()
+    )
+    phase_totals_chart["Monto_MM"] = phase_totals_chart["Disponible_CLP"] / 1_000_000
+    fig_funds = go.Figure()
+    for line_name in line_order:
+        line_df = (
+            grouped[grouped["Línea"].eq(line_name)]
+            .set_index("Fase")
+            .reindex(phase_chart_order)
+            .reset_index()
+        )
+        line_df["Línea"] = line_name
+        line_df["Disponible_CLP"] = line_df["Disponible_CLP"].fillna(0.0)
+        line_df["Partidas"] = line_df["Partidas"].fillna(0).astype(int)
+        line_df["Monto_MM"] = line_df["Disponible_CLP"] / 1_000_000
+        line_df["Disponible_fmt"] = line_df["Disponible_CLP"].apply(format_clp)
+        fig_funds.add_trace(
+            go.Bar(
+                x=line_df["Fase"],
+                y=line_df["Monto_MM"],
+                name=str(line_name),
+                marker=dict(
+                    color=line_color_map.get(line_name, "#64748B"),
+                    line=dict(color="rgba(15,23,42,.34)", width=1.1),
+                ),
+                customdata=np.stack(
+                    [
+                        line_df["Disponible_fmt"],
+                        line_df["Partidas"],
+                        [str(line_name)] * len(line_df),
+                    ],
+                    axis=-1,
+                ),
+                hovertemplate=(
+                    "<b>%{x}</b><br>"
+                    "Línea: %{customdata[2]}<br>"
+                    "Disponible: %{customdata[0]}<br>"
+                    "Monto: %{y:.1f} MM CLP<br>"
+                    "Partidas: %{customdata[1]}<extra></extra>"
+                ),
+            )
+        )
+    fig_funds.add_trace(
+        go.Scatter(
+            x=phase_totals_chart["Fase"],
+            y=phase_totals_chart["Monto_MM"],
+            name="Total fase",
+            mode="lines+markers",
+            line=dict(color="#2563EB", width=4),
+            marker=dict(size=9, color="#FFFFFF", line=dict(color="#2563EB", width=2.5)),
+            customdata=np.stack(
+                [
+                    phase_totals_chart["Disponible_CLP"].apply(format_clp),
+                    phase_totals_chart["Partidas"].fillna(0).astype(int),
+                ],
+                axis=-1,
+            ),
+            hovertemplate="<b>%{x}</b><br>Total fase: %{customdata[0]}<br>Partidas: %{customdata[1]}<extra></extra>",
+        )
+    )
+    if not phase_totals_chart.empty:
+        label_row = phase_totals_chart.sort_values("Monto_MM", ascending=False).iloc[0]
+        fig_funds.add_annotation(
+            x=label_row["Fase"],
+            y=float(label_row["Monto_MM"]),
+            text=format_clp(float(label_row["Disponible_CLP"])),
+            showarrow=False,
+            xanchor="left",
+            xshift=12,
+            font=dict(size=12, color="#2563EB"),
+            bgcolor="rgba(239,246,255,.96)",
+            bordercolor="#BFDBFE",
+            borderwidth=1,
+            borderpad=6,
+        )
     fig_funds.update_layout(
         barmode="stack",
-        height=max(420, min(640, 72 * max(len(phase_order), 1))),
-        margin=dict(l=8, r=18, t=8, b=44),
-        showlegend=False,
+        height=520,
+        margin=dict(l=10, r=132, t=72, b=84),
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            y=1.14,
+            x=0,
+            xanchor="left",
+            title=None,
+            bgcolor="rgba(255,255,255,0)",
+            font=dict(size=11, color="#334155"),
+        ),
         plot_bgcolor="white",
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#334155", size=11),
-        bargap=0.28,
-        hovermode="closest",
+        bargap=0.22,
+        hovermode="x unified",
     )
-    fig_funds.update_traces(
-        marker=dict(line=dict(color="rgba(255,255,255,.92)", width=1.2)),
-        hovertemplate=(
-            "<b>%{y}</b><br>"
-            "Línea: %{customdata[3]}<br>"
-            "Disponible: %{customdata[0]:,.0f} CLP<br>"
-            "Monto: %{x:.1f} MM CLP<br>"
-            "Partidas: %{customdata[1]}<br>"
-            "Participación: %{customdata[2]:.1f}%<extra></extra>"
-        ),
+    fig_funds.update_xaxes(
+        title=None,
+        categoryorder="array",
+        categoryarray=phase_chart_order,
+        tickangle=-18,
+        showgrid=False,
+        automargin=True,
     )
-    fig_funds.update_xaxes(showgrid=True, gridcolor="rgba(148,163,184,.18)", zeroline=False, ticksuffix=" MM")
-    fig_funds.update_yaxes(showgrid=False, automargin=True)
+    fig_funds.update_yaxes(
+        title="MM CLP",
+        showgrid=True,
+        gridcolor="rgba(148,163,184,.16)",
+        zeroline=False,
+        ticksuffix=" MM",
+    )
 
     st.markdown(
         f"""
@@ -10986,38 +11062,6 @@ def render_capex10_available_funds_by_phase_line() -> None:
             font-size:12px;
             font-weight:950;
             flex:0 0 auto;
-        }}
-        .capex10-dist-legend{{
-            display:grid;
-            grid-template-columns:repeat(4, minmax(0, 1fr));
-            gap:7px 14px;
-            align-items:center;
-            margin:0 0 14px 0;
-            padding:0 4px 10px 4px;
-            border-bottom:1px solid rgba(226,232,240,.86);
-        }}
-        .capex10-dist-legend-item{{
-            display:flex;
-            align-items:center;
-            gap:8px;
-            min-width:0;
-            color:#334155;
-            font-size:11px;
-            line-height:1.18;
-            font-weight:750;
-            overflow:hidden;
-        }}
-        .capex10-dist-legend-item span{{
-            width:11px;
-            height:11px;
-            border-radius:2px;
-            flex:0 0 auto;
-            box-shadow:0 0 0 1px rgba(255,255,255,.9),0 0 0 2px rgba(148,163,184,.10);
-        }}
-        .capex10-dist-legend-item b{{
-            overflow:hidden;
-            text-overflow:ellipsis;
-            white-space:nowrap;
         }}
         .capex10-table-wrap{{
             border:1px solid rgba(226,232,240,.95);
@@ -11094,7 +11138,6 @@ def render_capex10_available_funds_by_phase_line() -> None:
             white-space:nowrap;
         }}
         @media (max-width: 1180px){{
-            .capex10-dist-legend{{grid-template-columns:repeat(2, minmax(0, 1fr));}}
             .capex10-table-footer{{grid-template-columns:1fr;gap:8px;}}
         }}
         </style>
@@ -11109,7 +11152,6 @@ def render_capex10_available_funds_by_phase_line() -> None:
               <p class="capex10-lower-title">Distribución por fase y línea <span class="capex10-lower-muted">({len(table_display)} líneas seleccionadas)</span></p>
               <span class="capex10-info-dot">i</span>
             </div>
-            <div class="capex10-dist-legend">{legend_html}</div>
             """,
             unsafe_allow_html=True,
         )
