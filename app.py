@@ -9449,6 +9449,493 @@ def _capex10_funds_heading(selected_metodos: list[str]) -> str:
     return "Fondos faltantes para cumplir hitos, desglosados por fase y línea"
 
 
+def render_capex10_investor_injection_cash_flow(
+    funds_df: pd.DataFrame,
+    responsible_scope_df: pd.DataFrame | None = None,
+) -> None:
+    if funds_df.empty or "Disponible_CLP" not in funds_df.columns:
+        return
+    flow_df = funds_df[funds_df["Disponible_CLP"] > 0].copy()
+    if flow_df.empty:
+        return
+    date_col = GANTT_DATE_COL_START if GANTT_DATE_COL_START in flow_df.columns else None
+    fallback_col = GANTT_DATE_COL_END_PLAN if GANTT_DATE_COL_END_PLAN in flow_df.columns else None
+    if date_col:
+        flow_df["_cash_date"] = pd.to_datetime(flow_df[date_col], errors="coerce")
+    else:
+        flow_df["_cash_date"] = pd.NaT
+    if fallback_col:
+        flow_df["_cash_date"] = flow_df["_cash_date"].fillna(pd.to_datetime(flow_df[fallback_col], errors="coerce"))
+    flow_df["_cash_date"] = flow_df["_cash_date"].fillna(pd.Timestamp.today().normalize())
+    flow_df["_month"] = flow_df["_cash_date"].dt.to_period("M").dt.to_timestamp()
+    monthly = (
+        flow_df.groupby("_month", as_index=False)
+        .agg(Flujo_CLP=("Disponible_CLP", "sum"))
+        .sort_values("_month")
+    )
+    if monthly.empty:
+        return
+    total_clp = float(monthly["Flujo_CLP"].sum() or 0.0)
+
+    st.markdown(
+        """
+        <style>
+        .cash-injection-card{margin:8px 0 18px;border-radius:22px;background:#FFFFFF;border:1px solid rgba(203,213,225,.88);box-shadow:0 16px 36px rgba(15,23,42,.07);padding:18px 20px;}
+        .cash-injection-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 12px;}
+        .cash-injection-head b{display:block;color:#071427;font-size:18px;line-height:1.1;font-weight:950;}
+        .cash-injection-head span{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}
+        .cash-injection-pill{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:7px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}
+        @media(max-width:900px){.cash-injection-head{display:block;}.cash-injection-pill{display:inline-flex;margin-top:10px;}}
+        </style>
+        <div class="cash-injection-card">
+          <div class="cash-injection-head">
+            <div><b>Inyección cliente o inversionista</b><span>Entradas puntuales de caja contra los gastos pendientes calendarizados.</span></div>
+            <div class="cash-injection-pill">Capital externo</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    input_col_1, input_col_2, input_col_3 = st.columns([1, 1, 1.15])
+    with input_col_1:
+        investor_injection_clp = st.number_input(
+            "Monto inyección 1 (CLP)",
+            min_value=0,
+            value=54_000_000,
+            step=1_000_000,
+            format="%d",
+            key="capex10_investor_injection_clp",
+            help="Capital comprometido por un cliente o inversionista para contrastarlo contra los fondos por ejecutar.",
+        )
+    with input_col_2:
+        investor_injection_date = st.date_input(
+            "Fecha inyección 1",
+            value=pd.Timestamp("2026-08-30").date(),
+            key="capex10_investor_injection_date",
+            help="Fecha estimada en que entra la inyección de capital.",
+        )
+    input_col_4, input_col_5, _input_col_6 = st.columns([1, 1, 1.15])
+    with input_col_4:
+        investor_injection_2_clp = st.number_input(
+            "Monto inyección 2 (CLP)",
+            min_value=0,
+            value=0,
+            step=1_000_000,
+            format="%d",
+            key="capex10_investor_injection_2_clp",
+            help="Segunda entrada puntual de capital. Déjala en 0 si no aplica.",
+        )
+    with input_col_5:
+        investor_injection_2_date = st.date_input(
+            "Fecha inyección 2",
+            value=pd.Timestamp("2026-09-30").date(),
+            key="capex10_investor_injection_2_date",
+            help="Fecha estimada de la segunda inyección de capital.",
+        )
+    total_committed_clp = float(investor_injection_clp or 0.0) + float(investor_injection_2_clp or 0.0)
+    with input_col_3:
+        committed_pct = (total_committed_clp / total_clp * 100.0) if total_clp > 0 else 0.0
+        st.metric(
+            "Cobertura sobre flujo seleccionado",
+            f"{committed_pct:.1f}%",
+            delta=format_clp(total_committed_clp - total_clp),
+            help="Diferencia entre el total de inyecciones comprometidas y el flujo total pendiente de la selección activa.",
+        )
+
+    injection_df = pd.DataFrame(
+        [
+            {
+                "_month": pd.Timestamp(investor_injection_date).to_period("M").to_timestamp(),
+                "Inyeccion_CLP": float(investor_injection_clp or 0.0),
+                "Etiqueta": "Inyección 1",
+            },
+            {
+                "_month": pd.Timestamp(investor_injection_2_date).to_period("M").to_timestamp(),
+                "Inyeccion_CLP": float(investor_injection_2_clp or 0.0),
+                "Etiqueta": "Inyección 2",
+            },
+        ]
+    )
+    positive_injections = injection_df[injection_df["Inyeccion_CLP"] > 0].copy()
+    timeline_start = min(monthly["_month"].min(), injection_df["_month"].min())
+    timeline_end = max(monthly["_month"].max(), injection_df["_month"].max())
+    commitment_monthly = pd.DataFrame({"_month": pd.date_range(timeline_start, timeline_end, freq="MS")})
+    commitment_monthly = commitment_monthly.merge(monthly[["_month", "Flujo_CLP"]], on="_month", how="left")
+    commitment_monthly = commitment_monthly.merge(
+        injection_df.groupby("_month", as_index=False)["Inyeccion_CLP"].sum(),
+        on="_month",
+        how="left",
+    )
+    commitment_monthly["Flujo_CLP"] = commitment_monthly["Flujo_CLP"].fillna(0.0)
+    commitment_monthly["Inyeccion_CLP"] = commitment_monthly["Inyeccion_CLP"].fillna(0.0)
+    commitment_monthly["Acumulado_CLP"] = commitment_monthly["Flujo_CLP"].cumsum()
+    commitment_monthly["Inyeccion_acumulada_CLP"] = commitment_monthly["Inyeccion_CLP"].cumsum()
+    commitment_monthly["Saldo_caja_CLP"] = commitment_monthly["Inyeccion_acumulada_CLP"] - commitment_monthly["Acumulado_CLP"]
+    commitment_labels = commitment_monthly["_month"].dt.strftime("%b %Y")
+    fig_commitment = go.Figure()
+    fig_commitment.add_trace(
+        go.Bar(
+            x=commitment_labels,
+            y=commitment_monthly["Flujo_CLP"] / 1_000_000,
+            name="Flujo mensual pendiente",
+            marker_color="#7FA8A4",
+            text=[format_clp(value) if value > 0 else "" for value in commitment_monthly["Flujo_CLP"]],
+            textposition="outside",
+            hovertemplate="<b>%{x}</b><br>Flujo pendiente: %{text}<extra></extra>",
+        )
+    )
+    fig_commitment.add_trace(
+        go.Scatter(
+            x=commitment_labels,
+            y=commitment_monthly["Acumulado_CLP"] / 1_000_000,
+            name="Acumulado requerido",
+            mode="lines+markers",
+            line=dict(color="#1E3A8A", width=3),
+            marker=dict(size=8, color="#FFFFFF", line=dict(color="#1E3A8A", width=2)),
+            hovertemplate="<b>%{x}</b><br>Acumulado requerido: $%{y:.1f} MM<extra></extra>",
+        )
+    )
+    fig_commitment.add_trace(
+        go.Scatter(
+            x=commitment_labels,
+            y=commitment_monthly["Saldo_caja_CLP"] / 1_000_000,
+            name="Saldo caja acumulado",
+            mode="lines+markers",
+            line=dict(color="#D7605E", width=3),
+            marker=dict(size=8, color="#FFFFFF", line=dict(color="#D7605E", width=2)),
+            hovertemplate="<b>%{x}</b><br>Saldo caja: $%{y:.1f} MM<extra></extra>",
+        )
+    )
+    for _, injection in positive_injections.iterrows():
+        injection_label = pd.Timestamp(injection["_month"]).strftime("%b %Y")
+        fig_commitment.add_shape(
+            type="line",
+            x0=injection_label,
+            x1=injection_label,
+            y0=0,
+            y1=1,
+            xref="x",
+            yref="paper",
+            line=dict(color="#0F766E", width=2, dash="dot"),
+        )
+        fig_commitment.add_annotation(
+            x=injection_label,
+            y=1,
+            xref="x",
+            yref="paper",
+            text=f"{injection['Etiqueta']} · {format_clp(float(injection['Inyeccion_CLP']))}",
+            showarrow=False,
+            xanchor="left",
+            yanchor="bottom",
+            font=dict(size=11, color="#0F766E"),
+        )
+    final_commitment = commitment_monthly.iloc[-1]
+    final_commitment_label = pd.Timestamp(final_commitment["_month"]).strftime("%b %Y")
+    for value_col, label_color, bg_color in [
+        ("Acumulado_CLP", "#1E3A8A", "rgba(239,246,255,.96)"),
+        ("Saldo_caja_CLP", "#D7605E", "rgba(255,247,237,.96)"),
+    ]:
+        fig_commitment.add_annotation(
+            x=final_commitment_label,
+            y=float(final_commitment[value_col]) / 1_000_000,
+            text=format_clp(float(final_commitment[value_col])),
+            showarrow=False,
+            xanchor="left",
+            xshift=12,
+            align="left",
+            font=dict(size=13, color=label_color),
+            bgcolor=bg_color,
+            bordercolor=label_color,
+            borderwidth=1,
+            borderpad=6,
+        )
+    fig_commitment.update_layout(
+        height=390,
+        barmode="group",
+        margin=dict(l=12, r=112, t=24, b=40),
+        legend=dict(orientation="h", y=1.12, x=0, title=None),
+        yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False),
+        xaxis=dict(title=None),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+    st.plotly_chart(fig_commitment, use_container_width=True, config={"displaylogo": False})
+
+    responsible_flow_df = responsible_scope_df.copy() if responsible_scope_df is not None and not responsible_scope_df.empty else flow_df.copy()
+    if "Disponible_CLP" in responsible_flow_df.columns:
+        responsible_flow_df = responsible_flow_df[responsible_flow_df["Disponible_CLP"] > 0].copy()
+    responsable_col = first_matching_column(responsible_flow_df, ["Responsable"])
+    if responsable_col:
+        responsible_flow_df["_responsable"] = (
+            responsible_flow_df[responsable_col]
+            .astype(str)
+            .str.strip()
+            .replace({"": "Sin responsable", "nan": "Sin responsable", "None": "Sin responsable"})
+        )
+        responsible_summary = (
+            responsible_flow_df.groupby("_responsable", as_index=False)
+            .agg(
+                Aporte_CLP=("Disponible_CLP", "sum"),
+                Partidas=("Tarea / Entregable", "count"),
+            )
+            .sort_values("Aporte_CLP", ascending=True)
+        )
+        if not responsible_summary.empty:
+            responsible_total_clp = float(responsible_summary["Aporte_CLP"].sum() or 0.0)
+            responsible_summary["Monto_MM"] = responsible_summary["Aporte_CLP"] / 1_000_000
+            responsible_summary["Participacion"] = np.where(
+                responsible_total_clp > 0,
+                responsible_summary["Aporte_CLP"] / responsible_total_clp * 100.0,
+                0.0,
+            )
+            st.markdown(
+                """
+                <div class="cash-injection-head" style="margin-top:18px;border-top:1px solid rgba(226,232,240,.92);padding-top:16px;">
+                  <div><b>Aporte por responsable seleccionado</b><span>Explora monto, peso relativo y partidas por responsable según los filtros activos.</span></div>
+                  <div class="cash-injection-pill">Responsable</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            control_col_1, control_col_2 = st.columns([1, 1])
+            with control_col_1:
+                responsible_metric = st.selectbox(
+                    "Métrica",
+                    ["Monto requerido", "Partidas"],
+                    key="capex10_responsible_injection_metric",
+                )
+            with control_col_2:
+                max_responsibles = int(len(responsible_summary))
+                if max_responsibles > 1:
+                    top_n_responsibles = st.slider(
+                        "Responsables visibles",
+                        min_value=1,
+                        max_value=max_responsibles,
+                        value=max_responsibles,
+                        key="capex10_responsible_injection_top_n",
+                    )
+                else:
+                    top_n_responsibles = 1
+                    st.metric("Responsables visibles", "1")
+
+            sort_col = "Aporte_CLP" if responsible_metric == "Monto requerido" else "Partidas"
+            plot_responsible = (
+                responsible_summary.sort_values(sort_col, ascending=False)
+                .head(top_n_responsibles)
+                .sort_values(sort_col, ascending=True)
+                .copy()
+            )
+            plot_responsible["Monto_fmt"] = plot_responsible["Aporte_CLP"].apply(format_clp)
+            plot_responsible["Participacion_fmt"] = plot_responsible["Participacion"].map(lambda value: f"{value:.1f}%")
+            visible_responsibles = plot_responsible["_responsable"].tolist()
+            responsible_color_map = {
+                responsible: (
+                    "#0F766E"
+                    if normalize_key(responsible) == "fw"
+                    else "#E11D48"
+                    if normalize_key(responsible) == "cimed"
+                    else ["#1E3A8A", "#D97706", "#7C3AED", "#0891B2", "#475569", "#16A34A", "#B45309"][idx % 7]
+                )
+                for idx, responsible in enumerate(visible_responsibles)
+            }
+            x_values = plot_responsible["Monto_MM"] if responsible_metric == "Monto requerido" else plot_responsible["Partidas"]
+            x_title = "MM CLP" if responsible_metric == "Monto requerido" else "Partidas"
+            marker_sizes = 18 + (plot_responsible["Partidas"] / max(float(plot_responsible["Partidas"].max() or 1), 1.0) * 18)
+            fig_responsible_injection = go.Figure()
+            for (_, row), x_value, marker_size in zip(plot_responsible.iterrows(), x_values, marker_sizes):
+                responsible_name = str(row["_responsable"])
+                color = responsible_color_map.get(responsible_name, "#1E3A8A")
+                fig_responsible_injection.add_trace(
+                    go.Scatter(
+                        x=[0, x_value],
+                        y=[responsible_name, responsible_name],
+                        mode="lines",
+                        line=dict(color="rgba(148,163,184,.30)", width=8),
+                        hoverinfo="skip",
+                        showlegend=False,
+                    )
+                )
+                fig_responsible_injection.add_trace(
+                    go.Scatter(
+                        x=[x_value],
+                        y=[responsible_name],
+                        mode="markers+text",
+                        marker=dict(size=float(marker_size), color=color, line=dict(color="#FFFFFF", width=2)),
+                        text=[f"{row['Monto_fmt']} · {row['Participacion_fmt']}"],
+                        textposition="middle right",
+                        textfont=dict(size=12, color=color),
+                        customdata=[[row["Monto_fmt"], row["Partidas"], row["Participacion_fmt"]]],
+                        hovertemplate=(
+                            f"<b>{responsible_name}</b><br>"
+                            "Aporte requerido: %{customdata[0]}<br>"
+                            "Partidas: %{customdata[1]}<br>"
+                            "Participación: %{customdata[2]}<extra></extra>"
+                        ),
+                        name=responsible_name,
+                        showlegend=False,
+                    )
+                )
+            fig_responsible_injection.update_layout(
+                height=390,
+                margin=dict(l=12, r=150, t=10, b=42),
+                showlegend=False,
+                xaxis=dict(title=x_title, gridcolor="rgba(148,163,184,.18)", zeroline=False),
+                yaxis=dict(title=None, automargin=True),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
+            )
+            st.plotly_chart(fig_responsible_injection, use_container_width=True, config={"displaylogo": False})
+
+            responsible_timeline = responsible_flow_df.copy()
+            timeline_date_col = GANTT_DATE_COL_START if GANTT_DATE_COL_START in responsible_timeline.columns else None
+            timeline_fallback_col = GANTT_DATE_COL_END_PLAN if GANTT_DATE_COL_END_PLAN in responsible_timeline.columns else None
+            if timeline_date_col:
+                responsible_timeline["_cash_date"] = pd.to_datetime(responsible_timeline[timeline_date_col], errors="coerce")
+            else:
+                responsible_timeline["_cash_date"] = pd.NaT
+            if timeline_fallback_col:
+                responsible_timeline["_cash_date"] = responsible_timeline["_cash_date"].fillna(
+                    pd.to_datetime(responsible_timeline[timeline_fallback_col], errors="coerce")
+                )
+            responsible_timeline["_cash_date"] = responsible_timeline["_cash_date"].fillna(pd.Timestamp.today().normalize())
+            responsible_timeline["_month"] = responsible_timeline["_cash_date"].dt.to_period("M").dt.to_timestamp()
+            responsible_timeline = responsible_timeline[responsible_timeline["_responsable"].isin(visible_responsibles)].copy()
+            responsible_monthly = (
+                responsible_timeline.groupby(["_month", "_responsable"], as_index=False)
+                .agg(
+                    Flujo_CLP=("Disponible_CLP", "sum"),
+                    Partidas=("Tarea / Entregable", "count"),
+                )
+                .sort_values(["_responsable", "_month"])
+            )
+            if not responsible_monthly.empty:
+                timeline_index = pd.date_range(
+                    responsible_monthly["_month"].min(),
+                    responsible_monthly["_month"].max(),
+                    freq="MS",
+                )
+                responsible_frames = []
+                for responsible in visible_responsibles:
+                    one_responsible = responsible_monthly[responsible_monthly["_responsable"].eq(responsible)].set_index("_month")
+                    one_responsible = one_responsible.reindex(timeline_index)
+                    one_responsible["_responsable"] = responsible
+                    one_responsible["Flujo_CLP"] = one_responsible["Flujo_CLP"].fillna(0.0)
+                    one_responsible["Partidas"] = one_responsible["Partidas"].fillna(0).astype(int)
+                    one_responsible = one_responsible.reset_index().rename(columns={"index": "_month"})
+                    responsible_frames.append(one_responsible)
+                responsible_monthly_full = pd.concat(responsible_frames, ignore_index=True)
+                responsible_monthly_full["Acumulado_CLP"] = responsible_monthly_full.groupby("_responsable")["Flujo_CLP"].cumsum()
+                responsible_monthly_full["Mes"] = responsible_monthly_full["_month"].dt.strftime("%b %Y")
+                responsible_monthly_full["Flujo_fmt"] = responsible_monthly_full["Flujo_CLP"].apply(format_clp)
+                responsible_monthly_full["Acumulado_fmt"] = responsible_monthly_full["Acumulado_CLP"].apply(format_clp)
+
+                st.markdown(
+                    """
+                    <div class="cash-injection-head" style="margin-top:18px;border-top:1px solid rgba(226,232,240,.92);padding-top:16px;">
+                      <div><b>Flujo de caja por responsable</b><span>Evolución mensual de aportes requeridos por responsable visible.</span></div>
+                      <div class="cash-injection-pill">Líneas</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                responsible_flow_mode = st.radio(
+                    "Tipo de flujo",
+                    ["Acumulado", "Mensual"],
+                    horizontal=True,
+                    key="capex10_responsible_cashflow_mode",
+                )
+                line_df = responsible_monthly_full[
+                    responsible_monthly_full["_responsable"].isin(visible_responsibles)
+                ].copy()
+                y_col = "Acumulado_CLP" if responsible_flow_mode == "Acumulado" else "Flujo_CLP"
+                line_df["Valor_modo_fmt"] = line_df["Acumulado_fmt"] if responsible_flow_mode == "Acumulado" else line_df["Flujo_fmt"]
+                responsible_color_map = {
+                    responsible: (
+                        "#0F766E"
+                        if normalize_key(responsible) == "fw"
+                        else "#E11D48"
+                        if normalize_key(responsible) == "cimed"
+                        else ["#1E3A8A", "#D97706", "#7C3AED", "#0891B2", "#475569", "#16A34A", "#B45309"][idx % 7]
+                    )
+                    for idx, responsible in enumerate(visible_responsibles)
+                }
+                fig_responsible_cashflow = px.line(
+                    line_df,
+                    x="_month",
+                    y=y_col,
+                    color="_responsable",
+                    markers=True,
+                    line_shape="spline",
+                    custom_data=["Valor_modo_fmt", "Partidas", "Flujo_fmt", "Acumulado_fmt"],
+                    labels={"_month": "", y_col: "CLP", "_responsable": "Responsable"},
+                    color_discrete_map=responsible_color_map,
+                )
+                fig_responsible_cashflow.update_traces(
+                    line=dict(width=3),
+                    marker=dict(size=8, line=dict(width=1.5, color="#FFFFFF")),
+                    hovertemplate=(
+                        "<b>%{fullData.name}</b><br>"
+                        "%{x|%b %Y}<br>"
+                        f"{responsible_flow_mode}: %{{customdata[0]}}<br>"
+                        "Flujo mensual: %{customdata[2]}<br>"
+                        "Acumulado: %{customdata[3]}<br>"
+                        "Partidas: %{customdata[1]}<extra></extra>"
+                    ),
+                )
+                fig_responsible_cashflow.update_layout(
+                    height=430,
+                    margin=dict(l=12, r=132, t=10, b=42),
+                    legend=dict(orientation="h", y=1.12, x=0, title=None),
+                    yaxis=dict(title="CLP", tickprefix="$", gridcolor="rgba(148,163,184,.18)", zeroline=False),
+                    xaxis=dict(title=None),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    hovermode="x unified",
+                    hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
+                )
+                final_by_responsible = (
+                    line_df.sort_values("_month")
+                    .groupby("_responsable", as_index=False)
+                    .tail(1)
+                    .sort_values(y_col, ascending=False)
+                    .reset_index(drop=True)
+                )
+                y_range = float(line_df[y_col].max() - line_df[y_col].min()) if not line_df.empty else 0.0
+                min_label_gap = max(y_range * 0.085, 2_000_000.0)
+                placed_label_y: list[float] = []
+                for label_idx, final_row in final_by_responsible.iterrows():
+                    responsible_name = str(final_row["_responsable"])
+                    label_color = responsible_color_map.get(responsible_name, "#1E3A8A")
+                    point_y = float(final_row[y_col] or 0.0)
+                    label_y = point_y
+                    if label_idx > 0:
+                        label_y -= min_label_gap * 0.18
+                    while any(abs(label_y - used_y) < min_label_gap for used_y in placed_label_y):
+                        label_y -= min_label_gap
+                    placed_label_y.append(label_y)
+                    fig_responsible_cashflow.add_annotation(
+                        x=final_row["_month"],
+                        y=label_y,
+                        text=format_clp(point_y),
+                        showarrow=False,
+                        xanchor="left",
+                        xshift=12,
+                        align="left",
+                        font=dict(size=12, color=label_color),
+                        bgcolor="rgba(255,255,255,.96)",
+                        bordercolor=label_color,
+                        borderwidth=1,
+                        borderpad=6,
+                    )
+                if placed_label_y:
+                    y_min = min(float(line_df[y_col].min()), min(placed_label_y))
+                    y_max = max(float(line_df[y_col].max()), max(placed_label_y))
+                    y_pad = max((y_max - y_min) * 0.08, 1_000_000.0)
+                    fig_responsible_cashflow.update_yaxes(range=[y_min - y_pad, y_max + y_pad])
+                st.plotly_chart(fig_responsible_cashflow, use_container_width=True, config={"displaylogo": False})
+
+
 def render_capex10_selected_cash_flow(funds_df: pd.DataFrame) -> None:
     if funds_df.empty or "Disponible_CLP" not in funds_df.columns:
         return
@@ -9687,13 +10174,11 @@ def render_capex10_available_funds_by_phase_line() -> None:
     )
     if not etapa_options:
         return
-    default_etapa = next(
-        (value for value in etapa_options if "segunda" in str(value).casefold()),
-        etapa_options[0],
-    )
-
     base_unpaid_df = _capex10_unpaid_funds_source(df_gantt)
-    current_etapas = _capex10_sync_multiselect_state("capex10_funds_etapa_selector", etapa_options, [default_etapa])
+    current_etapas = _capex10_sync_multiselect_state("capex10_funds_etapa_selector", etapa_options)
+    if set(current_etapas) == set(etapa_options):
+        current_etapas = []
+        st.session_state["capex10_funds_etapa_selector"] = []
     current_metodos = _capex10_sync_multiselect_state(
         "capex10_funds_metodo_selector",
         _capex10_clean_filter_options(base_unpaid_df, metodo_col),
@@ -9709,8 +10194,10 @@ def render_capex10_available_funds_by_phase_line() -> None:
         ),
         key=lambda value: (0 if "segunda" in str(value).casefold() else 1, str(value).casefold()),
     ) or etapa_options
-    etapa_fallback = default_etapa if default_etapa in etapa_options else etapa_options[0]
-    current_etapas = _capex10_sync_multiselect_state("capex10_funds_etapa_selector", etapa_options, [etapa_fallback])
+    current_etapas = _capex10_sync_multiselect_state("capex10_funds_etapa_selector", etapa_options)
+    if set(current_etapas) == set(etapa_options):
+        current_etapas = []
+        st.session_state["capex10_funds_etapa_selector"] = []
     metodo_options = _capex10_clean_filter_options(
         _capex10_apply_fund_filter(base_unpaid_df, etapa_values=current_etapas, responsable_values=current_responsables, metodo_col=metodo_col, responsable_col=responsable_col),
         metodo_col,
@@ -9722,35 +10209,9 @@ def render_capex10_available_funds_by_phase_line() -> None:
     )
     current_responsables = _capex10_sync_multiselect_state("capex10_funds_responsable_selector", responsable_options)
 
-    with st.container(border=True):
-        st.markdown(
-            '<div style="font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#0F766E;margin:0 0 8px 0;">Filtros de fondos faltantes</div>',
-            unsafe_allow_html=True,
-        )
-        filter_col_1, filter_col_2, filter_col_3 = st.columns(3)
-        with filter_col_1:
-            selected_etapas = st.multiselect(
-                "Etapa para fondos por ejecutar",
-                etapa_options,
-                key="capex10_funds_etapa_selector",
-                help="Filtra el cierre ejecutivo por la columna ETAPA y solo considera partidas No pagado.",
-            )
-        with filter_col_2:
-            selected_metodos = st.multiselect(
-                "Método",
-                metodo_options,
-                key="capex10_funds_metodo_selector",
-                placeholder="Todos",
-                help="Filtra por la columna V Método. Sin selección muestra todos los métodos.",
-            )
-        with filter_col_3:
-            selected_responsables = st.multiselect(
-                "Responsable",
-                responsable_options,
-                key="capex10_funds_responsable_selector",
-                placeholder="Todos",
-                help="Filtra por la columna X Responsable. Sin selección muestra todos los responsables.",
-            )
+    selected_etapas = current_etapas
+    selected_metodos = current_metodos
+    selected_responsables = current_responsables
 
     funds_df = _capex10_filtered_funds_df(
         df_gantt,
@@ -9873,7 +10334,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
         }}
         .capex10-kpi-grid{{
             display:grid;
-            grid-template-columns:minmax(0,1.45fr) minmax(0,.72fr) minmax(0,.72fr) minmax(0,1.25fr);
+            grid-template-columns:minmax(260px, 420px);
             gap:12px;
             align-items:stretch;
             margin-top:24px;
@@ -10028,9 +10489,9 @@ def render_capex10_available_funds_by_phase_line() -> None:
         @media (max-width: 1180px){{
             .capex10-funds-grid{{grid-template-columns:1fr;}}
             .capex10-funds-art{{min-height:220px;}}
-            .capex10-kpi-grid{{grid-template-columns:1fr 1fr;}}
-            .capex10-kpi-main{{grid-column:span 2;}}
-            .capex10-kpi-phase{{grid-column:span 2;}}
+            .capex10-kpi-grid{{grid-template-columns:1fr;}}
+            .capex10-kpi-main{{grid-column:auto;}}
+            .capex10-kpi-phase{{grid-column:auto;}}
         }}
         @media (max-width: 720px){{
             .capex10-funds-left{{padding:22px 18px;}}
@@ -10074,54 +10535,6 @@ def render_capex10_available_funds_by_phase_line() -> None:
                       <p class="capex10-kpi-value">{total_disponible_fmt}</p>
                       <p class="capex10-kpi-label">Disponible total</p>
                       <p class="capex10-kpi-note">Fondos pendientes por ejecutar</p>
-                    </div>
-                  </div>
-                </div>
-                <div class="capex10-kpi-card">
-                  <div class="capex10-kpi-top">
-                    <div class="capex10-kpi-ico" aria-hidden="true">
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/>
-                        <rect x="13" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/>
-                        <rect x="4" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/>
-                        <rect x="13" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <p class="capex10-kpi-value">{len(phase_order)}</p>
-                      <p class="capex10-kpi-label">Fases</p>
-                      <p class="capex10-kpi-note">Frentes agregados</p>
-                    </div>
-                  </div>
-                </div>
-                <div class="capex10-kpi-card">
-                  <div class="capex10-kpi-top">
-                    <div class="capex10-kpi-ico" aria-hidden="true">
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M8 6h13M8 12h13M8 18h13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        <circle cx="4" cy="6" r="1.6" fill="currentColor"/>
-                        <circle cx="4" cy="12" r="1.6" fill="currentColor"/>
-                        <circle cx="4" cy="18" r="1.6" fill="currentColor"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <p class="capex10-kpi-value">{line_count}</p>
-                      <p class="capex10-kpi-label">Líneas</p>
-                      <p class="capex10-kpi-note">Partidas ejecutables</p>
-                    </div>
-                  </div>
-                </div>
-                <div class="capex10-kpi-card capex10-kpi-phase">
-                  <div class="capex10-kpi-top">
-                    <div class="capex10-kpi-ico" aria-hidden="true">
-                      <svg width="27" height="27" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 3l7 3v5c0 4.8-2.9 8.2-7 10-4.1-1.8-7-5.2-7-10V6l7-3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                        <path d="M9 12l2 2 4-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <p class="capex10-kpi-label">Mayor fase</p>
-                      <p class="capex10-kpi-value">{max_phase_label}</p>
                     </div>
                   </div>
                 </div>
@@ -10171,6 +10584,54 @@ def render_capex10_available_funds_by_phase_line() -> None:
         unsafe_allow_html=True,
     )
 
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div style="font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#0F766E;margin:0 0 8px 0;">
+              Filtros de fondos faltantes
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        filter_col_1, filter_col_2, filter_col_3 = st.columns(3)
+        with filter_col_1:
+            selected_etapas = st.multiselect(
+                "Etapa para fondos por ejecutar",
+                etapa_options,
+                key="capex10_funds_etapa_selector",
+                placeholder="Todos",
+                help="Filtra el cierre ejecutivo por la columna ETAPA y solo considera partidas No pagado.",
+            )
+        with filter_col_2:
+            selected_metodos = st.multiselect(
+                "Método",
+                metodo_options,
+                key="capex10_funds_metodo_selector",
+                placeholder="Todos",
+                help="Filtra por la columna V Método. Sin selección muestra todos los métodos.",
+            )
+        with filter_col_3:
+            selected_responsables = st.multiselect(
+                "Responsable",
+                responsable_options,
+                key="capex10_funds_responsable_selector",
+                placeholder="Todos",
+                help="Filtra por la columna X Responsable. Sin selección muestra todos los responsables.",
+            )
+
+    responsible_scope_df = _capex10_filtered_funds_df(
+        df_gantt,
+        selected_etapas,
+        selected_metodos,
+        [],
+        metodo_col=metodo_col,
+        responsable_col=responsable_col,
+    )
+    responsible_scope_df["Fase"] = responsible_scope_df["Fase"].astype(str).str.strip().replace({"": "Sin fase", "nan": "Sin fase", "None": "Sin fase"})
+    responsible_scope_df["Línea"] = responsible_scope_df["Línea"].astype(str).str.strip().replace({"": "Sin línea", "nan": "Sin línea", "None": "Sin línea"})
+    responsible_scope_df = responsible_scope_df[responsible_scope_df["Disponible_CLP"] > 0].copy()
+    render_capex10_investor_injection_cash_flow(funds_df, responsible_scope_df)
+
     funds_colors = ["#0F766E", "#164E63", "#7C3AED", "#1E3A8A", "#B7791F", "#64748B", "#0891B2", "#2C7A7B", "#334155", "#14B8A6"]
     line_order = (
         grouped.groupby("Línea", as_index=True)["Disponible_CLP"]
@@ -10189,7 +10650,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
         """
         for line in line_order
     )
-    table_display = grouped.head(10).copy()
+    table_display = grouped.copy()
     table_rows_html = "".join(
         f"""
         <tr>
@@ -10215,13 +10676,14 @@ def render_capex10_available_funds_by_phase_line() -> None:
     )
     fig_funds.update_layout(
         barmode="stack",
-        height=max(360, min(470, 54 * max(len(phase_order), 1))),
-        margin=dict(l=8, r=18, t=4, b=36),
+        height=max(420, min(640, 72 * max(len(phase_order), 1))),
+        margin=dict(l=8, r=18, t=8, b=44),
         showlegend=False,
         plot_bgcolor="white",
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#334155", size=11),
-        bargap=0.36,
+        bargap=0.28,
+        hovermode="closest",
     )
     fig_funds.update_traces(
         marker=dict(line=dict(color="rgba(255,255,255,.92)", width=1.2)),
@@ -10389,51 +10851,50 @@ def render_capex10_available_funds_by_phase_line() -> None:
         unsafe_allow_html=True,
     )
 
-    chart_col, table_col = st.columns([1.08, 1], gap="medium")
-    with chart_col:
-        with st.container(border=True):
-            st.markdown(
-                f"""
-                <div class="capex10-lower-card-head">
-                  <p class="capex10-lower-title">Distribución por fase <span class="capex10-lower-muted">(Top 10)</span></p>
-                  <span class="capex10-info-dot">i</span>
+    with st.container(border=True):
+        st.markdown(
+            f"""
+            <div class="capex10-lower-card-head">
+              <p class="capex10-lower-title">Distribución por fase y línea <span class="capex10-lower-muted">({len(table_display)} líneas seleccionadas)</span></p>
+              <span class="capex10-info-dot">i</span>
+            </div>
+            <div class="capex10-dist-legend">{legend_html}</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.plotly_chart(fig_funds, use_container_width=True, config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"]})
+
+    with st.container(border=True):
+        st.markdown(
+            f"""
+            <div class="capex10-lower-card-head">
+              <p class="capex10-lower-title">Detalle por fase y línea <span class="capex10-lower-muted">todo lo seleccionado</span></p>
+              <div class="capex10-table-total-value">{total_disponible_fmt}</div>
+            </div>
+            <div class="capex10-table-wrap">
+              <table class="capex10-funds-table">
+                <thead>
+                  <tr>
+                    <th>Fase</th>
+                    <th>Línea</th>
+                    <th>Partidas</th>
+                    <th>Disponible</th>
+                  </tr>
+                </thead>
+                <tbody>{table_rows_html}</tbody>
+              </table>
+              <div class="capex10-table-footer">
+                <div class="capex10-table-link">
+                  <span class="capex10-info-dot">▦</span>
+                  <span>{len(table_display)} líneas visibles según los filtros activos</span>
                 </div>
-                <div class="capex10-dist-legend">{legend_html}</div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.plotly_chart(fig_funds, use_container_width=True, config={"displaylogo": False})
-    with table_col:
-        with st.container(border=True):
-            st.markdown(
-                f"""
-                <div class="capex10-lower-card-head">
-                  <p class="capex10-lower-title">Detalle por fase y línea</p>
-                </div>
-                <div class="capex10-table-wrap">
-                  <table class="capex10-funds-table">
-                    <thead>
-                      <tr>
-                        <th>Fase</th>
-                        <th>Línea</th>
-                        <th>Partidas</th>
-                        <th>Disponible</th>
-                      </tr>
-                    </thead>
-                    <tbody>{table_rows_html}</tbody>
-                  </table>
-                  <div class="capex10-table-footer">
-                    <div class="capex10-table-link">
-                      <span class="capex10-info-dot">▦</span>
-                      <span>Ver todas las líneas</span>
-                    </div>
-                    <div class="capex10-table-total-label">Total disponible</div>
-                    <div class="capex10-table-total-value">{total_disponible_fmt}</div>
-                  </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                <div class="capex10-table-total-label">Total disponible</div>
+                <div class="capex10-table-total-value">{total_disponible_fmt}</div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def render_capex10_stage_line_detail_table() -> None:
@@ -11118,10 +11579,17 @@ def render_capex10_executed_investment_scaling_80kw() -> None:
         </div>
         """).strip()
     scale80_html = "\n".join(line.lstrip() for line in scale80_html.splitlines())
-    st.markdown(
-        scale80_html,
-        unsafe_allow_html=True,
-    )
+    summary_marker = '<div class="scale-card">\n<div class="scale-card-head"><span class="scale-num">6</span><h3>Resumen ejecutivo'
+    if summary_marker in scale80_html:
+        before_summary, summary_tail = scale80_html.split(summary_marker, 1)
+        st.markdown(before_summary + "\n</div>", unsafe_allow_html=True)
+        with st.expander("Resumen ejecutivo · transformación de capital en valor", expanded=False):
+            st.markdown('<div class="scale80-shell">' + summary_marker + summary_tail, unsafe_allow_html=True)
+    else:
+        st.markdown(
+            scale80_html,
+            unsafe_allow_html=True,
+        )
 
 
 def render_inputs_contexto_block():
@@ -21492,7 +21960,6 @@ def render_inputs_capex_10kw_detail():
             """,
             unsafe_allow_html=True,
         )
-        render_capex10_selected_cash_flow(st.session_state.get("capex10_funds_filtered_df", pd.DataFrame()))
         render_pilotos_ana_embedded_view()
         render_inputs_gantt_cost_analysis(
             df_gantt_costs,
@@ -21658,7 +22125,6 @@ def render_inputs_capex_10kw_detail():
             """,
             unsafe_allow_html=True,
         )
-        render_capex10_selected_cash_flow(st.session_state.get("capex10_funds_filtered_df", pd.DataFrame()))
         render_pilotos_ana_embedded_view()
         render_inputs_gantt_cost_analysis(
             df_gantt_costs,
