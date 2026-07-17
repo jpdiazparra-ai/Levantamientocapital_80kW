@@ -9660,14 +9660,13 @@ def render_capex10_investor_injection_cash_flow(
         )
         fig_commitment.add_annotation(
             x=milestone_label,
-            y=1,
+            y=0.98 - (milestone_idx * 0.08),
             xref="x",
             yref="paper",
             text=f"{milestone_name} · {pd.Timestamp(milestone['date']).strftime('%d-%m-%Y')}",
             showarrow=False,
             xanchor="right" if milestone_idx % 2 else "left",
-            yanchor="bottom",
-            yshift=18 + (milestone_idx * 16),
+            yanchor="top",
             font=dict(size=11, color=milestone_color),
             bgcolor="rgba(255,255,255,.92)",
             bordercolor=milestone_color,
@@ -10038,16 +10037,32 @@ def render_capex10_investor_injection_cash_flow(
                 )
                 for milestone_idx, milestone in enumerate(valid_milestones):
                     milestone_date = pd.Timestamp(milestone["date"])
+                    milestone_month = milestone_date.to_period("M").to_timestamp()
                     milestone_color = milestone_colors[milestone_idx % len(milestone_colors)]
-                    fig_responsible_cashflow.add_vline(
-                        x=milestone_date.to_period("M").to_timestamp(),
-                        line_width=2,
-                        line_dash="dash",
-                        line_color=milestone_color,
-                        annotation_text=f"{milestone.get('label', 'Hito')} · {milestone_date.strftime('%d-%m-%Y')}",
-                        annotation_position="top left" if milestone_idx % 2 == 0 else "top right",
-                        annotation_font_size=11,
-                        annotation_font_color=milestone_color,
+                    fig_responsible_cashflow.add_shape(
+                        type="line",
+                        x0=milestone_month,
+                        x1=milestone_month,
+                        y0=0,
+                        y1=1,
+                        xref="x",
+                        yref="paper",
+                        line=dict(color=milestone_color, width=2, dash="dash"),
+                    )
+                    fig_responsible_cashflow.add_annotation(
+                        x=milestone_month,
+                        y=0.98 - (milestone_idx * 0.08),
+                        xref="x",
+                        yref="paper",
+                        text=f"{milestone.get('label', 'Hito')} · {milestone_date.strftime('%d-%m-%Y')}",
+                        showarrow=False,
+                        xanchor="left" if milestone_idx % 2 == 0 else "right",
+                        yanchor="top",
+                        font=dict(size=11, color=milestone_color),
+                        bgcolor="rgba(255,255,255,.92)",
+                        bordercolor=milestone_color,
+                        borderwidth=1,
+                        borderpad=4,
                     )
                 final_by_responsible = (
                     line_df.sort_values("_month")
