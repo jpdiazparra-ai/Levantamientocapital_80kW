@@ -6521,7 +6521,8 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
         </div>
     """).strip()
     summary_html = "\n".join(line.lstrip() for line in summary_html.splitlines())
-    st.markdown(summary_html, unsafe_allow_html=True)
+    with st.expander("Resumen ejecutivo", expanded=False):
+        st.markdown(summary_html, unsafe_allow_html=True)
 
     if delayed_df.empty:
         return
@@ -21960,12 +21961,14 @@ def render_inputs_capex_10kw_detail():
             """,
             unsafe_allow_html=True,
         )
-        render_pilotos_ana_embedded_view()
-        render_inputs_gantt_cost_analysis(
-            df_gantt_costs,
-            scope_label="toda la hoja del cronograma",
-            pilot_total_reference_clp=get_brecha_piloto_10kw_clp(refresh_nonce=data_refresh_nonce),
-        )
+        with st.expander("Resumen ejecutivo", expanded=False):
+            render_pilotos_ana_embedded_view()
+        with st.expander("Cost Architecture · Piloto vs Comercial", expanded=False):
+            render_inputs_gantt_cost_analysis(
+                df_gantt_costs,
+                scope_label="toda la hoja del cronograma",
+                pilot_total_reference_clp=get_brecha_piloto_10kw_clp(refresh_nonce=data_refresh_nonce),
+            )
     render_capex10_stage_line_detail_table()
     return
 
@@ -22125,12 +22128,14 @@ def render_inputs_capex_10kw_detail():
             """,
             unsafe_allow_html=True,
         )
-        render_pilotos_ana_embedded_view()
-        render_inputs_gantt_cost_analysis(
-            df_gantt_costs,
-            scope_label="toda la hoja del cronograma",
-            pilot_total_reference_clp=get_brecha_piloto_10kw_clp(refresh_nonce=data_refresh_nonce),
-        )
+        with st.expander("Resumen ejecutivo", expanded=False):
+            render_pilotos_ana_embedded_view()
+        with st.expander("Cost Architecture · Piloto vs Comercial", expanded=False):
+            render_inputs_gantt_cost_analysis(
+                df_gantt_costs,
+                scope_label="toda la hoja del cronograma",
+                pilot_total_reference_clp=get_brecha_piloto_10kw_clp(refresh_nonce=data_refresh_nonce),
+            )
     st.markdown(
         """
         <div style="clear:both;height:26px;"></div>
