@@ -10892,6 +10892,22 @@ def render_capex10_available_funds_by_phase_line() -> None:
         .tolist()
     )
     line_color_map = {line: funds_colors[idx % len(funds_colors)] for idx, line in enumerate(line_order)}
+    chart_legend_items = [
+        """
+        <div class="capex10-chart-legend-item capex10-chart-legend-line">
+          <span></span><b>Total fase</b>
+        </div>
+        """
+    ] + [
+        f"""
+        <div class="capex10-chart-legend-item">
+          <span style="background:{line_color_map.get(line, '#64748B')};"></span>
+          <b>{html.escape(str(line))}</b>
+        </div>
+        """
+        for line in line_order
+    ]
+    chart_legend_html = "".join(chart_legend_items)
     table_display = grouped.copy()
     table_rows_html = "".join(
         f"""
@@ -10993,17 +11009,8 @@ def render_capex10_available_funds_by_phase_line() -> None:
     fig_funds.update_layout(
         barmode="stack",
         height=520,
-        margin=dict(l=10, r=132, t=96, b=84),
-        showlegend=True,
-        legend=dict(
-            orientation="h",
-            y=1.06,
-            x=0,
-            xanchor="left",
-            title=None,
-            bgcolor="rgba(255,255,255,0)",
-            font=dict(size=11, color="#334155"),
-        ),
+        margin=dict(l=10, r=132, t=22, b=84),
+        showlegend=False,
         plot_bgcolor="white",
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#334155", size=11),
@@ -11062,6 +11069,57 @@ def render_capex10_available_funds_by_phase_line() -> None:
             font-size:12px;
             font-weight:950;
             flex:0 0 auto;
+        }}
+        .capex10-chart-legend{{
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:8px 18px;
+            align-items:center;
+            padding:4px 8px 14px 8px;
+            margin:0 0 8px 0;
+            border-bottom:1px solid rgba(226,232,240,.86);
+        }}
+        .capex10-chart-legend-item{{
+            display:flex;
+            align-items:center;
+            gap:9px;
+            min-width:0;
+            color:#334155;
+            font-size:11px;
+            line-height:1.15;
+            font-weight:800;
+            overflow:hidden;
+        }}
+        .capex10-chart-legend-item span{{
+            width:13px;
+            height:13px;
+            border-radius:2px;
+            flex:0 0 auto;
+            box-shadow:0 0 0 1px rgba(15,23,42,.18);
+        }}
+        .capex10-chart-legend-line span{{
+            width:27px;
+            height:4px;
+            border-radius:999px;
+            background:#2563EB;
+            position:relative;
+            box-shadow:none;
+        }}
+        .capex10-chart-legend-line span::after{{
+            content:"";
+            position:absolute;
+            left:9px;
+            top:-4px;
+            width:10px;
+            height:10px;
+            border-radius:999px;
+            background:#FFFFFF;
+            border:3px solid #2563EB;
+        }}
+        .capex10-chart-legend-item b{{
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
         }}
         .capex10-table-wrap{{
             border:1px solid rgba(226,232,240,.95);
@@ -11138,6 +11196,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
             white-space:nowrap;
         }}
         @media (max-width: 1180px){{
+            .capex10-chart-legend{{grid-template-columns:repeat(2,minmax(0,1fr));}}
             .capex10-table-footer{{grid-template-columns:1fr;gap:8px;}}
         }}
         </style>
@@ -11152,6 +11211,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
               <p class="capex10-lower-title">Distribución por fase y línea <span class="capex10-lower-muted">({len(table_display)} líneas seleccionadas)</span></p>
               <span class="capex10-info-dot">i</span>
             </div>
+            <div class="capex10-chart-legend">{chart_legend_html}</div>
             """,
             unsafe_allow_html=True,
         )
