@@ -11133,13 +11133,24 @@ def render_capex10_available_funds_by_phase_line() -> None:
             if detail_responsible_col
             else "Sin responsable"
         )
+        detail_interactive_df["_inicio_dt"] = pd.to_datetime(detail_interactive_df.get(GANTT_DATE_COL_START), errors="coerce")
+        detail_interactive_df["_fin_plan_dt"] = pd.to_datetime(detail_interactive_df.get(GANTT_DATE_COL_END_PLAN), errors="coerce")
+        detail_interactive_df["_fin_real_dt"] = pd.to_datetime(detail_interactive_df.get(GANTT_DATE_COL_END_REAL), errors="coerce")
         detail_line_summary = (
             detail_interactive_df.groupby(["_responsable_detalle", "Fase", "Línea"], as_index=False)
             .agg(
                 Disponible_CLP=("Disponible_CLP", "sum"),
                 Partidas=("Tarea / Entregable", "count"),
+                Inicio=("_inicio_dt", "min"),
+                Fin_plan=("_fin_plan_dt", "max"),
+                Fin_real=("_fin_real_dt", "max"),
             )
             .sort_values(["_responsable_detalle", "Disponible_CLP"], ascending=[True, False])
+        )
+        detail_line_summary["Peso_total"] = np.where(
+            total_disponible > 0,
+            detail_line_summary["Disponible_CLP"] / total_disponible * 100.0,
+            0.0,
         )
         detail_responsible_summary = (
             detail_line_summary.groupby("_responsable_detalle", as_index=False)
@@ -11147,8 +11158,15 @@ def render_capex10_available_funds_by_phase_line() -> None:
                 Disponible_CLP=("Disponible_CLP", "sum"),
                 Lineas=("Línea", "nunique"),
                 Partidas=("Partidas", "sum"),
+                Inicio=("Inicio", "min"),
+                Fin_real=("Fin_real", "max"),
             )
             .sort_values("Disponible_CLP", ascending=False)
+        )
+        detail_responsible_summary["Peso_total"] = np.where(
+            total_disponible > 0,
+            detail_responsible_summary["Disponible_CLP"] / total_disponible * 100.0,
+            0.0,
         )
         display_cols_candidates = [
             ("Fase", "Fase"),
@@ -11163,33 +11181,78 @@ def render_capex10_available_funds_by_phase_line() -> None:
         st.markdown(
             """
             <style>
-              .capex10-responsible-detail-head{
-                display:flex;align-items:center;justify-content:space-between;gap:12px;
-                border:1px solid rgba(203,213,225,.78);border-radius:14px;
-                background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
-                padding:10px 12px;margin:10px 0 8px;
-              }
-              .capex10-responsible-detail-head b{font-size:14px;color:#071427;font-weight:950;}
-              .capex10-responsible-detail-head span{font-size:11px;color:#64748B;font-weight:850;}
+              .capex10-detail-panel{border:1px solid rgba(203,213,225,.82);border-radius:14px;background:#FFFFFF;padding:12px;margin:0 0 12px;}
+              .capex10-detail-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0 0 12px;}
+              .capex10-detail-kpi{border:1px solid rgba(226,232,240,.95);border-radius:10px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:8px 10px;min-height:58px;}
+              .capex10-detail-kpi span{display:block;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+              .capex10-detail-kpi b{display:block;color:#071427;font-size:16px;line-height:1.1;font-weight:950;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+              .capex10-line-analysis{display:grid;grid-template-columns:1.2fr repeat(5,minmax(0,.75fr));gap:8px;margin:0 0 10px;}
+              .capex10-line-analysis div{border:1px solid rgba(226,232,240,.95);border-radius:10px;background:#F8FAFC;padding:8px 10px;min-height:54px;}
+              .capex10-line-analysis span{display:block;color:#64748B;font-size:9.5px;font-weight:950;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+              .capex10-line-analysis b{display:block;color:#0F172A;font-size:14px;font-weight:950;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+              @media(max-width:1100px){.capex10-detail-kpis,.capex10-line-analysis{grid-template-columns:repeat(2,minmax(0,1fr));}}
             </style>
             """,
             unsafe_allow_html=True,
         )
         for _, responsible_row in detail_responsible_summary.iterrows():
             responsible_name = str(responsible_row["_responsable_detalle"])
-            st.markdown(
-                f"""
-                <div class="capex10-responsible-detail-head">
-                  <b>{html.escape(responsible_name)}</b>
-                  <span>{int(responsible_row["Lineas"])} líneas · {int(responsible_row["Partidas"])} partidas · {format_clp(float(responsible_row["Disponible_CLP"]))}</span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            responsible_lines = detail_line_summary[
-                detail_line_summary["_responsable_detalle"].eq(responsible_name)
-            ].copy()
-            for _, line_row in responsible_lines.iterrows():
+            responsible_total = float(responsible_row["Disponible_CLP"])
+            responsible_start = pd.Timestamp(responsible_row["Inicio"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Inicio"]) else "-"
+            responsible_end = pd.Timestamp(responsible_row["Fin_real"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Fin_real"]) else "-"
+            with st.expander(
+                f"{responsible_name} · {format_clp(responsible_total)} · {int(responsible_row['Lineas'])} líneas · {int(responsible_row['Partidas'])} partidas",
+                expanded=False,
+            ):
+                st.markdown(
+                    f"""
+                    <div class="capex10-detail-panel">
+                      <div class="capex10-detail-kpis">
+                        <div class="capex10-detail-kpi"><span>Aporte responsable</span><b>{format_clp(responsible_total)}</b></div>
+                        <div class="capex10-detail-kpi"><span>Peso total</span><b>{float(responsible_row["Peso_total"]):.1f}%</b></div>
+                        <div class="capex10-detail-kpi"><span>Líneas</span><b>{int(responsible_row["Lineas"])}</b></div>
+                        <div class="capex10-detail-kpi"><span>Partidas</span><b>{int(responsible_row["Partidas"])}</b></div>
+                        <div class="capex10-detail-kpi"><span>Ventana real</span><b>{responsible_start} / {responsible_end}</b></div>
+                      </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                responsible_lines = detail_line_summary[
+                    detail_line_summary["_responsable_detalle"].eq(responsible_name)
+                ].copy()
+                responsible_lines["Peso_responsable"] = np.where(
+                    responsible_total > 0,
+                    responsible_lines["Disponible_CLP"] / responsible_total * 100.0,
+                    0.0,
+                )
+                line_summary_display = responsible_lines.copy()
+                line_summary_display["Disponible"] = line_summary_display["Disponible_CLP"].apply(format_clp)
+                line_summary_display["% responsable"] = line_summary_display["Peso_responsable"].map(lambda value: f"{value:.1f}%")
+                line_summary_display["% total"] = line_summary_display["Peso_total"].map(lambda value: f"{value:.1f}%")
+                line_summary_display["Inicio"] = pd.to_datetime(line_summary_display["Inicio"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                line_summary_display["Fin plan"] = pd.to_datetime(line_summary_display["Fin_plan"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                line_summary_display["Fin real"] = pd.to_datetime(line_summary_display["Fin_real"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                st.dataframe(
+                    line_summary_display[["Línea", "Fase", "Partidas", "Disponible", "% responsable", "% total", "Inicio", "Fin plan", "Fin real"]],
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(300, 38 + (len(line_summary_display) + 1) * 35),
+                )
+                line_options = [
+                    (
+                        idx,
+                        f"{row['Línea']} · {row['Fase']} · {int(row['Partidas'])} partidas · {format_clp(float(row['Disponible_CLP']))}",
+                    )
+                    for idx, row in responsible_lines.iterrows()
+                ]
+                selected_line_idx = st.selectbox(
+                    "Línea para ver composición",
+                    [idx for idx, _ in line_options],
+                    format_func=lambda idx: dict(line_options).get(idx, str(idx)),
+                    key=f"capex10_detail_line_selector_{normalize_key(responsible_name)}",
+                )
+                line_row = responsible_lines.loc[selected_line_idx]
                 phase_name = str(line_row["Fase"])
                 line_name = str(line_row["Línea"])
                 line_items = detail_interactive_df[
@@ -11198,6 +11261,15 @@ def render_capex10_available_funds_by_phase_line() -> None:
                     & detail_interactive_df["Línea"].eq(line_name)
                 ].copy()
                 line_items = line_items.sort_values(["Fase", "Línea", "Tarea / Entregable"], na_position="last")
+                line_inicio = pd.Timestamp(line_row["Inicio"]).strftime("%d-%m-%Y") if pd.notna(line_row["Inicio"]) else "-"
+                line_fin_plan = pd.Timestamp(line_row["Fin_plan"]).strftime("%d-%m-%Y") if pd.notna(line_row["Fin_plan"]) else "-"
+                line_fin_real = pd.Timestamp(line_row["Fin_real"]).strftime("%d-%m-%Y") if pd.notna(line_row["Fin_real"]) else "-"
+                status_summary = "-"
+                if "Estado.1" in line_items.columns:
+                    states = line_items["Estado.1"].astype(str).str.strip().replace({"": np.nan, "nan": np.nan, "None": np.nan}).dropna()
+                    if not states.empty:
+                        top_state = states.value_counts().idxmax()
+                        status_summary = f"{top_state} ({int(states.value_counts().max())})"
                 detail_display = pd.DataFrame()
                 for source_col, display_col in display_cols_candidates:
                     if source_col in line_items.columns:
@@ -11207,17 +11279,25 @@ def render_capex10_available_funds_by_phase_line() -> None:
                             detail_display[display_col] = pd.to_datetime(line_items[source_col], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
                         else:
                             detail_display[display_col] = line_items[source_col].astype(str).replace({"nan": "-", "None": "-"})
-                expander_label = (
-                    f"{line_name} · {phase_name} · "
-                    f"{int(line_row['Partidas'])} partidas · {format_clp(float(line_row['Disponible_CLP']))}"
+                st.markdown(
+                    f"""
+                    <div class="capex10-line-analysis">
+                      <div><span>Línea seleccionada</span><b>{html.escape(line_name)}</b></div>
+                      <div><span>Peso responsable</span><b>{float(line_row["Peso_responsable"]):.1f}%</b></div>
+                      <div><span>Peso total</span><b>{float(line_row["Peso_total"]):.1f}%</b></div>
+                      <div><span>Inicio</span><b>{line_inicio}</b></div>
+                      <div><span>Fin plan / real</span><b>{line_fin_plan} / {line_fin_real}</b></div>
+                      <div><span>Estado dominante</span><b>{html.escape(status_summary)}</b></div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
                 )
-                with st.expander(expander_label, expanded=False):
-                    st.dataframe(
-                        detail_display,
-                        use_container_width=True,
-                        hide_index=True,
-                        height=min(420, 38 + (len(detail_display) + 1) * 35),
-                    )
+                st.dataframe(
+                    detail_display,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(420, 38 + (len(detail_display) + 1) * 35),
+                )
         st.markdown(
             f"""
             <div class="capex10-table-footer">
