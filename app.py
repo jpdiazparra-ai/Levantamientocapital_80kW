@@ -9840,15 +9840,110 @@ def render_capex10_investor_injection_cash_flow(
                     """,
                     unsafe_allow_html=True,
                 )
-                responsible_flow_mode = st.radio(
-                    "Tipo de flujo",
-                    ["Acumulado", "Mensual"],
-                    horizontal=True,
-                    key="capex10_responsible_cashflow_mode",
-                )
                 line_df = responsible_monthly_full[
                     responsible_monthly_full["_responsable"].isin(visible_responsibles)
                 ].copy()
+                monthly_totals = line_df.groupby("_month", as_index=False)["Flujo_CLP"].sum()
+                responsible_totals = (
+                    line_df.groupby("_responsable", as_index=False)["Flujo_CLP"]
+                    .sum()
+                    .sort_values("Flujo_CLP", ascending=False)
+                )
+                total_visible_clp = float(responsible_totals["Flujo_CLP"].sum()) if not responsible_totals.empty else 0.0
+                leader_row = responsible_totals.iloc[0] if not responsible_totals.empty else None
+                peak_month_row = (
+                    monthly_totals.sort_values("Flujo_CLP", ascending=False).iloc[0]
+                    if not monthly_totals.empty
+                    else None
+                )
+                active_monthly_totals = monthly_totals[monthly_totals["Flujo_CLP"] > 0]
+                average_monthly_clp = (
+                    float(active_monthly_totals["Flujo_CLP"].mean())
+                    if not active_monthly_totals.empty
+                    else 0.0
+                )
+                leader_name = html.escape(str(leader_row["_responsable"])) if leader_row is not None else "-"
+                leader_value = format_clp(float(leader_row["Flujo_CLP"])) if leader_row is not None else format_clp(0)
+                peak_month_label = (
+                    pd.to_datetime(peak_month_row["_month"]).strftime("%b %Y")
+                    if peak_month_row is not None
+                    else "-"
+                )
+                peak_month_value = format_clp(float(peak_month_row["Flujo_CLP"])) if peak_month_row is not None else format_clp(0)
+                flow_control_col, flow_kpi_col = st.columns([0.34, 0.66], vertical_alignment="bottom")
+                with flow_control_col:
+                    responsible_flow_mode = st.radio(
+                        "Tipo de flujo",
+                        ["Acumulado", "Mensual"],
+                        horizontal=True,
+                        key="capex10_responsible_cashflow_mode",
+                    )
+                with flow_kpi_col:
+                    st.markdown(
+                        f"""
+                        <style>
+                          .cashflow-kpi-strip {{
+                            display:grid;
+                            grid-template-columns:repeat(4,minmax(0,1fr));
+                            gap:8px;
+                            margin:0 0 6px;
+                          }}
+                          .cashflow-kpi-card {{
+                            min-height:58px;
+                            border:1px solid rgba(203,213,225,.78);
+                            border-radius:10px;
+                            background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(248,250,252,.96));
+                            padding:8px 10px;
+                            box-shadow:0 8px 18px rgba(15,23,42,.045);
+                            overflow:hidden;
+                          }}
+                          .cashflow-kpi-card span {{
+                            display:block;
+                            color:#64748B;
+                            font-size:10px;
+                            font-weight:900;
+                            letter-spacing:.055em;
+                            line-height:1.05;
+                            text-transform:uppercase;
+                            white-space:nowrap;
+                            overflow:hidden;
+                            text-overflow:ellipsis;
+                          }}
+                          .cashflow-kpi-card b {{
+                            display:block;
+                            color:#071427;
+                            font-size:16px;
+                            line-height:1.1;
+                            margin-top:6px;
+                            font-weight:950;
+                            white-space:nowrap;
+                            overflow:hidden;
+                            text-overflow:ellipsis;
+                          }}
+                          .cashflow-kpi-card em {{
+                            display:block;
+                            color:#7C8798;
+                            font-size:10.5px;
+                            line-height:1.1;
+                            margin-top:3px;
+                            font-style:normal;
+                            white-space:nowrap;
+                            overflow:hidden;
+                            text-overflow:ellipsis;
+                          }}
+                          @media (max-width:1100px) {{
+                            .cashflow-kpi-strip {{grid-template-columns:repeat(2,minmax(0,1fr));}}
+                          }}
+                        </style>
+                        <div class="cashflow-kpi-strip">
+                          <div class="cashflow-kpi-card"><span>Aporte visible</span><b>{format_clp(total_visible_clp)}</b><em>{len(responsible_totals)} responsables</em></div>
+                          <div class="cashflow-kpi-card"><span>Mayor responsable</span><b>{leader_name}</b><em>{leader_value}</em></div>
+                          <div class="cashflow-kpi-card"><span>Pico mensual</span><b>{peak_month_value}</b><em>{html.escape(peak_month_label)}</em></div>
+                          <div class="cashflow-kpi-card"><span>Promedio mensual</span><b>{format_clp(average_monthly_clp)}</b><em>meses con aporte</em></div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
                 y_col = "Acumulado_CLP" if responsible_flow_mode == "Acumulado" else "Flujo_CLP"
                 line_df["Valor_modo_fmt"] = line_df["Acumulado_fmt"] if responsible_flow_mode == "Acumulado" else line_df["Flujo_fmt"]
                 responsible_color_map = {
