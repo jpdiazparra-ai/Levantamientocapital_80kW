@@ -7909,6 +7909,178 @@ def render_inputs_gantt_cost_analysis(
     )
     costpro_insights = "".join(f"<li>{html.escape(item)}</li>" for item in insights[:4])
 
+    cost_arch_df = pd.DataFrame(report_breakdown)
+    cost_arch_df["Piloto_MM"] = cost_arch_df["pilot"] / 1_000_000
+    cost_arch_df["Comercial_MM"] = cost_arch_df["commercial"] / 1_000_000
+    cost_arch_df["Brecha_MM"] = (cost_arch_df["commercial"] - cost_arch_df["pilot"]) / 1_000_000
+    cost_arch_df["Participacion_comercial"] = np.where(
+        total_comercial > 0,
+        cost_arch_df["commercial"] / total_comercial * 100.0,
+        0.0,
+    )
+    cost_arch_color_map = {str(row["label"]): str(row["color"]) for _, row in cost_arch_df.iterrows()}
+
+    st.markdown(
+        f"""
+        <style>
+          .costarch-shell{{
+            border:1px solid rgba(203,213,225,.82);
+            border-radius:24px;
+            background:linear-gradient(135deg,#FFFFFF 0%,#F8FAFC 62%,#EEFDF9 100%);
+            box-shadow:0 18px 40px rgba(15,23,42,.075);
+            padding:20px;
+            margin:8px 0 18px;
+          }}
+          .costarch-head{{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:16px;
+            margin:0 0 16px;
+          }}
+          .costarch-k{{font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#0F766E;margin:0 0 6px;}}
+          .costarch-title{{font-size:clamp(24px,1.8vw,34px);line-height:1.05;font-weight:950;color:#071427;margin:0;}}
+          .costarch-sub{{font-size:12px;line-height:1.35;color:#64748B;font-weight:800;margin:8px 0 0;max-width:860px;}}
+          .costarch-pill{{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:8px 11px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}}
+          .costarch-kpis{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 14px;}}
+          .costarch-kpi{{border:1px solid rgba(226,232,240,.95);border-top:4px solid var(--c);border-radius:12px;background:#FFFFFF;padding:11px 12px;min-height:76px;box-shadow:0 10px 22px rgba(15,23,42,.045);}}
+          .costarch-kpi span{{display:block;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
+          .costarch-kpi b{{display:block;color:var(--c);font-size:22px;line-height:1;font-weight:950;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
+          .costarch-kpi em{{display:block;color:#64748B;font-size:10.5px;font-style:normal;font-weight:850;margin-top:6px;}}
+          .costarch-insights{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0 0;}}
+          .costarch-insight{{border:1px solid rgba(226,232,240,.95);border-left:5px solid var(--c);border-radius:12px;background:#FFFFFF;padding:11px 12px;min-height:82px;}}
+          .costarch-insight b{{display:block;color:#071427;font-size:12px;font-weight:950;line-height:1.18;}}
+          .costarch-insight span{{display:block;color:#64748B;font-size:11px;font-weight:800;line-height:1.3;margin-top:6px;}}
+          @media(max-width:1100px){{.costarch-head{{display:block;}}.costarch-pill{{display:inline-flex;margin-top:10px;}}.costarch-kpis,.costarch-insights{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
+          @media(max-width:720px){{.costarch-kpis,.costarch-insights{{grid-template-columns:1fr;}}}}
+        </style>
+        <div class="costarch-shell">
+          <div class="costarch-head">
+            <div>
+              <p class="costarch-k">Cost architecture · piloto vs comercial</p>
+              <h2 class="costarch-title">Análisis de costos – piloto vs comercial</h2>
+              <p class="costarch-sub">Lectura ejecutiva con la misma selección activa del cronograma: compara costo piloto, referencia comercial, brecha y composición por alcance EPC.</p>
+            </div>
+            <div class="costarch-pill">{html.escape(scope_label)}</div>
+          </div>
+          <div class="costarch-kpis">
+            <div class="costarch-kpi" style="--c:#164E63;"><span>Costo piloto</span><b>{fmt_money(total_piloto)}</b><em>Base experimental</em></div>
+            <div class="costarch-kpi" style="--c:#1E3A8A;"><span>Costo comercial</span><b>{fmt_money(total_comercial)}</b><em>Referencia escalable</em></div>
+            <div class="costarch-kpi" style="--c:#0F766E;"><span>Brecha esperada</span><b>{fmt_signed_money(reduction_value)}</b><em>{fmt_pct_local(reduction_pct)} vs piloto</em></div>
+            <div class="costarch-kpi" style="--c:#B7791F;"><span>Supply replicable</span><b>{fmt_pct_local(replicable_pct)}</b><em>del costo comercial</em></div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    fig_cost = go.Figure()
+    fig_cost.add_trace(
+        go.Bar(
+            x=cost_arch_df["label"],
+            y=cost_arch_df["Piloto_MM"],
+            name="Piloto",
+            marker=dict(color="#164E63", line=dict(color="rgba(15,23,42,.35)", width=1)),
+            customdata=np.stack([cost_arch_df["pilot"].apply(format_clp), cost_arch_df["tasks"]], axis=-1),
+            hovertemplate="<b>%{x}</b><br>Piloto: %{customdata[0]}<br>Partidas: %{customdata[1]}<extra></extra>",
+        )
+    )
+    fig_cost.add_trace(
+        go.Bar(
+            x=cost_arch_df["label"],
+            y=cost_arch_df["Comercial_MM"],
+            name="Comercial",
+            marker=dict(color="#14B8A6", line=dict(color="rgba(15,23,42,.25)", width=1)),
+            customdata=np.stack([cost_arch_df["commercial"].apply(format_clp), cost_arch_df["Participacion_comercial"].map(lambda value: f"{value:.1f}%")], axis=-1),
+            hovertemplate="<b>%{x}</b><br>Comercial: %{customdata[0]}<br>Participación: %{customdata[1]}<extra></extra>",
+        )
+    )
+    fig_cost.add_trace(
+        go.Scatter(
+            x=cost_arch_df["label"],
+            y=cost_arch_df["Brecha_MM"],
+            name="Brecha",
+            mode="lines+markers",
+            line=dict(color="#D97706", width=3),
+            marker=dict(size=8, color="#FFFFFF", line=dict(color="#D97706", width=2)),
+            customdata=cost_arch_df["Brecha_MM"].map(lambda value: f"{value:.1f}".replace(".", ",")),
+            hovertemplate="<b>%{x}</b><br>Brecha: %{customdata} MM CLP<extra></extra>",
+            yaxis="y2",
+        )
+    )
+    fig_cost.update_layout(
+        height=460,
+        barmode="group",
+        margin=dict(l=8, r=62, t=34, b=78),
+        legend=dict(orientation="h", y=1.08, x=0, title=None),
+        yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.16)", zeroline=False),
+        yaxis2=dict(title="Brecha MM", overlaying="y", side="right", showgrid=False, zeroline=True, zerolinecolor="rgba(217,119,6,.28)"),
+        xaxis=dict(title=None, tickangle=-16, automargin=True),
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="rgba(0,0,0,0)",
+        hovermode="x unified",
+    )
+
+    fig_donut = go.Figure(
+        go.Pie(
+            labels=cost_arch_df["label"],
+            values=cost_arch_df["commercial"],
+            hole=0.58,
+            marker=dict(colors=[cost_arch_color_map.get(label, "#64748B") for label in cost_arch_df["label"]], line=dict(color="#FFFFFF", width=2)),
+            textinfo="percent",
+            customdata=np.stack([cost_arch_df["commercial"].apply(format_clp), cost_arch_df["tasks"]], axis=-1),
+            hovertemplate="<b>%{label}</b><br>Comercial: %{customdata[0]}<br>Partidas: %{customdata[1]}<extra></extra>",
+        )
+    )
+    fig_donut.update_layout(
+        height=460,
+        margin=dict(l=8, r=8, t=34, b=18),
+        showlegend=True,
+        legend=dict(orientation="h", y=-0.04, x=0, title=None, font=dict(size=10)),
+        paper_bgcolor="rgba(0,0,0,0)",
+        annotations=[
+            dict(
+                text=f"<b>{fmt_mm_unit(total_comercial)}</b><br><span style='font-size:11px;color:#64748B'>Comercial</span>",
+                x=0.5,
+                y=0.5,
+                showarrow=False,
+                font=dict(size=18, color="#071427"),
+            )
+        ],
+    )
+
+    chart_col, donut_col = st.columns([0.64, 0.36])
+    with chart_col:
+        st.plotly_chart(fig_cost, use_container_width=True, config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"]})
+    with donut_col:
+        st.plotly_chart(fig_donut, use_container_width=True, config={"displaylogo": False})
+
+    st.markdown(
+        f"""
+        <div class="costarch-insights">
+          <div class="costarch-insight" style="--c:#164E63;"><b>CAPEX replicable</b><span>{fmt_mm_unit(supply["commercial"])} en suministro, equivalente a {fmt_pct_local(supply_pct)} del comercial.</span></div>
+          <div class="costarch-insight" style="--c:#0F766E;"><b>Sitio dependiente</b><span>{fmt_mm_unit(bos["commercial"])} en BOS, equivalente a {fmt_pct_local(bos_pct)} del comercial.</span></div>
+          <div class="costarch-insight" style="--c:#B7791F;"><b>Ingeniería y PMO</b><span>Brecha esperada de {fmt_mm_unit(eng_reduction)} por estandarización.</span></div>
+          <div class="costarch-insight" style="--c:#1E3A8A;"><b>Reducción total</b><span>{fmt_money(total_piloto)} a {fmt_money(total_comercial)} en referencia comercial.</span></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    cost_table_display = cost_arch_df.copy()
+    cost_table_display["Piloto"] = cost_table_display["pilot"].apply(format_clp)
+    cost_table_display["Comercial"] = cost_table_display["commercial"].apply(format_clp)
+    cost_table_display["Brecha"] = (cost_table_display["commercial"] - cost_table_display["pilot"]).apply(fmt_signed_money)
+    cost_table_display["% comercial"] = cost_table_display["Participacion_comercial"].map(fmt_pct_local)
+    cost_table_display = cost_table_display.rename(columns={"label": "Alcance", "tasks": "Partidas"})
+    st.dataframe(
+        cost_table_display[["Alcance", "Partidas", "Piloto", "Comercial", "Brecha", "% comercial"]],
+        use_container_width=True,
+        hide_index=True,
+        height=min(360, 38 + (len(cost_table_display) + 1) * 35),
+    )
+    return
+
     epc_pro_html = textwrap.dedent(f"""
         <style>
         .costpro-wrap{{font-family:inherit;color:#071427;margin:18px 0 10px;width:100%;max-width:100%;overflow:hidden;box-sizing:border-box;}}
