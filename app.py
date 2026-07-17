@@ -9912,6 +9912,144 @@ def render_capex10_investor_injection_cash_flow(
     )
     st.plotly_chart(fig_commitment, use_container_width=True, config={"displaylogo": False})
 
+    analysis_month_options = commitment_monthly["_month"].tolist()
+    default_analysis_month = (
+        monthly.loc[monthly["Flujo_CLP"].gt(0), "_month"].min()
+        if monthly["Flujo_CLP"].gt(0).any()
+        else commitment_monthly["_month"].min()
+    )
+    default_analysis_index = next(
+        (idx for idx, month_value in enumerate(analysis_month_options) if pd.Timestamp(month_value).eq(pd.Timestamp(default_analysis_month))),
+        0,
+    )
+    selected_analysis_month = st.selectbox(
+        "Período para analizar",
+        analysis_month_options,
+        index=default_analysis_index,
+        format_func=lambda value: pd.Timestamp(value).strftime("%b %Y"),
+        key="capex10_investor_injection_analysis_month",
+        help="Selecciona el mes de la barra para ver el detalle del período y su acumulado.",
+    )
+    selected_analysis_month = pd.Timestamp(selected_analysis_month)
+    selected_month_row = commitment_monthly[commitment_monthly["_month"].eq(selected_analysis_month)].iloc[0]
+    period_items = flow_df[flow_df["_month"].eq(selected_analysis_month)].copy()
+    accumulated_items = flow_df[flow_df["_month"].le(selected_analysis_month)].copy()
+    period_injection = float(selected_month_row["Inyeccion_CLP"] or 0.0)
+    period_flow = float(selected_month_row["Flujo_CLP"] or 0.0)
+    accumulated_required = float(selected_month_row["Acumulado_CLP"] or 0.0)
+    accumulated_injection = float(selected_month_row["Inyeccion_acumulada_CLP"] or 0.0)
+    accumulated_balance = float(selected_month_row["Saldo_caja_CLP"] or 0.0)
+    accumulated_periods = int(commitment_monthly[commitment_monthly["_month"].le(selected_analysis_month)].shape[0])
+    display_detail_cols = [
+        ("Fase", "Fase"),
+        ("Línea", "Línea"),
+        ("Tarea / Entregable", "Tarea / Entregable"),
+        ("Estado.1", "Estado"),
+        (GANTT_DATE_COL_START, "Inicio"),
+        (GANTT_DATE_COL_END_PLAN, "Fin plan"),
+        (GANTT_DATE_COL_END_REAL, "Fin real"),
+        ("Disponible_CLP", "Disponible"),
+    ]
+    period_detail_display = pd.DataFrame()
+    if not period_items.empty:
+        period_items = period_items.sort_values(["_cash_date", "Fase", "Línea"], na_position="last")
+        for source_col, display_col in display_detail_cols:
+            if source_col in period_items.columns:
+                if source_col == "Disponible_CLP":
+                    period_detail_display[display_col] = period_items[source_col].apply(format_clp)
+                elif source_col in {GANTT_DATE_COL_START, GANTT_DATE_COL_END_PLAN, GANTT_DATE_COL_END_REAL}:
+                    period_detail_display[display_col] = pd.to_datetime(period_items[source_col], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                else:
+                    period_detail_display[display_col] = period_items[source_col].astype(str).replace({"nan": "-", "None": "-"})
+    phase_period_summary = (
+        period_items.groupby("Fase", as_index=False)["Disponible_CLP"].sum().sort_values("Disponible_CLP", ascending=False)
+        if not period_items.empty and "Fase" in period_items.columns
+        else pd.DataFrame(columns=["Fase", "Disponible_CLP"])
+    )
+    top_period_phase = str(phase_period_summary.iloc[0]["Fase"]) if not phase_period_summary.empty else "Sin gasto del período"
+    top_period_phase_value = float(phase_period_summary.iloc[0]["Disponible_CLP"]) if not phase_period_summary.empty else 0.0
+    accumulated_detail_display = pd.DataFrame()
+    if not accumulated_items.empty and {"Fase", "Línea", "Disponible_CLP"}.issubset(accumulated_items.columns):
+        accumulated_summary = (
+            accumulated_items.groupby(["Fase", "Línea"], as_index=False)
+            .agg(
+                Partidas=("Tarea / Entregable", "count"),
+                Disponible_CLP=("Disponible_CLP", "sum"),
+            )
+            .sort_values("Disponible_CLP", ascending=False)
+        )
+        accumulated_detail_display = accumulated_summary.copy()
+        accumulated_detail_display["Disponible"] = accumulated_detail_display["Disponible_CLP"].apply(format_clp)
+        accumulated_detail_display["% acumulado"] = np.where(
+            accumulated_required > 0,
+            accumulated_detail_display["Disponible_CLP"] / accumulated_required * 100.0,
+            0.0,
+        )
+        accumulated_detail_display["% acumulado"] = accumulated_detail_display["% acumulado"].map(lambda value: f"{value:.1f}%")
+        accumulated_detail_display = accumulated_detail_display[["Fase", "Línea", "Partidas", "Disponible", "% acumulado"]]
+
+    st.markdown(
+        f"""
+        <style>
+          .cash-period-panel{{
+            border:1px solid rgba(203,213,225,.82);
+            border-left:6px solid #0F766E;
+            border-radius:18px;
+            background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
+            padding:14px;
+            margin:10px 0 18px;
+            box-shadow:0 12px 26px rgba(15,23,42,.055);
+          }}
+          .cash-period-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:0 0 12px;}}
+          .cash-period-head b{{display:block;color:#071427;font-size:16px;line-height:1.1;font-weight:950;}}
+          .cash-period-head span{{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}}
+          .cash-period-chip{{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:7px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}}
+          .cash-period-kpis{{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0 0 12px;}}
+          .cash-period-kpi{{border:1px solid rgba(226,232,240,.95);border-top:3px solid var(--c);border-radius:10px;background:#FFFFFF;padding:9px 10px;min-height:66px;}}
+          .cash-period-kpi span{{display:block;color:#64748B;font-size:9.5px;font-weight:950;letter-spacing:.055em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
+          .cash-period-kpi b{{display:block;color:var(--c);font-size:17px;line-height:1.08;font-weight:950;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
+          .cash-period-kpi em{{display:block;color:#64748B;font-size:10px;font-style:normal;font-weight:800;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
+          @media(max-width:1100px){{.cash-period-kpis{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
+          @media(max-width:720px){{.cash-period-head{{display:block;}}.cash-period-chip{{display:inline-flex;margin-top:10px;}}.cash-period-kpis{{grid-template-columns:1fr;}}}}
+        </style>
+        <div class="cash-period-panel">
+          <div class="cash-period-head">
+            <div><b>Análisis del período seleccionado</b><span>Detalle del mes elegido en el gráfico de inyección, con lectura mensual y acumulada.</span></div>
+            <div class="cash-period-chip">{selected_analysis_month.strftime("%b %Y")}</div>
+          </div>
+          <div class="cash-period-kpis">
+            <div class="cash-period-kpi" style="--c:#7FA8A4;"><span>Gasto del período</span><b>{format_clp(period_flow)}</b><em>{len(period_items)} partidas</em></div>
+            <div class="cash-period-kpi" style="--c:#0F766E;"><span>Inyección del período</span><b>{format_clp(period_injection)}</b><em>Entrada puntual</em></div>
+            <div class="cash-period-kpi" style="--c:#1E3A8A;"><span>Acumulado requerido</span><b>{format_clp(accumulated_required)}</b><em>{accumulated_periods} períodos</em></div>
+            <div class="cash-period-kpi" style="--c:#D7605E;"><span>Saldo acumulado</span><b>{format_clp(accumulated_balance)}</b><em>Inyección - requerido</em></div>
+            <div class="cash-period-kpi" style="--c:#B7791F;"><span>Mayor fase del mes</span><b>{html.escape(top_period_phase)}</b><em>{format_clp(top_period_phase_value)}</em></div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    period_tab, accumulated_tab = st.tabs(["Detalle del período", "Acumulado a la fecha"])
+    with period_tab:
+        if period_detail_display.empty:
+            st.info("El período seleccionado no tiene partidas de gasto calendarizadas.")
+        else:
+            st.dataframe(
+                period_detail_display,
+                use_container_width=True,
+                hide_index=True,
+                height=min(420, 38 + (len(period_detail_display) + 1) * 35),
+            )
+    with accumulated_tab:
+        if accumulated_detail_display.empty:
+            st.info("No hay partidas acumuladas hasta el período seleccionado.")
+        else:
+            st.dataframe(
+                accumulated_detail_display,
+                use_container_width=True,
+                hide_index=True,
+                height=min(420, 38 + (len(accumulated_detail_display) + 1) * 35),
+            )
+
     responsible_flow_df = responsible_scope_df.copy() if responsible_scope_df is not None and not responsible_scope_df.empty else flow_df.copy()
     if "Disponible_CLP" in responsible_flow_df.columns:
         responsible_flow_df = responsible_flow_df[responsible_flow_df["Disponible_CLP"] > 0].copy()
