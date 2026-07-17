@@ -10350,6 +10350,27 @@ def render_capex10_available_funds_by_phase_line() -> None:
     max_phase_label = html.escape(str(max_phase["Fase"])) if max_phase is not None else "-"
     total_disponible_fmt = format_clp(total_disponible)
     funds_heading = _capex10_funds_heading(selected_metodos)
+    milestone_source_df = df_gantt.copy()
+    if selected_etapas and "ETAPA" in milestone_source_df.columns:
+        milestone_source_df = milestone_source_df[
+            milestone_source_df["ETAPA"].astype(str).str.strip().isin(selected_etapas)
+        ].copy()
+
+    def _capex10_hito_fin_real(line_candidates: list[str]) -> str:
+        if "Línea" not in milestone_source_df.columns or GANTT_DATE_COL_END_REAL not in milestone_source_df.columns:
+            return "-"
+        wanted = {normalize_key(candidate) for candidate in line_candidates}
+        line_keys = milestone_source_df["Línea"].astype(str).map(normalize_key)
+        milestone_dates = pd.to_datetime(
+            milestone_source_df.loc[line_keys.isin(wanted), GANTT_DATE_COL_END_REAL],
+            errors="coerce",
+        ).dropna()
+        if milestone_dates.empty:
+            return "-"
+        return pd.Timestamp(milestone_dates.max()).strftime("%d-%m-%Y")
+
+    premontaje_fin_real = _capex10_hito_fin_real(["PRE-MONTAJE", "PRE MONTAJE", "PRE- MONTAJE"])
+    montaje_fin_real = _capex10_hito_fin_real(["MONTAJE"])
 
     st.markdown(
         f"""
@@ -10430,7 +10451,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
         }}
         .capex10-kpi-grid{{
             display:grid;
-            grid-template-columns:minmax(260px, 420px);
+            grid-template-columns:minmax(260px, 1.22fr) repeat(2,minmax(170px, .72fr));
             gap:12px;
             align-items:stretch;
             margin-top:24px;
@@ -10544,6 +10565,24 @@ def render_capex10_available_funds_by_phase_line() -> None:
             white-space:normal;
             overflow-wrap:anywhere;
         }}
+        .capex10-kpi-milestone{{
+            border-left:5px solid #164E63;
+        }}
+        .capex10-kpi-milestone .capex10-kpi-ico{{
+            color:#164E63;
+            background:rgba(22,78,99,.10);
+            border-color:rgba(22,78,99,.18);
+        }}
+        .capex10-kpi-milestone .capex10-kpi-value{{
+            color:#164E63;
+            font-size:21px;
+        }}
+        .capex10-kpi-milestone .capex10-kpi-label{{
+            text-transform:uppercase;
+            letter-spacing:.04em;
+            font-size:11px;
+            color:#475569;
+        }}
         .capex10-funds-art{{
             position:relative;
             min-height:284px;
@@ -10631,6 +10670,37 @@ def render_capex10_available_funds_by_phase_line() -> None:
                       <p class="capex10-kpi-value">{total_disponible_fmt}</p>
                       <p class="capex10-kpi-label">Disponible total</p>
                       <p class="capex10-kpi-note">Fondos pendientes por ejecutar</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="capex10-kpi-card capex10-kpi-milestone">
+                  <div class="capex10-kpi-top">
+                    <div class="capex10-kpi-ico" aria-hidden="true">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="4" y="5" width="16" height="15" rx="3" stroke="currentColor" stroke-width="2"/>
+                        <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p class="capex10-kpi-value">{html.escape(premontaje_fin_real)}</p>
+                      <p class="capex10-kpi-label">Hito PRE-MONTAJE</p>
+                      <p class="capex10-kpi-note">Fecha fin real</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="capex10-kpi-card capex10-kpi-milestone">
+                  <div class="capex10-kpi-top">
+                    <div class="capex10-kpi-ico" aria-hidden="true">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M5 20h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M8 20V8l4-4 4 4v12" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                        <path d="M10 11h4M10 15h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p class="capex10-kpi-value">{html.escape(montaje_fin_real)}</p>
+                      <p class="capex10-kpi-label">Hito MONTAJE</p>
+                      <p class="capex10-kpi-note">Fecha fin real</p>
                     </div>
                   </div>
                 </div>
