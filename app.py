@@ -9450,6 +9450,26 @@ def _capex10_funds_heading(selected_metodos: list[str]) -> str:
     return "Fondos faltantes para cumplir hitos, desglosados por fase y línea"
 
 
+def _capex10_responsible_color(responsible: object, idx: int = 0) -> str:
+    key = normalize_key(str(responsible))
+    explicit_colors = {
+        "imelsa": "#1E3A8A",
+        "cimed": "#E11D48",
+        "jp": "#7C3AED",
+        "grupoec": "#0891B2",
+        "fw": "#0F766E",
+    }
+    fallback_colors = ["#D97706", "#475569", "#16A34A", "#B45309", "#0E7490", "#6D28D9", "#BE123C"]
+    return explicit_colors.get(key, fallback_colors[idx % len(fallback_colors)])
+
+
+def _capex10_responsible_color_map(responsibles: list[object]) -> dict[object, str]:
+    return {
+        responsible: _capex10_responsible_color(responsible, idx)
+        for idx, responsible in enumerate(responsibles)
+    }
+
+
 def render_capex10_investor_injection_cash_flow(
     funds_df: pd.DataFrame,
     responsible_scope_df: pd.DataFrame | None = None,
@@ -9772,16 +9792,7 @@ def render_capex10_investor_injection_cash_flow(
             plot_responsible["Monto_fmt"] = plot_responsible["Aporte_CLP"].apply(format_clp)
             plot_responsible["Participacion_fmt"] = plot_responsible["Participacion"].map(lambda value: f"{value:.1f}%")
             visible_responsibles = plot_responsible["_responsable"].tolist()
-            responsible_color_map = {
-                responsible: (
-                    "#0F766E"
-                    if normalize_key(responsible) == "fw"
-                    else "#E11D48"
-                    if normalize_key(responsible) == "cimed"
-                    else ["#1E3A8A", "#D97706", "#7C3AED", "#0891B2", "#475569", "#16A34A", "#B45309"][idx % 7]
-                )
-                for idx, responsible in enumerate(visible_responsibles)
-            }
+            responsible_color_map = _capex10_responsible_color_map(visible_responsibles)
             x_values = plot_responsible["Monto_MM"] if responsible_metric == "Monto requerido" else plot_responsible["Partidas"]
             x_title = "MM CLP" if responsible_metric == "Monto requerido" else "Partidas"
             marker_sizes = 18 + (plot_responsible["Partidas"] / max(float(plot_responsible["Partidas"].max() or 1), 1.0) * 18)
@@ -9991,16 +10002,7 @@ def render_capex10_investor_injection_cash_flow(
                     )
                 y_col = "Acumulado_CLP" if responsible_flow_mode == "Acumulado" else "Flujo_CLP"
                 line_df["Valor_modo_fmt"] = line_df["Acumulado_fmt"] if responsible_flow_mode == "Acumulado" else line_df["Flujo_fmt"]
-                responsible_color_map = {
-                    responsible: (
-                        "#0F766E"
-                        if normalize_key(responsible) == "fw"
-                        else "#E11D48"
-                        if normalize_key(responsible) == "cimed"
-                        else ["#1E3A8A", "#D97706", "#7C3AED", "#0891B2", "#475569", "#16A34A", "#B45309"][idx % 7]
-                    )
-                    for idx, responsible in enumerate(visible_responsibles)
-                }
+                responsible_color_map = _capex10_responsible_color_map(visible_responsibles)
                 fig_responsible_cashflow = px.line(
                     line_df,
                     x="_month",
@@ -11181,15 +11183,15 @@ def render_capex10_available_funds_by_phase_line() -> None:
         st.markdown(
             """
             <style>
-              .capex10-detail-panel{border:1px solid rgba(203,213,225,.82);border-radius:14px;background:#FFFFFF;padding:12px;margin:0 0 12px;}
+              .capex10-detail-panel{border:1px solid rgba(203,213,225,.82);border-left:6px solid var(--resp-color);border-radius:14px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:12px;margin:0 0 12px;box-shadow:0 10px 22px rgba(15,23,42,.045);}
               .capex10-detail-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0 0 12px;}
-              .capex10-detail-kpi{border:1px solid rgba(226,232,240,.95);border-radius:10px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:8px 10px;min-height:58px;}
+              .capex10-detail-kpi{border:1px solid rgba(226,232,240,.95);border-top:3px solid var(--resp-color);border-radius:10px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:8px 10px;min-height:58px;}
               .capex10-detail-kpi span{display:block;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-              .capex10-detail-kpi b{display:block;color:#071427;font-size:16px;line-height:1.1;font-weight:950;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+              .capex10-detail-kpi b{display:block;color:var(--resp-color);font-size:16px;line-height:1.1;font-weight:950;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
               .capex10-line-analysis{display:grid;grid-template-columns:1.2fr repeat(5,minmax(0,.75fr));gap:8px;margin:0 0 10px;}
-              .capex10-line-analysis div{border:1px solid rgba(226,232,240,.95);border-radius:10px;background:#F8FAFC;padding:8px 10px;min-height:54px;}
+              .capex10-line-analysis div{border:1px solid rgba(226,232,240,.95);border-left:4px solid var(--resp-color);border-radius:10px;background:#F8FAFC;padding:8px 10px;min-height:54px;}
               .capex10-line-analysis span{display:block;color:#64748B;font-size:9.5px;font-weight:950;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-              .capex10-line-analysis b{display:block;color:#0F172A;font-size:14px;font-weight:950;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+              .capex10-line-analysis b{display:block;color:var(--resp-color);font-size:14px;font-weight:950;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
               @media(max-width:1100px){.capex10-detail-kpis,.capex10-line-analysis{grid-template-columns:repeat(2,minmax(0,1fr));}}
             </style>
             """,
@@ -11200,13 +11202,14 @@ def render_capex10_available_funds_by_phase_line() -> None:
             responsible_total = float(responsible_row["Disponible_CLP"])
             responsible_start = pd.Timestamp(responsible_row["Inicio"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Inicio"]) else "-"
             responsible_end = pd.Timestamp(responsible_row["Fin_real"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Fin_real"]) else "-"
+            responsible_color = _capex10_responsible_color(responsible_name)
             with st.expander(
                 f"{responsible_name} · {format_clp(responsible_total)} · {int(responsible_row['Lineas'])} líneas · {int(responsible_row['Partidas'])} partidas",
                 expanded=False,
             ):
                 st.markdown(
                     f"""
-                    <div class="capex10-detail-panel">
+                    <div class="capex10-detail-panel" style="--resp-color:{responsible_color};">
                       <div class="capex10-detail-kpis">
                         <div class="capex10-detail-kpi"><span>Aporte responsable</span><b>{format_clp(responsible_total)}</b></div>
                         <div class="capex10-detail-kpi"><span>Peso total</span><b>{float(responsible_row["Peso_total"]):.1f}%</b></div>
@@ -11281,7 +11284,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
                             detail_display[display_col] = line_items[source_col].astype(str).replace({"nan": "-", "None": "-"})
                 st.markdown(
                     f"""
-                    <div class="capex10-line-analysis">
+                    <div class="capex10-line-analysis" style="--resp-color:{responsible_color};">
                       <div><span>Línea seleccionada</span><b>{html.escape(line_name)}</b></div>
                       <div><span>Peso responsable</span><b>{float(line_row["Peso_responsable"]):.1f}%</b></div>
                       <div><span>Peso total</span><b>{float(line_row["Peso_total"]):.1f}%</b></div>
