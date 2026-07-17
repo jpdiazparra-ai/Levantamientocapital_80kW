@@ -9453,6 +9453,7 @@ def _capex10_funds_heading(selected_metodos: list[str]) -> str:
 def render_capex10_investor_injection_cash_flow(
     funds_df: pd.DataFrame,
     responsible_scope_df: pd.DataFrame | None = None,
+    milestone_dates: list[dict[str, object]] | None = None,
 ) -> None:
     if funds_df.empty or "Disponible_CLP" not in funds_df.columns:
         return
@@ -9558,8 +9559,19 @@ def render_capex10_investor_injection_cash_flow(
         ]
     )
     positive_injections = injection_df[injection_df["Inyeccion_CLP"] > 0].copy()
-    timeline_start = min(monthly["_month"].min(), injection_df["_month"].min())
-    timeline_end = max(monthly["_month"].max(), injection_df["_month"].max())
+    valid_milestones = [
+        milestone
+        for milestone in (milestone_dates or [])
+        if pd.notna(pd.to_datetime(milestone.get("date"), errors="coerce"))
+    ]
+    milestone_months = [
+        pd.Timestamp(milestone["date"]).to_period("M").to_timestamp()
+        for milestone in valid_milestones
+    ]
+    timeline_start_candidates = [monthly["_month"].min(), injection_df["_month"].min(), *milestone_months]
+    timeline_end_candidates = [monthly["_month"].max(), injection_df["_month"].max(), *milestone_months]
+    timeline_start = min(timeline_start_candidates)
+    timeline_end = max(timeline_end_candidates)
     commitment_monthly = pd.DataFrame({"_month": pd.date_range(timeline_start, timeline_end, freq="MS")})
     commitment_monthly = commitment_monthly.merge(monthly[["_month", "Flujo_CLP"]], on="_month", how="left")
     commitment_monthly = commitment_monthly.merge(
@@ -9629,6 +9641,38 @@ def render_capex10_investor_injection_cash_flow(
             xanchor="left",
             yanchor="bottom",
             font=dict(size=11, color="#0F766E"),
+        )
+    milestone_colors = ["#B7791F", "#7C2D12"]
+    for milestone_idx, milestone in enumerate(valid_milestones):
+        milestone_month = pd.Timestamp(milestone["date"]).to_period("M").to_timestamp()
+        milestone_label = milestone_month.strftime("%b %Y")
+        milestone_name = str(milestone.get("label", "Hito"))
+        milestone_color = milestone_colors[milestone_idx % len(milestone_colors)]
+        fig_commitment.add_shape(
+            type="line",
+            x0=milestone_label,
+            x1=milestone_label,
+            y0=0,
+            y1=1,
+            xref="x",
+            yref="paper",
+            line=dict(color=milestone_color, width=2, dash="dash"),
+        )
+        fig_commitment.add_annotation(
+            x=milestone_label,
+            y=1,
+            xref="x",
+            yref="paper",
+            text=f"{milestone_name} · {pd.Timestamp(milestone['date']).strftime('%d-%m-%Y')}",
+            showarrow=False,
+            xanchor="right" if milestone_idx % 2 else "left",
+            yanchor="bottom",
+            yshift=18 + (milestone_idx * 16),
+            font=dict(size=11, color=milestone_color),
+            bgcolor="rgba(255,255,255,.92)",
+            bordercolor=milestone_color,
+            borderwidth=1,
+            borderpad=4,
         )
     final_commitment = commitment_monthly.iloc[-1]
     final_commitment_label = pd.Timestamp(final_commitment["_month"]).strftime("%b %Y")
@@ -9811,9 +9855,11 @@ def render_capex10_investor_injection_cash_flow(
                 .sort_values(["_responsable", "_month"])
             )
             if not responsible_monthly.empty:
+                responsible_timeline_start = min([responsible_monthly["_month"].min(), *milestone_months]) if milestone_months else responsible_monthly["_month"].min()
+                responsible_timeline_end = max([responsible_monthly["_month"].max(), *milestone_months]) if milestone_months else responsible_monthly["_month"].max()
                 timeline_index = pd.date_range(
-                    responsible_monthly["_month"].min(),
-                    responsible_monthly["_month"].max(),
+                    responsible_timeline_start,
+                    responsible_timeline_end,
                     freq="MS",
                 )
                 responsible_frames = []
@@ -9990,6 +10036,19 @@ def render_capex10_investor_injection_cash_flow(
                     hovermode="x unified",
                     hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
                 )
+                for milestone_idx, milestone in enumerate(valid_milestones):
+                    milestone_date = pd.Timestamp(milestone["date"])
+                    milestone_color = milestone_colors[milestone_idx % len(milestone_colors)]
+                    fig_responsible_cashflow.add_vline(
+                        x=milestone_date.to_period("M").to_timestamp(),
+                        line_width=2,
+                        line_dash="dash",
+                        line_color=milestone_color,
+                        annotation_text=f"{milestone.get('label', 'Hito')} · {milestone_date.strftime('%d-%m-%Y')}",
+                        annotation_position="top left" if milestone_idx % 2 == 0 else "top right",
+                        annotation_font_size=11,
+                        annotation_font_color=milestone_color,
+                    )
                 final_by_responsible = (
                     line_df.sort_values("_month")
                     .groupby("_responsable", as_index=False)
@@ -10356,21 +10415,30 @@ def render_capex10_available_funds_by_phase_line() -> None:
             milestone_source_df["ETAPA"].astype(str).str.strip().isin(selected_etapas)
         ].copy()
 
-    def _capex10_hito_fin_real(line_candidates: list[str]) -> str:
+    def _capex10_hito_info(line_name: str) -> dict[str, object]:
         if "Línea" not in milestone_source_df.columns or GANTT_DATE_COL_END_REAL not in milestone_source_df.columns:
-            return "-"
-        wanted = {normalize_key(candidate) for candidate in line_candidates}
+            return {"label": line_name, "date": pd.NaT, "date_fmt": "-"}
+        wanted_key = normalize_key(line_name)
         line_keys = milestone_source_df["Línea"].astype(str).map(normalize_key)
+        matching_rows = milestone_source_df.loc[line_keys.eq(wanted_key)].copy()
+        if matching_rows.empty:
+            return {"label": line_name, "date": pd.NaT, "date_fmt": "-"}
         milestone_dates = pd.to_datetime(
-            milestone_source_df.loc[line_keys.isin(wanted), GANTT_DATE_COL_END_REAL],
+            matching_rows[GANTT_DATE_COL_END_REAL],
             errors="coerce",
         ).dropna()
         if milestone_dates.empty:
-            return "-"
-        return pd.Timestamp(milestone_dates.max()).strftime("%d-%m-%Y")
+            return {"label": line_name, "date": pd.NaT, "date_fmt": "-"}
+        milestone_date = pd.Timestamp(milestone_dates.max())
+        return {
+            "label": line_name,
+            "date": milestone_date,
+            "date_fmt": milestone_date.strftime("%d-%m-%Y"),
+        }
 
-    premontaje_fin_real = _capex10_hito_fin_real(["PRE-MONTAJE", "PRE MONTAJE", "PRE- MONTAJE"])
-    montaje_fin_real = _capex10_hito_fin_real(["MONTAJE"])
+    premontaje_hito = _capex10_hito_info("Hito Pre -Montaje")
+    montaje_hito = _capex10_hito_info("Hito Montaje")
+    capex10_milestone_dates = [premontaje_hito, montaje_hito]
 
     st.markdown(
         f"""
@@ -10682,8 +10750,8 @@ def render_capex10_available_funds_by_phase_line() -> None:
                       </svg>
                     </div>
                     <div>
-                      <p class="capex10-kpi-value">{html.escape(premontaje_fin_real)}</p>
-                      <p class="capex10-kpi-label">Hito PRE-MONTAJE</p>
+                      <p class="capex10-kpi-value">{html.escape(str(premontaje_hito["date_fmt"]))}</p>
+                      <p class="capex10-kpi-label">Hito Pre -Montaje</p>
                       <p class="capex10-kpi-note">Fecha fin real</p>
                     </div>
                   </div>
@@ -10698,8 +10766,8 @@ def render_capex10_available_funds_by_phase_line() -> None:
                       </svg>
                     </div>
                     <div>
-                      <p class="capex10-kpi-value">{html.escape(montaje_fin_real)}</p>
-                      <p class="capex10-kpi-label">Hito MONTAJE</p>
+                      <p class="capex10-kpi-value">{html.escape(str(montaje_hito["date_fmt"]))}</p>
+                      <p class="capex10-kpi-label">Hito Montaje</p>
                       <p class="capex10-kpi-note">Fecha fin real</p>
                     </div>
                   </div>
@@ -10796,7 +10864,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
     responsible_scope_df["Fase"] = responsible_scope_df["Fase"].astype(str).str.strip().replace({"": "Sin fase", "nan": "Sin fase", "None": "Sin fase"})
     responsible_scope_df["Línea"] = responsible_scope_df["Línea"].astype(str).str.strip().replace({"": "Sin línea", "nan": "Sin línea", "None": "Sin línea"})
     responsible_scope_df = responsible_scope_df[responsible_scope_df["Disponible_CLP"] > 0].copy()
-    render_capex10_investor_injection_cash_flow(funds_df, responsible_scope_df)
+    render_capex10_investor_injection_cash_flow(funds_df, responsible_scope_df, capex10_milestone_dates)
 
     funds_colors = ["#0F766E", "#164E63", "#7C3AED", "#1E3A8A", "#B7791F", "#64748B", "#0891B2", "#2C7A7B", "#334155", "#14B8A6"]
     line_order = (
