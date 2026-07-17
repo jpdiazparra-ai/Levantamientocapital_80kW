@@ -10993,11 +10993,11 @@ def render_capex10_available_funds_by_phase_line() -> None:
     fig_funds.update_layout(
         barmode="stack",
         height=520,
-        margin=dict(l=10, r=132, t=72, b=84),
+        margin=dict(l=10, r=132, t=96, b=84),
         showlegend=True,
         legend=dict(
             orientation="h",
-            y=1.14,
+            y=1.06,
             x=0,
             xanchor="left",
             title=None,
@@ -11226,6 +11226,9 @@ def render_capex10_available_funds_by_phase_line() -> None:
             """
             <style>
               .capex10-detail-panel{border:1px solid rgba(203,213,225,.82);border-left:6px solid var(--resp-color);border-radius:14px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:12px;margin:0 0 12px;box-shadow:0 10px 22px rgba(15,23,42,.045);}
+              .capex10-detail-title{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid rgba(226,232,240,.95);border-left:6px solid var(--resp-color);border-radius:12px;background:#FFFFFF;padding:10px 12px;margin:0 0 10px;}
+              .capex10-detail-title b{color:var(--resp-color);font-size:15px;font-weight:950;line-height:1.1;}
+              .capex10-detail-title span{color:#64748B;font-size:11px;font-weight:850;white-space:nowrap;}
               .capex10-detail-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0 0 12px;}
               .capex10-detail-kpi{border:1px solid rgba(226,232,240,.95);border-top:3px solid var(--resp-color);border-radius:10px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:8px 10px;min-height:58px;}
               .capex10-detail-kpi span{display:block;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -11252,6 +11255,10 @@ def render_capex10_available_funds_by_phase_line() -> None:
                 st.markdown(
                     f"""
                     <div class="capex10-detail-panel" style="--resp-color:{responsible_color};">
+                      <div class="capex10-detail-title">
+                        <b>{html.escape(responsible_name)}</b>
+                        <span>{format_clp(responsible_total)} · {int(responsible_row['Lineas'])} líneas · {int(responsible_row['Partidas'])} partidas</span>
+                      </div>
                       <div class="capex10-detail-kpis">
                         <div class="capex10-detail-kpi"><span>Aporte responsable</span><b>{format_clp(responsible_total)}</b></div>
                         <div class="capex10-detail-kpi"><span>Peso total</span><b>{float(responsible_row["Peso_total"]):.1f}%</b></div>
