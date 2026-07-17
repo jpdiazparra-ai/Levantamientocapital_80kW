@@ -9918,8 +9918,9 @@ def render_capex10_investor_injection_cash_flow(
         if monthly["Flujo_CLP"].gt(0).any()
         else commitment_monthly["_month"].min()
     )
+    default_analysis_month = pd.Timestamp(default_analysis_month)
     default_analysis_index = next(
-        (idx for idx, month_value in enumerate(analysis_month_options) if pd.Timestamp(month_value).eq(pd.Timestamp(default_analysis_month))),
+        (idx for idx, month_value in enumerate(analysis_month_options) if pd.Timestamp(month_value) == default_analysis_month),
         0,
     )
     selected_analysis_month = st.selectbox(
