@@ -10028,6 +10028,7 @@ def render_capex10_investor_injection_cash_flow(
             st.info(f"No hay aportes por responsable para {plan_label} en este período.")
             return
         contribution_total_clp = float(contribution_summary["Aporte_CLP"].sum() or 0.0)
+        contribution_summary = contribution_summary.sort_values("Aporte_CLP", ascending=False).copy()
         contribution_summary["Monto_MM"] = contribution_summary["Aporte_CLP"] / 1_000_000
         contribution_summary["Monto_fmt"] = contribution_summary["Aporte_CLP"].apply(format_clp)
         contribution_summary["Participacion"] = np.where(
@@ -10048,50 +10049,64 @@ def render_capex10_investor_injection_cash_flow(
             unsafe_allow_html=True,
         )
         fig_period_responsible = go.Figure()
-        marker_sizes = 18 + (
-            contribution_summary["Partidas"] / max(float(contribution_summary["Partidas"].max() or 1), 1.0) * 18
+        donut_colors = [contribution_color_map.get(str(responsible), "#1E3A8A") for responsible in contribution_summary["_responsable"]]
+        fig_period_responsible.add_trace(
+            go.Pie(
+                labels=contribution_summary["_responsable"],
+                values=contribution_summary["Aporte_CLP"],
+                hole=0.58,
+                sort=False,
+                direction="clockwise",
+                marker=dict(colors=donut_colors, line=dict(color="#FFFFFF", width=3)),
+                text=contribution_summary["Participacion_fmt"],
+                textinfo="label+percent",
+                textposition="outside",
+                customdata=np.stack(
+                    [
+                        contribution_summary["Monto_fmt"],
+                        contribution_summary["Partidas"].astype(int),
+                        contribution_summary["Participacion_fmt"],
+                    ],
+                    axis=-1,
+                ),
+                hovertemplate=(
+                    "<b>%{label}</b><br>"
+                    "Aporte requerido: %{customdata[0]}<br>"
+                    "Partidas: %{customdata[1]}<br>"
+                    "Participación período: %{customdata[2]}<extra></extra>"
+                ),
+                pull=[0.04 if idx == 0 else 0 for idx in range(len(contribution_summary))],
+            )
         )
-        for (_, row), marker_size in zip(contribution_summary.iterrows(), marker_sizes):
-            responsible_name = str(row["_responsable"])
-            color = contribution_color_map.get(responsible_name, "#1E3A8A")
-            x_value = float(row["Monto_MM"])
-            fig_period_responsible.add_trace(
-                go.Scatter(
-                    x=[0, x_value],
-                    y=[responsible_name, responsible_name],
-                    mode="lines",
-                    line=dict(color="rgba(148,163,184,.30)", width=8),
-                    hoverinfo="skip",
-                    showlegend=False,
-                )
-            )
-            fig_period_responsible.add_trace(
-                go.Scatter(
-                    x=[x_value],
-                    y=[responsible_name],
-                    mode="markers+text",
-                    marker=dict(size=float(marker_size), color=color, line=dict(color="#FFFFFF", width=2)),
-                    text=[f"{row['Monto_fmt']} · {row['Participacion_fmt']}"],
-                    textposition="middle right",
-                    textfont=dict(size=12, color=color),
-                    customdata=[[row["Monto_fmt"], row["Partidas"], row["Participacion_fmt"], plan_label]],
-                    hovertemplate=(
-                        "<b>%{y}</b><br>"
-                        "Plan: %{customdata[3]}<br>"
-                        "Aporte requerido: %{customdata[0]}<br>"
-                        "Partidas: %{customdata[1]}<br>"
-                        "Participación período: %{customdata[2]}<extra></extra>"
-                    ),
-                    name=responsible_name,
-                    showlegend=False,
-                )
-            )
+        top_contributor = str(contribution_summary.iloc[0]["_responsable"])
+        top_contributor_share = str(contribution_summary.iloc[0]["Participacion_fmt"])
         fig_period_responsible.update_layout(
-            height=max(260, min(390, 150 + len(contribution_summary) * 42)),
-            margin=dict(l=12, r=150, t=8, b=38),
-            showlegend=False,
-            xaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False),
-            yaxis=dict(title=None, automargin=True),
+            height=390,
+            margin=dict(l=12, r=12, t=18, b=18),
+            showlegend=True,
+            legend=dict(
+                orientation="v",
+                y=0.5,
+                yanchor="middle",
+                x=1.02,
+                xanchor="left",
+                title=None,
+                font=dict(size=12, color="#334155"),
+            ),
+            annotations=[
+                dict(
+                    text=(
+                        f"<b>{format_clp(contribution_total_clp)}</b>"
+                        f"<br><span style='font-size:11px;color:#64748B'>Total período</span>"
+                        f"<br><span style='font-size:10px;color:#64748B'>{html.escape(top_contributor)} · {top_contributor_share}</span>"
+                    ),
+                    x=0.5,
+                    y=0.5,
+                    font=dict(size=15, color="#071427"),
+                    showarrow=False,
+                    align="center",
+                )
+            ],
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
