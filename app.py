@@ -9982,37 +9982,41 @@ def render_capex10_investor_injection_cash_flow(
     )
     st.plotly_chart(fig_commitment, use_container_width=True, config={"displaylogo": False})
 
-    analysis_month_options = commitment_monthly["_month"].tolist()
-    default_analysis_month = (
-        monthly.loc[monthly["Flujo_CLP"].gt(0), "_month"].min()
-        if monthly["Flujo_CLP"].gt(0).any()
-        else commitment_monthly["_month"].min()
-    )
-    default_analysis_month = pd.Timestamp(default_analysis_month)
-    default_analysis_index = next(
-        (idx for idx, month_value in enumerate(analysis_month_options) if pd.Timestamp(month_value) == default_analysis_month),
-        0,
-    )
-    selected_analysis_month = st.selectbox(
+    analysis_month_options = [pd.Timestamp(value) for value in commitment_monthly["_month"].tolist()]
+    selected_analysis_month_values = st.multiselect(
         "Período para analizar",
         analysis_month_options,
-        index=default_analysis_index,
         format_func=lambda value: pd.Timestamp(value).strftime("%b %Y"),
-        key="capex10_investor_injection_analysis_month",
-        help="Selecciona el mes de la barra para ver el detalle del período según el plan de calendarización activo.",
+        key="capex10_investor_injection_analysis_months",
+        placeholder="Todos",
+        help="Filtra uno o varios meses. Sin selección muestra todos los períodos, igual que el selector Método.",
     )
-    selected_analysis_month = pd.Timestamp(selected_analysis_month)
-    selected_month_row = commitment_monthly[commitment_monthly["_month"].eq(selected_analysis_month)].iloc[0]
+    selected_analysis_months = (
+        sorted({pd.Timestamp(value).to_period("M").to_timestamp() for value in selected_analysis_month_values})
+        if selected_analysis_month_values
+        else analysis_month_options
+    )
+    selected_analysis_cutoff_month = max(selected_analysis_months)
+    all_analysis_months_selected = set(selected_analysis_months) == set(analysis_month_options)
+    selected_period_label = (
+        "Todos"
+        if not selected_analysis_month_values or all_analysis_months_selected
+        else ", ".join(pd.Timestamp(value).strftime("%b %Y") for value in selected_analysis_months[:4])
+    )
+    if selected_analysis_month_values and not all_analysis_months_selected and len(selected_analysis_months) > 4:
+        selected_period_label = f"{selected_period_label} +{len(selected_analysis_months) - 4}"
+    selected_month_rows = commitment_monthly[commitment_monthly["_month"].isin(selected_analysis_months)].copy()
+    selected_cutoff_row = commitment_monthly[commitment_monthly["_month"].eq(selected_analysis_cutoff_month)].iloc[0]
     is_plan_a_selected = cashflow_plan.startswith("Plan A")
     selected_plan_label = "Plan A - Flexibilidad Proveedores" if is_plan_a_selected else "Plan B - Sin Flexibilidad Proveedores"
     selected_plan_sort_col = "_chart_date" if is_plan_a_selected else "_cash_date"
     alternate_plan_label = "Plan B - Sin Flexibilidad Proveedores" if is_plan_a_selected else "Plan A - Flexibilidad Proveedores"
     alternate_plan_month_col = "_analysis_month" if is_plan_a_selected else "_chart_date"
     alternate_plan_sort_col = "_cash_date" if is_plan_a_selected else "_chart_date"
-    period_injection = float(selected_month_row["Inyeccion_CLP"] or 0.0)
-    plan_required_to_period = float(selected_month_row["Acumulado_CLP"] or 0.0)
-    plan_balance_to_period = float(selected_month_row["Saldo_caja_CLP"] or 0.0)
-    plan_periods_to_period = int(commitment_monthly[commitment_monthly["_month"].le(selected_analysis_month)].shape[0])
+    period_injection = float(selected_month_rows["Inyeccion_CLP"].sum() or 0.0)
+    plan_required_to_period = float(selected_cutoff_row["Acumulado_CLP"] or 0.0)
+    plan_balance_to_period = float(selected_cutoff_row["Saldo_caja_CLP"] or 0.0)
+    plan_periods_to_period = int(commitment_monthly[commitment_monthly["_month"].le(selected_analysis_cutoff_month)].shape[0])
     detail_responsible_col = first_matching_column(flow_df, ["Responsable"])
     display_detail_cols = [
         ("Fase", "Fase"),
@@ -10031,9 +10035,9 @@ def render_capex10_investor_injection_cash_flow(
         if month_col not in flow_df.columns:
             items = pd.DataFrame()
         elif accumulated:
-            items = flow_df[flow_df[month_col].le(selected_analysis_month)].copy()
+            items = flow_df[flow_df[month_col].le(selected_analysis_cutoff_month)].copy()
         else:
-            items = flow_df[flow_df[month_col].eq(selected_analysis_month)].copy()
+            items = flow_df[flow_df[month_col].isin(selected_analysis_months)].copy()
         detail_display = pd.DataFrame()
         if not items.empty:
             sort_cols = [col for col in [sort_col, "Fase", "Línea"] if col in items.columns]
@@ -10107,7 +10111,7 @@ def render_capex10_investor_injection_cash_flow(
         st.markdown(
             f"""
             <div class="cash-injection-head" style="margin-top:14px;border-top:1px solid rgba(226,232,240,.92);padding-top:14px;">
-              <div><b>Aporte por responsable seleccionado</b><span>{html.escape(plan_label)} · {selected_analysis_month.strftime("%b %Y")} · {format_clp(contribution_total_clp)}.</span></div>
+              <div><b>Aporte por responsable seleccionado</b><span>{html.escape(plan_label)} · {html.escape(selected_period_label)} · {format_clp(contribution_total_clp)}.</span></div>
               <div class="cash-injection-pill">Responsable</div>
             </div>
             """,
@@ -10284,8 +10288,8 @@ def render_capex10_investor_injection_cash_flow(
         </style>
         <div class="cash-period-panel">
           <div class="cash-period-head">
-            <div><b>Análisis del período seleccionado · {html.escape(selected_plan_label)}</b><span>Detalle del mes elegido en el gráfico de inyección según el plan activo.</span></div>
-            <div class="cash-period-chip">{html.escape(selected_plan_label)} · {selected_analysis_month.strftime("%b %Y")}</div>
+            <div><b>Análisis del período seleccionado · {html.escape(selected_plan_label)}</b><span>Detalle de los meses elegidos en el gráfico de inyección según el plan activo.</span></div>
+            <div class="cash-period-chip">{html.escape(selected_plan_label)} · {html.escape(selected_period_label)}</div>
           </div>
           <div class="cash-period-kpis">
             <div class="cash-period-kpi" style="--c:#7FA8A4;"><span>Gasto del período</span><b>{format_clp(period_flow)}</b><em>{len(period_items)} partidas</em></div>
@@ -10311,7 +10315,7 @@ def render_capex10_investor_injection_cash_flow(
             st.info(empty_message)
         else:
             period_total = float(items["Disponible_CLP"].sum() or 0.0) if "Disponible_CLP" in items.columns else 0.0
-            st.caption(f"{plan_label} · {selected_analysis_month.strftime('%b %Y')} · {format_clp(period_total)} · {len(items)} partidas")
+            st.caption(f"{plan_label} · {selected_period_label} · {format_clp(period_total)} · {len(items)} partidas")
             st.dataframe(
                 detail_display,
                 use_container_width=True,
@@ -10324,7 +10328,7 @@ def render_capex10_investor_injection_cash_flow(
             else 0.0
         )
         st.caption(
-            f"Detalle acumulado hasta {selected_analysis_month.strftime('%b %Y')} · {plan_label} · "
+            f"Detalle acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')} · {plan_label} · "
             f"{format_clp(accumulated_flow)} · {len(accumulated_items)} partidas"
         )
         if accumulated_detail_display.empty:
