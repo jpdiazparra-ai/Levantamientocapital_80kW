@@ -10111,7 +10111,7 @@ def render_capex10_investor_injection_cash_flow(
         st.markdown(
             f"""
             <div class="cash-injection-head" style="margin-top:14px;border-top:1px solid rgba(226,232,240,.92);padding-top:14px;">
-              <div><b>Aporte por responsable seleccionado</b><span>{html.escape(plan_label)} · {html.escape(selected_period_label)} · {format_clp(contribution_total_clp)}.</span></div>
+              <div><b>Aporte por responsable seleccionado</b><span>Acumulado hasta {selected_analysis_cutoff_month.strftime("%b %Y")} · {html.escape(plan_label)} · {format_clp(contribution_total_clp)}.</span></div>
               <div class="cash-injection-pill">Responsable</div>
             </div>
             """,
@@ -10142,7 +10142,7 @@ def render_capex10_investor_injection_cash_flow(
                     "<b>%{label}</b><br>"
                     "Aporte requerido: %{customdata[0]}<br>"
                     "Partidas: %{customdata[1]}<br>"
-                    "Participación período: %{customdata[2]}<extra></extra>"
+                    "Participación acumulada: %{customdata[2]}<extra></extra>"
                 ),
                 pull=[0.04 if idx == 0 else 0 for idx in range(len(contribution_summary))],
             )
@@ -10166,7 +10166,7 @@ def render_capex10_investor_injection_cash_flow(
                 dict(
                     text=(
                         f"<b>{format_clp(contribution_total_clp)}</b>"
-                        f"<br><span style='font-size:11px;color:#64748B'>Total período</span>"
+                        f"<br><span style='font-size:11px;color:#64748B'>Total acumulado</span>"
                         f"<br><span style='font-size:10px;color:#64748B'>{html.escape(top_contributor)} · {top_contributor_share}</span>"
                     ),
                     x=0.5,
@@ -10254,7 +10254,7 @@ def render_capex10_investor_injection_cash_flow(
             st.plotly_chart(fig_period_responsible, use_container_width=True, config={"displaylogo": False}, key=f"capex10_period_responsible_{key_suffix}")
         with hito_col:
             st.markdown(
-                "<div class='cash-injection-head' style='margin:0 0 4px;'><div><b>Hitos por método</b><span>Monto no pagado por hito y método del período.</span></div></div>",
+                f"<div class='cash-injection-head' style='margin:0 0 4px;'><div><b>Hitos por método</b><span>Monto no pagado acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}.</span></div></div>",
                 unsafe_allow_html=True,
             )
             if hito_summary.empty:
@@ -10340,7 +10340,7 @@ def render_capex10_investor_injection_cash_flow(
                 hide_index=True,
                 height=min(420, 38 + (len(accumulated_detail_display) + 1) * 35),
             )
-        render_period_responsible_contribution(items, plan_label, key_suffix)
+        render_period_responsible_contribution(accumulated_items, plan_label, key_suffix)
 
     if is_plan_a_selected:
         period_tab, alternate_plan_tab = st.tabs(["Detalle del período", f"Detalle {alternate_plan_label}"])
