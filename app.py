@@ -9622,6 +9622,58 @@ def _capex10_funds_heading(selected_metodos: list[str]) -> str:
     return "Fondos faltantes para cumplir hitos, desglosados por fase y línea"
 
 
+def _capex10_selected_hito_specs(selected_metodos: list[str]) -> list[dict[str, object]]:
+    specs: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for metodo in selected_metodos or []:
+        key = normalize_key(metodo)
+        spec: dict[str, object] | None = None
+        if "hitoproducto" in key or "hito3" in key or key == "producto":
+            spec = {
+                "label": "Hito Producto",
+                "aliases": ["hitoproducto", "hito3", "producto"],
+            }
+        elif "hitopremontaje" in key or "hito1" in key or "premontaje" in key:
+            spec = {
+                "label": "Hito Pre -Montaje",
+                "aliases": ["hitopremontaje", "hito1", "premontaje"],
+            }
+        elif "hitomontaje" in key or "hito2" in key or key == "montaje":
+            spec = {
+                "label": "Hito Montaje",
+                "aliases": ["hitomontaje", "hito2", "montaje"],
+            }
+        if spec and str(spec["label"]) not in seen:
+            specs.append(spec)
+            seen.add(str(spec["label"]))
+    return specs
+
+
+def _capex10_filter_hito_scope_for_injection(df: pd.DataFrame, selected_metodos: list[str]) -> pd.DataFrame:
+    hito_specs = _capex10_selected_hito_specs(selected_metodos)
+    if df.empty or not hito_specs:
+        return df.copy()
+    scoped = df.copy()
+    line_col = "Línea" if "Línea" in scoped.columns else None
+    method_col = first_matching_column(scoped, ["Método", "Metodo"])
+    if not line_col and not method_col:
+        return scoped
+    line_keys = scoped[line_col].astype(str).map(normalize_key) if line_col else pd.Series("", index=scoped.index)
+    method_keys = scoped[method_col].astype(str).map(normalize_key) if method_col else pd.Series("", index=scoped.index)
+    hito_mask = pd.Series(False, index=scoped.index)
+    for spec in hito_specs:
+        label_key = normalize_key(str(spec["label"]))
+        aliases = [normalize_key(alias) for alias in spec.get("aliases", [])]
+        one_mask = line_keys.eq(label_key)
+        for alias in aliases:
+            if alias == "montaje":
+                one_mask |= method_keys.eq(alias)
+            else:
+                one_mask |= method_keys.str.contains(alias, na=False, regex=False)
+        hito_mask |= one_mask
+    return scoped[hito_mask].copy()
+
+
 def _capex10_responsible_color(responsible: object, idx: int = 0) -> str:
     key = normalize_key(str(responsible))
     explicit_colors = {
@@ -11390,7 +11442,19 @@ def render_capex10_available_funds_by_phase_line() -> None:
     responsible_scope_df["Fase"] = responsible_scope_df["Fase"].astype(str).str.strip().replace({"": "Sin fase", "nan": "Sin fase", "None": "Sin fase"})
     responsible_scope_df["Línea"] = responsible_scope_df["Línea"].astype(str).str.strip().replace({"": "Sin línea", "nan": "Sin línea", "None": "Sin línea"})
     responsible_scope_df = responsible_scope_df[responsible_scope_df["Disponible_CLP"] > 0].copy()
-    render_capex10_investor_injection_cash_flow(funds_df, responsible_scope_df, capex10_milestone_dates)
+    injection_funds_df = _capex10_filter_hito_scope_for_injection(funds_df, selected_metodos)
+    injection_responsible_scope_df = _capex10_filter_hito_scope_for_injection(responsible_scope_df, selected_metodos)
+    selected_hito_specs = _capex10_selected_hito_specs(selected_metodos)
+    if selected_hito_specs:
+        selected_hito_labels = {normalize_key(str(spec["label"])) for spec in selected_hito_specs}
+        injection_milestone_dates = [
+            milestone
+            for milestone in capex10_milestone_dates
+            if normalize_key(str(milestone.get("label", ""))) in selected_hito_labels
+        ]
+    else:
+        injection_milestone_dates = capex10_milestone_dates
+    render_capex10_investor_injection_cash_flow(injection_funds_df, injection_responsible_scope_df, injection_milestone_dates)
 
     funds_colors = ["#0F766E", "#164E63", "#7C3AED", "#1E3A8A", "#B7791F", "#64748B", "#0891B2", "#2C7A7B", "#334155", "#14B8A6"]
     line_order = (
