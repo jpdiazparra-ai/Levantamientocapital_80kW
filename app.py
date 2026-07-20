@@ -9751,10 +9751,10 @@ def render_capex10_investor_injection_cash_flow(
         )
         cashflow_plan = st.selectbox(
             "Plan de calendarización",
-            ["Plan A · Fecha FC", "Plan B · Inicio"],
+            ["Plan A - Flexibilidad Proveedores", "Plan B - Sin Flexibilidad Proveedores"],
             index=0,
             key="capex10_investor_injection_cashflow_plan",
-            help="Plan A usa Fecha FC para el gráfico. Plan B usa Inicio (AAAA-MM-DD), que era la lectura anterior.",
+            help="Plan A usa Fecha FC para reflejar flexibilidad de proveedores. Plan B usa Inicio (AAAA-MM-DD), sin flexibilidad de proveedores.",
         )
 
     if cashflow_plan.startswith("Plan A"):
@@ -9952,25 +9952,27 @@ def render_capex10_investor_injection_cash_flow(
     selected_analysis_month = pd.Timestamp(selected_analysis_month)
     selected_month_row = commitment_monthly[commitment_monthly["_month"].eq(selected_analysis_month)].iloc[0]
     is_plan_a_selected = cashflow_plan.startswith("Plan A")
-    selected_plan_label = "Plan A · Fecha FC" if is_plan_a_selected else "Plan B · Inicio"
+    selected_plan_label = "Plan A - Flexibilidad Proveedores" if is_plan_a_selected else "Plan B - Sin Flexibilidad Proveedores"
     selected_plan_sort_col = "_chart_date" if is_plan_a_selected else "_cash_date"
-    alternate_plan_label = "Plan B · Inicio" if is_plan_a_selected else "Plan A · Fecha FC"
+    alternate_plan_label = "Plan B - Sin Flexibilidad Proveedores" if is_plan_a_selected else "Plan A - Flexibilidad Proveedores"
     alternate_plan_month_col = "_analysis_month" if is_plan_a_selected else "_chart_date"
     alternate_plan_sort_col = "_cash_date" if is_plan_a_selected else "_chart_date"
     period_injection = float(selected_month_row["Inyeccion_CLP"] or 0.0)
     plan_required_to_period = float(selected_month_row["Acumulado_CLP"] or 0.0)
     plan_balance_to_period = float(selected_month_row["Saldo_caja_CLP"] or 0.0)
     plan_periods_to_period = int(commitment_monthly[commitment_monthly["_month"].le(selected_analysis_month)].shape[0])
+    detail_responsible_col = first_matching_column(flow_df, ["Responsable"])
     display_detail_cols = [
         ("Fase", "Fase"),
         ("Línea", "Línea"),
         ("Tarea / Entregable", "Tarea / Entregable"),
+        (detail_responsible_col, "Responsable") if detail_responsible_col else (None, "Responsable"),
+        ("Disponible_CLP", "Disponible"),
         ("Estado.1", "Estado"),
         (chart_date_col, "Fecha FC") if chart_date_col else (None, "Fecha FC"),
         (GANTT_DATE_COL_START, "Inicio"),
         (GANTT_DATE_COL_END_PLAN, "Fin plan"),
         (GANTT_DATE_COL_END_REAL, "Fin real"),
-        ("Disponible_CLP", "Disponible"),
     ]
 
     def build_period_detail(month_col: str, sort_col: str) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -10139,8 +10141,8 @@ def render_capex10_investor_injection_cash_flow(
         </style>
         <div class="cash-period-panel">
           <div class="cash-period-head">
-            <div><b>Análisis del período seleccionado</b><span>Detalle del mes elegido en el gráfico de inyección según {html.escape(selected_plan_label)}.</span></div>
-            <div class="cash-period-chip">{selected_plan_label} · {selected_analysis_month.strftime("%b %Y")}</div>
+            <div><b>Análisis del período seleccionado · {html.escape(selected_plan_label)}</b><span>Detalle del mes elegido en el gráfico de inyección según el plan activo.</span></div>
+            <div class="cash-period-chip">{html.escape(selected_plan_label)} · {selected_analysis_month.strftime("%b %Y")}</div>
           </div>
           <div class="cash-period-kpis">
             <div class="cash-period-kpi" style="--c:#7FA8A4;"><span>Gasto del período</span><b>{format_clp(period_flow)}</b><em>{len(period_items)} partidas</em></div>
