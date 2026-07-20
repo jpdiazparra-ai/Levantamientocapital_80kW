@@ -9867,7 +9867,7 @@ def render_capex10_investor_injection_cash_flow(
             yanchor="bottom",
             font=dict(size=11, color="#0F766E"),
         )
-    milestone_colors = ["#B7791F", "#7C2D12"]
+    milestone_colors = ["#B7791F", "#7C2D12", "#0E7490"]
     for milestone_idx, milestone in enumerate(valid_milestones):
         milestone_month = pd.Timestamp(milestone["date"]).to_period("M").to_timestamp()
         milestone_label = milestone_month.strftime("%b %Y")
@@ -10124,7 +10124,87 @@ def render_capex10_investor_injection_cash_flow(
             plot_bgcolor="rgba(0,0,0,0)",
             hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
         )
-        st.plotly_chart(fig_period_responsible, use_container_width=True, config={"displaylogo": False}, key=f"capex10_period_responsible_{key_suffix}")
+
+        hito_scope = period_scope_df.copy()
+        method_col = first_matching_column(hito_scope, ["Método", "Metodo"])
+        status_col = first_matching_column(hito_scope, ["Estado.1", "Estado de pago", "Estado"])
+        line_col = "Línea" if "Línea" in hito_scope.columns else None
+        hito_summary = pd.DataFrame()
+        if method_col and "Disponible_CLP" in hito_scope.columns:
+            if status_col:
+                unpaid_mask = hito_scope[status_col].astype(str).str.casefold().str.contains("no pagado|pendiente|por pagar", na=False)
+                hito_scope = hito_scope[unpaid_mask].copy()
+            hito_scope["_metodo_hito"] = hito_scope[method_col].astype(str).str.strip().replace({"": "Sin método", "nan": "Sin método", "None": "Sin método"})
+            hito_scope["_line_key"] = hito_scope[line_col].astype(str).map(normalize_key) if line_col else ""
+            hito_scope["_method_key"] = hito_scope["_metodo_hito"].astype(str).map(normalize_key)
+            hito_rows = []
+            for hito in (milestone_dates or []):
+                hito_label = str(hito.get("label", "Hito"))
+                hito_key = normalize_key(hito_label)
+                hito_mask = hito_scope["_line_key"].eq(hito_key) | hito_scope["_method_key"].str.contains(hito_key, na=False, regex=False)
+                hito_items = hito_scope[hito_mask].copy()
+                if hito_items.empty:
+                    hito_rows.append(
+                        {
+                            "Hito": hito_label,
+                            "Método": "Sin monto no pagado",
+                            "Monto_CLP": 0.0,
+                            "Partidas": 0,
+                        }
+                    )
+                    continue
+                hito_grouped = (
+                    hito_items.groupby("_metodo_hito", as_index=False)
+                    .agg(
+                        Monto_CLP=("Disponible_CLP", "sum"),
+                        Partidas=("Tarea / Entregable", "count"),
+                    )
+                    .rename(columns={"_metodo_hito": "Método"})
+                )
+                hito_grouped["Hito"] = hito_label
+                hito_rows.extend(hito_grouped.to_dict("records"))
+            hito_summary = pd.DataFrame(hito_rows)
+        if not hito_summary.empty:
+            hito_summary["Monto_fmt"] = hito_summary["Monto_CLP"].apply(format_clp)
+            hito_summary["Monto_MM"] = hito_summary["Monto_CLP"] / 1_000_000
+            fig_hito_method = px.bar(
+                hito_summary,
+                x="Monto_MM",
+                y="Hito",
+                color="Método",
+                orientation="h",
+                text="Monto_fmt",
+                custom_data=["Método", "Monto_fmt", "Partidas"],
+                color_discrete_sequence=["#0F766E", "#1E3A8A", "#B7791F", "#7C2D12", "#0E7490", "#64748B"],
+            )
+            fig_hito_method.update_traces(
+                textposition="outside",
+                hovertemplate="<b>%{y}</b><br>Método: %{customdata[0]}<br>Monto no pagado: %{customdata[1]}<br>Partidas: %{customdata[2]}<extra></extra>",
+            )
+            fig_hito_method.update_layout(
+                height=390,
+                barmode="stack",
+                margin=dict(l=8, r=96, t=18, b=38),
+                legend=dict(orientation="h", y=1.14, x=0, title=None, font=dict(size=10)),
+                xaxis=dict(title="MM CLP no pagado", gridcolor="rgba(148,163,184,.18)", zeroline=False),
+                yaxis=dict(title=None, automargin=True),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
+            )
+
+        contribution_col, hito_col = st.columns([0.52, 0.48])
+        with contribution_col:
+            st.plotly_chart(fig_period_responsible, use_container_width=True, config={"displaylogo": False}, key=f"capex10_period_responsible_{key_suffix}")
+        with hito_col:
+            st.markdown(
+                "<div class='cash-injection-head' style='margin:0 0 4px;'><div><b>Hitos por método</b><span>Monto no pagado por hito y método del período.</span></div></div>",
+                unsafe_allow_html=True,
+            )
+            if hito_summary.empty:
+                st.info("No hay monto no pagado asociado a los hitos del período.")
+            else:
+                st.plotly_chart(fig_hito_method, use_container_width=True, config={"displaylogo": False}, key=f"capex10_hito_method_{key_suffix}")
 
     st.markdown(
         f"""
@@ -10883,7 +10963,8 @@ def render_capex10_available_funds_by_phase_line() -> None:
 
     premontaje_hito = _capex10_hito_info("Hito Pre -Montaje")
     montaje_hito = _capex10_hito_info("Hito Montaje")
-    capex10_milestone_dates = [premontaje_hito, montaje_hito]
+    producto_hito = _capex10_hito_info("Hito Producto")
+    capex10_milestone_dates = [premontaje_hito, montaje_hito, producto_hito]
 
     st.markdown(
         f"""
