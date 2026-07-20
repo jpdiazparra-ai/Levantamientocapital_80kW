@@ -10070,126 +10070,123 @@ def render_capex10_investor_injection_cash_flow(
     top_period_phase = str(phase_period_summary.iloc[0]["Fase"]) if not phase_period_summary.empty else "Sin gasto del período"
     top_period_phase_value = float(phase_period_summary.iloc[0]["Disponible_CLP"]) if not phase_period_summary.empty else 0.0
 
-    def render_period_responsible_contribution(period_scope_df: pd.DataFrame, plan_label: str, key_suffix: str) -> None:
-        if period_scope_df.empty or "Disponible_CLP" not in period_scope_df.columns:
-            st.info(f"No hay aportes por responsable para {plan_label} en este período.")
-            return
-        contribution_df = period_scope_df[period_scope_df["Disponible_CLP"] > 0].copy()
-        contribution_responsible_col = first_matching_column(contribution_df, ["Responsable"])
-        if contribution_df.empty or not contribution_responsible_col:
-            st.info(f"No hay responsables asociados a {plan_label} en este período.")
-            return
-        contribution_df["_responsable"] = (
-            contribution_df[contribution_responsible_col]
-            .astype(str)
-            .str.strip()
-            .replace({"": "Sin responsable", "nan": "Sin responsable", "None": "Sin responsable"})
-        )
-        contribution_summary = (
-            contribution_df.groupby("_responsable", as_index=False)
-            .agg(
-                Aporte_CLP=("Disponible_CLP", "sum"),
-                Partidas=("Tarea / Entregable", "count"),
+    def render_period_responsible_contribution(
+        period_scope_df: pd.DataFrame,
+        accumulated_scope_df: pd.DataFrame,
+        plan_label: str,
+        key_suffix: str,
+    ) -> None:
+        def build_responsible_summary(scope_df: pd.DataFrame, amount_col: str, parts_col: str) -> pd.DataFrame:
+            if scope_df.empty or "Disponible_CLP" not in scope_df.columns:
+                return pd.DataFrame(columns=["_responsable", amount_col, parts_col])
+            contribution_df = scope_df[scope_df["Disponible_CLP"] > 0].copy()
+            contribution_responsible_col = first_matching_column(contribution_df, ["Responsable"])
+            if contribution_df.empty or not contribution_responsible_col:
+                return pd.DataFrame(columns=["_responsable", amount_col, parts_col])
+            contribution_df["_responsable"] = (
+                contribution_df[contribution_responsible_col]
+                .astype(str)
+                .str.strip()
+                .replace({"": "Sin responsable", "nan": "Sin responsable", "None": "Sin responsable"})
             )
-            .sort_values("Aporte_CLP", ascending=True)
-        )
-        if contribution_summary.empty:
-            st.info(f"No hay aportes por responsable para {plan_label} en este período.")
+            return (
+                contribution_df.groupby("_responsable", as_index=False)
+                .agg(
+                    **{
+                        amount_col: ("Disponible_CLP", "sum"),
+                        parts_col: ("Tarea / Entregable", "count"),
+                    }
+                )
+            )
+
+        period_responsible = build_responsible_summary(period_scope_df, "Periodo_CLP", "Partidas_periodo")
+        accumulated_responsible = build_responsible_summary(accumulated_scope_df, "Acumulado_CLP", "Partidas_acumulado")
+        contribution_summary = period_responsible.merge(accumulated_responsible, on="_responsable", how="outer").fillna(0)
+        if contribution_summary.empty or float(contribution_summary["Acumulado_CLP"].sum() or 0.0) <= 0:
+            st.info(f"No hay aportes por responsable acumulados para {plan_label}.")
             return
-        contribution_total_clp = float(contribution_summary["Aporte_CLP"].sum() or 0.0)
-        contribution_summary = contribution_summary.sort_values("Aporte_CLP", ascending=False).copy()
-        contribution_summary["Monto_MM"] = contribution_summary["Aporte_CLP"] / 1_000_000
-        contribution_summary["Monto_fmt"] = contribution_summary["Aporte_CLP"].apply(format_clp)
-        contribution_summary["Participacion"] = np.where(
-            contribution_total_clp > 0,
-            contribution_summary["Aporte_CLP"] / contribution_total_clp * 100.0,
-            0.0,
-        )
-        contribution_summary["Participacion_fmt"] = contribution_summary["Participacion"].map(lambda value: f"{value:.1f}%")
+        contribution_summary = contribution_summary.sort_values("Acumulado_CLP", ascending=False).copy()
+        contribution_summary["Periodo_MM"] = contribution_summary["Periodo_CLP"] / 1_000_000
+        contribution_summary["Acumulado_MM"] = contribution_summary["Acumulado_CLP"] / 1_000_000
+        contribution_summary["Periodo_fmt"] = contribution_summary["Periodo_CLP"].apply(format_clp)
+        contribution_summary["Acumulado_fmt"] = contribution_summary["Acumulado_CLP"].apply(format_clp)
         contribution_responsibles = contribution_summary["_responsable"].tolist()
         contribution_color_map = _capex10_responsible_color_map(contribution_responsibles)
+        contribution_total_period_clp = float(contribution_summary["Periodo_CLP"].sum() or 0.0)
+        contribution_total_accumulated_clp = float(contribution_summary["Acumulado_CLP"].sum() or 0.0)
         st.markdown(
             f"""
             <div class="cash-injection-head" style="margin-top:14px;border-top:1px solid rgba(226,232,240,.92);padding-top:14px;">
-              <div><b>Aporte por responsable seleccionado</b><span>Acumulado hasta {selected_analysis_cutoff_month.strftime("%b %Y")} · {html.escape(plan_label)} · {format_clp(contribution_total_clp)}.</span></div>
+              <div><b>Aporte por responsable seleccionado</b><span>Período {format_clp(contribution_total_period_clp)} · acumulado {format_clp(contribution_total_accumulated_clp)} hasta {selected_analysis_cutoff_month.strftime("%b %Y")}.</span></div>
               <div class="cash-injection-pill">Responsable</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
         fig_period_responsible = go.Figure()
-        donut_colors = [contribution_color_map.get(str(responsible), "#1E3A8A") for responsible in contribution_summary["_responsable"]]
         fig_period_responsible.add_trace(
-            go.Pie(
-                labels=contribution_summary["_responsable"],
-                values=contribution_summary["Aporte_CLP"],
-                hole=0.58,
-                sort=False,
-                direction="clockwise",
-                marker=dict(colors=donut_colors, line=dict(color="#FFFFFF", width=3)),
-                text=contribution_summary["Participacion_fmt"],
-                textinfo="label+percent",
+            go.Bar(
+                x=contribution_summary["_responsable"],
+                y=contribution_summary["Periodo_MM"],
+                name="Período seleccionado",
+                marker_color=[contribution_color_map.get(str(responsible), "#1E3A8A") for responsible in contribution_summary["_responsable"]],
+                text=contribution_summary["Periodo_fmt"],
                 textposition="outside",
-                customdata=np.stack(
-                    [
-                        contribution_summary["Monto_fmt"],
-                        contribution_summary["Partidas"].astype(int),
-                        contribution_summary["Participacion_fmt"],
-                    ],
-                    axis=-1,
-                ),
+                cliponaxis=False,
+                customdata=np.stack([contribution_summary["Periodo_fmt"], contribution_summary["Partidas_periodo"].astype(int)], axis=-1),
                 hovertemplate=(
-                    "<b>%{label}</b><br>"
-                    "Aporte requerido: %{customdata[0]}<br>"
+                    "<b>%{x}</b><br>"
+                    "Período seleccionado: %{customdata[0]}<br>"
                     "Partidas: %{customdata[1]}<br>"
-                    "Participación acumulada: %{customdata[2]}<extra></extra>"
+                    "<extra></extra>"
                 ),
-                pull=[0.04 if idx == 0 else 0 for idx in range(len(contribution_summary))],
             )
         )
-        top_contributor = str(contribution_summary.iloc[0]["_responsable"])
-        top_contributor_share = str(contribution_summary.iloc[0]["Participacion_fmt"])
+        fig_period_responsible.add_trace(
+            go.Scatter(
+                x=contribution_summary["_responsable"],
+                y=contribution_summary["Acumulado_MM"],
+                name="Acumulado",
+                mode="lines+markers+text",
+                line=dict(color="#071427", width=3),
+                marker=dict(size=9, color="#FFFFFF", line=dict(color="#071427", width=2)),
+                text=contribution_summary["Acumulado_fmt"],
+                textposition="top center",
+                textfont=dict(size=10, color="#071427"),
+                customdata=np.stack([contribution_summary["Acumulado_fmt"], contribution_summary["Partidas_acumulado"].astype(int)], axis=-1),
+                hovertemplate=(
+                    "<b>%{x}</b><br>"
+                    "Acumulado: %{customdata[0]}<br>"
+                    "Partidas acumuladas: %{customdata[1]}<br>"
+                    "<extra></extra>"
+                ),
+            )
+        )
         fig_period_responsible.update_layout(
             height=390,
-            margin=dict(l=12, r=12, t=18, b=18),
+            margin=dict(l=12, r=18, t=24, b=78),
+            barmode="group",
             showlegend=True,
-            legend=dict(
-                orientation="v",
-                y=0.5,
-                yanchor="middle",
-                x=1.02,
-                xanchor="left",
-                title=None,
-                font=dict(size=12, color="#334155"),
-            ),
-            annotations=[
-                dict(
-                    text=(
-                        f"<b>{format_clp(contribution_total_clp)}</b>"
-                        f"<br><span style='font-size:11px;color:#64748B'>Total acumulado</span>"
-                        f"<br><span style='font-size:10px;color:#64748B'>{html.escape(top_contributor)} · {top_contributor_share}</span>"
-                    ),
-                    x=0.5,
-                    y=0.5,
-                    font=dict(size=15, color="#071427"),
-                    showarrow=False,
-                    align="center",
-                )
-            ],
+            legend=dict(orientation="h", y=1.12, x=0, title=None, font=dict(size=11, color="#334155")),
+            yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False),
+            xaxis=dict(title=None, tickangle=-25, automargin=True),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
         )
 
-        hito_scope = period_scope_df.copy()
-        method_col = first_matching_column(hito_scope, ["Método", "Metodo"])
-        status_col = first_matching_column(hito_scope, ["Estado.1", "Estado de pago", "Estado"])
-        line_col = "Línea" if "Línea" in hito_scope.columns else None
-        hito_summary = pd.DataFrame()
-        if method_col and "Disponible_CLP" in hito_scope.columns:
+        def build_hito_summary(scope_df: pd.DataFrame) -> pd.DataFrame:
+            hito_scope = scope_df.copy()
+            method_col = first_matching_column(hito_scope, ["Método", "Metodo"])
+            status_col = first_matching_column(hito_scope, ["Estado.1", "Estado de pago", "Estado"])
+            line_col = "Línea" if "Línea" in hito_scope.columns else None
+            if hito_scope.empty or not method_col or "Disponible_CLP" not in hito_scope.columns:
+                return pd.DataFrame(columns=["Hito", "Método", "Monto_CLP", "Partidas"])
             if status_col:
                 unpaid_mask = hito_scope[status_col].astype(str).str.casefold().str.contains("no pagado|pendiente|por pagar", na=False)
                 hito_scope = hito_scope[unpaid_mask].copy()
+            if hito_scope.empty:
+                return pd.DataFrame(columns=["Hito", "Método", "Monto_CLP", "Partidas"])
             hito_scope["_metodo_hito"] = hito_scope[method_col].astype(str).str.strip().replace({"": "Sin método", "nan": "Sin método", "None": "Sin método"})
             hito_scope["_line_key"] = hito_scope[line_col].astype(str).map(normalize_key) if line_col else ""
             hito_scope["_method_key"] = hito_scope["_metodo_hito"].astype(str).map(normalize_key)
@@ -10200,14 +10197,6 @@ def render_capex10_investor_injection_cash_flow(
                 hito_mask = hito_scope["_line_key"].eq(hito_key) | hito_scope["_method_key"].str.contains(hito_key, na=False, regex=False)
                 hito_items = hito_scope[hito_mask].copy()
                 if hito_items.empty:
-                    hito_rows.append(
-                        {
-                            "Hito": hito_label,
-                            "Método": "Sin monto no pagado",
-                            "Monto_CLP": 0.0,
-                            "Partidas": 0,
-                        }
-                    )
                     continue
                 hito_grouped = (
                     hito_items.groupby("_metodo_hito", as_index=False)
@@ -10219,31 +10208,61 @@ def render_capex10_investor_injection_cash_flow(
                 )
                 hito_grouped["Hito"] = hito_label
                 hito_rows.extend(hito_grouped.to_dict("records"))
-            hito_summary = pd.DataFrame(hito_rows)
-        if not hito_summary.empty:
-            hito_summary["Monto_fmt"] = hito_summary["Monto_CLP"].apply(format_clp)
-            hito_summary["Monto_MM"] = hito_summary["Monto_CLP"] / 1_000_000
-            fig_hito_method = px.bar(
-                hito_summary,
-                x="Monto_MM",
-                y="Hito",
-                color="Método",
-                orientation="h",
-                text="Monto_fmt",
-                custom_data=["Método", "Monto_fmt", "Partidas"],
-                color_discrete_sequence=["#0F766E", "#1E3A8A", "#B7791F", "#7C2D12", "#0E7490", "#64748B"],
+            return pd.DataFrame(hito_rows)
+
+        hito_period_summary = build_hito_summary(period_scope_df)
+        hito_accumulated_summary = build_hito_summary(accumulated_scope_df)
+        hito_accumulated_total = (
+            hito_accumulated_summary.groupby("Hito", as_index=False)["Monto_CLP"].sum()
+            if not hito_accumulated_summary.empty
+            else pd.DataFrame(columns=["Hito", "Monto_CLP"])
+        )
+        fig_hito_method = go.Figure()
+        if not hito_period_summary.empty:
+            hito_period_summary["Monto_fmt"] = hito_period_summary["Monto_CLP"].apply(format_clp)
+            hito_period_summary["Monto_MM"] = hito_period_summary["Monto_CLP"] / 1_000_000
+            method_palette = ["#0F766E", "#1E3A8A", "#B7791F", "#7C2D12", "#0E7490", "#64748B"]
+            for method_idx, method_name in enumerate(hito_period_summary["Método"].dropna().unique().tolist()):
+                method_rows = hito_period_summary[hito_period_summary["Método"].eq(method_name)].copy()
+                fig_hito_method.add_trace(
+                    go.Bar(
+                        x=method_rows["Hito"],
+                        y=method_rows["Monto_MM"],
+                        name=str(method_name),
+                        marker_color=method_palette[method_idx % len(method_palette)],
+                        text=method_rows["Monto_fmt"],
+                        textposition="outside",
+                        cliponaxis=False,
+                        customdata=np.stack([method_rows["Monto_fmt"], method_rows["Partidas"].astype(int)], axis=-1),
+                        hovertemplate="<b>%{x}</b><br>Método: " + html.escape(str(method_name)) + "<br>Período: %{customdata[0]}<br>Partidas: %{customdata[1]}<extra></extra>",
+                    )
+                )
+        if not hito_accumulated_total.empty:
+            hito_accumulated_total["Monto_fmt"] = hito_accumulated_total["Monto_CLP"].apply(format_clp)
+            hito_accumulated_total["Monto_MM"] = hito_accumulated_total["Monto_CLP"] / 1_000_000
+            fig_hito_method.add_trace(
+                go.Scatter(
+                    x=hito_accumulated_total["Hito"],
+                    y=hito_accumulated_total["Monto_MM"],
+                    name="Acumulado",
+                    mode="lines+markers+text",
+                    line=dict(color="#071427", width=3),
+                    marker=dict(size=9, color="#FFFFFF", line=dict(color="#071427", width=2)),
+                    text=hito_accumulated_total["Monto_fmt"],
+                    textposition="top center",
+                    textfont=dict(size=10, color="#071427"),
+                    customdata=hito_accumulated_total["Monto_fmt"],
+                    hovertemplate="<b>%{x}</b><br>Acumulado: %{customdata}<extra></extra>",
+                )
             )
-            fig_hito_method.update_traces(
-                textposition="outside",
-                hovertemplate="<b>%{y}</b><br>Método: %{customdata[0]}<br>Monto no pagado: %{customdata[1]}<br>Partidas: %{customdata[2]}<extra></extra>",
-            )
+        if fig_hito_method.data:
             fig_hito_method.update_layout(
                 height=390,
-                barmode="stack",
-                margin=dict(l=8, r=96, t=18, b=38),
+                barmode="group",
+                margin=dict(l=8, r=18, t=24, b=78),
                 legend=dict(orientation="h", y=1.14, x=0, title=None, font=dict(size=10)),
-                xaxis=dict(title="MM CLP no pagado", gridcolor="rgba(148,163,184,.18)", zeroline=False),
-                yaxis=dict(title=None, automargin=True),
+                yaxis=dict(title="MM CLP no pagado", gridcolor="rgba(148,163,184,.18)", zeroline=False),
+                xaxis=dict(title=None, tickangle=-20, automargin=True),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
@@ -10254,10 +10273,10 @@ def render_capex10_investor_injection_cash_flow(
             st.plotly_chart(fig_period_responsible, use_container_width=True, config={"displaylogo": False}, key=f"capex10_period_responsible_{key_suffix}")
         with hito_col:
             st.markdown(
-                f"<div class='cash-injection-head' style='margin:0 0 4px;'><div><b>Hitos por método</b><span>Monto no pagado acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}.</span></div></div>",
+                f"<div class='cash-injection-head' style='margin:0 0 4px;'><div><b>Hitos por método</b><span>Barras del período y línea acumulada hasta {selected_analysis_cutoff_month.strftime('%b %Y')}.</span></div></div>",
                 unsafe_allow_html=True,
             )
-            if hito_summary.empty:
+            if not fig_hito_method.data:
                 st.info("No hay monto no pagado asociado a los hitos del período.")
             else:
                 st.plotly_chart(fig_hito_method, use_container_width=True, config={"displaylogo": False}, key=f"capex10_hito_method_{key_suffix}")
@@ -10340,7 +10359,7 @@ def render_capex10_investor_injection_cash_flow(
                 hide_index=True,
                 height=min(420, 38 + (len(accumulated_detail_display) + 1) * 35),
             )
-        render_period_responsible_contribution(accumulated_items, plan_label, key_suffix)
+        render_period_responsible_contribution(items, accumulated_items, plan_label, key_suffix)
 
     if is_plan_a_selected:
         period_tab, alternate_plan_tab = st.tabs(["Detalle del período", f"Detalle {alternate_plan_label}"])
