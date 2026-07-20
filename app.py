@@ -10001,6 +10001,103 @@ def render_capex10_investor_injection_cash_flow(
     top_period_phase = str(phase_period_summary.iloc[0]["Fase"]) if not phase_period_summary.empty else "Sin gasto del período"
     top_period_phase_value = float(phase_period_summary.iloc[0]["Disponible_CLP"]) if not phase_period_summary.empty else 0.0
 
+    def render_period_responsible_contribution(period_scope_df: pd.DataFrame, plan_label: str, key_suffix: str) -> None:
+        if period_scope_df.empty or "Disponible_CLP" not in period_scope_df.columns:
+            st.info(f"No hay aportes por responsable para {plan_label} en este período.")
+            return
+        contribution_df = period_scope_df[period_scope_df["Disponible_CLP"] > 0].copy()
+        contribution_responsible_col = first_matching_column(contribution_df, ["Responsable"])
+        if contribution_df.empty or not contribution_responsible_col:
+            st.info(f"No hay responsables asociados a {plan_label} en este período.")
+            return
+        contribution_df["_responsable"] = (
+            contribution_df[contribution_responsible_col]
+            .astype(str)
+            .str.strip()
+            .replace({"": "Sin responsable", "nan": "Sin responsable", "None": "Sin responsable"})
+        )
+        contribution_summary = (
+            contribution_df.groupby("_responsable", as_index=False)
+            .agg(
+                Aporte_CLP=("Disponible_CLP", "sum"),
+                Partidas=("Tarea / Entregable", "count"),
+            )
+            .sort_values("Aporte_CLP", ascending=True)
+        )
+        if contribution_summary.empty:
+            st.info(f"No hay aportes por responsable para {plan_label} en este período.")
+            return
+        contribution_total_clp = float(contribution_summary["Aporte_CLP"].sum() or 0.0)
+        contribution_summary["Monto_MM"] = contribution_summary["Aporte_CLP"] / 1_000_000
+        contribution_summary["Monto_fmt"] = contribution_summary["Aporte_CLP"].apply(format_clp)
+        contribution_summary["Participacion"] = np.where(
+            contribution_total_clp > 0,
+            contribution_summary["Aporte_CLP"] / contribution_total_clp * 100.0,
+            0.0,
+        )
+        contribution_summary["Participacion_fmt"] = contribution_summary["Participacion"].map(lambda value: f"{value:.1f}%")
+        contribution_responsibles = contribution_summary["_responsable"].tolist()
+        contribution_color_map = _capex10_responsible_color_map(contribution_responsibles)
+        st.markdown(
+            f"""
+            <div class="cash-injection-head" style="margin-top:14px;border-top:1px solid rgba(226,232,240,.92);padding-top:14px;">
+              <div><b>Aporte por responsable seleccionado</b><span>{html.escape(plan_label)} · {selected_analysis_month.strftime("%b %Y")} · {format_clp(contribution_total_clp)}.</span></div>
+              <div class="cash-injection-pill">Responsable</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        fig_period_responsible = go.Figure()
+        marker_sizes = 18 + (
+            contribution_summary["Partidas"] / max(float(contribution_summary["Partidas"].max() or 1), 1.0) * 18
+        )
+        for (_, row), marker_size in zip(contribution_summary.iterrows(), marker_sizes):
+            responsible_name = str(row["_responsable"])
+            color = contribution_color_map.get(responsible_name, "#1E3A8A")
+            x_value = float(row["Monto_MM"])
+            fig_period_responsible.add_trace(
+                go.Scatter(
+                    x=[0, x_value],
+                    y=[responsible_name, responsible_name],
+                    mode="lines",
+                    line=dict(color="rgba(148,163,184,.30)", width=8),
+                    hoverinfo="skip",
+                    showlegend=False,
+                )
+            )
+            fig_period_responsible.add_trace(
+                go.Scatter(
+                    x=[x_value],
+                    y=[responsible_name],
+                    mode="markers+text",
+                    marker=dict(size=float(marker_size), color=color, line=dict(color="#FFFFFF", width=2)),
+                    text=[f"{row['Monto_fmt']} · {row['Participacion_fmt']}"],
+                    textposition="middle right",
+                    textfont=dict(size=12, color=color),
+                    customdata=[[row["Monto_fmt"], row["Partidas"], row["Participacion_fmt"], plan_label]],
+                    hovertemplate=(
+                        "<b>%{y}</b><br>"
+                        "Plan: %{customdata[3]}<br>"
+                        "Aporte requerido: %{customdata[0]}<br>"
+                        "Partidas: %{customdata[1]}<br>"
+                        "Participación período: %{customdata[2]}<extra></extra>"
+                    ),
+                    name=responsible_name,
+                    showlegend=False,
+                )
+            )
+        fig_period_responsible.update_layout(
+            height=max(260, min(390, 150 + len(contribution_summary) * 42)),
+            margin=dict(l=12, r=150, t=8, b=38),
+            showlegend=False,
+            xaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False),
+            yaxis=dict(title=None, automargin=True),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
+        )
+        st.plotly_chart(fig_period_responsible, use_container_width=True, config={"displaylogo": False}, key=f"capex10_period_responsible_{key_suffix}")
+
     st.markdown(
         f"""
         <style>
@@ -10052,6 +10149,7 @@ def render_capex10_investor_injection_cash_flow(
                 hide_index=True,
                 height=min(420, 38 + (len(period_detail_display) + 1) * 35),
             )
+            render_period_responsible_contribution(period_items, selected_plan_label, "active")
     with alternate_plan_tab:
         if alternate_period_detail_display.empty:
             st.info(f"El período seleccionado no tiene partidas calendarizadas en {alternate_plan_label}.")
@@ -10064,6 +10162,7 @@ def render_capex10_investor_injection_cash_flow(
                 hide_index=True,
                 height=min(420, 38 + (len(alternate_period_detail_display) + 1) * 35),
             )
+            render_period_responsible_contribution(alternate_period_items, alternate_plan_label, "alternate")
 
     responsible_flow_df = responsible_scope_df.copy() if responsible_scope_df is not None and not responsible_scope_df.empty else flow_df.copy()
     if "Disponible_CLP" in responsible_flow_df.columns:
@@ -10092,95 +10191,13 @@ def render_capex10_investor_injection_cash_flow(
                 responsible_summary["Aporte_CLP"] / responsible_total_clp * 100.0,
                 0.0,
             )
-            st.markdown(
-                """
-                <div class="cash-injection-head" style="margin-top:18px;border-top:1px solid rgba(226,232,240,.92);padding-top:16px;">
-                  <div><b>Aporte por responsable seleccionado</b><span>Explora monto, peso relativo y partidas por responsable según los filtros activos.</span></div>
-                  <div class="cash-injection-pill">Responsable</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            control_col_1, control_col_2 = st.columns([1, 1])
-            with control_col_1:
-                responsible_metric = st.selectbox(
-                    "Métrica",
-                    ["Monto requerido", "Partidas"],
-                    key="capex10_responsible_injection_metric",
-                )
-            with control_col_2:
-                max_responsibles = int(len(responsible_summary))
-                if max_responsibles > 1:
-                    top_n_responsibles = st.slider(
-                        "Responsables visibles",
-                        min_value=1,
-                        max_value=max_responsibles,
-                        value=max_responsibles,
-                        key="capex10_responsible_injection_top_n",
-                    )
-                else:
-                    top_n_responsibles = 1
-                    st.metric("Responsables visibles", "1")
-
-            sort_col = "Aporte_CLP" if responsible_metric == "Monto requerido" else "Partidas"
             plot_responsible = (
-                responsible_summary.sort_values(sort_col, ascending=False)
-                .head(top_n_responsibles)
-                .sort_values(sort_col, ascending=True)
-                .copy()
+                responsible_summary.sort_values("Aporte_CLP", ascending=True).copy()
             )
             plot_responsible["Monto_fmt"] = plot_responsible["Aporte_CLP"].apply(format_clp)
             plot_responsible["Participacion_fmt"] = plot_responsible["Participacion"].map(lambda value: f"{value:.1f}%")
             visible_responsibles = plot_responsible["_responsable"].tolist()
             responsible_color_map = _capex10_responsible_color_map(visible_responsibles)
-            x_values = plot_responsible["Monto_MM"] if responsible_metric == "Monto requerido" else plot_responsible["Partidas"]
-            x_title = "MM CLP" if responsible_metric == "Monto requerido" else "Partidas"
-            marker_sizes = 18 + (plot_responsible["Partidas"] / max(float(plot_responsible["Partidas"].max() or 1), 1.0) * 18)
-            fig_responsible_injection = go.Figure()
-            for (_, row), x_value, marker_size in zip(plot_responsible.iterrows(), x_values, marker_sizes):
-                responsible_name = str(row["_responsable"])
-                color = responsible_color_map.get(responsible_name, "#1E3A8A")
-                fig_responsible_injection.add_trace(
-                    go.Scatter(
-                        x=[0, x_value],
-                        y=[responsible_name, responsible_name],
-                        mode="lines",
-                        line=dict(color="rgba(148,163,184,.30)", width=8),
-                        hoverinfo="skip",
-                        showlegend=False,
-                    )
-                )
-                fig_responsible_injection.add_trace(
-                    go.Scatter(
-                        x=[x_value],
-                        y=[responsible_name],
-                        mode="markers+text",
-                        marker=dict(size=float(marker_size), color=color, line=dict(color="#FFFFFF", width=2)),
-                        text=[f"{row['Monto_fmt']} · {row['Participacion_fmt']}"],
-                        textposition="middle right",
-                        textfont=dict(size=12, color=color),
-                        customdata=[[row["Monto_fmt"], row["Partidas"], row["Participacion_fmt"]]],
-                        hovertemplate=(
-                            f"<b>{responsible_name}</b><br>"
-                            "Aporte requerido: %{customdata[0]}<br>"
-                            "Partidas: %{customdata[1]}<br>"
-                            "Participación: %{customdata[2]}<extra></extra>"
-                        ),
-                        name=responsible_name,
-                        showlegend=False,
-                    )
-                )
-            fig_responsible_injection.update_layout(
-                height=390,
-                margin=dict(l=12, r=150, t=10, b=42),
-                showlegend=False,
-                xaxis=dict(title=x_title, gridcolor="rgba(148,163,184,.18)", zeroline=False),
-                yaxis=dict(title=None, automargin=True),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
-            )
-            st.plotly_chart(fig_responsible_injection, use_container_width=True, config={"displaylogo": False})
 
             responsible_timeline = responsible_flow_df.copy()
             timeline_date_col = GANTT_DATE_COL_START if GANTT_DATE_COL_START in responsible_timeline.columns else None
