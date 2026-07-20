@@ -9683,15 +9683,7 @@ def render_capex10_investor_injection_cash_flow(
     else:
         flow_df["_chart_date"] = pd.NaT
     flow_df["_chart_date"] = flow_df["_chart_date"].fillna(flow_df["_cash_date"])
-    flow_df["_month"] = flow_df["_chart_date"].dt.to_period("M").dt.to_timestamp()
-    monthly = (
-        flow_df.groupby("_month", as_index=False)
-        .agg(Flujo_CLP=("Disponible_CLP", "sum"))
-        .sort_values("_month")
-    )
-    if monthly.empty:
-        return
-    total_clp = float(monthly["Flujo_CLP"].sum() or 0.0)
+    total_clp = float(flow_df["Disponible_CLP"].sum() or 0.0)
 
     st.markdown(
         """
@@ -9757,6 +9749,25 @@ def render_capex10_investor_injection_cash_flow(
             delta=format_clp(total_committed_clp - total_clp),
             help="Diferencia entre el total de inyecciones comprometidas y el flujo total pendiente de la selección activa.",
         )
+        cashflow_plan = st.selectbox(
+            "Plan de calendarización",
+            ["Plan A · Fecha FC", "Plan B · Inicio"],
+            index=0,
+            key="capex10_investor_injection_cashflow_plan",
+            help="Plan A usa Fecha FC para el gráfico. Plan B usa Inicio (AAAA-MM-DD), que era la lectura anterior.",
+        )
+
+    if cashflow_plan.startswith("Plan A"):
+        flow_df["_month"] = flow_df["_chart_date"].dt.to_period("M").dt.to_timestamp()
+    else:
+        flow_df["_month"] = flow_df["_analysis_month"]
+    monthly = (
+        flow_df.groupby("_month", as_index=False)
+        .agg(Flujo_CLP=("Disponible_CLP", "sum"))
+        .sort_values("_month")
+    )
+    if monthly.empty:
+        return
 
     injection_df = pd.DataFrame(
         [
