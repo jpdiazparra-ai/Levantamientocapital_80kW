@@ -9951,11 +9951,13 @@ def render_capex10_investor_injection_cash_flow(
     )
     selected_analysis_month = pd.Timestamp(selected_analysis_month)
     selected_month_row = commitment_monthly[commitment_monthly["_month"].eq(selected_analysis_month)].iloc[0]
-    selected_plan_label = "Plan A · Fecha FC" if cashflow_plan.startswith("Plan A") else "Plan B · Inicio"
-    selected_plan_sort_col = "_chart_date" if cashflow_plan.startswith("Plan A") else "_cash_date"
-    period_items = flow_df[flow_df["_month"].eq(selected_analysis_month)].copy()
+    is_plan_a_selected = cashflow_plan.startswith("Plan A")
+    selected_plan_label = "Plan A · Fecha FC" if is_plan_a_selected else "Plan B · Inicio"
+    selected_plan_sort_col = "_chart_date" if is_plan_a_selected else "_cash_date"
+    alternate_plan_label = "Plan B · Inicio" if is_plan_a_selected else "Plan A · Fecha FC"
+    alternate_plan_month_col = "_analysis_month" if is_plan_a_selected else "_chart_date"
+    alternate_plan_sort_col = "_cash_date" if is_plan_a_selected else "_chart_date"
     period_injection = float(selected_month_row["Inyeccion_CLP"] or 0.0)
-    period_flow = float(period_items["Disponible_CLP"].sum() or 0.0)
     plan_required_to_period = float(selected_month_row["Acumulado_CLP"] or 0.0)
     plan_balance_to_period = float(selected_month_row["Saldo_caja_CLP"] or 0.0)
     plan_periods_to_period = int(commitment_monthly[commitment_monthly["_month"].le(selected_analysis_month)].shape[0])
@@ -9970,17 +9972,27 @@ def render_capex10_investor_injection_cash_flow(
         (GANTT_DATE_COL_END_REAL, "Fin real"),
         ("Disponible_CLP", "Disponible"),
     ]
-    period_detail_display = pd.DataFrame()
-    if not period_items.empty:
-        period_items = period_items.sort_values([selected_plan_sort_col, "Fase", "Línea"], na_position="last")
-        for source_col, display_col in display_detail_cols:
-            if source_col and source_col in period_items.columns:
-                if source_col == "Disponible_CLP":
-                    period_detail_display[display_col] = period_items[source_col].apply(format_clp)
-                elif source_col in {chart_date_col, GANTT_DATE_COL_START, GANTT_DATE_COL_END_PLAN, GANTT_DATE_COL_END_REAL}:
-                    period_detail_display[display_col] = pd.to_datetime(period_items[source_col], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
-                else:
-                    period_detail_display[display_col] = period_items[source_col].astype(str).replace({"nan": "-", "None": "-"})
+
+    def build_period_detail(month_col: str, sort_col: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+        items = flow_df[flow_df[month_col].eq(selected_analysis_month)].copy() if month_col in flow_df.columns else pd.DataFrame()
+        detail_display = pd.DataFrame()
+        if not items.empty:
+            sort_cols = [col for col in [sort_col, "Fase", "Línea"] if col in items.columns]
+            if sort_cols:
+                items = items.sort_values(sort_cols, na_position="last")
+            for source_col, display_col in display_detail_cols:
+                if source_col and source_col in items.columns:
+                    if source_col == "Disponible_CLP":
+                        detail_display[display_col] = items[source_col].apply(format_clp)
+                    elif source_col in {chart_date_col, GANTT_DATE_COL_START, GANTT_DATE_COL_END_PLAN, GANTT_DATE_COL_END_REAL}:
+                        detail_display[display_col] = pd.to_datetime(items[source_col], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                    else:
+                        detail_display[display_col] = items[source_col].astype(str).replace({"nan": "-", "None": "-"})
+        return items, detail_display
+
+    period_items, period_detail_display = build_period_detail("_month", selected_plan_sort_col)
+    alternate_period_items, alternate_period_detail_display = build_period_detail(alternate_plan_month_col, alternate_plan_sort_col)
+    period_flow = float(period_items["Disponible_CLP"].sum() or 0.0) if "Disponible_CLP" in period_items.columns else 0.0
     phase_period_summary = (
         period_items.groupby("Fase", as_index=False)["Disponible_CLP"].sum().sort_values("Disponible_CLP", ascending=False)
         if not period_items.empty and "Fase" in period_items.columns
@@ -9988,25 +10000,6 @@ def render_capex10_investor_injection_cash_flow(
     )
     top_period_phase = str(phase_period_summary.iloc[0]["Fase"]) if not phase_period_summary.empty else "Sin gasto del período"
     top_period_phase_value = float(phase_period_summary.iloc[0]["Disponible_CLP"]) if not phase_period_summary.empty else 0.0
-    plan_period_summary_display = pd.DataFrame()
-    if not period_items.empty and {"Fase", "Línea", "Disponible_CLP"}.issubset(period_items.columns):
-        plan_period_summary = (
-            period_items.groupby(["Fase", "Línea"], as_index=False)
-            .agg(
-                Partidas=("Tarea / Entregable", "count"),
-                Disponible_CLP=("Disponible_CLP", "sum"),
-            )
-            .sort_values("Disponible_CLP", ascending=False)
-        )
-        plan_period_summary_display = plan_period_summary.copy()
-        plan_period_summary_display["Disponible"] = plan_period_summary_display["Disponible_CLP"].apply(format_clp)
-        plan_period_summary_display["% período"] = np.where(
-            period_flow > 0,
-            plan_period_summary_display["Disponible_CLP"] / period_flow * 100.0,
-            0.0,
-        )
-        plan_period_summary_display["% período"] = plan_period_summary_display["% período"].map(lambda value: f"{value:.1f}%")
-        plan_period_summary_display = plan_period_summary_display[["Fase", "Línea", "Partidas", "Disponible", "% período"]]
 
     st.markdown(
         f"""
@@ -10048,7 +10041,7 @@ def render_capex10_investor_injection_cash_flow(
         """,
         unsafe_allow_html=True,
     )
-    period_tab, plan_summary_tab = st.tabs(["Detalle del período", f"Resumen {selected_plan_label}"])
+    period_tab, alternate_plan_tab = st.tabs(["Detalle del período", f"Detalle {alternate_plan_label}"])
     with period_tab:
         if period_detail_display.empty:
             st.info("El período seleccionado no tiene partidas de gasto calendarizadas.")
@@ -10059,15 +10052,17 @@ def render_capex10_investor_injection_cash_flow(
                 hide_index=True,
                 height=min(420, 38 + (len(period_detail_display) + 1) * 35),
             )
-    with plan_summary_tab:
-        if plan_period_summary_display.empty:
-            st.info("No hay resumen disponible para el período seleccionado.")
+    with alternate_plan_tab:
+        if alternate_period_detail_display.empty:
+            st.info(f"El período seleccionado no tiene partidas calendarizadas en {alternate_plan_label}.")
         else:
+            alternate_period_flow = float(alternate_period_items["Disponible_CLP"].sum() or 0.0) if "Disponible_CLP" in alternate_period_items.columns else 0.0
+            st.caption(f"{alternate_plan_label} · {selected_analysis_month.strftime('%b %Y')} · {format_clp(alternate_period_flow)} · {len(alternate_period_items)} partidas")
             st.dataframe(
-                plan_period_summary_display,
+                alternate_period_detail_display,
                 use_container_width=True,
                 hide_index=True,
-                height=min(420, 38 + (len(plan_period_summary_display) + 1) * 35),
+                height=min(420, 38 + (len(alternate_period_detail_display) + 1) * 35),
             )
 
     responsible_flow_df = responsible_scope_df.copy() if responsible_scope_df is not None and not responsible_scope_df.empty else flow_df.copy()
