@@ -10166,67 +10166,74 @@ def render_capex10_investor_injection_cash_flow(
         """,
         unsafe_allow_html=True,
     )
-    period_tab, alternate_plan_tab = st.tabs(["Detalle del período", f"Detalle {alternate_plan_label}"])
+    def render_period_tables(
+        detail_display: pd.DataFrame,
+        items: pd.DataFrame,
+        accumulated_items: pd.DataFrame,
+        accumulated_detail_display: pd.DataFrame,
+        plan_label: str,
+        key_suffix: str,
+        empty_message: str,
+    ) -> None:
+        if detail_display.empty:
+            st.info(empty_message)
+        else:
+            period_total = float(items["Disponible_CLP"].sum() or 0.0) if "Disponible_CLP" in items.columns else 0.0
+            st.caption(f"{plan_label} · {selected_analysis_month.strftime('%b %Y')} · {format_clp(period_total)} · {len(items)} partidas")
+            st.dataframe(
+                detail_display,
+                use_container_width=True,
+                hide_index=True,
+                height=min(420, 38 + (len(detail_display) + 1) * 35),
+            )
+        accumulated_flow = (
+            float(accumulated_items["Disponible_CLP"].sum() or 0.0)
+            if "Disponible_CLP" in accumulated_items.columns
+            else 0.0
+        )
+        st.caption(
+            f"Detalle acumulado hasta {selected_analysis_month.strftime('%b %Y')} · {plan_label} · "
+            f"{format_clp(accumulated_flow)} · {len(accumulated_items)} partidas"
+        )
+        if accumulated_detail_display.empty:
+            st.info(f"No hay partidas acumuladas en {plan_label} hasta el período seleccionado.")
+        else:
+            st.dataframe(
+                accumulated_detail_display,
+                use_container_width=True,
+                hide_index=True,
+                height=min(420, 38 + (len(accumulated_detail_display) + 1) * 35),
+            )
+        render_period_responsible_contribution(items, plan_label, key_suffix)
+
+    if is_plan_a_selected:
+        period_tab, alternate_plan_tab = st.tabs(["Detalle del período", f"Detalle {alternate_plan_label}"])
+    else:
+        period_tab = st.tabs(["Detalle del período"])[0]
+        alternate_plan_tab = None
+
     with period_tab:
-        if period_detail_display.empty:
-            st.info("El período seleccionado no tiene partidas de gasto calendarizadas.")
-        else:
-            st.dataframe(
-                period_detail_display,
-                use_container_width=True,
-                hide_index=True,
-                height=min(420, 38 + (len(period_detail_display) + 1) * 35),
-            )
-        accumulated_period_flow = (
-            float(accumulated_period_items["Disponible_CLP"].sum() or 0.0)
-            if "Disponible_CLP" in accumulated_period_items.columns
-            else 0.0
+        render_period_tables(
+            period_detail_display,
+            period_items,
+            accumulated_period_items,
+            accumulated_period_detail_display,
+            selected_plan_label,
+            "active",
+            "El período seleccionado no tiene partidas de gasto calendarizadas.",
         )
-        st.caption(
-            f"Detalle acumulado hasta {selected_analysis_month.strftime('%b %Y')} · {selected_plan_label} · "
-            f"{format_clp(accumulated_period_flow)} · {len(accumulated_period_items)} partidas"
-        )
-        if accumulated_period_detail_display.empty:
-            st.info("No hay partidas acumuladas hasta el período seleccionado.")
-        else:
-            st.dataframe(
-                accumulated_period_detail_display,
-                use_container_width=True,
-                hide_index=True,
-                height=min(420, 38 + (len(accumulated_period_detail_display) + 1) * 35),
-            )
-        render_period_responsible_contribution(period_items, selected_plan_label, "active")
-    with alternate_plan_tab:
-        if alternate_period_detail_display.empty:
-            st.info(f"El período seleccionado no tiene partidas calendarizadas en {alternate_plan_label}.")
-        else:
-            alternate_period_flow = float(alternate_period_items["Disponible_CLP"].sum() or 0.0) if "Disponible_CLP" in alternate_period_items.columns else 0.0
-            st.caption(f"{alternate_plan_label} · {selected_analysis_month.strftime('%b %Y')} · {format_clp(alternate_period_flow)} · {len(alternate_period_items)} partidas")
-            st.dataframe(
+
+    if alternate_plan_tab is not None:
+        with alternate_plan_tab:
+            render_period_tables(
                 alternate_period_detail_display,
-                use_container_width=True,
-                hide_index=True,
-                height=min(420, 38 + (len(alternate_period_detail_display) + 1) * 35),
-            )
-        alternate_accumulated_flow = (
-            float(alternate_accumulated_items["Disponible_CLP"].sum() or 0.0)
-            if "Disponible_CLP" in alternate_accumulated_items.columns
-            else 0.0
-        )
-        st.caption(
-            f"Detalle acumulado hasta {selected_analysis_month.strftime('%b %Y')} · {alternate_plan_label} · "
-            f"{format_clp(alternate_accumulated_flow)} · {len(alternate_accumulated_items)} partidas"
-        )
-        if alternate_accumulated_detail_display.empty:
-            st.info(f"No hay partidas acumuladas en {alternate_plan_label} hasta el período seleccionado.")
-        else:
-            st.dataframe(
+                alternate_period_items,
+                alternate_accumulated_items,
                 alternate_accumulated_detail_display,
-                use_container_width=True,
-                hide_index=True,
-                height=min(420, 38 + (len(alternate_accumulated_detail_display) + 1) * 35),
+                alternate_plan_label,
+                "alternate",
+                f"El período seleccionado no tiene partidas calendarizadas en {alternate_plan_label}.",
             )
-        render_period_responsible_contribution(alternate_period_items, alternate_plan_label, "alternate")
 
     responsible_flow_df = responsible_scope_df.copy() if responsible_scope_df is not None and not responsible_scope_df.empty else flow_df.copy()
     if "Disponible_CLP" in responsible_flow_df.columns:
