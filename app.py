@@ -10130,9 +10130,13 @@ def render_capex10_investor_injection_cash_flow(
                 y=contribution_summary["Periodo_MM"],
                 name="Período seleccionado",
                 marker_color=[contribution_color_map.get(str(responsible), "#1E3A8A") for responsible in contribution_summary["_responsable"]],
+                marker_line=dict(color="rgba(255,255,255,.85)", width=1.5),
                 text=contribution_summary["Periodo_fmt"],
-                textposition="outside",
+                textposition="inside",
+                insidetextanchor="end",
+                textfont=dict(size=11, color="#FFFFFF"),
                 cliponaxis=False,
+                width=0.58,
                 customdata=np.stack([contribution_summary["Periodo_fmt"], contribution_summary["Partidas_periodo"].astype(int)], axis=-1),
                 hovertemplate=(
                     "<b>%{x}</b><br>"
@@ -10147,12 +10151,9 @@ def render_capex10_investor_injection_cash_flow(
                 x=contribution_summary["_responsable"],
                 y=contribution_summary["Acumulado_MM"],
                 name="Acumulado",
-                mode="lines+markers+text",
+                mode="lines+markers",
                 line=dict(color="#071427", width=3),
                 marker=dict(size=9, color="#FFFFFF", line=dict(color="#071427", width=2)),
-                text=contribution_summary["Acumulado_fmt"],
-                textposition="top center",
-                textfont=dict(size=10, color="#071427"),
                 customdata=np.stack([contribution_summary["Acumulado_fmt"], contribution_summary["Partidas_acumulado"].astype(int)], axis=-1),
                 hovertemplate=(
                     "<b>%{x}</b><br>"
@@ -10162,13 +10163,22 @@ def render_capex10_investor_injection_cash_flow(
                 ),
             )
         )
+        responsible_axis_top = max(
+            float(contribution_summary["Periodo_MM"].max() or 0.0),
+            float(contribution_summary["Acumulado_MM"].max() or 0.0),
+        )
         fig_period_responsible.update_layout(
-            height=390,
-            margin=dict(l=12, r=18, t=24, b=78),
+            height=420,
+            margin=dict(l=12, r=18, t=34, b=82),
             barmode="group",
             showlegend=True,
             legend=dict(orientation="h", y=1.12, x=0, title=None, font=dict(size=11, color="#334155")),
-            yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False),
+            yaxis=dict(
+                title="MM CLP",
+                gridcolor="rgba(148,163,184,.18)",
+                zeroline=False,
+                range=[0, responsible_axis_top * 1.18 if responsible_axis_top > 0 else 1],
+            ),
             xaxis=dict(title=None, tickangle=-25, automargin=True),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
@@ -10230,9 +10240,13 @@ def render_capex10_investor_injection_cash_flow(
                         y=method_rows["Monto_MM"],
                         name=str(method_name),
                         marker_color=method_palette[method_idx % len(method_palette)],
+                        marker_line=dict(color="rgba(255,255,255,.85)", width=1.5),
                         text=method_rows["Monto_fmt"],
-                        textposition="outside",
+                        textposition="inside",
+                        insidetextanchor="end",
+                        textfont=dict(size=10, color="#FFFFFF"),
                         cliponaxis=False,
+                        width=0.58,
                         customdata=np.stack([method_rows["Monto_fmt"], method_rows["Partidas"].astype(int)], axis=-1),
                         hovertemplate="<b>%{x}</b><br>Método: " + html.escape(str(method_name)) + "<br>Período: %{customdata[0]}<br>Partidas: %{customdata[1]}<extra></extra>",
                     )
@@ -10245,23 +10259,36 @@ def render_capex10_investor_injection_cash_flow(
                     x=hito_accumulated_total["Hito"],
                     y=hito_accumulated_total["Monto_MM"],
                     name="Acumulado",
-                    mode="lines+markers+text",
+                    mode="lines+markers",
                     line=dict(color="#071427", width=3),
                     marker=dict(size=9, color="#FFFFFF", line=dict(color="#071427", width=2)),
-                    text=hito_accumulated_total["Monto_fmt"],
-                    textposition="top center",
-                    textfont=dict(size=10, color="#071427"),
                     customdata=hito_accumulated_total["Monto_fmt"],
                     hovertemplate="<b>%{x}</b><br>Acumulado: %{customdata}<extra></extra>",
                 )
             )
         if fig_hito_method.data:
+            hito_period_top = (
+                float(hito_period_summary["Monto_MM"].max() or 0.0)
+                if not hito_period_summary.empty and "Monto_MM" in hito_period_summary.columns
+                else 0.0
+            )
+            hito_accumulated_top = (
+                float(hito_accumulated_total["Monto_MM"].max() or 0.0)
+                if not hito_accumulated_total.empty and "Monto_MM" in hito_accumulated_total.columns
+                else 0.0
+            )
+            hito_axis_top = max(hito_period_top, hito_accumulated_top)
             fig_hito_method.update_layout(
-                height=390,
+                height=420,
                 barmode="group",
-                margin=dict(l=8, r=18, t=24, b=78),
+                margin=dict(l=8, r=18, t=34, b=82),
                 legend=dict(orientation="h", y=1.14, x=0, title=None, font=dict(size=10)),
-                yaxis=dict(title="MM CLP no pagado", gridcolor="rgba(148,163,184,.18)", zeroline=False),
+                yaxis=dict(
+                    title="MM CLP no pagado",
+                    gridcolor="rgba(148,163,184,.18)",
+                    zeroline=False,
+                    range=[0, hito_axis_top * 1.18 if hito_axis_top > 0 else 1],
+                ),
                 xaxis=dict(title=None, tickangle=-20, automargin=True),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
@@ -10270,7 +10297,12 @@ def render_capex10_investor_injection_cash_flow(
 
         contribution_col, hito_col = st.columns([0.52, 0.48])
         with contribution_col:
-            st.plotly_chart(fig_period_responsible, use_container_width=True, config={"displaylogo": False}, key=f"capex10_period_responsible_{key_suffix}")
+            st.plotly_chart(
+                fig_period_responsible,
+                use_container_width=True,
+                config={"displaylogo": False, "displayModeBar": False},
+                key=f"capex10_period_responsible_{key_suffix}",
+            )
         with hito_col:
             st.markdown(
                 f"<div class='cash-injection-head' style='margin:0 0 4px;'><div><b>Hitos por método</b><span>Barras del período y línea acumulada hasta {selected_analysis_cutoff_month.strftime('%b %Y')}.</span></div></div>",
@@ -10279,7 +10311,12 @@ def render_capex10_investor_injection_cash_flow(
             if not fig_hito_method.data:
                 st.info("No hay monto no pagado asociado a los hitos del período.")
             else:
-                st.plotly_chart(fig_hito_method, use_container_width=True, config={"displaylogo": False}, key=f"capex10_hito_method_{key_suffix}")
+                st.plotly_chart(
+                    fig_hito_method,
+                    use_container_width=True,
+                    config={"displaylogo": False, "displayModeBar": False},
+                    key=f"capex10_hito_method_{key_suffix}",
+                )
 
     st.markdown(
         f"""
