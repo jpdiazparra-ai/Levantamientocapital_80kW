@@ -9676,7 +9676,14 @@ def render_capex10_investor_injection_cash_flow(
     if fallback_col:
         flow_df["_cash_date"] = flow_df["_cash_date"].fillna(pd.to_datetime(flow_df[fallback_col], errors="coerce"))
     flow_df["_cash_date"] = flow_df["_cash_date"].fillna(pd.Timestamp.today().normalize())
-    flow_df["_month"] = flow_df["_cash_date"].dt.to_period("M").dt.to_timestamp()
+    flow_df["_analysis_month"] = flow_df["_cash_date"].dt.to_period("M").dt.to_timestamp()
+    chart_date_col = first_matching_column(flow_df, ["Fecha FC", "Fecha_FC", "Fecha flujo caja", "Fecha flujo de caja"])
+    if chart_date_col and chart_date_col in flow_df.columns:
+        flow_df["_chart_date"] = pd.to_datetime(flow_df[chart_date_col], errors="coerce")
+    else:
+        flow_df["_chart_date"] = pd.NaT
+    flow_df["_chart_date"] = flow_df["_chart_date"].fillna(flow_df["_cash_date"])
+    flow_df["_month"] = flow_df["_chart_date"].dt.to_period("M").dt.to_timestamp()
     monthly = (
         flow_df.groupby("_month", as_index=False)
         .agg(Flujo_CLP=("Disponible_CLP", "sum"))
@@ -9933,14 +9940,14 @@ def render_capex10_investor_injection_cash_flow(
     )
     selected_analysis_month = pd.Timestamp(selected_analysis_month)
     selected_month_row = commitment_monthly[commitment_monthly["_month"].eq(selected_analysis_month)].iloc[0]
-    period_items = flow_df[flow_df["_month"].eq(selected_analysis_month)].copy()
-    accumulated_items = flow_df[flow_df["_month"].le(selected_analysis_month)].copy()
+    period_items = flow_df[flow_df["_analysis_month"].eq(selected_analysis_month)].copy()
+    accumulated_items = flow_df[flow_df["_analysis_month"].le(selected_analysis_month)].copy()
     period_injection = float(selected_month_row["Inyeccion_CLP"] or 0.0)
-    period_flow = float(selected_month_row["Flujo_CLP"] or 0.0)
-    accumulated_required = float(selected_month_row["Acumulado_CLP"] or 0.0)
+    period_flow = float(period_items["Disponible_CLP"].sum() or 0.0)
+    accumulated_required = float(accumulated_items["Disponible_CLP"].sum() or 0.0)
     accumulated_injection = float(selected_month_row["Inyeccion_acumulada_CLP"] or 0.0)
-    accumulated_balance = float(selected_month_row["Saldo_caja_CLP"] or 0.0)
-    accumulated_periods = int(commitment_monthly[commitment_monthly["_month"].le(selected_analysis_month)].shape[0])
+    accumulated_balance = accumulated_injection - accumulated_required
+    accumulated_periods = int(flow_df.loc[flow_df["_analysis_month"].le(selected_analysis_month), "_analysis_month"].nunique())
     display_detail_cols = [
         ("Fase", "Fase"),
         ("Línea", "Línea"),
