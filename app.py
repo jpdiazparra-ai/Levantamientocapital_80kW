@@ -10367,35 +10367,37 @@ def render_capex10_investor_injection_cash_flow(
         key_suffix: str,
         empty_message: str,
     ) -> None:
-        if detail_display.empty:
-            st.info(empty_message)
-        else:
-            period_total = float(items["Disponible_CLP"].sum() or 0.0) if "Disponible_CLP" in items.columns else 0.0
-            st.caption(f"{plan_label} · {selected_period_label} · {format_clp(period_total)} · {len(items)} partidas")
-            st.dataframe(
-                detail_display,
-                use_container_width=True,
-                hide_index=True,
-                height=min(420, 38 + (len(detail_display) + 1) * 35),
-            )
+        period_total = float(items["Disponible_CLP"].sum() or 0.0) if "Disponible_CLP" in items.columns else 0.0
+        period_expander_label = f"Detalle del período · {selected_period_label} · {format_clp(period_total)} · {len(items)} partidas"
+        with st.expander(period_expander_label, expanded=False):
+            if detail_display.empty:
+                st.info(empty_message)
+            else:
+                st.dataframe(
+                    detail_display,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(420, 38 + (len(detail_display) + 1) * 35),
+                )
         accumulated_flow = (
             float(accumulated_items["Disponible_CLP"].sum() or 0.0)
             if "Disponible_CLP" in accumulated_items.columns
             else 0.0
         )
-        st.caption(
-            f"Detalle acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')} · {plan_label} · "
+        accumulated_expander_label = (
+            f"Detalle acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')} · "
             f"{format_clp(accumulated_flow)} · {len(accumulated_items)} partidas"
         )
-        if accumulated_detail_display.empty:
-            st.info(f"No hay partidas acumuladas en {plan_label} hasta el período seleccionado.")
-        else:
-            st.dataframe(
-                accumulated_detail_display,
-                use_container_width=True,
-                hide_index=True,
-                height=min(420, 38 + (len(accumulated_detail_display) + 1) * 35),
-            )
+        with st.expander(accumulated_expander_label, expanded=False):
+            if accumulated_detail_display.empty:
+                st.info(f"No hay partidas acumuladas en {plan_label} hasta el período seleccionado.")
+            else:
+                st.dataframe(
+                    accumulated_detail_display,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(420, 38 + (len(accumulated_detail_display) + 1) * 35),
+                )
         render_period_responsible_contribution(items, accumulated_items, plan_label, key_suffix)
 
     if is_plan_a_selected:
