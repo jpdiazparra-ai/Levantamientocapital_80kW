@@ -10686,6 +10686,108 @@ def render_capex10_investor_injection_cash_flow(
                     "capex10_accumulated",
                 )
 
+        if not accumulated_detail_scope_df.empty:
+            period_chart_summary = (
+                detail_scope_df.groupby([phase_col, line_col], as_index=False)
+                .agg(
+                    Periodo_CLP=("Disponible_CLP", "sum"),
+                    Partidas_periodo=(task_col or line_col, "count"),
+                    Responsables_periodo=("_responsable_detalle_periodo", "nunique"),
+                )
+                if not detail_scope_df.empty
+                else pd.DataFrame(columns=[phase_col, line_col, "Periodo_CLP", "Partidas_periodo", "Responsables_periodo"])
+            )
+            accumulated_chart_summary = (
+                accumulated_detail_scope_df.groupby([phase_col, line_col], as_index=False)
+                .agg(
+                    Acumulado_CLP=("Disponible_CLP", "sum"),
+                    Partidas_acumulado=(task_col or line_col, "count"),
+                    Responsables_acumulado=("_responsable_detalle_periodo", "nunique"),
+                )
+            )
+            concentration_df = accumulated_chart_summary.merge(
+                period_chart_summary,
+                on=[phase_col, line_col],
+                how="left",
+            ).fillna(
+                {
+                    "Periodo_CLP": 0,
+                    "Partidas_periodo": 0,
+                    "Responsables_periodo": 0,
+                }
+            )
+            concentration_df = concentration_df[concentration_df["Acumulado_CLP"].fillna(0) > 0].copy()
+            if not concentration_df.empty:
+                concentration_df["Periodo_MM"] = concentration_df["Periodo_CLP"] / 1_000_000
+                concentration_df["Acumulado_MM"] = concentration_df["Acumulado_CLP"] / 1_000_000
+                concentration_df["Periodo_fmt"] = concentration_df["Periodo_CLP"].apply(format_clp)
+                concentration_df["Acumulado_fmt"] = concentration_df["Acumulado_CLP"].apply(format_clp)
+                concentration_df["Peso_acumulado"] = np.where(
+                    accumulated_detail_total > 0,
+                    concentration_df["Acumulado_CLP"] / accumulated_detail_total * 100.0,
+                    0.0,
+                )
+                concentration_df["Peso_acumulado_fmt"] = concentration_df["Peso_acumulado"].map(lambda value: f"{value:.1f}%")
+                concentration_df = concentration_df.sort_values("Acumulado_CLP", ascending=False).copy()
+                fig_concentration = px.treemap(
+                    concentration_df,
+                    path=[phase_col, line_col],
+                    values="Acumulado_CLP",
+                    color="Periodo_MM",
+                    color_continuous_scale=["#E6FFFA", "#7FA8A4", "#0F766E", "#164E63"],
+                    custom_data=[
+                        "Periodo_fmt",
+                        "Acumulado_fmt",
+                        "Peso_acumulado_fmt",
+                        "Partidas_periodo",
+                        "Partidas_acumulado",
+                        "Responsables_acumulado",
+                    ],
+                )
+                fig_concentration.update_traces(
+                    textinfo="label+percent parent",
+                    marker=dict(line=dict(color="#FFFFFF", width=2)),
+                    hovertemplate=(
+                        "<b>%{label}</b><br>"
+                        "Período: %{customdata[0]}<br>"
+                        "Acumulado: %{customdata[1]}<br>"
+                        "Peso acumulado: %{customdata[2]}<br>"
+                        "Partidas período: %{customdata[3]}<br>"
+                        "Partidas acumuladas: %{customdata[4]}<br>"
+                        "Responsables: %{customdata[5]}<extra></extra>"
+                    ),
+                )
+                fig_concentration.update_layout(
+                    height=430,
+                    margin=dict(l=4, r=4, t=8, b=4),
+                    coloraxis_colorbar=dict(
+                        title="Período<br>MM CLP",
+                        thickness=12,
+                        len=.72,
+                    ),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#334155", size=12),
+                )
+                st.markdown(
+                    f"""
+                    <div class="cash-period-detail-head" style="margin-top:16px;">
+                      <div>
+                        <b>Concentración por fase y línea</b>
+                        <span>Área por acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')} · color por gasto del período seleccionado.</span>
+                      </div>
+                      <div class="cash-period-detail-total">{format_clp(accumulated_detail_total)}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.plotly_chart(
+                    fig_concentration,
+                    use_container_width=True,
+                    config={"displaylogo": False, "displayModeBar": False},
+                    key=f"capex10_phase_line_concentration_{key_suffix}",
+                )
+
     st.markdown(
         f"""
         <style>
