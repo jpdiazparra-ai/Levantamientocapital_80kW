@@ -10063,6 +10063,27 @@ def render_capex10_investor_injection_cash_flow(
         if "Disponible_CLP" in accumulated_period_items.columns
         else 0.0
     )
+    def hito_accumulated_amount(label: str) -> float:
+        if accumulated_period_items.empty or "Disponible_CLP" not in accumulated_period_items.columns:
+            return 0.0
+        hito_df = accumulated_period_items.copy()
+        hito_key = normalize_key(label)
+        line_match = (
+            hito_df["Línea"].astype(str).map(normalize_key).eq(hito_key)
+            if "Línea" in hito_df.columns
+            else pd.Series(False, index=hito_df.index)
+        )
+        method_col = first_matching_column(hito_df, ["Método", "Metodo"])
+        method_match = (
+            hito_df[method_col].astype(str).map(normalize_key).str.contains(hito_key, na=False, regex=False)
+            if method_col and method_col in hito_df.columns
+            else pd.Series(False, index=hito_df.index)
+        )
+        return float(hito_df[line_match | method_match]["Disponible_CLP"].sum() or 0.0)
+
+    hito_premontaje_accumulated = hito_accumulated_amount("Hito Pre -Montaje")
+    hito_montaje_accumulated = hito_accumulated_amount("Hito Montaje")
+    hito_producto_accumulated = hito_accumulated_amount("Hito Producto")
     phase_period_summary = (
         period_items.groupby("Fase", as_index=False)["Disponible_CLP"].sum().sort_values("Disponible_CLP", ascending=False)
         if not period_items.empty and "Fase" in period_items.columns
@@ -10673,7 +10694,7 @@ def render_capex10_investor_injection_cash_flow(
                 render_selectable_phase_line_detail(
                     detail_scope_df,
                     responsible_lines,
-                    "Seleccionar fase",
+                    f"Detalle de período {selected_period_label}",
                     "Peso_periodo",
                     "% período",
                     "capex10_period",
@@ -10820,11 +10841,11 @@ def render_capex10_investor_injection_cash_flow(
           </div>
           <div class="cash-period-kpis">
             <div class="cash-period-kpi" style="--c:#0E7490;"><span>Monto período seleccionado</span><b>{format_clp(period_flow)}</b><em>{len(period_items)} partidas filtradas</em></div>
-            <div class="cash-period-kpi" style="--c:#164E63;"><span>Hitos acumulado</span><b>{format_clp(accumulated_hito_flow)}</b><em>Hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>
             <div class="cash-period-kpi" style="--c:#0F766E;"><span>Inyección del período</span><b>{format_clp(period_injection)}</b><em>Entrada puntual</em></div>
-            <div class="cash-period-kpi" style="--c:#1E3A8A;"><span>Requerido plan al mes</span><b>{format_clp(plan_required_to_period)}</b><em>{plan_periods_to_period} períodos</em></div>
             <div class="cash-period-kpi" style="--c:#D7605E;"><span>Saldo plan al mes</span><b>{format_clp(plan_balance_to_period)}</b><em>Inyección - requerido</em></div>
-            <div class="cash-period-kpi" style="--c:#B7791F;"><span>Mayor fase del mes</span><b>{html.escape(top_period_phase)}</b><em>{format_clp(top_period_phase_value)}</em></div>
+            <div class="cash-period-kpi" style="--c:#164E63;"><span>Hito Pre-Montaje</span><b>{format_clp(hito_premontaje_accumulated)}</b><em>Acum. hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>
+            <div class="cash-period-kpi" style="--c:#1E3A8A;"><span>Hito Montaje</span><b>{format_clp(hito_montaje_accumulated)}</b><em>Acum. hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>
+            <div class="cash-period-kpi" style="--c:#B7791F;"><span>Hito Producto</span><b>{format_clp(hito_producto_accumulated)}</b><em>Acum. hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>
           </div>
         </div>
         """,
@@ -11406,24 +11427,45 @@ def render_capex10_available_funds_by_phase_line() -> None:
     base_unpaid_df = _capex10_unpaid_funds_source(df_gantt)
     current_etapas = []
     st.session_state["capex10_funds_etapa_selector"] = []
+    initial_metodo_options = _capex10_clean_filter_options(base_unpaid_df, metodo_col)
+    default_metodos = [
+        metodo
+        for metodo in initial_metodo_options
+        if normalize_key(metodo) in {"hitopremontaje", "hitomontaje", "hito-pre-montaje", "hito-montaje"}
+        or "premontaje" in normalize_key(metodo)
+        or "montaje" in normalize_key(metodo)
+    ]
+    default_metodos = [
+        metodo
+        for metodo in default_metodos
+        if "producto" not in normalize_key(metodo)
+    ]
+    initial_responsable_options = _capex10_clean_filter_options(base_unpaid_df, responsable_col)
+    default_responsables = [
+        responsable
+        for responsable in initial_responsable_options
+        if normalize_key(responsable) in {"fw", "grupoec", "socios"}
+    ]
     current_metodos = _capex10_sync_multiselect_state(
         "capex10_funds_metodo_selector",
-        _capex10_clean_filter_options(base_unpaid_df, metodo_col),
+        initial_metodo_options,
+        default_metodos,
     )
     current_responsables = _capex10_sync_multiselect_state(
         "capex10_funds_responsable_selector",
-        _capex10_clean_filter_options(base_unpaid_df, responsable_col),
+        initial_responsable_options,
+        default_responsables,
     )
     metodo_options = _capex10_clean_filter_options(
         _capex10_apply_fund_filter(base_unpaid_df, etapa_values=current_etapas, responsable_values=current_responsables, metodo_col=metodo_col, responsable_col=responsable_col),
         metodo_col,
     )
-    current_metodos = _capex10_sync_multiselect_state("capex10_funds_metodo_selector", metodo_options)
+    current_metodos = _capex10_sync_multiselect_state("capex10_funds_metodo_selector", metodo_options, default_metodos)
     responsable_options = _capex10_clean_filter_options(
         _capex10_apply_fund_filter(base_unpaid_df, etapa_values=current_etapas, metodo_values=current_metodos, metodo_col=metodo_col, responsable_col=responsable_col),
         responsable_col,
     )
-    current_responsables = _capex10_sync_multiselect_state("capex10_funds_responsable_selector", responsable_options)
+    current_responsables = _capex10_sync_multiselect_state("capex10_funds_responsable_selector", responsable_options, default_responsables)
 
     selected_etapas = current_etapas
     selected_metodos = current_metodos
