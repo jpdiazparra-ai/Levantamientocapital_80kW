@@ -10318,6 +10318,165 @@ def render_capex10_investor_injection_cash_flow(
                     key=f"capex10_hito_method_{key_suffix}",
                 )
 
+    def render_period_phase_line_detail(scope_df: pd.DataFrame, plan_label: str, key_suffix: str) -> None:
+        if scope_df.empty or "Disponible_CLP" not in scope_df.columns:
+            st.info("No hay detalle por fase y línea para el período seleccionado.")
+            return
+        detail_scope_df = scope_df.copy()
+        detail_scope_df = detail_scope_df[detail_scope_df["Disponible_CLP"].fillna(0) > 0].copy()
+        if detail_scope_df.empty:
+            st.info("No hay detalle por fase y línea para el período seleccionado.")
+            return
+
+        detail_responsible_col = first_matching_column(detail_scope_df, ["Responsable"])
+        detail_scope_df["_responsable_detalle_periodo"] = (
+            detail_scope_df[detail_responsible_col]
+            .astype(str)
+            .str.strip()
+            .replace({"": "Sin responsable", "nan": "Sin responsable", "None": "Sin responsable"})
+            if detail_responsible_col
+            else "Sin responsable"
+        )
+        for date_source, date_target in [
+            (GANTT_DATE_COL_START, "_inicio_detalle_periodo"),
+            (GANTT_DATE_COL_END_PLAN, "_fin_plan_detalle_periodo"),
+            (GANTT_DATE_COL_END_REAL, "_fin_real_detalle_periodo"),
+        ]:
+            detail_scope_df[date_target] = pd.to_datetime(detail_scope_df.get(date_source), errors="coerce")
+
+        phase_col = "Fase" if "Fase" in detail_scope_df.columns else None
+        line_col = "Línea" if "Línea" in detail_scope_df.columns else None
+        task_col = "Tarea / Entregable" if "Tarea / Entregable" in detail_scope_df.columns else None
+        if not phase_col or not line_col:
+            st.info("El detalle del período no contiene columnas de fase y línea.")
+            return
+
+        period_detail_total = float(detail_scope_df["Disponible_CLP"].sum() or 0.0)
+        line_summary = (
+            detail_scope_df.groupby(["_responsable_detalle_periodo", phase_col, line_col], as_index=False)
+            .agg(
+                Disponible_CLP=("Disponible_CLP", "sum"),
+                Partidas=(task_col or line_col, "count"),
+                Inicio=("_inicio_detalle_periodo", "min"),
+                Fin_plan=("_fin_plan_detalle_periodo", "max"),
+                Fin_real=("_fin_real_detalle_periodo", "max"),
+            )
+            .sort_values(["_responsable_detalle_periodo", "Disponible_CLP"], ascending=[True, False])
+        )
+        line_summary["Peso_periodo"] = np.where(
+            period_detail_total > 0,
+            line_summary["Disponible_CLP"] / period_detail_total * 100.0,
+            0.0,
+        )
+        responsible_summary = (
+            line_summary.groupby("_responsable_detalle_periodo", as_index=False)
+            .agg(
+                Disponible_CLP=("Disponible_CLP", "sum"),
+                Lineas=(line_col, "nunique"),
+                Partidas=("Partidas", "sum"),
+                Inicio=("Inicio", "min"),
+                Fin_real=("Fin_real", "max"),
+            )
+            .sort_values("Disponible_CLP", ascending=False)
+        )
+        responsible_summary["Peso_periodo"] = np.where(
+            period_detail_total > 0,
+            responsible_summary["Disponible_CLP"] / period_detail_total * 100.0,
+            0.0,
+        )
+
+        st.markdown(
+            f"""
+            <style>
+              .cash-period-detail-head{{
+                display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+                margin:4px 0 10px;padding:12px 14px;border:1px solid rgba(203,213,225,.82);
+                border-radius:14px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
+              }}
+              .cash-period-detail-head b{{display:block;color:#071427;font-size:15px;line-height:1.1;font-weight:950;}}
+              .cash-period-detail-head span{{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}}
+              .cash-period-detail-total{{color:#0F766E;font-size:17px;font-weight:950;white-space:nowrap;}}
+              .cash-period-resp-card{{
+                border:1px solid rgba(203,213,225,.82);border-left:6px solid var(--resp-color);
+                border-radius:14px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
+                padding:12px;margin:0 0 10px;box-shadow:0 10px 22px rgba(15,23,42,.045);
+              }}
+              .cash-period-resp-kpis{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 10px;}}
+              .cash-period-resp-kpis div{{
+                border:1px solid rgba(226,232,240,.95);border-top:3px solid var(--resp-color);
+                border-radius:10px;background:#FFFFFF;padding:8px 10px;min-height:56px;
+              }}
+              .cash-period-resp-kpis span{{
+                display:block;color:#64748B;font-size:9.5px;font-weight:950;letter-spacing:.055em;
+                text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+              }}
+              .cash-period-resp-kpis b{{
+                display:block;color:var(--resp-color);font-size:15px;line-height:1.08;font-weight:950;
+                margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+              }}
+              @media(max-width:980px){{.cash-period-resp-kpis{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
+              @media(max-width:620px){{.cash-period-detail-head{{display:block;}}.cash-period-detail-total{{margin-top:8px;}}.cash-period-resp-kpis{{grid-template-columns:1fr;}}}}
+            </style>
+            <div class="cash-period-detail-head">
+              <div>
+                <b>Detalle por fase y línea <span>todo lo seleccionado</span></b>
+                <span>{html.escape(plan_label)} · filtrado por {html.escape(selected_period_label)} y selectores activos.</span>
+              </div>
+              <div class="cash-period-detail-total">{format_clp(period_detail_total)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        for _, responsible_row in responsible_summary.iterrows():
+            responsible_name = str(responsible_row["_responsable_detalle_periodo"])
+            responsible_total = float(responsible_row["Disponible_CLP"] or 0.0)
+            responsible_color = _capex10_responsible_color(responsible_name)
+            responsible_label_color, responsible_icon = _capex10_responsible_expander_style(responsible_name)
+            responsible_start = pd.Timestamp(responsible_row["Inicio"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Inicio"]) else "-"
+            responsible_end = pd.Timestamp(responsible_row["Fin_real"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Fin_real"]) else "-"
+            expander_label = (
+                f":{responsible_label_color}[{responsible_name}] · "
+                f"{format_clp(responsible_total)} · "
+                f"{int(responsible_row['Lineas'])} líneas · "
+                f"{int(responsible_row['Partidas'])} partidas"
+            )
+            with st.expander(expander_label, expanded=False, icon=responsible_icon):
+                st.markdown(
+                    f"""
+                    <div class="cash-period-resp-card" style="--resp-color:{responsible_color};">
+                      <div class="cash-period-resp-kpis">
+                        <div><span>Aporte período</span><b>{format_clp(responsible_total)}</b></div>
+                        <div><span>Peso período</span><b>{float(responsible_row["Peso_periodo"]):.1f}%</b></div>
+                        <div><span>Líneas / partidas</span><b>{int(responsible_row["Lineas"])} / {int(responsible_row["Partidas"])}</b></div>
+                        <div><span>Ventana real</span><b>{responsible_start} / {responsible_end}</b></div>
+                      </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                responsible_lines = line_summary[
+                    line_summary["_responsable_detalle_periodo"].eq(responsible_name)
+                ].copy()
+                responsible_lines["Disponible"] = responsible_lines["Disponible_CLP"].apply(format_clp)
+                responsible_lines["% período"] = responsible_lines["Peso_periodo"].map(lambda value: f"{value:.1f}%")
+                responsible_lines["Inicio"] = pd.to_datetime(responsible_lines["Inicio"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                responsible_lines["Fin plan"] = pd.to_datetime(responsible_lines["Fin_plan"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                responsible_lines["Fin real"] = pd.to_datetime(responsible_lines["Fin_real"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                responsible_lines = responsible_lines.rename(
+                    columns={
+                        phase_col: "Fase",
+                        line_col: "Línea",
+                    }
+                )
+                st.dataframe(
+                    responsible_lines[["Fase", "Línea", "Partidas", "Disponible", "% período", "Inicio", "Fin plan", "Fin real"]],
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(330, 38 + (len(responsible_lines) + 1) * 35),
+                    key=f"capex10_period_phase_line_detail_{key_suffix}_{normalize_key(responsible_name)}",
+                )
+
     st.markdown(
         f"""
         <style>
@@ -10368,6 +10527,7 @@ def render_capex10_investor_injection_cash_flow(
         empty_message: str,
     ) -> None:
         period_total = float(items["Disponible_CLP"].sum() or 0.0) if "Disponible_CLP" in items.columns else 0.0
+        render_period_phase_line_detail(items, plan_label, key_suffix)
         period_expander_label = f"Detalle del período · {selected_period_label} · {format_clp(period_total)} · {len(items)} partidas"
         with st.expander(period_expander_label, expanded=False):
             if detail_display.empty:
