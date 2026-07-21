@@ -9713,6 +9713,7 @@ def render_capex10_investor_injection_cash_flow(
     funds_df: pd.DataFrame,
     responsible_scope_df: pd.DataFrame | None = None,
     milestone_dates: list[dict[str, object]] | None = None,
+    cashflow_plan: str | None = None,
 ) -> None:
     if funds_df.empty or "Disponible_CLP" not in funds_df.columns:
         return
@@ -9801,13 +9802,8 @@ def render_capex10_investor_injection_cash_flow(
             delta=format_clp(total_committed_clp - total_clp),
             help="Diferencia entre el total de inyecciones comprometidas y el flujo total pendiente de la selección activa.",
         )
-        cashflow_plan = st.selectbox(
-            "Plan de calendarización",
-            ["Plan A - Flexibilidad Proveedores", "Plan B - Sin Flexibilidad Proveedores"],
-            index=0,
-            key="capex10_investor_injection_cashflow_plan",
-            help="Plan A usa Fecha FC para reflejar flexibilidad de proveedores. Plan B usa Inicio (AAAA-MM-DD), sin flexibilidad de proveedores.",
-        )
+    if not cashflow_plan:
+        cashflow_plan = "Plan A - Flexibilidad Proveedores"
 
     if cashflow_plan.startswith("Plan A"):
         flow_df["_month"] = flow_df["_chart_date"].dt.to_period("M").dt.to_timestamp()
@@ -9971,7 +9967,7 @@ def render_capex10_investor_injection_cash_flow(
             borderpad=6,
         )
     fig_commitment.update_layout(
-        height=390,
+        height=468,
         barmode="group",
         margin=dict(l=12, r=112, t=24, b=40),
         legend=dict(orientation="h", y=1.12, x=0, title=None),
@@ -10062,6 +10058,11 @@ def render_capex10_investor_injection_cash_flow(
         accumulated=True,
     )
     period_flow = float(period_items["Disponible_CLP"].sum() or 0.0) if "Disponible_CLP" in period_items.columns else 0.0
+    accumulated_hito_flow = (
+        float(accumulated_period_items["Disponible_CLP"].sum() or 0.0)
+        if "Disponible_CLP" in accumulated_period_items.columns
+        else 0.0
+    )
     phase_period_summary = (
         period_items.groupby("Fase", as_index=False)["Disponible_CLP"].sum().sort_values("Disponible_CLP", ascending=False)
         if not period_items.empty and "Fase" in period_items.columns
@@ -10804,7 +10805,7 @@ def render_capex10_investor_injection_cash_flow(
           .cash-period-head b{{display:block;color:#071427;font-size:16px;line-height:1.1;font-weight:950;}}
           .cash-period-head span{{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}}
           .cash-period-chip{{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:7px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}}
-          .cash-period-kpis{{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0 0 12px;}}
+          .cash-period-kpis{{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:0 0 12px;}}
           .cash-period-kpi{{border:1px solid rgba(226,232,240,.95);border-top:3px solid var(--c);border-radius:10px;background:#FFFFFF;padding:9px 10px;min-height:66px;}}
           .cash-period-kpi span{{display:block;color:#64748B;font-size:9.5px;font-weight:950;letter-spacing:.055em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
           .cash-period-kpi b{{display:block;color:var(--c);font-size:17px;line-height:1.08;font-weight:950;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
@@ -10818,7 +10819,8 @@ def render_capex10_investor_injection_cash_flow(
             <div class="cash-period-chip">{html.escape(selected_plan_label)} · {html.escape(selected_period_label)}</div>
           </div>
           <div class="cash-period-kpis">
-            <div class="cash-period-kpi" style="--c:#7FA8A4;"><span>Gasto del período</span><b>{format_clp(period_flow)}</b><em>{len(period_items)} partidas</em></div>
+            <div class="cash-period-kpi" style="--c:#0E7490;"><span>Monto período seleccionado</span><b>{format_clp(period_flow)}</b><em>{len(period_items)} partidas filtradas</em></div>
+            <div class="cash-period-kpi" style="--c:#164E63;"><span>Hitos acumulado</span><b>{format_clp(accumulated_hito_flow)}</b><em>Hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>
             <div class="cash-period-kpi" style="--c:#0F766E;"><span>Inyección del período</span><b>{format_clp(period_injection)}</b><em>Entrada puntual</em></div>
             <div class="cash-period-kpi" style="--c:#1E3A8A;"><span>Requerido plan al mes</span><b>{format_clp(plan_required_to_period)}</b><em>{plan_periods_to_period} períodos</em></div>
             <div class="cash-period-kpi" style="--c:#D7605E;"><span>Saldo plan al mes</span><b>{format_clp(plan_balance_to_period)}</b><em>Inyección - requerido</em></div>
@@ -11401,18 +11403,9 @@ def render_capex10_available_funds_by_phase_line() -> None:
 
     metodo_col, responsable_col = _capex10_funds_selector_columns(df_gantt)
 
-    etapa_values = _capex10_clean_filter_options(df_gantt, "ETAPA")
-    etapa_options = sorted(
-        etapa_values,
-        key=lambda value: (0 if "segunda" in str(value).casefold() else 1, str(value).casefold()),
-    )
-    if not etapa_options:
-        return
     base_unpaid_df = _capex10_unpaid_funds_source(df_gantt)
-    current_etapas = _capex10_sync_multiselect_state("capex10_funds_etapa_selector", etapa_options)
-    if set(current_etapas) == set(etapa_options):
-        current_etapas = []
-        st.session_state["capex10_funds_etapa_selector"] = []
+    current_etapas = []
+    st.session_state["capex10_funds_etapa_selector"] = []
     current_metodos = _capex10_sync_multiselect_state(
         "capex10_funds_metodo_selector",
         _capex10_clean_filter_options(base_unpaid_df, metodo_col),
@@ -11421,17 +11414,6 @@ def render_capex10_available_funds_by_phase_line() -> None:
         "capex10_funds_responsable_selector",
         _capex10_clean_filter_options(base_unpaid_df, responsable_col),
     )
-    etapa_options = sorted(
-        _capex10_clean_filter_options(
-            _capex10_apply_fund_filter(base_unpaid_df, metodo_values=current_metodos, responsable_values=current_responsables, metodo_col=metodo_col, responsable_col=responsable_col),
-            "ETAPA",
-        ),
-        key=lambda value: (0 if "segunda" in str(value).casefold() else 1, str(value).casefold()),
-    ) or etapa_options
-    current_etapas = _capex10_sync_multiselect_state("capex10_funds_etapa_selector", etapa_options)
-    if set(current_etapas) == set(etapa_options):
-        current_etapas = []
-        st.session_state["capex10_funds_etapa_selector"] = []
     metodo_options = _capex10_clean_filter_options(
         _capex10_apply_fund_filter(base_unpaid_df, etapa_values=current_etapas, responsable_values=current_responsables, metodo_col=metodo_col, responsable_col=responsable_col),
         metodo_col,
@@ -11909,12 +11891,12 @@ def render_capex10_available_funds_by_phase_line() -> None:
         )
         filter_col_1, filter_col_2, filter_col_3 = st.columns(3)
         with filter_col_1:
-            selected_etapas = st.multiselect(
-                "Etapa para fondos por ejecutar",
-                etapa_options,
-                key="capex10_funds_etapa_selector",
-                placeholder="Todos",
-                help="Filtra el cierre ejecutivo por la columna ETAPA y solo considera partidas No pagado.",
+            selected_cashflow_plan = st.selectbox(
+                "Plan de calendarización",
+                ["Plan A - Flexibilidad Proveedores", "Plan B - Sin Flexibilidad Proveedores"],
+                index=0,
+                key="capex10_investor_injection_cashflow_plan",
+                help="Plan A usa Fecha FC para reflejar flexibilidad de proveedores. Plan B usa Inicio (AAAA-MM-DD), sin flexibilidad de proveedores.",
             )
         with filter_col_2:
             selected_metodos = st.multiselect(
@@ -11933,6 +11915,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
                 help="Filtra por la columna X Responsable. Sin selección muestra todos los responsables.",
             )
 
+    selected_etapas = []
     responsible_scope_df = _capex10_filtered_funds_df(
         df_gantt,
         selected_etapas,
@@ -11956,7 +11939,13 @@ def render_capex10_available_funds_by_phase_line() -> None:
         ]
     else:
         injection_milestone_dates = capex10_milestone_dates
-    render_capex10_investor_injection_cash_flow(injection_funds_df, injection_responsible_scope_df, injection_milestone_dates)
+    render_capex10_investor_injection_cash_flow(
+        injection_funds_df,
+        injection_responsible_scope_df,
+        injection_milestone_dates,
+        selected_cashflow_plan,
+    )
+    return
 
     funds_colors = ["#0F766E", "#164E63", "#7C3AED", "#1E3A8A", "#B7791F", "#64748B", "#0891B2", "#2C7A7B", "#334155", "#14B8A6"]
     line_order = (
