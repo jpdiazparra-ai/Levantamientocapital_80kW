@@ -10567,7 +10567,9 @@ def render_capex10_investor_injection_cash_flow(
                     selection_mode="single-row",
                 )
                 selected_rows = getattr(getattr(selected_state, "selection", None), "rows", []) if selected_state is not None else []
-                selected_position = int(selected_rows[0]) if selected_rows else 0
+                if not selected_rows:
+                    return
+                selected_position = int(selected_rows[0])
                 selected_position = max(0, min(selected_position, len(selectable_rows) - 1))
                 selected_line = selectable_rows.iloc[selected_position]
                 selected_phase_name = str(selected_line["Fase"])
@@ -10584,8 +10586,6 @@ def render_capex10_investor_injection_cash_flow(
                 if sort_cols:
                     selected_items = selected_items.sort_values(sort_cols, ascending=[True] * (len(sort_cols) - 1) + [False], na_position="last")
                 task_display = pd.DataFrame()
-                task_display["Fase"] = selected_items[phase_col].astype(str).replace({"nan": "-", "None": "-"})
-                task_display["Línea"] = selected_items[line_col].astype(str).replace({"nan": "-", "None": "-"})
                 task_display["Tarea / Entregable"] = (
                     selected_items[task_col].astype(str).replace({"nan": "-", "None": "-"})
                     if task_col and task_col in selected_items.columns
@@ -10620,7 +10620,14 @@ def render_capex10_investor_injection_cash_flow(
                     task_display,
                     use_container_width=True,
                     hide_index=True,
-                    height=min(360, 38 + (len(task_display) + 1) * 35),
+                    height=min(520, 48 + (len(task_display) + 1) * 86),
+                    row_height=78,
+                    column_config={
+                        "Tarea / Entregable": st.column_config.TextColumn(
+                            "Tarea / Entregable",
+                            width="large",
+                        ),
+                    },
                     key=f"{key_prefix}_task_detail_{key_suffix}_{normalize_key(responsible_name)}",
                 )
 
@@ -10665,7 +10672,7 @@ def render_capex10_investor_injection_cash_flow(
                 render_selectable_phase_line_detail(
                     detail_scope_df,
                     responsible_lines,
-                    "Período seleccionado",
+                    "Seleccionar fase",
                     "Peso_periodo",
                     "% período",
                     "capex10_period",
