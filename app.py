@@ -10449,9 +10449,21 @@ def render_capex10_investor_injection_cash_flow(
               .cash-period-detail-head span{{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}}
               .cash-period-detail-total{{color:#0F766E;font-size:17px;font-weight:950;white-space:nowrap;}}
               .cash-period-resp-card{{
-                border:1px solid rgba(203,213,225,.82);border-left:6px solid var(--resp-color);
+                border:1px solid var(--resp-color);border-left:8px solid var(--resp-color);
                 border-radius:14px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
                 padding:12px;margin:0 0 10px;box-shadow:0 10px 22px rgba(15,23,42,.045);
+              }}
+              .cash-period-resp-title{{
+                display:flex;align-items:center;justify-content:space-between;gap:10px;
+                border:1px solid rgba(226,232,240,.95);border-left:5px solid var(--resp-color);
+                border-radius:12px;background:#FFFFFF;padding:10px 12px;margin:0 0 10px;
+              }}
+              .cash-period-resp-title b{{
+                color:var(--resp-color);font-size:15px;line-height:1.1;font-weight:950;
+                white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+              }}
+              .cash-period-resp-title span{{
+                color:#334155;font-size:12px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
               }}
               .cash-period-resp-kpis{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 10px;}}
               .cash-period-resp-kpis div{{
@@ -10493,9 +10505,11 @@ def render_capex10_investor_injection_cash_flow(
             responsible_total = float(responsible_row["Disponible_CLP"] or 0.0)
             responsible_accumulated_total = float(responsible_row["Acumulado_CLP"] or 0.0)
             responsible_color = _capex10_responsible_color(responsible_name)
-            responsible_label_color, responsible_icon = _capex10_responsible_expander_style(responsible_name)
+            _, responsible_icon = _capex10_responsible_expander_style(responsible_name)
             responsible_start = pd.Timestamp(responsible_row["Inicio"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Inicio"]) else "-"
             responsible_end = pd.Timestamp(responsible_row["Fin_real"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Fin_real"]) else "-"
+            responsible_period_label = format_clp(responsible_total).replace("$", "\\$")
+            responsible_accumulated_label = format_clp(responsible_accumulated_total).replace("$", "\\$")
 
             def render_selectable_phase_line_detail(
                 source_df: pd.DataFrame,
@@ -10596,14 +10610,18 @@ def render_capex10_investor_injection_cash_flow(
                 )
 
             expander_label = (
-                f":{responsible_label_color}[{responsible_name}] · "
-                f"Período {format_clp(responsible_total)} · "
-                f"Acumulado {format_clp(responsible_accumulated_total)}"
+                f"**{responsible_name}** · "
+                f"**Período {responsible_period_label}** · "
+                f"**Acumulado {responsible_accumulated_label}**"
             )
             with st.expander(expander_label, expanded=False, icon=responsible_icon):
                 st.markdown(
                     f"""
                     <div class="cash-period-resp-card" style="--resp-color:{responsible_color};">
+                      <div class="cash-period-resp-title">
+                        <b>{html.escape(responsible_name)}</b>
+                        <span>Período {format_clp(responsible_total)} · Acumulado {format_clp(responsible_accumulated_total)}</span>
+                      </div>
                       <div class="cash-period-resp-kpis">
                         <div><span>Aporte período</span><b>{format_clp(responsible_total)}</b></div>
                         <div><span>Aporte acumulado</span><b>{format_clp(responsible_accumulated_total)}</b></div>
@@ -12335,10 +12353,10 @@ def render_capex10_available_funds_by_phase_line() -> None:
         st.markdown(
             """
             <style>
-              .capex10-detail-panel{border:1px solid rgba(203,213,225,.82);border-left:6px solid var(--resp-color);border-radius:14px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:12px;margin:0 0 12px;box-shadow:0 10px 22px rgba(15,23,42,.045);}
+              .capex10-detail-panel{border:1px solid var(--resp-color);border-left:8px solid var(--resp-color);border-radius:14px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:12px;margin:0 0 12px;box-shadow:0 10px 22px rgba(15,23,42,.045);}
               .capex10-detail-title{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid rgba(226,232,240,.95);border-left:6px solid var(--resp-color);border-radius:12px;background:#FFFFFF;padding:10px 12px;margin:0 0 10px;}
               .capex10-detail-title b{color:var(--resp-color);font-size:15px;font-weight:950;line-height:1.1;}
-              .capex10-detail-title span{color:#64748B;font-size:11px;font-weight:850;white-space:nowrap;}
+              .capex10-detail-title span{color:#334155;font-size:12px;font-weight:900;white-space:nowrap;}
               .capex10-detail-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0 0 12px;}
               .capex10-detail-kpi{border:1px solid rgba(226,232,240,.95);border-top:3px solid var(--resp-color);border-radius:10px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:8px 10px;min-height:58px;}
               .capex10-detail-kpi span{display:block;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -12358,12 +12376,13 @@ def render_capex10_available_funds_by_phase_line() -> None:
             responsible_start = pd.Timestamp(responsible_row["Inicio"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Inicio"]) else "-"
             responsible_end = pd.Timestamp(responsible_row["Fin_real"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Fin_real"]) else "-"
             responsible_color = _capex10_responsible_color(responsible_name)
-            responsible_label_color, responsible_icon = _capex10_responsible_expander_style(responsible_name)
+            _, responsible_icon = _capex10_responsible_expander_style(responsible_name)
+            responsible_total_label = format_clp(responsible_total).replace("$", "\\$")
             responsible_expander_label = (
-                f":{responsible_label_color}[{responsible_name}] · "
-                f"{format_clp(responsible_total)} · "
-                f"{int(responsible_row['Lineas'])} líneas · "
-                f"{int(responsible_row['Partidas'])} partidas"
+                f"**{responsible_name}** · "
+                f"**{responsible_total_label}** · "
+                f"**{int(responsible_row['Lineas'])} líneas** · "
+                f"**{int(responsible_row['Partidas'])} partidas**"
             )
             with st.expander(
                 responsible_expander_label,
