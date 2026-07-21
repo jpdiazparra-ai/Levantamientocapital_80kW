@@ -10136,11 +10136,79 @@ def render_capex10_investor_injection_cash_flow(
         contribution_color_map = _capex10_responsible_color_map(contribution_responsibles)
         contribution_total_period_clp = float(contribution_summary["Periodo_CLP"].sum() or 0.0)
         contribution_total_accumulated_clp = float(contribution_summary["Acumulado_CLP"].sum() or 0.0)
+        contribution_leader = contribution_summary.iloc[0]
+        contribution_leader_name = str(contribution_leader["_responsable"])
+        contribution_leader_clp = float(contribution_leader["Acumulado_CLP"] or 0.0)
+        contribution_leader_share = (
+            contribution_leader_clp / contribution_total_accumulated_clp * 100.0
+            if contribution_total_accumulated_clp > 0
+            else 0.0
+        )
+        contribution_total_parts = int(contribution_summary["Partidas_acumulado"].sum() or 0)
         st.markdown(
             f"""
+            <style>
+              .capex10-contribution-kpis{{
+                display:grid;
+                grid-template-columns:repeat(4,minmax(0,1fr));
+                gap:10px;
+                margin:0 0 12px;
+              }}
+              .capex10-contribution-kpi{{
+                border:1px solid rgba(203,213,225,.82);
+                border-top:4px solid var(--c);
+                border-radius:12px;
+                background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
+                padding:10px 12px;
+                min-height:72px;
+                box-shadow:0 10px 22px rgba(15,23,42,.045);
+              }}
+              .capex10-contribution-kpi span{{
+                display:block;
+                color:#64748B;
+                font-size:10px;
+                font-weight:950;
+                letter-spacing:.06em;
+                text-transform:uppercase;
+                white-space:nowrap;
+                overflow:hidden;
+                text-overflow:ellipsis;
+              }}
+              .capex10-contribution-kpi b{{
+                display:block;
+                color:var(--c);
+                font-size:18px;
+                line-height:1.08;
+                margin-top:7px;
+                font-weight:950;
+                white-space:nowrap;
+                overflow:hidden;
+                text-overflow:ellipsis;
+              }}
+              .capex10-contribution-kpi em{{
+                display:block;
+                color:#64748B;
+                font-size:10.5px;
+                line-height:1.12;
+                margin-top:4px;
+                font-style:normal;
+                font-weight:800;
+                white-space:nowrap;
+                overflow:hidden;
+                text-overflow:ellipsis;
+              }}
+              @media(max-width:1100px){{.capex10-contribution-kpis{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
+              @media(max-width:720px){{.capex10-contribution-kpis{{grid-template-columns:1fr;}}}}
+            </style>
             <div class="cash-injection-head" style="margin-top:14px;border-top:1px solid rgba(226,232,240,.92);padding-top:14px;">
               <div><b>Aporte por responsable seleccionado</b><span>Período {format_clp(contribution_total_period_clp)} · acumulado {format_clp(contribution_total_accumulated_clp)} hasta {selected_analysis_cutoff_month.strftime("%b %Y")}.</span></div>
               <div class="cash-injection-pill">Responsable</div>
+            </div>
+            <div class="capex10-contribution-kpis">
+              <div class="capex10-contribution-kpi" style="--c:#0F766E;"><span>Total período</span><b>{format_clp(contribution_total_period_clp)}</b><em>Selección activa</em></div>
+              <div class="capex10-contribution-kpi" style="--c:#164E63;"><span>Total acumulado</span><b>{format_clp(contribution_total_accumulated_clp)}</b><em>Hasta {selected_analysis_cutoff_month.strftime("%b %Y")}</em></div>
+              <div class="capex10-contribution-kpi" style="--c:{contribution_color_map.get(contribution_leader_name, "#1E3A8A")};"><span>Mayor responsable</span><b>{html.escape(contribution_leader_name)}</b><em>{format_clp(contribution_leader_clp)} · {contribution_leader_share:.1f}%</em></div>
+              <div class="capex10-contribution-kpi" style="--c:#B7791F;"><span>Partidas acumuladas</span><b>{contribution_total_parts}</b><em>{len(contribution_summary)} responsables visibles</em></div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -10190,8 +10258,8 @@ def render_capex10_investor_injection_cash_flow(
             float(contribution_summary["Acumulado_MM"].max() or 0.0),
         )
         fig_period_responsible.update_layout(
-            height=420,
-            margin=dict(l=12, r=18, t=34, b=82),
+            height=500,
+            margin=dict(l=12, r=22, t=42, b=88),
             barmode="group",
             showlegend=True,
             legend=dict(orientation="h", y=1.12, x=0, title=None, font=dict(size=11, color="#334155")),
@@ -10206,139 +10274,13 @@ def render_capex10_investor_injection_cash_flow(
             plot_bgcolor="rgba(0,0,0,0)",
             hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
         )
-
-        def build_hito_summary(scope_df: pd.DataFrame) -> pd.DataFrame:
-            hito_scope = scope_df.copy()
-            method_col = first_matching_column(hito_scope, ["Método", "Metodo"])
-            status_col = first_matching_column(hito_scope, ["Estado.1", "Estado de pago", "Estado"])
-            line_col = "Línea" if "Línea" in hito_scope.columns else None
-            if hito_scope.empty or not method_col or "Disponible_CLP" not in hito_scope.columns:
-                return pd.DataFrame(columns=["Hito", "Método", "Monto_CLP", "Partidas"])
-            if status_col:
-                unpaid_mask = hito_scope[status_col].astype(str).str.casefold().str.contains("no pagado|pendiente|por pagar", na=False)
-                hito_scope = hito_scope[unpaid_mask].copy()
-            if hito_scope.empty:
-                return pd.DataFrame(columns=["Hito", "Método", "Monto_CLP", "Partidas"])
-            hito_scope["_metodo_hito"] = hito_scope[method_col].astype(str).str.strip().replace({"": "Sin método", "nan": "Sin método", "None": "Sin método"})
-            hito_scope["_line_key"] = hito_scope[line_col].astype(str).map(normalize_key) if line_col else ""
-            hito_scope["_method_key"] = hito_scope["_metodo_hito"].astype(str).map(normalize_key)
-            hito_rows = []
-            for hito in (milestone_dates or []):
-                hito_label = str(hito.get("label", "Hito"))
-                hito_key = normalize_key(hito_label)
-                hito_mask = hito_scope["_line_key"].eq(hito_key) | hito_scope["_method_key"].str.contains(hito_key, na=False, regex=False)
-                hito_items = hito_scope[hito_mask].copy()
-                if hito_items.empty:
-                    continue
-                hito_grouped = (
-                    hito_items.groupby("_metodo_hito", as_index=False)
-                    .agg(
-                        Monto_CLP=("Disponible_CLP", "sum"),
-                        Partidas=("Tarea / Entregable", "count"),
-                    )
-                    .rename(columns={"_metodo_hito": "Método"})
-                )
-                hito_grouped["Hito"] = hito_label
-                hito_rows.extend(hito_grouped.to_dict("records"))
-            return pd.DataFrame(hito_rows)
-
-        hito_period_summary = build_hito_summary(period_scope_df)
-        hito_accumulated_summary = build_hito_summary(accumulated_scope_df)
-        hito_accumulated_total = (
-            hito_accumulated_summary.groupby("Hito", as_index=False)["Monto_CLP"].sum()
-            if not hito_accumulated_summary.empty
-            else pd.DataFrame(columns=["Hito", "Monto_CLP"])
+        st.plotly_chart(
+            fig_period_responsible,
+            use_container_width=True,
+            config={"displaylogo": False, "displayModeBar": False},
+            key=f"capex10_period_responsible_{key_suffix}",
         )
-        fig_hito_method = go.Figure()
-        if not hito_period_summary.empty:
-            hito_period_summary["Monto_fmt"] = hito_period_summary["Monto_CLP"].apply(format_clp)
-            hito_period_summary["Monto_MM"] = hito_period_summary["Monto_CLP"] / 1_000_000
-            method_palette = ["#0F766E", "#1E3A8A", "#B7791F", "#7C2D12", "#0E7490", "#64748B"]
-            for method_idx, method_name in enumerate(hito_period_summary["Método"].dropna().unique().tolist()):
-                method_rows = hito_period_summary[hito_period_summary["Método"].eq(method_name)].copy()
-                fig_hito_method.add_trace(
-                    go.Bar(
-                        x=method_rows["Hito"],
-                        y=method_rows["Monto_MM"],
-                        name=str(method_name),
-                        marker_color=method_palette[method_idx % len(method_palette)],
-                        marker_line=dict(color="rgba(255,255,255,.85)", width=1.5),
-                        text=method_rows["Monto_fmt"],
-                        textposition="inside",
-                        insidetextanchor="end",
-                        textfont=dict(size=10, color="#FFFFFF"),
-                        cliponaxis=False,
-                        width=0.58,
-                        customdata=np.stack([method_rows["Monto_fmt"], method_rows["Partidas"].astype(int)], axis=-1),
-                        hovertemplate="<b>%{x}</b><br>Método: " + html.escape(str(method_name)) + "<br>Período: %{customdata[0]}<br>Partidas: %{customdata[1]}<extra></extra>",
-                    )
-                )
-        if not hito_accumulated_total.empty:
-            hito_accumulated_total["Monto_fmt"] = hito_accumulated_total["Monto_CLP"].apply(format_clp)
-            hito_accumulated_total["Monto_MM"] = hito_accumulated_total["Monto_CLP"] / 1_000_000
-            fig_hito_method.add_trace(
-                go.Scatter(
-                    x=hito_accumulated_total["Hito"],
-                    y=hito_accumulated_total["Monto_MM"],
-                    name="Acumulado",
-                    mode="lines+markers",
-                    line=dict(color="#071427", width=3),
-                    marker=dict(size=9, color="#FFFFFF", line=dict(color="#071427", width=2)),
-                    customdata=hito_accumulated_total["Monto_fmt"],
-                    hovertemplate="<b>%{x}</b><br>Acumulado: %{customdata}<extra></extra>",
-                )
-            )
-        if fig_hito_method.data:
-            hito_period_top = (
-                float(hito_period_summary["Monto_MM"].max() or 0.0)
-                if not hito_period_summary.empty and "Monto_MM" in hito_period_summary.columns
-                else 0.0
-            )
-            hito_accumulated_top = (
-                float(hito_accumulated_total["Monto_MM"].max() or 0.0)
-                if not hito_accumulated_total.empty and "Monto_MM" in hito_accumulated_total.columns
-                else 0.0
-            )
-            hito_axis_top = max(hito_period_top, hito_accumulated_top)
-            fig_hito_method.update_layout(
-                height=420,
-                barmode="group",
-                margin=dict(l=8, r=18, t=34, b=82),
-                legend=dict(orientation="h", y=1.14, x=0, title=None, font=dict(size=10)),
-                yaxis=dict(
-                    title="MM CLP no pagado",
-                    gridcolor="rgba(148,163,184,.18)",
-                    zeroline=False,
-                    range=[0, hito_axis_top * 1.18 if hito_axis_top > 0 else 1],
-                ),
-                xaxis=dict(title=None, tickangle=-20, automargin=True),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
-            )
-
-        contribution_col, hito_col = st.columns([0.52, 0.48])
-        with contribution_col:
-            st.plotly_chart(
-                fig_period_responsible,
-                use_container_width=True,
-                config={"displaylogo": False, "displayModeBar": False},
-                key=f"capex10_period_responsible_{key_suffix}",
-            )
-        with hito_col:
-            st.markdown(
-                f"<div class='cash-injection-head' style='margin:0 0 4px;'><div><b>Hitos por método</b><span>Barras del período y línea acumulada hasta {selected_analysis_cutoff_month.strftime('%b %Y')}.</span></div></div>",
-                unsafe_allow_html=True,
-            )
-            if not fig_hito_method.data:
-                st.info("No hay monto no pagado asociado a los hitos del período.")
-            else:
-                st.plotly_chart(
-                    fig_hito_method,
-                    use_container_width=True,
-                    config={"displaylogo": False, "displayModeBar": False},
-                    key=f"capex10_hito_method_{key_suffix}",
-                )
+        return
 
     def render_period_phase_line_detail(
         scope_df: pd.DataFrame,
@@ -10972,225 +10914,226 @@ def render_capex10_investor_injection_cash_flow(
                 responsible_monthly_full["Flujo_fmt"] = responsible_monthly_full["Flujo_CLP"].apply(format_clp)
                 responsible_monthly_full["Acumulado_fmt"] = responsible_monthly_full["Acumulado_CLP"].apply(format_clp)
 
-                st.markdown(
-                    """
-                    <div class="cash-injection-head" style="margin-top:18px;border-top:1px solid rgba(226,232,240,.92);padding-top:16px;">
-                      <div><b>Flujo de caja por responsable</b><span>Evolución mensual de aportes requeridos por responsable visible.</span></div>
-                      <div class="cash-injection-pill">Líneas</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                line_df = responsible_monthly_full[
-                    responsible_monthly_full["_responsable"].isin(visible_responsibles)
-                ].copy()
-                monthly_totals = line_df.groupby("_month", as_index=False)["Flujo_CLP"].sum()
-                responsible_totals = (
-                    line_df.groupby("_responsable", as_index=False)["Flujo_CLP"]
-                    .sum()
-                    .sort_values("Flujo_CLP", ascending=False)
-                )
-                total_visible_clp = float(responsible_totals["Flujo_CLP"].sum()) if not responsible_totals.empty else 0.0
-                leader_row = responsible_totals.iloc[0] if not responsible_totals.empty else None
-                peak_month_row = (
-                    monthly_totals.sort_values("Flujo_CLP", ascending=False).iloc[0]
-                    if not monthly_totals.empty
-                    else None
-                )
-                active_monthly_totals = monthly_totals[monthly_totals["Flujo_CLP"] > 0]
-                average_monthly_clp = (
-                    float(active_monthly_totals["Flujo_CLP"].mean())
-                    if not active_monthly_totals.empty
-                    else 0.0
-                )
-                leader_name = html.escape(str(leader_row["_responsable"])) if leader_row is not None else "-"
-                leader_value = format_clp(float(leader_row["Flujo_CLP"])) if leader_row is not None else format_clp(0)
-                peak_month_label = (
-                    pd.to_datetime(peak_month_row["_month"]).strftime("%b %Y")
-                    if peak_month_row is not None
-                    else "-"
-                )
-                peak_month_value = format_clp(float(peak_month_row["Flujo_CLP"])) if peak_month_row is not None else format_clp(0)
-                flow_control_col, flow_kpi_col = st.columns([0.34, 0.66], vertical_alignment="bottom")
-                with flow_control_col:
-                    responsible_flow_mode = st.radio(
-                        "Tipo de flujo",
-                        ["Acumulado", "Mensual"],
-                        horizontal=True,
-                        key="capex10_responsible_cashflow_mode",
-                    )
-                with flow_kpi_col:
+                with st.expander("Flujo de caja por responsable", expanded=False):
                     st.markdown(
-                        f"""
-                        <style>
-                          .cashflow-kpi-strip {{
-                            display:grid;
-                            grid-template-columns:repeat(4,minmax(0,1fr));
-                            gap:8px;
-                            margin:0 0 6px;
-                          }}
-                          .cashflow-kpi-card {{
-                            min-height:58px;
-                            border:1px solid rgba(203,213,225,.78);
-                            border-radius:10px;
-                            background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(248,250,252,.96));
-                            padding:8px 10px;
-                            box-shadow:0 8px 18px rgba(15,23,42,.045);
-                            overflow:hidden;
-                          }}
-                          .cashflow-kpi-card span {{
-                            display:block;
-                            color:#64748B;
-                            font-size:10px;
-                            font-weight:900;
-                            letter-spacing:.055em;
-                            line-height:1.05;
-                            text-transform:uppercase;
-                            white-space:nowrap;
-                            overflow:hidden;
-                            text-overflow:ellipsis;
-                          }}
-                          .cashflow-kpi-card b {{
-                            display:block;
-                            color:#071427;
-                            font-size:16px;
-                            line-height:1.1;
-                            margin-top:6px;
-                            font-weight:950;
-                            white-space:nowrap;
-                            overflow:hidden;
-                            text-overflow:ellipsis;
-                          }}
-                          .cashflow-kpi-card em {{
-                            display:block;
-                            color:#7C8798;
-                            font-size:10.5px;
-                            line-height:1.1;
-                            margin-top:3px;
-                            font-style:normal;
-                            white-space:nowrap;
-                            overflow:hidden;
-                            text-overflow:ellipsis;
-                          }}
-                          @media (max-width:1100px) {{
-                            .cashflow-kpi-strip {{grid-template-columns:repeat(2,minmax(0,1fr));}}
-                          }}
-                        </style>
-                        <div class="cashflow-kpi-strip">
-                          <div class="cashflow-kpi-card"><span>Aporte visible</span><b>{format_clp(total_visible_clp)}</b><em>{len(responsible_totals)} responsables</em></div>
-                          <div class="cashflow-kpi-card"><span>Mayor responsable</span><b>{leader_name}</b><em>{leader_value}</em></div>
-                          <div class="cashflow-kpi-card"><span>Pico mensual</span><b>{peak_month_value}</b><em>{html.escape(peak_month_label)}</em></div>
-                          <div class="cashflow-kpi-card"><span>Promedio mensual</span><b>{format_clp(average_monthly_clp)}</b><em>meses con aporte</em></div>
+                        """
+                        <div class="cash-injection-head" style="margin-top:18px;border-top:1px solid rgba(226,232,240,.92);padding-top:16px;">
+                          <div><b>Flujo de caja por responsable</b><span>Evolución mensual de aportes requeridos por responsable visible.</span></div>
+                          <div class="cash-injection-pill">Líneas</div>
                         </div>
                         """,
                         unsafe_allow_html=True,
                     )
-                y_col = "Acumulado_CLP" if responsible_flow_mode == "Acumulado" else "Flujo_CLP"
-                line_df["Valor_modo_fmt"] = line_df["Acumulado_fmt"] if responsible_flow_mode == "Acumulado" else line_df["Flujo_fmt"]
-                responsible_color_map = _capex10_responsible_color_map(visible_responsibles)
-                fig_responsible_cashflow = px.line(
-                    line_df,
-                    x="_month",
-                    y=y_col,
-                    color="_responsable",
-                    markers=True,
-                    line_shape="spline",
-                    custom_data=["Valor_modo_fmt", "Partidas", "Flujo_fmt", "Acumulado_fmt"],
-                    labels={"_month": "", y_col: "CLP", "_responsable": "Responsable"},
-                    color_discrete_map=responsible_color_map,
-                )
-                fig_responsible_cashflow.update_traces(
-                    line=dict(width=3),
-                    marker=dict(size=8, line=dict(width=1.5, color="#FFFFFF")),
-                    hovertemplate=(
-                        "<b>%{fullData.name}</b><br>"
-                        "%{x|%b %Y}<br>"
-                        f"{responsible_flow_mode}: %{{customdata[0]}}<br>"
-                        "Flujo mensual: %{customdata[2]}<br>"
-                        "Acumulado: %{customdata[3]}<br>"
-                        "Partidas: %{customdata[1]}<extra></extra>"
-                    ),
-                )
-                fig_responsible_cashflow.update_layout(
-                    height=430,
-                    margin=dict(l=12, r=132, t=10, b=42),
-                    legend=dict(orientation="h", y=1.12, x=0, title=None),
-                    yaxis=dict(title="CLP", tickprefix="$", gridcolor="rgba(148,163,184,.18)", zeroline=False),
-                    xaxis=dict(title=None),
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    hovermode="x unified",
-                    hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
-                )
-                for milestone_idx, milestone in enumerate(valid_milestones):
-                    milestone_date = pd.Timestamp(milestone["date"])
-                    milestone_month = milestone_date.to_period("M").to_timestamp()
-                    milestone_color = milestone_colors[milestone_idx % len(milestone_colors)]
-                    fig_responsible_cashflow.add_shape(
-                        type="line",
-                        x0=milestone_month,
-                        x1=milestone_month,
-                        y0=0,
-                        y1=1,
-                        xref="x",
-                        yref="paper",
-                        line=dict(color=milestone_color, width=2, dash="dash"),
+                    line_df = responsible_monthly_full[
+                        responsible_monthly_full["_responsable"].isin(visible_responsibles)
+                    ].copy()
+                    monthly_totals = line_df.groupby("_month", as_index=False)["Flujo_CLP"].sum()
+                    responsible_totals = (
+                        line_df.groupby("_responsable", as_index=False)["Flujo_CLP"]
+                        .sum()
+                        .sort_values("Flujo_CLP", ascending=False)
                     )
-                    fig_responsible_cashflow.add_annotation(
-                        x=milestone_month,
-                        y=0.98 - (milestone_idx * 0.08),
-                        xref="x",
-                        yref="paper",
-                        text=f"{milestone.get('label', 'Hito')} · {milestone_date.strftime('%d-%m-%Y')}",
-                        showarrow=False,
-                        xanchor="left" if milestone_idx % 2 == 0 else "right",
-                        yanchor="top",
-                        font=dict(size=11, color=milestone_color),
-                        bgcolor="rgba(255,255,255,.92)",
-                        bordercolor=milestone_color,
-                        borderwidth=1,
-                        borderpad=4,
+                    total_visible_clp = float(responsible_totals["Flujo_CLP"].sum()) if not responsible_totals.empty else 0.0
+                    leader_row = responsible_totals.iloc[0] if not responsible_totals.empty else None
+                    peak_month_row = (
+                        monthly_totals.sort_values("Flujo_CLP", ascending=False).iloc[0]
+                        if not monthly_totals.empty
+                        else None
                     )
-                final_by_responsible = (
-                    line_df.sort_values("_month")
-                    .groupby("_responsable", as_index=False)
-                    .tail(1)
-                    .sort_values(y_col, ascending=False)
-                    .reset_index(drop=True)
-                )
-                y_range = float(line_df[y_col].max() - line_df[y_col].min()) if not line_df.empty else 0.0
-                min_label_gap = max(y_range * 0.085, 2_000_000.0)
-                placed_label_y: list[float] = []
-                for label_idx, final_row in final_by_responsible.iterrows():
-                    responsible_name = str(final_row["_responsable"])
-                    label_color = responsible_color_map.get(responsible_name, "#1E3A8A")
-                    point_y = float(final_row[y_col] or 0.0)
-                    label_y = point_y
-                    if label_idx > 0:
-                        label_y -= min_label_gap * 0.18
-                    while any(abs(label_y - used_y) < min_label_gap for used_y in placed_label_y):
-                        label_y -= min_label_gap
-                    placed_label_y.append(label_y)
-                    fig_responsible_cashflow.add_annotation(
-                        x=final_row["_month"],
-                        y=label_y,
-                        text=format_clp(point_y),
-                        showarrow=False,
-                        xanchor="left",
-                        xshift=12,
-                        align="left",
-                        font=dict(size=12, color=label_color),
-                        bgcolor="rgba(255,255,255,.96)",
-                        bordercolor=label_color,
-                        borderwidth=1,
-                        borderpad=6,
+                    active_monthly_totals = monthly_totals[monthly_totals["Flujo_CLP"] > 0]
+                    average_monthly_clp = (
+                        float(active_monthly_totals["Flujo_CLP"].mean())
+                        if not active_monthly_totals.empty
+                        else 0.0
                     )
-                if placed_label_y:
-                    y_min = min(float(line_df[y_col].min()), min(placed_label_y))
-                    y_max = max(float(line_df[y_col].max()), max(placed_label_y))
-                    y_pad = max((y_max - y_min) * 0.08, 1_000_000.0)
-                    fig_responsible_cashflow.update_yaxes(range=[y_min - y_pad, y_max + y_pad])
-                st.plotly_chart(fig_responsible_cashflow, use_container_width=True, config={"displaylogo": False})
+                    leader_name = html.escape(str(leader_row["_responsable"])) if leader_row is not None else "-"
+                    leader_value = format_clp(float(leader_row["Flujo_CLP"])) if leader_row is not None else format_clp(0)
+                    peak_month_label = (
+                        pd.to_datetime(peak_month_row["_month"]).strftime("%b %Y")
+                        if peak_month_row is not None
+                        else "-"
+                    )
+                    peak_month_value = format_clp(float(peak_month_row["Flujo_CLP"])) if peak_month_row is not None else format_clp(0)
+                    flow_control_col, flow_kpi_col = st.columns([0.34, 0.66], vertical_alignment="bottom")
+                    with flow_control_col:
+                        responsible_flow_mode = st.radio(
+                            "Tipo de flujo",
+                            ["Acumulado", "Mensual"],
+                            horizontal=True,
+                            key="capex10_responsible_cashflow_mode",
+                        )
+                    with flow_kpi_col:
+                        st.markdown(
+                            f"""
+                            <style>
+                              .cashflow-kpi-strip {{
+                                display:grid;
+                                grid-template-columns:repeat(4,minmax(0,1fr));
+                                gap:8px;
+                                margin:0 0 6px;
+                              }}
+                              .cashflow-kpi-card {{
+                                min-height:58px;
+                                border:1px solid rgba(203,213,225,.78);
+                                border-radius:10px;
+                                background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(248,250,252,.96));
+                                padding:8px 10px;
+                                box-shadow:0 8px 18px rgba(15,23,42,.045);
+                                overflow:hidden;
+                              }}
+                              .cashflow-kpi-card span {{
+                                display:block;
+                                color:#64748B;
+                                font-size:10px;
+                                font-weight:900;
+                                letter-spacing:.055em;
+                                line-height:1.05;
+                                text-transform:uppercase;
+                                white-space:nowrap;
+                                overflow:hidden;
+                                text-overflow:ellipsis;
+                              }}
+                              .cashflow-kpi-card b {{
+                                display:block;
+                                color:#071427;
+                                font-size:16px;
+                                line-height:1.1;
+                                margin-top:6px;
+                                font-weight:950;
+                                white-space:nowrap;
+                                overflow:hidden;
+                                text-overflow:ellipsis;
+                              }}
+                              .cashflow-kpi-card em {{
+                                display:block;
+                                color:#7C8798;
+                                font-size:10.5px;
+                                line-height:1.1;
+                                margin-top:3px;
+                                font-style:normal;
+                                white-space:nowrap;
+                                overflow:hidden;
+                                text-overflow:ellipsis;
+                              }}
+                              @media (max-width:1100px) {{
+                                .cashflow-kpi-strip {{grid-template-columns:repeat(2,minmax(0,1fr));}}
+                              }}
+                            </style>
+                            <div class="cashflow-kpi-strip">
+                              <div class="cashflow-kpi-card"><span>Aporte visible</span><b>{format_clp(total_visible_clp)}</b><em>{len(responsible_totals)} responsables</em></div>
+                              <div class="cashflow-kpi-card"><span>Mayor responsable</span><b>{leader_name}</b><em>{leader_value}</em></div>
+                              <div class="cashflow-kpi-card"><span>Pico mensual</span><b>{peak_month_value}</b><em>{html.escape(peak_month_label)}</em></div>
+                              <div class="cashflow-kpi-card"><span>Promedio mensual</span><b>{format_clp(average_monthly_clp)}</b><em>meses con aporte</em></div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    y_col = "Acumulado_CLP" if responsible_flow_mode == "Acumulado" else "Flujo_CLP"
+                    line_df["Valor_modo_fmt"] = line_df["Acumulado_fmt"] if responsible_flow_mode == "Acumulado" else line_df["Flujo_fmt"]
+                    responsible_color_map = _capex10_responsible_color_map(visible_responsibles)
+                    fig_responsible_cashflow = px.line(
+                        line_df,
+                        x="_month",
+                        y=y_col,
+                        color="_responsable",
+                        markers=True,
+                        line_shape="spline",
+                        custom_data=["Valor_modo_fmt", "Partidas", "Flujo_fmt", "Acumulado_fmt"],
+                        labels={"_month": "", y_col: "CLP", "_responsable": "Responsable"},
+                        color_discrete_map=responsible_color_map,
+                    )
+                    fig_responsible_cashflow.update_traces(
+                        line=dict(width=3),
+                        marker=dict(size=8, line=dict(width=1.5, color="#FFFFFF")),
+                        hovertemplate=(
+                            "<b>%{fullData.name}</b><br>"
+                            "%{x|%b %Y}<br>"
+                            f"{responsible_flow_mode}: %{{customdata[0]}}<br>"
+                            "Flujo mensual: %{customdata[2]}<br>"
+                            "Acumulado: %{customdata[3]}<br>"
+                            "Partidas: %{customdata[1]}<extra></extra>"
+                        ),
+                    )
+                    fig_responsible_cashflow.update_layout(
+                        height=430,
+                        margin=dict(l=12, r=132, t=10, b=42),
+                        legend=dict(orientation="h", y=1.12, x=0, title=None),
+                        yaxis=dict(title="CLP", tickprefix="$", gridcolor="rgba(148,163,184,.18)", zeroline=False),
+                        xaxis=dict(title=None),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        hovermode="x unified",
+                        hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
+                    )
+                    for milestone_idx, milestone in enumerate(valid_milestones):
+                        milestone_date = pd.Timestamp(milestone["date"])
+                        milestone_month = milestone_date.to_period("M").to_timestamp()
+                        milestone_color = milestone_colors[milestone_idx % len(milestone_colors)]
+                        fig_responsible_cashflow.add_shape(
+                            type="line",
+                            x0=milestone_month,
+                            x1=milestone_month,
+                            y0=0,
+                            y1=1,
+                            xref="x",
+                            yref="paper",
+                            line=dict(color=milestone_color, width=2, dash="dash"),
+                        )
+                        fig_responsible_cashflow.add_annotation(
+                            x=milestone_month,
+                            y=0.98 - (milestone_idx * 0.08),
+                            xref="x",
+                            yref="paper",
+                            text=f"{milestone.get('label', 'Hito')} · {milestone_date.strftime('%d-%m-%Y')}",
+                            showarrow=False,
+                            xanchor="left" if milestone_idx % 2 == 0 else "right",
+                            yanchor="top",
+                            font=dict(size=11, color=milestone_color),
+                            bgcolor="rgba(255,255,255,.92)",
+                            bordercolor=milestone_color,
+                            borderwidth=1,
+                            borderpad=4,
+                        )
+                    final_by_responsible = (
+                        line_df.sort_values("_month")
+                        .groupby("_responsable", as_index=False)
+                        .tail(1)
+                        .sort_values(y_col, ascending=False)
+                        .reset_index(drop=True)
+                    )
+                    y_range = float(line_df[y_col].max() - line_df[y_col].min()) if not line_df.empty else 0.0
+                    min_label_gap = max(y_range * 0.085, 2_000_000.0)
+                    placed_label_y: list[float] = []
+                    for label_idx, final_row in final_by_responsible.iterrows():
+                        responsible_name = str(final_row["_responsable"])
+                        label_color = responsible_color_map.get(responsible_name, "#1E3A8A")
+                        point_y = float(final_row[y_col] or 0.0)
+                        label_y = point_y
+                        if label_idx > 0:
+                            label_y -= min_label_gap * 0.18
+                        while any(abs(label_y - used_y) < min_label_gap for used_y in placed_label_y):
+                            label_y -= min_label_gap
+                        placed_label_y.append(label_y)
+                        fig_responsible_cashflow.add_annotation(
+                            x=final_row["_month"],
+                            y=label_y,
+                            text=format_clp(point_y),
+                            showarrow=False,
+                            xanchor="left",
+                            xshift=12,
+                            align="left",
+                            font=dict(size=12, color=label_color),
+                            bgcolor="rgba(255,255,255,.96)",
+                            bordercolor=label_color,
+                            borderwidth=1,
+                            borderpad=6,
+                        )
+                    if placed_label_y:
+                        y_min = min(float(line_df[y_col].min()), min(placed_label_y))
+                        y_max = max(float(line_df[y_col].max()), max(placed_label_y))
+                        y_pad = max((y_max - y_min) * 0.08, 1_000_000.0)
+                        fig_responsible_cashflow.update_yaxes(range=[y_min - y_pad, y_max + y_pad])
+                    st.plotly_chart(fig_responsible_cashflow, use_container_width=True, config={"displaylogo": False})
 
 
 def render_capex10_selected_cash_flow(funds_df: pd.DataFrame) -> None:
@@ -23611,7 +23554,8 @@ def render_inputs_capex_10kw_detail():
                 scope_label="toda la hoja del cronograma",
                 pilot_total_reference_clp=get_brecha_piloto_10kw_clp(refresh_nonce=data_refresh_nonce),
             )
-    render_capex10_stage_line_detail_table()
+    with st.expander("Detalle completo · etapa y línea", expanded=False):
+        render_capex10_stage_line_detail_table()
     return
 
     st.markdown(
