@@ -12189,6 +12189,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
             unsafe_allow_html=True,
         )
         st.plotly_chart(fig_funds, use_container_width=True, config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"]})
+    return
 
     with st.container(border=True):
         st.markdown(
