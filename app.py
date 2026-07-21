@@ -10502,6 +10502,14 @@ def render_capex10_investor_injection_cash_flow(
                 display:block;color:var(--resp-color);font-size:15px;line-height:1.08;font-weight:950;
                 margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
               }}
+              .cash-period-task-head{{
+                display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:12px 0 8px;
+                border:1px solid rgba(226,232,240,.95);border-left:5px solid var(--resp-color);
+                border-radius:12px;background:#FFFFFF;padding:10px 12px;
+              }}
+              .cash-period-task-head b{{display:block;color:var(--resp-color);font-size:14px;font-weight:950;line-height:1.15;}}
+              .cash-period-task-head span{{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:3px;}}
+              .cash-period-task-amount{{color:#071427;font-size:14px;font-weight:950;white-space:nowrap;}}
               @media(max-width:980px){{.cash-period-resp-kpis{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
               @media(max-width:620px){{.cash-period-detail-head{{display:block;}}.cash-period-detail-total{{margin-top:8px;}}.cash-period-resp-kpis{{grid-template-columns:1fr;}}}}
             </style>
@@ -10524,6 +10532,98 @@ def render_capex10_investor_injection_cash_flow(
             responsible_label_color, responsible_icon = _capex10_responsible_expander_style(responsible_name)
             responsible_start = pd.Timestamp(responsible_row["Inicio"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Inicio"]) else "-"
             responsible_end = pd.Timestamp(responsible_row["Fin_real"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Fin_real"]) else "-"
+
+            def render_selectable_phase_line_detail(
+                source_df: pd.DataFrame,
+                summary_df: pd.DataFrame,
+                section_label: str,
+                weight_col: str,
+                weight_label: str,
+                key_prefix: str,
+            ) -> None:
+                st.markdown(
+                    f"<div class='cash-injection-head' style='margin:8px 0 4px;'><div><b>{html.escape(section_label)}</b><span>Selecciona una fase/línea para ver las tareas que componen el monto.</span></div></div>",
+                    unsafe_allow_html=True,
+                )
+                if summary_df.empty:
+                    st.info(f"Este responsable no tiene partidas en {section_label.lower()}.")
+                    return
+
+                selectable_rows = summary_df.copy().reset_index(drop=True)
+                selectable_rows["Disponible"] = selectable_rows["Disponible_CLP"].apply(format_clp)
+                selectable_rows[weight_label] = selectable_rows[weight_col].map(lambda value: f"{value:.1f}%")
+                selectable_rows["Inicio"] = pd.to_datetime(selectable_rows["Inicio"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                selectable_rows["Fin plan"] = pd.to_datetime(selectable_rows["Fin_plan"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                selectable_rows["Fin real"] = pd.to_datetime(selectable_rows["Fin_real"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                selectable_rows = selectable_rows.rename(columns={phase_col: "Fase", line_col: "Línea"})
+                display_rows = selectable_rows[["Fase", "Línea", "Partidas", "Disponible", weight_label, "Inicio", "Fin plan", "Fin real"]]
+                selected_state = st.dataframe(
+                    display_rows,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(300, 38 + (len(display_rows) + 1) * 35),
+                    key=f"{key_prefix}_phase_line_{key_suffix}_{normalize_key(responsible_name)}",
+                    on_select="rerun",
+                    selection_mode="single-row",
+                )
+                selected_rows = getattr(getattr(selected_state, "selection", None), "rows", []) if selected_state is not None else []
+                selected_position = int(selected_rows[0]) if selected_rows else 0
+                selected_position = max(0, min(selected_position, len(selectable_rows) - 1))
+                selected_line = selectable_rows.iloc[selected_position]
+                selected_phase_name = str(selected_line["Fase"])
+                selected_line_name = str(selected_line["Línea"])
+                selected_items = source_df[
+                    source_df["_responsable_detalle_periodo"].eq(responsible_name)
+                    & source_df[phase_col].astype(str).eq(selected_phase_name)
+                    & source_df[line_col].astype(str).eq(selected_line_name)
+                ].copy()
+                if selected_items.empty:
+                    st.info("No hay tareas para la fase/línea seleccionada.")
+                    return
+                sort_cols = [col for col in [phase_col, line_col, task_col, "Disponible_CLP"] if col and col in selected_items.columns]
+                if sort_cols:
+                    selected_items = selected_items.sort_values(sort_cols, ascending=[True] * (len(sort_cols) - 1) + [False], na_position="last")
+                task_display = pd.DataFrame()
+                task_display["Fase"] = selected_items[phase_col].astype(str).replace({"nan": "-", "None": "-"})
+                task_display["Línea"] = selected_items[line_col].astype(str).replace({"nan": "-", "None": "-"})
+                task_display["Tarea / Entregable"] = (
+                    selected_items[task_col].astype(str).replace({"nan": "-", "None": "-"})
+                    if task_col and task_col in selected_items.columns
+                    else "-"
+                )
+                task_display["Disponible"] = selected_items["Disponible_CLP"].apply(format_clp)
+                status_col = first_matching_column(selected_items, ["Estado.1", "Estado"])
+                if status_col:
+                    task_display["Estado"] = selected_items[status_col].astype(str).replace({"nan": "-", "None": "-"})
+                for source_col, display_col in [
+                    (chart_date_col, "Fecha FC") if chart_date_col else (None, "Fecha FC"),
+                    (GANTT_DATE_COL_START, "Inicio"),
+                    (GANTT_DATE_COL_END_PLAN, "Fin plan"),
+                    (GANTT_DATE_COL_END_REAL, "Fin real"),
+                ]:
+                    if source_col and source_col in selected_items.columns:
+                        task_display[display_col] = pd.to_datetime(selected_items[source_col], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                selected_total = float(selected_items["Disponible_CLP"].sum() or 0.0)
+                st.markdown(
+                    f"""
+                    <div class="cash-period-task-head" style="--resp-color:{responsible_color};">
+                      <div>
+                        <b>{html.escape(selected_phase_name)}</b>
+                        <span>{html.escape(selected_line_name)} · {len(selected_items)} tareas seleccionadas</span>
+                      </div>
+                      <div class="cash-period-task-amount">{format_clp(selected_total)}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.dataframe(
+                    task_display,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(360, 38 + (len(task_display) + 1) * 35),
+                    key=f"{key_prefix}_task_detail_{key_suffix}_{normalize_key(responsible_name)}",
+                )
+
             expander_label = (
                 f":{responsible_label_color}[{responsible_name}] · "
                 f"Período {format_clp(responsible_total)} · "
@@ -10562,41 +10662,22 @@ def render_capex10_investor_injection_cash_flow(
                 accumulated_responsible_lines = accumulated_line_summary[
                     accumulated_line_summary["_responsable_detalle_periodo"].eq(responsible_name)
                 ].copy()
-                if not accumulated_responsible_lines.empty:
-                    accumulated_responsible_lines["Disponible"] = accumulated_responsible_lines["Disponible_CLP"].apply(format_clp)
-                    accumulated_responsible_lines["% acumulado"] = accumulated_responsible_lines["Peso_acumulado"].map(lambda value: f"{value:.1f}%")
-                    accumulated_responsible_lines["Inicio"] = pd.to_datetime(accumulated_responsible_lines["Inicio"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
-                    accumulated_responsible_lines["Fin plan"] = pd.to_datetime(accumulated_responsible_lines["Fin_plan"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
-                    accumulated_responsible_lines["Fin real"] = pd.to_datetime(accumulated_responsible_lines["Fin_real"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
-                    accumulated_responsible_lines = accumulated_responsible_lines.rename(
-                        columns={
-                            phase_col: "Fase",
-                            line_col: "Línea",
-                        }
-                    )
-                period_line_tab, accumulated_line_tab = st.tabs(["Período seleccionado", "Acumulado responsable"])
-                with period_line_tab:
-                    if responsible_lines.empty:
-                        st.info("Este responsable no tiene partidas en el período seleccionado.")
-                    else:
-                        st.dataframe(
-                            responsible_lines[["Fase", "Línea", "Partidas", "Disponible", "% período", "Inicio", "Fin plan", "Fin real"]],
-                            use_container_width=True,
-                            hide_index=True,
-                            height=min(330, 38 + (len(responsible_lines) + 1) * 35),
-                            key=f"capex10_period_phase_line_detail_{key_suffix}_{normalize_key(responsible_name)}",
-                        )
-                with accumulated_line_tab:
-                    if accumulated_responsible_lines.empty:
-                        st.info("Este responsable no tiene partidas acumuladas hasta el período seleccionado.")
-                    else:
-                        st.dataframe(
-                            accumulated_responsible_lines[["Fase", "Línea", "Partidas", "Disponible", "% acumulado", "Inicio", "Fin plan", "Fin real"]],
-                            use_container_width=True,
-                            hide_index=True,
-                            height=min(330, 38 + (len(accumulated_responsible_lines) + 1) * 35),
-                            key=f"capex10_accumulated_phase_line_detail_{key_suffix}_{normalize_key(responsible_name)}",
-                        )
+                render_selectable_phase_line_detail(
+                    detail_scope_df,
+                    responsible_lines,
+                    "Período seleccionado",
+                    "Peso_periodo",
+                    "% período",
+                    "capex10_period",
+                )
+                render_selectable_phase_line_detail(
+                    accumulated_detail_scope_df,
+                    accumulated_responsible_lines,
+                    f"Acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}",
+                    "Peso_acumulado",
+                    "% acumulado",
+                    "capex10_accumulated",
+                )
 
     st.markdown(
         f"""
@@ -10647,38 +10728,7 @@ def render_capex10_investor_injection_cash_flow(
         key_suffix: str,
         empty_message: str,
     ) -> None:
-        period_total = float(items["Disponible_CLP"].sum() or 0.0) if "Disponible_CLP" in items.columns else 0.0
         render_period_phase_line_detail(items, accumulated_items, plan_label, key_suffix)
-        period_expander_label = f"Detalle del período · {selected_period_label} · {format_clp(period_total)} · {len(items)} partidas"
-        with st.expander(period_expander_label, expanded=False):
-            if detail_display.empty:
-                st.info(empty_message)
-            else:
-                st.dataframe(
-                    detail_display,
-                    use_container_width=True,
-                    hide_index=True,
-                    height=min(420, 38 + (len(detail_display) + 1) * 35),
-                )
-        accumulated_flow = (
-            float(accumulated_items["Disponible_CLP"].sum() or 0.0)
-            if "Disponible_CLP" in accumulated_items.columns
-            else 0.0
-        )
-        accumulated_expander_label = (
-            f"Detalle acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')} · "
-            f"{format_clp(accumulated_flow)} · {len(accumulated_items)} partidas"
-        )
-        with st.expander(accumulated_expander_label, expanded=False):
-            if accumulated_detail_display.empty:
-                st.info(f"No hay partidas acumuladas en {plan_label} hasta el período seleccionado.")
-            else:
-                st.dataframe(
-                    accumulated_detail_display,
-                    use_container_width=True,
-                    hide_index=True,
-                    height=min(420, 38 + (len(accumulated_detail_display) + 1) * 35),
-                )
         render_period_responsible_contribution(items, accumulated_items, plan_label, key_suffix)
 
     if is_plan_a_selected:
