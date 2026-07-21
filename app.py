@@ -10241,9 +10241,15 @@ def render_capex10_investor_injection_cash_flow(
                 x=contribution_summary["_responsable"],
                 y=contribution_summary["Acumulado_MM"],
                 name="Acumulado",
-                mode="lines+markers",
+                mode="lines+markers+text",
                 line=dict(color="#071427", width=3),
                 marker=dict(size=9, color="#FFFFFF", line=dict(color="#071427", width=2)),
+                text=contribution_summary["Acumulado_fmt"],
+                textposition=[
+                    "top center" if idx % 2 == 0 else "bottom center"
+                    for idx in range(len(contribution_summary))
+                ],
+                textfont=dict(size=10, color="#071427"),
                 customdata=np.stack([contribution_summary["Acumulado_fmt"], contribution_summary["Partidas_acumulado"].astype(int)], axis=-1),
                 hovertemplate=(
                     "<b>%{x}</b><br>"
@@ -10267,7 +10273,7 @@ def render_capex10_investor_injection_cash_flow(
                 title="MM CLP",
                 gridcolor="rgba(148,163,184,.18)",
                 zeroline=False,
-                range=[0, responsible_axis_top * 1.18 if responsible_axis_top > 0 else 1],
+                range=[0, responsible_axis_top * 1.28 if responsible_axis_top > 0 else 1],
             ),
             xaxis=dict(title=None, tickangle=-25, automargin=True),
             paper_bgcolor="rgba(0,0,0,0)",
@@ -10289,12 +10295,12 @@ def render_capex10_investor_injection_cash_flow(
         key_suffix: str,
     ) -> None:
         if scope_df.empty or "Disponible_CLP" not in scope_df.columns:
-            st.info("No hay detalle por fase y línea para el período seleccionado.")
+            st.info("No hay detalle por responsable, fase y línea para el período seleccionado.")
             return
         detail_scope_df = scope_df.copy()
         detail_scope_df = detail_scope_df[detail_scope_df["Disponible_CLP"].fillna(0) > 0].copy()
         if detail_scope_df.empty:
-            st.info("No hay detalle por fase y línea para el período seleccionado.")
+            st.info("No hay detalle por responsable, fase y línea para el período seleccionado.")
             return
 
         detail_responsible_col = first_matching_column(detail_scope_df, ["Responsable"])
@@ -10491,7 +10497,7 @@ def render_capex10_investor_injection_cash_flow(
             </style>
             <div class="cash-period-detail-head">
               <div>
-                <b>Detalle por fase y línea <span>todo lo seleccionado</span></b>
+                <b>Detalle por Responsable, Fase y línea <span>todo lo seleccionado</span></b>
                 <span>{html.escape(plan_label)} · período {html.escape(selected_period_label)} · acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}.</span>
               </div>
               <div class="cash-period-detail-total">{format_clp(period_detail_total)} / {format_clp(accumulated_detail_total)}</div>
@@ -10823,25 +10829,18 @@ def render_capex10_investor_injection_cash_flow(
         render_period_phase_line_detail(items, accumulated_items, plan_label, key_suffix)
         render_period_responsible_contribution(items, accumulated_items, plan_label, key_suffix)
 
+    render_period_tables(
+        period_detail_display,
+        period_items,
+        accumulated_period_items,
+        accumulated_period_detail_display,
+        selected_plan_label,
+        "active",
+        "El período seleccionado no tiene partidas de gasto calendarizadas.",
+    )
+
     if is_plan_a_selected:
-        period_tab, alternate_plan_tab = st.tabs(["Detalle del período", f"Detalle {alternate_plan_label}"])
-    else:
-        period_tab = st.tabs(["Detalle del período"])[0]
-        alternate_plan_tab = None
-
-    with period_tab:
-        render_period_tables(
-            period_detail_display,
-            period_items,
-            accumulated_period_items,
-            accumulated_period_detail_display,
-            selected_plan_label,
-            "active",
-            "El período seleccionado no tiene partidas de gasto calendarizadas.",
-        )
-
-    if alternate_plan_tab is not None:
-        with alternate_plan_tab:
+        with st.expander(f"Detalle {alternate_plan_label}", expanded=False):
             render_period_tables(
                 alternate_period_detail_display,
                 alternate_period_items,
@@ -11897,7 +11896,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
             selected_cashflow_plan = st.selectbox(
                 "Plan de calendarización",
                 ["Plan A - Flexibilidad Proveedores", "Plan B - Sin Flexibilidad Proveedores"],
-                index=0,
+                index=1,
                 key="capex10_investor_injection_cashflow_plan",
                 help="Plan A usa Fecha FC para reflejar flexibilidad de proveedores. Plan B usa Inicio (AAAA-MM-DD), sin flexibilidad de proveedores.",
             )
@@ -12289,7 +12288,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
         st.markdown(
             f"""
             <div class="capex10-lower-card-head">
-              <p class="capex10-lower-title">Detalle por fase y línea <span class="capex10-lower-muted">todo lo seleccionado</span></p>
+              <p class="capex10-lower-title">Detalle por Responsable, Fase y línea <span class="capex10-lower-muted">todo lo seleccionado</span></p>
               <div class="capex10-table-total-value">{total_disponible_fmt}</div>
             </div>
             """,
