@@ -10686,6 +10686,233 @@ def render_capex10_investor_injection_cash_flow(
                     "capex10_accumulated",
                 )
 
+    def render_period_phase_line_distribution(
+        period_scope_df: pd.DataFrame,
+        accumulated_scope_df: pd.DataFrame,
+        plan_label: str,
+        key_suffix: str,
+    ) -> None:
+        if accumulated_scope_df.empty or "Disponible_CLP" not in accumulated_scope_df.columns:
+            st.info("No hay distribución por fase y línea para el período seleccionado.")
+            return
+        period_chart_df = period_scope_df.copy() if period_scope_df is not None else pd.DataFrame()
+        accumulated_chart_df = accumulated_scope_df.copy()
+        for chart_df in [period_chart_df, accumulated_chart_df]:
+            if not chart_df.empty:
+                chart_df["Fase"] = chart_df["Fase"].astype(str).str.strip().replace({"": "Sin fase", "nan": "Sin fase", "None": "Sin fase"})
+                chart_df["Línea"] = chart_df["Línea"].astype(str).str.strip().replace({"": "Sin línea", "nan": "Sin línea", "None": "Sin línea"})
+        period_chart_df = (
+            period_chart_df[period_chart_df["Disponible_CLP"].fillna(0) > 0].copy()
+            if not period_chart_df.empty and "Disponible_CLP" in period_chart_df.columns
+            else pd.DataFrame(columns=["Fase", "Línea", "Disponible_CLP", "Tarea / Entregable"])
+        )
+        accumulated_chart_df = accumulated_chart_df[accumulated_chart_df["Disponible_CLP"].fillna(0) > 0].copy()
+        if accumulated_chart_df.empty:
+            st.info("No hay distribución acumulada hasta el período seleccionado.")
+            return
+        period_grouped = (
+            period_chart_df.groupby(["Fase", "Línea"], as_index=False)
+            .agg(
+                Periodo_CLP=("Disponible_CLP", "sum"),
+                Partidas_periodo=("Tarea / Entregable", "count"),
+            )
+            if not period_chart_df.empty
+            else pd.DataFrame(columns=["Fase", "Línea", "Periodo_CLP", "Partidas_periodo"])
+        )
+        accumulated_grouped = (
+            accumulated_chart_df.groupby(["Fase", "Línea"], as_index=False)
+            .agg(
+                Acumulado_CLP=("Disponible_CLP", "sum"),
+                Partidas_acumulado=("Tarea / Entregable", "count"),
+            )
+        )
+        chart_grouped = accumulated_grouped.merge(period_grouped, on=["Fase", "Línea"], how="left").fillna(
+            {"Periodo_CLP": 0, "Partidas_periodo": 0}
+        )
+        chart_grouped = chart_grouped.sort_values("Acumulado_CLP", ascending=False).copy()
+        line_order = (
+            chart_grouped.groupby("Línea", as_index=True)["Acumulado_CLP"]
+            .sum()
+            .sort_values(ascending=False)
+            .index
+            .tolist()
+        )
+        phase_totals = (
+            chart_grouped.groupby("Fase", as_index=False)
+            .agg(
+                Periodo_CLP=("Periodo_CLP", "sum"),
+                Acumulado_CLP=("Acumulado_CLP", "sum"),
+                Partidas_acumulado=("Partidas_acumulado", "sum"),
+            )
+            .sort_values("Acumulado_CLP", ascending=False)
+        )
+        phase_order = phase_totals["Fase"].tolist()
+        if not phase_order:
+            st.info("No hay fases acumuladas hasta el período seleccionado.")
+            return
+        funds_colors = ["#0F766E", "#164E63", "#7C3AED", "#1E3A8A", "#B7791F", "#64748B", "#0891B2", "#2C7A7B", "#334155", "#14B8A6"]
+        line_color_map = {line: funds_colors[idx % len(funds_colors)] for idx, line in enumerate(line_order)}
+        chart_legend_html = "".join(
+            [
+                """
+                <div class="capex10-period-chart-legend-item capex10-period-chart-legend-line">
+                  <span></span><b>Acumulado fase</b>
+                </div>
+                """
+            ]
+            + [
+                f"""
+                <div class="capex10-period-chart-legend-item">
+                  <span style="background:{line_color_map.get(line, '#64748B')};"></span>
+                  <b>{html.escape(str(line))}</b>
+                </div>
+                """
+                for line in line_order
+            ]
+        )
+        fig_distribution = go.Figure()
+        for line_name in line_order:
+            line_df = (
+                chart_grouped[chart_grouped["Línea"].eq(line_name)]
+                .set_index("Fase")
+                .reindex(phase_order)
+                .reset_index()
+            )
+            line_df["Línea"] = line_name
+            line_df["Periodo_CLP"] = line_df["Periodo_CLP"].fillna(0.0)
+            line_df["Acumulado_CLP"] = line_df["Acumulado_CLP"].fillna(0.0)
+            line_df["Partidas_periodo"] = line_df["Partidas_periodo"].fillna(0).astype(int)
+            line_df["Periodo_MM"] = line_df["Periodo_CLP"] / 1_000_000
+            line_df["Periodo_fmt"] = line_df["Periodo_CLP"].apply(format_clp)
+            line_df["Acumulado_fmt"] = line_df["Acumulado_CLP"].apply(format_clp)
+            fig_distribution.add_trace(
+                go.Bar(
+                    x=line_df["Fase"],
+                    y=line_df["Periodo_MM"],
+                    name=str(line_name),
+                    marker=dict(
+                        color=line_color_map.get(line_name, "#64748B"),
+                        line=dict(color="rgba(15,23,42,.34)", width=1.0),
+                    ),
+                    customdata=np.stack(
+                        [
+                            line_df["Periodo_fmt"],
+                            line_df["Acumulado_fmt"],
+                            line_df["Partidas_periodo"],
+                            [str(line_name)] * len(line_df),
+                        ],
+                        axis=-1,
+                    ),
+                    hovertemplate=(
+                        "<b>%{x}</b><br>"
+                        "Línea: %{customdata[3]}<br>"
+                        "Período: %{customdata[0]}<br>"
+                        "Acumulado: %{customdata[1]}<br>"
+                        "Partidas período: %{customdata[2]}<extra></extra>"
+                    ),
+                )
+            )
+        phase_totals["Acumulado_MM"] = phase_totals["Acumulado_CLP"] / 1_000_000
+        fig_distribution.add_trace(
+            go.Scatter(
+                x=phase_totals["Fase"],
+                y=phase_totals["Acumulado_MM"],
+                name="Acumulado fase",
+                mode="lines+markers",
+                line=dict(color="#2563EB", width=4),
+                marker=dict(size=9, color="#FFFFFF", line=dict(color="#2563EB", width=2.5)),
+                customdata=np.stack(
+                    [
+                        phase_totals["Acumulado_CLP"].apply(format_clp),
+                        phase_totals["Periodo_CLP"].apply(format_clp),
+                        phase_totals["Partidas_acumulado"].fillna(0).astype(int),
+                    ],
+                    axis=-1,
+                ),
+                hovertemplate="<b>%{x}</b><br>Acumulado fase: %{customdata[0]}<br>Período: %{customdata[1]}<br>Partidas acumuladas: %{customdata[2]}<extra></extra>",
+            )
+        )
+        if not phase_totals.empty:
+            label_row = phase_totals.iloc[0]
+            fig_distribution.add_annotation(
+                x=label_row["Fase"],
+                y=float(label_row["Acumulado_MM"]),
+                text=format_clp(float(label_row["Acumulado_CLP"])),
+                showarrow=False,
+                xanchor="left",
+                xshift=12,
+                font=dict(size=12, color="#2563EB"),
+                bgcolor="rgba(239,246,255,.96)",
+                bordercolor="#BFDBFE",
+                borderwidth=1,
+                borderpad=6,
+            )
+        fig_distribution.update_layout(
+            barmode="stack",
+            height=440,
+            margin=dict(l=10, r=132, t=22, b=84),
+            showlegend=False,
+            plot_bgcolor="white",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#334155", size=11),
+            bargap=0.22,
+            hovermode="x unified",
+        )
+        fig_distribution.update_xaxes(
+            title=None,
+            categoryorder="array",
+            categoryarray=phase_order,
+            tickangle=-18,
+            showgrid=False,
+            automargin=True,
+        )
+        fig_distribution.update_yaxes(
+            title="MM CLP",
+            showgrid=True,
+            gridcolor="rgba(148,163,184,.16)",
+            zeroline=False,
+            ticksuffix=" MM",
+        )
+        st.markdown(
+            f"""
+            <style>
+              .capex10-period-chart-card{{
+                border:1px solid rgba(203,213,225,.82);
+                border-radius:16px;
+                background:#FFFFFF;
+                padding:14px;
+                margin:14px 0 16px;
+                box-shadow:0 12px 26px rgba(15,23,42,.045);
+              }}
+              .capex10-period-chart-head{{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 12px;}}
+              .capex10-period-chart-title{{font-size:16px;line-height:1.2;color:#071427;font-weight:950;margin:0;}}
+              .capex10-period-chart-muted{{color:#64748B;font-weight:850;}}
+              .capex10-period-chart-pill{{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:7px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}}
+              .capex10-period-chart-legend{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 18px;align-items:center;padding:4px 8px 12px;margin:0 0 8px;border-bottom:1px solid rgba(226,232,240,.86);}}
+              .capex10-period-chart-legend-item{{display:flex;align-items:center;gap:9px;min-width:0;color:#334155;font-size:11px;line-height:1.15;font-weight:800;overflow:hidden;}}
+              .capex10-period-chart-legend-item span{{width:13px;height:13px;border-radius:2px;flex:0 0 auto;box-shadow:0 0 0 1px rgba(15,23,42,.18);}}
+              .capex10-period-chart-legend-line span{{width:27px;height:4px;border-radius:999px;background:#2563EB;position:relative;box-shadow:none;}}
+              .capex10-period-chart-legend-line span::after{{content:"";position:absolute;left:9px;top:-4px;width:10px;height:10px;border-radius:999px;background:#FFFFFF;border:3px solid #2563EB;}}
+              .capex10-period-chart-legend-item b{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}}
+              @media(max-width:1180px){{.capex10-period-chart-legend{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
+            </style>
+            <div class="capex10-period-chart-card">
+              <div class="capex10-period-chart-head">
+                <p class="capex10-period-chart-title">Distribución por fase y línea <span class="capex10-period-chart-muted">({len(line_order)} líneas seleccionadas)</span></p>
+                <div class="capex10-period-chart-pill">{html.escape(plan_label)} · {html.escape(selected_period_label)}</div>
+              </div>
+              <div class="capex10-period-chart-legend">{chart_legend_html}</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.plotly_chart(
+            fig_distribution,
+            use_container_width=True,
+            config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"]},
+            key=f"capex10_period_phase_line_distribution_{key_suffix}",
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+
     st.markdown(
         f"""
         <style>
@@ -10735,7 +10962,7 @@ def render_capex10_investor_injection_cash_flow(
         key_suffix: str,
         empty_message: str,
     ) -> None:
-        render_period_phase_line_detail(items, accumulated_items, plan_label, key_suffix)
+        render_period_phase_line_distribution(items, accumulated_items, plan_label, key_suffix)
         render_period_responsible_contribution(items, accumulated_items, plan_label, key_suffix)
 
     if is_plan_a_selected:
@@ -11855,6 +12082,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
     else:
         injection_milestone_dates = capex10_milestone_dates
     render_capex10_investor_injection_cash_flow(injection_funds_df, injection_responsible_scope_df, injection_milestone_dates)
+    return
 
     funds_colors = ["#0F766E", "#164E63", "#7C3AED", "#1E3A8A", "#B7791F", "#64748B", "#0891B2", "#2C7A7B", "#334155", "#14B8A6"]
     line_order = (
