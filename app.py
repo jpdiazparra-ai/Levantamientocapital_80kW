@@ -10318,7 +10318,12 @@ def render_capex10_investor_injection_cash_flow(
                     key=f"capex10_hito_method_{key_suffix}",
                 )
 
-    def render_period_phase_line_detail(scope_df: pd.DataFrame, plan_label: str, key_suffix: str) -> None:
+    def render_period_phase_line_detail(
+        scope_df: pd.DataFrame,
+        accumulated_scope_df: pd.DataFrame,
+        plan_label: str,
+        key_suffix: str,
+    ) -> None:
         if scope_df.empty or "Disponible_CLP" not in scope_df.columns:
             st.info("No hay detalle por fase y línea para el período seleccionado.")
             return
@@ -10351,22 +10356,69 @@ def render_capex10_investor_injection_cash_flow(
             st.info("El detalle del período no contiene columnas de fase y línea.")
             return
 
-        period_detail_total = float(detail_scope_df["Disponible_CLP"].sum() or 0.0)
-        line_summary = (
-            detail_scope_df.groupby(["_responsable_detalle_periodo", phase_col, line_col], as_index=False)
-            .agg(
-                Disponible_CLP=("Disponible_CLP", "sum"),
-                Partidas=(task_col or line_col, "count"),
-                Inicio=("_inicio_detalle_periodo", "min"),
-                Fin_plan=("_fin_plan_detalle_periodo", "max"),
-                Fin_real=("_fin_real_detalle_periodo", "max"),
+        accumulated_detail_scope_df = accumulated_scope_df.copy() if accumulated_scope_df is not None else pd.DataFrame()
+        if not accumulated_detail_scope_df.empty and "Disponible_CLP" in accumulated_detail_scope_df.columns:
+            accumulated_detail_scope_df = accumulated_detail_scope_df[accumulated_detail_scope_df["Disponible_CLP"].fillna(0) > 0].copy()
+            accumulated_detail_responsible_col = first_matching_column(accumulated_detail_scope_df, ["Responsable"])
+            accumulated_detail_scope_df["_responsable_detalle_periodo"] = (
+                accumulated_detail_scope_df[accumulated_detail_responsible_col]
+                .astype(str)
+                .str.strip()
+                .replace({"": "Sin responsable", "nan": "Sin responsable", "None": "Sin responsable"})
+                if accumulated_detail_responsible_col
+                else "Sin responsable"
             )
-            .sort_values(["_responsable_detalle_periodo", "Disponible_CLP"], ascending=[True, False])
+            for date_source, date_target in [
+                (GANTT_DATE_COL_START, "_inicio_detalle_periodo"),
+                (GANTT_DATE_COL_END_PLAN, "_fin_plan_detalle_periodo"),
+                (GANTT_DATE_COL_END_REAL, "_fin_real_detalle_periodo"),
+            ]:
+                accumulated_detail_scope_df[date_target] = pd.to_datetime(accumulated_detail_scope_df.get(date_source), errors="coerce")
+
+        def build_phase_line_summary(source_df: pd.DataFrame, total_amount: float, weight_col: str) -> pd.DataFrame:
+            if source_df.empty or "Disponible_CLP" not in source_df.columns:
+                return pd.DataFrame(
+                    columns=[
+                        "_responsable_detalle_periodo",
+                        phase_col,
+                        line_col,
+                        "Disponible_CLP",
+                        "Partidas",
+                        "Inicio",
+                        "Fin_plan",
+                        "Fin_real",
+                        weight_col,
+                    ]
+                )
+            summary = (
+                source_df.groupby(["_responsable_detalle_periodo", phase_col, line_col], as_index=False)
+                .agg(
+                    Disponible_CLP=("Disponible_CLP", "sum"),
+                    Partidas=(task_col or line_col, "count"),
+                    Inicio=("_inicio_detalle_periodo", "min"),
+                    Fin_plan=("_fin_plan_detalle_periodo", "max"),
+                    Fin_real=("_fin_real_detalle_periodo", "max"),
+                )
+                .sort_values(["_responsable_detalle_periodo", "Disponible_CLP"], ascending=[True, False])
+            )
+            summary[weight_col] = np.where(
+                total_amount > 0,
+                summary["Disponible_CLP"] / total_amount * 100.0,
+                0.0,
+            )
+            return summary
+
+        period_detail_total = float(detail_scope_df["Disponible_CLP"].sum() or 0.0)
+        accumulated_detail_total = (
+            float(accumulated_detail_scope_df["Disponible_CLP"].sum() or 0.0)
+            if not accumulated_detail_scope_df.empty and "Disponible_CLP" in accumulated_detail_scope_df.columns
+            else 0.0
         )
-        line_summary["Peso_periodo"] = np.where(
-            period_detail_total > 0,
-            line_summary["Disponible_CLP"] / period_detail_total * 100.0,
-            0.0,
+        line_summary = build_phase_line_summary(detail_scope_df, period_detail_total, "Peso_periodo")
+        accumulated_line_summary = build_phase_line_summary(
+            accumulated_detail_scope_df,
+            accumulated_detail_total,
+            "Peso_acumulado",
         )
         responsible_summary = (
             line_summary.groupby("_responsable_detalle_periodo", as_index=False)
@@ -10384,6 +10436,42 @@ def render_capex10_investor_injection_cash_flow(
             responsible_summary["Disponible_CLP"] / period_detail_total * 100.0,
             0.0,
         )
+        accumulated_responsible_summary = (
+            accumulated_line_summary.groupby("_responsable_detalle_periodo", as_index=False)
+            .agg(
+                Acumulado_CLP=("Disponible_CLP", "sum"),
+                Lineas=(line_col, "nunique"),
+                Partidas=("Partidas", "sum"),
+                Inicio=("Inicio", "min"),
+                Fin_real=("Fin_real", "max"),
+            )
+            if not accumulated_line_summary.empty
+            else pd.DataFrame(columns=["_responsable_detalle_periodo", "Acumulado_CLP", "Lineas", "Partidas", "Inicio", "Fin_real"])
+        )
+        accumulated_responsible_summary["Peso_acumulado"] = np.where(
+            accumulated_detail_total > 0,
+            accumulated_responsible_summary["Acumulado_CLP"] / accumulated_detail_total * 100.0,
+            0.0,
+        )
+        responsible_summary = responsible_summary.merge(
+            accumulated_responsible_summary[
+                ["_responsable_detalle_periodo", "Acumulado_CLP", "Peso_acumulado", "Lineas", "Partidas"]
+            ].rename(columns={"Lineas": "Lineas_acumuladas", "Partidas": "Partidas_acumuladas"}),
+            on="_responsable_detalle_periodo",
+            how="outer",
+        ).fillna(
+            {
+                "Disponible_CLP": 0,
+                "Peso_periodo": 0,
+                "Lineas": 0,
+                "Partidas": 0,
+                "Acumulado_CLP": 0,
+                "Peso_acumulado": 0,
+                "Lineas_acumuladas": 0,
+                "Partidas_acumuladas": 0,
+            }
+        )
+        responsible_summary = responsible_summary.sort_values(["Disponible_CLP", "Acumulado_CLP"], ascending=False)
 
         st.markdown(
             f"""
@@ -10420,9 +10508,9 @@ def render_capex10_investor_injection_cash_flow(
             <div class="cash-period-detail-head">
               <div>
                 <b>Detalle por fase y línea <span>todo lo seleccionado</span></b>
-                <span>{html.escape(plan_label)} · filtrado por {html.escape(selected_period_label)} y selectores activos.</span>
+                <span>{html.escape(plan_label)} · período {html.escape(selected_period_label)} · acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}.</span>
               </div>
-              <div class="cash-period-detail-total">{format_clp(period_detail_total)}</div>
+              <div class="cash-period-detail-total">{format_clp(period_detail_total)} / {format_clp(accumulated_detail_total)}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -10431,15 +10519,15 @@ def render_capex10_investor_injection_cash_flow(
         for _, responsible_row in responsible_summary.iterrows():
             responsible_name = str(responsible_row["_responsable_detalle_periodo"])
             responsible_total = float(responsible_row["Disponible_CLP"] or 0.0)
+            responsible_accumulated_total = float(responsible_row["Acumulado_CLP"] or 0.0)
             responsible_color = _capex10_responsible_color(responsible_name)
             responsible_label_color, responsible_icon = _capex10_responsible_expander_style(responsible_name)
             responsible_start = pd.Timestamp(responsible_row["Inicio"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Inicio"]) else "-"
             responsible_end = pd.Timestamp(responsible_row["Fin_real"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Fin_real"]) else "-"
             expander_label = (
                 f":{responsible_label_color}[{responsible_name}] · "
-                f"{format_clp(responsible_total)} · "
-                f"{int(responsible_row['Lineas'])} líneas · "
-                f"{int(responsible_row['Partidas'])} partidas"
+                f"Período {format_clp(responsible_total)} · "
+                f"Acumulado {format_clp(responsible_accumulated_total)}"
             )
             with st.expander(expander_label, expanded=False, icon=responsible_icon):
                 st.markdown(
@@ -10447,9 +10535,11 @@ def render_capex10_investor_injection_cash_flow(
                     <div class="cash-period-resp-card" style="--resp-color:{responsible_color};">
                       <div class="cash-period-resp-kpis">
                         <div><span>Aporte período</span><b>{format_clp(responsible_total)}</b></div>
+                        <div><span>Aporte acumulado</span><b>{format_clp(responsible_accumulated_total)}</b></div>
                         <div><span>Peso período</span><b>{float(responsible_row["Peso_periodo"]):.1f}%</b></div>
-                        <div><span>Líneas / partidas</span><b>{int(responsible_row["Lineas"])} / {int(responsible_row["Partidas"])}</b></div>
-                        <div><span>Ventana real</span><b>{responsible_start} / {responsible_end}</b></div>
+                        <div><span>Peso acumulado</span><b>{float(responsible_row["Peso_acumulado"]):.1f}%</b></div>
+                        <div><span>Período líneas / partidas</span><b>{int(responsible_row["Lineas"])} / {int(responsible_row["Partidas"])}</b></div>
+                        <div><span>Acum. líneas / partidas</span><b>{int(responsible_row["Lineas_acumuladas"])} / {int(responsible_row["Partidas_acumuladas"])}</b></div>
                       </div>
                     </div>
                     """,
@@ -10469,13 +10559,44 @@ def render_capex10_investor_injection_cash_flow(
                         line_col: "Línea",
                     }
                 )
-                st.dataframe(
-                    responsible_lines[["Fase", "Línea", "Partidas", "Disponible", "% período", "Inicio", "Fin plan", "Fin real"]],
-                    use_container_width=True,
-                    hide_index=True,
-                    height=min(330, 38 + (len(responsible_lines) + 1) * 35),
-                    key=f"capex10_period_phase_line_detail_{key_suffix}_{normalize_key(responsible_name)}",
-                )
+                accumulated_responsible_lines = accumulated_line_summary[
+                    accumulated_line_summary["_responsable_detalle_periodo"].eq(responsible_name)
+                ].copy()
+                if not accumulated_responsible_lines.empty:
+                    accumulated_responsible_lines["Disponible"] = accumulated_responsible_lines["Disponible_CLP"].apply(format_clp)
+                    accumulated_responsible_lines["% acumulado"] = accumulated_responsible_lines["Peso_acumulado"].map(lambda value: f"{value:.1f}%")
+                    accumulated_responsible_lines["Inicio"] = pd.to_datetime(accumulated_responsible_lines["Inicio"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                    accumulated_responsible_lines["Fin plan"] = pd.to_datetime(accumulated_responsible_lines["Fin_plan"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                    accumulated_responsible_lines["Fin real"] = pd.to_datetime(accumulated_responsible_lines["Fin_real"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                    accumulated_responsible_lines = accumulated_responsible_lines.rename(
+                        columns={
+                            phase_col: "Fase",
+                            line_col: "Línea",
+                        }
+                    )
+                period_line_tab, accumulated_line_tab = st.tabs(["Período seleccionado", "Acumulado responsable"])
+                with period_line_tab:
+                    if responsible_lines.empty:
+                        st.info("Este responsable no tiene partidas en el período seleccionado.")
+                    else:
+                        st.dataframe(
+                            responsible_lines[["Fase", "Línea", "Partidas", "Disponible", "% período", "Inicio", "Fin plan", "Fin real"]],
+                            use_container_width=True,
+                            hide_index=True,
+                            height=min(330, 38 + (len(responsible_lines) + 1) * 35),
+                            key=f"capex10_period_phase_line_detail_{key_suffix}_{normalize_key(responsible_name)}",
+                        )
+                with accumulated_line_tab:
+                    if accumulated_responsible_lines.empty:
+                        st.info("Este responsable no tiene partidas acumuladas hasta el período seleccionado.")
+                    else:
+                        st.dataframe(
+                            accumulated_responsible_lines[["Fase", "Línea", "Partidas", "Disponible", "% acumulado", "Inicio", "Fin plan", "Fin real"]],
+                            use_container_width=True,
+                            hide_index=True,
+                            height=min(330, 38 + (len(accumulated_responsible_lines) + 1) * 35),
+                            key=f"capex10_accumulated_phase_line_detail_{key_suffix}_{normalize_key(responsible_name)}",
+                        )
 
     st.markdown(
         f"""
@@ -10527,7 +10648,7 @@ def render_capex10_investor_injection_cash_flow(
         empty_message: str,
     ) -> None:
         period_total = float(items["Disponible_CLP"].sum() or 0.0) if "Disponible_CLP" in items.columns else 0.0
-        render_period_phase_line_detail(items, plan_label, key_suffix)
+        render_period_phase_line_detail(items, accumulated_items, plan_label, key_suffix)
         period_expander_label = f"Detalle del período · {selected_period_label} · {format_clp(period_total)} · {len(items)} partidas"
         with st.expander(period_expander_label, expanded=False):
             if detail_display.empty:
