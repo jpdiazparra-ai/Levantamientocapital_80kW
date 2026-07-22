@@ -9741,6 +9741,7 @@ def render_capex10_investor_injection_cash_flow(
     flow_df = funds_df[funds_df["Disponible_CLP"] > 0].copy()
     if flow_df.empty:
         return
+    detail_flow_df = funds_df[funds_df["Disponible_CLP"].fillna(0) >= 0].copy()
     date_col = GANTT_DATE_COL_START if GANTT_DATE_COL_START in flow_df.columns else None
     fallback_col = GANTT_DATE_COL_END_PLAN if GANTT_DATE_COL_END_PLAN in flow_df.columns else None
     if date_col:
@@ -9757,6 +9758,19 @@ def render_capex10_investor_injection_cash_flow(
     else:
         flow_df["_chart_date"] = pd.NaT
     flow_df["_chart_date"] = flow_df["_chart_date"].fillna(flow_df["_cash_date"])
+    if date_col:
+        detail_flow_df["_cash_date"] = pd.to_datetime(detail_flow_df[date_col], errors="coerce")
+    else:
+        detail_flow_df["_cash_date"] = pd.NaT
+    if fallback_col:
+        detail_flow_df["_cash_date"] = detail_flow_df["_cash_date"].fillna(pd.to_datetime(detail_flow_df[fallback_col], errors="coerce"))
+    detail_flow_df["_cash_date"] = detail_flow_df["_cash_date"].fillna(pd.Timestamp.today().normalize())
+    detail_flow_df["_analysis_month"] = detail_flow_df["_cash_date"].dt.to_period("M").dt.to_timestamp()
+    if chart_date_col and chart_date_col in detail_flow_df.columns:
+        detail_flow_df["_chart_date"] = pd.to_datetime(detail_flow_df[chart_date_col], errors="coerce")
+    else:
+        detail_flow_df["_chart_date"] = pd.NaT
+    detail_flow_df["_chart_date"] = detail_flow_df["_chart_date"].fillna(detail_flow_df["_cash_date"])
     total_clp = float(flow_df["Disponible_CLP"].sum() or 0.0)
 
     st.markdown(
@@ -9915,8 +9929,10 @@ def render_capex10_investor_injection_cash_flow(
 
     if cashflow_plan.startswith("Plan A"):
         flow_df["_month"] = flow_df["_chart_date"].dt.to_period("M").dt.to_timestamp()
+        detail_flow_df["_month"] = detail_flow_df["_chart_date"].dt.to_period("M").dt.to_timestamp()
     else:
         flow_df["_month"] = flow_df["_analysis_month"]
+        detail_flow_df["_month"] = detail_flow_df["_analysis_month"]
     monthly = (
         flow_df.groupby("_month", as_index=False)
         .agg(Flujo_CLP=("Disponible_CLP", "sum"))
@@ -10073,39 +10089,38 @@ def render_capex10_investor_injection_cash_flow(
     )
     st.plotly_chart(fig_commitment, use_container_width=True, config={"displaylogo": False})
 
-    analysis_month_options = [pd.Timestamp(value) for value in commitment_monthly["_month"].tolist()]
-    analysis_month_key = "capex10_investor_injection_analysis_months"
+    analysis_month_options = [pd.Timestamp(value).to_period("M").to_timestamp() for value in commitment_monthly["_month"].tolist()]
+    analysis_month_key = "capex10_investor_injection_analysis_month"
+    legacy_analysis_month_key = "capex10_investor_injection_analysis_months"
     analysis_month_sticky = st.session_state.pop(f"{analysis_month_key}__sticky", None)
+    if analysis_month_sticky is None:
+        analysis_month_sticky = st.session_state.pop(f"{legacy_analysis_month_key}__sticky", None)
+
+    def normalize_single_analysis_month(value) -> pd.Timestamp | None:
+        if isinstance(value, (list, tuple, set)):
+            value = next(iter(value), None)
+        if value is None or pd.isna(value):
+            return None
+        return pd.Timestamp(value).to_period("M").to_timestamp()
+
+    analysis_month_option_set = set(analysis_month_options)
     if analysis_month_sticky is not None:
-        st.session_state[analysis_month_key] = analysis_month_sticky
-    raw_selected_analysis_month_values = st.session_state.get(analysis_month_key, [])
-    if not isinstance(raw_selected_analysis_month_values, (list, tuple, set)):
-        raw_selected_analysis_month_values = [raw_selected_analysis_month_values]
-    analysis_month_option_set = {pd.Timestamp(value).to_period("M").to_timestamp() for value in analysis_month_options}
-    selected_analysis_month_values = [
-        month_value
-        for month_value in (
-            pd.Timestamp(value).to_period("M").to_timestamp()
-            for value in raw_selected_analysis_month_values
-            if pd.notna(value)
-        )
-        if month_value in analysis_month_option_set
-    ]
-    selected_analysis_months = (
-        sorted({pd.Timestamp(value).to_period("M").to_timestamp() for value in selected_analysis_month_values})
-        if selected_analysis_month_values
-        else analysis_month_options
-    )
-    selected_analysis_cutoff_month = max(selected_analysis_months)
-    all_analysis_months_selected = set(selected_analysis_months) == set(analysis_month_options)
-    selected_period_label = (
-        "Todos"
-        if not selected_analysis_month_values or all_analysis_months_selected
-        else ", ".join(pd.Timestamp(value).strftime("%b %Y") for value in selected_analysis_months[:4])
-    )
-    if selected_analysis_month_values and not all_analysis_months_selected and len(selected_analysis_months) > 4:
-        selected_period_label = f"{selected_period_label} +{len(selected_analysis_months) - 4}"
-    selected_month_rows = commitment_monthly[commitment_monthly["_month"].isin(selected_analysis_months)].copy()
+        sticky_month = normalize_single_analysis_month(analysis_month_sticky)
+        if sticky_month in analysis_month_option_set:
+            st.session_state[analysis_month_key] = sticky_month
+    elif analysis_month_key not in st.session_state and legacy_analysis_month_key in st.session_state:
+        legacy_month = normalize_single_analysis_month(st.session_state.get(legacy_analysis_month_key))
+        if legacy_month in analysis_month_option_set:
+            st.session_state[analysis_month_key] = legacy_month
+
+    selected_analysis_month = normalize_single_analysis_month(st.session_state.get(analysis_month_key))
+    if selected_analysis_month not in analysis_month_option_set:
+        selected_analysis_month = analysis_month_options[0]
+        st.session_state[analysis_month_key] = selected_analysis_month
+    selected_analysis_months = [selected_analysis_month]
+    selected_analysis_cutoff_month = selected_analysis_month
+    selected_period_label = selected_analysis_month.strftime("%b %Y")
+    selected_month_rows = commitment_monthly[commitment_monthly["_month"].eq(selected_analysis_month)].copy()
     selected_cutoff_row = commitment_monthly[commitment_monthly["_month"].eq(selected_analysis_cutoff_month)].iloc[0]
     is_plan_a_selected = cashflow_plan.startswith("Plan A")
     selected_plan_label = CAPEX10_PLAN_A_LABEL if is_plan_a_selected else CAPEX10_PLAN_B_LABEL
@@ -10117,7 +10132,7 @@ def render_capex10_investor_injection_cash_flow(
     plan_required_to_period = float(selected_cutoff_row["Acumulado_CLP"] or 0.0)
     plan_balance_to_period = float(selected_cutoff_row["Saldo_caja_CLP"] or 0.0)
     plan_periods_to_period = int(commitment_monthly[commitment_monthly["_month"].le(selected_analysis_cutoff_month)].shape[0])
-    detail_responsible_col = first_matching_column(flow_df, ["Responsable"])
+    detail_responsible_col = first_matching_column(detail_flow_df, ["Responsable"])
     display_detail_cols = [
         ("Fase", "Fase"),
         ("Línea", "Línea"),
@@ -10131,13 +10146,13 @@ def render_capex10_investor_injection_cash_flow(
         (GANTT_DATE_COL_END_REAL, "Fin real"),
     ]
 
-    def build_period_detail(month_col: str, sort_col: str, accumulated: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
-        if month_col not in flow_df.columns:
+    def build_period_detail(source_df: pd.DataFrame, month_col: str, sort_col: str, accumulated: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
+        if source_df.empty or month_col not in source_df.columns:
             items = pd.DataFrame()
         elif accumulated:
-            items = flow_df[flow_df[month_col].le(selected_analysis_cutoff_month)].copy()
+            items = source_df[source_df[month_col].le(selected_analysis_cutoff_month)].copy()
         else:
-            items = flow_df[flow_df[month_col].isin(selected_analysis_months)].copy()
+            items = source_df[source_df[month_col].isin(selected_analysis_months)].copy()
         detail_display = pd.DataFrame()
         if not items.empty:
             sort_cols = [col for col in [sort_col, "Fase", "Línea"] if col in items.columns]
@@ -10153,10 +10168,20 @@ def render_capex10_investor_injection_cash_flow(
                         detail_display[display_col] = items[source_col].astype(str).replace({"nan": "-", "None": "-"})
         return items, detail_display
 
-    period_items, period_detail_display = build_period_detail("_month", selected_plan_sort_col)
-    alternate_period_items, alternate_period_detail_display = build_period_detail(alternate_plan_month_col, alternate_plan_sort_col)
-    accumulated_period_items, accumulated_period_detail_display = build_period_detail("_month", selected_plan_sort_col, accumulated=True)
+    period_items, period_detail_display = build_period_detail(flow_df, "_month", selected_plan_sort_col)
+    alternate_period_items, alternate_period_detail_display = build_period_detail(flow_df, alternate_plan_month_col, alternate_plan_sort_col)
+    accumulated_period_items, accumulated_period_detail_display = build_period_detail(flow_df, "_month", selected_plan_sort_col, accumulated=True)
     alternate_accumulated_items, alternate_accumulated_detail_display = build_period_detail(
+        flow_df,
+        alternate_plan_month_col,
+        alternate_plan_sort_col,
+        accumulated=True,
+    )
+    period_table_items, period_table_detail_display = build_period_detail(detail_flow_df, "_month", selected_plan_sort_col)
+    alternate_period_table_items, alternate_period_table_detail_display = build_period_detail(detail_flow_df, alternate_plan_month_col, alternate_plan_sort_col)
+    accumulated_period_table_items, accumulated_period_table_detail_display = build_period_detail(detail_flow_df, "_month", selected_plan_sort_col, accumulated=True)
+    alternate_accumulated_table_items, alternate_accumulated_table_detail_display = build_period_detail(
+        detail_flow_df,
         alternate_plan_month_col,
         alternate_plan_sort_col,
         accumulated=True,
@@ -10419,7 +10444,7 @@ def render_capex10_investor_injection_cash_flow(
             st.info("No hay detalle por responsable, fase y línea para el período seleccionado.")
             return
         detail_scope_df = scope_df.copy()
-        detail_scope_df = detail_scope_df[detail_scope_df["Disponible_CLP"].fillna(0) > 0].copy()
+        detail_scope_df = detail_scope_df[detail_scope_df["Disponible_CLP"].fillna(0) >= 0].copy()
         if detail_scope_df.empty:
             st.info("No hay detalle por responsable, fase y línea para el período seleccionado.")
             return
@@ -10449,7 +10474,7 @@ def render_capex10_investor_injection_cash_flow(
 
         accumulated_detail_scope_df = accumulated_scope_df.copy() if accumulated_scope_df is not None else pd.DataFrame()
         if not accumulated_detail_scope_df.empty and "Disponible_CLP" in accumulated_detail_scope_df.columns:
-            accumulated_detail_scope_df = accumulated_detail_scope_df[accumulated_detail_scope_df["Disponible_CLP"].fillna(0) > 0].copy()
+            accumulated_detail_scope_df = accumulated_detail_scope_df[accumulated_detail_scope_df["Disponible_CLP"].fillna(0) >= 0].copy()
             accumulated_detail_responsible_col = first_matching_column(accumulated_detail_scope_df, ["Responsable"])
             accumulated_detail_scope_df["_responsable_detalle_periodo"] = (
                 accumulated_detail_scope_df[accumulated_detail_responsible_col]
@@ -10664,17 +10689,34 @@ def render_capex10_investor_injection_cash_flow(
 
                 selectable_rows = summary_df.copy().reset_index(drop=True)
                 selectable_rows["Disponible"] = selectable_rows["Disponible_CLP"].apply(format_clp)
+                selectable_rows["Tipo"] = np.where(
+                    selectable_rows["Disponible_CLP"].fillna(0) > 0,
+                    "Con monto",
+                    "Sin monto",
+                )
                 selectable_rows[weight_label] = selectable_rows[weight_col].map(lambda value: f"{value:.1f}%")
                 selectable_rows["Inicio"] = pd.to_datetime(selectable_rows["Inicio"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
                 selectable_rows["Fin plan"] = pd.to_datetime(selectable_rows["Fin_plan"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
                 selectable_rows["Fin real"] = pd.to_datetime(selectable_rows["Fin_real"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
                 selectable_rows = selectable_rows.rename(columns={phase_col: "Fase", line_col: "Línea"})
-                display_rows = selectable_rows[["Fase", "Línea", "Partidas", "Disponible", weight_label, "Inicio", "Fin plan", "Fin real"]]
+                display_rows = selectable_rows[["Fase", "Línea", "Partidas", "Disponible", "Tipo", weight_label, "Inicio", "Fin plan", "Fin real"]]
                 selected_state = st.dataframe(
                     display_rows,
                     use_container_width=True,
                     hide_index=True,
-                    height=min(300, 38 + (len(display_rows) + 1) * 35),
+                    height=min(360, 42 + (len(display_rows) + 1) * 44),
+                    row_height=42,
+                    column_config={
+                        "Fase": st.column_config.TextColumn("Fase", width="medium"),
+                        "Línea": st.column_config.TextColumn("Línea", width="medium"),
+                        "Partidas": st.column_config.NumberColumn("Partidas", width="small"),
+                        "Disponible": st.column_config.TextColumn("Disponible", width="small"),
+                        "Tipo": st.column_config.TextColumn("Tipo", width="small"),
+                        weight_label: st.column_config.TextColumn(weight_label, width="small"),
+                        "Inicio": st.column_config.TextColumn("Inicio", width="small"),
+                        "Fin plan": st.column_config.TextColumn("Fin plan", width="small"),
+                        "Fin real": st.column_config.TextColumn("Fin real", width="small"),
+                    },
                     key=f"{key_prefix}_phase_line_{key_suffix}_{normalize_key(responsible_name)}",
                     on_select="rerun",
                     selection_mode="multi-row",
@@ -10715,6 +10757,11 @@ def render_capex10_investor_injection_cash_flow(
                     else "-"
                 )
                 task_display["Disponible"] = selected_items["Disponible_CLP"].apply(format_clp)
+                task_display["Tipo"] = np.where(
+                    selected_items["Disponible_CLP"].fillna(0) > 0,
+                    "Con monto",
+                    "Sin monto",
+                )
                 status_col = first_matching_column(selected_items, ["Estado.1", "Estado"])
                 if status_col:
                     task_display["Estado"] = selected_items[status_col].astype(str).replace({"nan": "-", "None": "-"})
@@ -10752,17 +10799,31 @@ def render_capex10_investor_injection_cash_flow(
                     """,
                     unsafe_allow_html=True,
                 )
+                task_text_max_len = (
+                    int(task_display["Tarea / Entregable"].astype(str).str.len().max())
+                    if "Tarea / Entregable" in task_display.columns and not task_display.empty
+                    else 0
+                )
+                task_row_height = min(190, max(92, 56 + math.ceil(task_text_max_len / 72) * 22))
+                task_table_height = min(980, 52 + (len(task_display) + 1) * task_row_height)
                 st.dataframe(
                     task_display,
                     use_container_width=True,
                     hide_index=True,
-                    height=min(520, 48 + (len(task_display) + 1) * 86),
-                    row_height=78,
+                    height=task_table_height,
+                    row_height=task_row_height,
                     column_config={
                         "Tarea / Entregable": st.column_config.TextColumn(
                             "Tarea / Entregable",
                             width="large",
                         ),
+                        "Disponible": st.column_config.TextColumn("Disponible", width="small"),
+                        "Tipo": st.column_config.TextColumn("Tipo", width="small"),
+                        "Estado": st.column_config.TextColumn("Estado", width="small"),
+                        "Fecha FC": st.column_config.TextColumn("Fecha FC", width="small"),
+                        "Inicio": st.column_config.TextColumn("Inicio", width="small"),
+                        "Fin plan": st.column_config.TextColumn("Fin plan", width="small"),
+                        "Fin real": st.column_config.TextColumn("Fin real", width="small"),
                     },
                     key=f"{key_prefix}_task_detail_{key_suffix}_{normalize_key(responsible_name)}",
                 )
@@ -11010,8 +11071,12 @@ def render_capex10_investor_injection_cash_flow(
         plan_label: str,
         key_suffix: str,
         empty_message: str,
+        detail_items: pd.DataFrame | None = None,
+        accumulated_detail_items: pd.DataFrame | None = None,
     ) -> None:
-        render_period_phase_line_detail(items, accumulated_items, plan_label, key_suffix)
+        table_items = detail_items if detail_items is not None else items
+        table_accumulated_items = accumulated_detail_items if accumulated_detail_items is not None else accumulated_items
+        render_period_phase_line_detail(table_items, table_accumulated_items, plan_label, key_suffix)
         render_period_responsible_contribution(items, accumulated_items, plan_label, key_suffix)
 
     st.markdown(
@@ -11052,13 +11117,12 @@ def render_capex10_investor_injection_cash_flow(
         )
         period_selector_col, _ = st.columns([0.28, 0.72])
         with period_selector_col:
-            st.multiselect(
+            st.selectbox(
                 "Período para analizar",
                 analysis_month_options,
                 format_func=lambda value: pd.Timestamp(value).strftime("%b %Y"),
                 key=analysis_month_key,
-                placeholder="Todos",
-                help="Filtra uno o varios meses. Sin selección muestra todos los períodos, igual que el selector Método.",
+                help="Selecciona un único mes para el análisis del período.",
             )
         st.markdown(
             f"""
@@ -11080,6 +11144,8 @@ def render_capex10_investor_injection_cash_flow(
             selected_plan_label,
             "active",
             "El período seleccionado no tiene partidas de gasto calendarizadas.",
+            period_table_items,
+            accumulated_period_table_items,
         )
 
         if is_plan_a_selected:
@@ -11092,6 +11158,8 @@ def render_capex10_investor_injection_cash_flow(
                     alternate_plan_label,
                     "alternate",
                     f"El período seleccionado no tiene partidas calendarizadas en {alternate_plan_label}.",
+                    alternate_period_table_items,
+                    alternate_accumulated_table_items,
                 )
 
     responsible_flow_df = responsible_scope_df.copy() if responsible_scope_df is not None and not responsible_scope_df.empty else flow_df.copy()
@@ -11674,7 +11742,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
     selected_metodos = current_metodos
     selected_responsables = current_responsables
 
-    funds_df = _capex10_filtered_funds_df(
+    funds_all_df = _capex10_filtered_funds_df(
         df_gantt,
         selected_etapas,
         selected_metodos,
@@ -11683,9 +11751,9 @@ def render_capex10_available_funds_by_phase_line() -> None:
         responsable_col=responsable_col,
     )
 
-    funds_df["Fase"] = funds_df["Fase"].astype(str).str.strip().replace({"": "Sin fase", "nan": "Sin fase", "None": "Sin fase"})
-    funds_df["Línea"] = funds_df["Línea"].astype(str).str.strip().replace({"": "Sin línea", "nan": "Sin línea", "None": "Sin línea"})
-    funds_df = funds_df[funds_df["Disponible_CLP"] > 0].copy()
+    funds_all_df["Fase"] = funds_all_df["Fase"].astype(str).str.strip().replace({"": "Sin fase", "nan": "Sin fase", "None": "Sin fase"})
+    funds_all_df["Línea"] = funds_all_df["Línea"].astype(str).str.strip().replace({"": "Sin línea", "nan": "Sin línea", "None": "Sin línea"})
+    funds_df = funds_all_df[funds_all_df["Disponible_CLP"] > 0].copy()
     st.session_state["capex10_funds_filtered_df"] = funds_df.copy()
     if funds_df.empty:
         return
@@ -12174,7 +12242,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
     responsible_scope_df["Fase"] = responsible_scope_df["Fase"].astype(str).str.strip().replace({"": "Sin fase", "nan": "Sin fase", "None": "Sin fase"})
     responsible_scope_df["Línea"] = responsible_scope_df["Línea"].astype(str).str.strip().replace({"": "Sin línea", "nan": "Sin línea", "None": "Sin línea"})
     responsible_scope_df = responsible_scope_df[responsible_scope_df["Disponible_CLP"] > 0].copy()
-    injection_funds_df = _capex10_filter_hito_scope_for_injection(funds_df, selected_metodos)
+    injection_funds_df = _capex10_filter_hito_scope_for_injection(funds_all_df, selected_metodos)
     injection_responsible_scope_df = _capex10_filter_hito_scope_for_injection(responsible_scope_df, selected_metodos)
     selected_hito_specs = _capex10_selected_hito_specs(selected_metodos)
     if selected_hito_specs:
@@ -25256,7 +25324,7 @@ if st.sidebar.button("🔁 Actualizar datos desde URL"):
         "capex10_funds_etapa_selector",
         "capex10_funds_metodo_selector",
         "capex10_funds_responsable_selector",
-        "capex10_investor_injection_analysis_months",
+        "capex10_investor_injection_analysis_month",
         "capex10_stage_detail_etapa_selector",
         "telecom_market_tab_selector",
     ):
