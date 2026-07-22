@@ -9767,33 +9767,37 @@ def render_capex10_investor_injection_cash_flow(
         .cash-injection-head span{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}
         .cash-injection-pill{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:7px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}
         .cash-injection-summary{
+            box-sizing:border-box;
+            width:max-content;
+            min-width:238px;
+            max-width:100%;
             border:1px solid rgba(203,213,225,.9);
             border-top:4px solid #0F766E;
             border-radius:14px;
             background:
                 linear-gradient(135deg,rgba(236,253,245,.95),rgba(255,255,255,.98) 46%),
                 #FFFFFF;
-            padding:8px 12px;
-            min-height:58px;
-            margin-top:18px;
+            padding:7px 10px;
+            min-height:64px;
+            margin:0 0 0 auto;
             box-shadow:0 6px 14px rgba(15,23,42,.04);
         }
         .cash-injection-summary span{
             display:block;
             color:#64748B;
-            font-size:8.5px;
+            font-size:8px;
             font-weight:950;
             letter-spacing:.055em;
             text-transform:uppercase;
-            margin-bottom:5px;
+            margin-bottom:4px;
         }
         .cash-injection-summary b{
             display:block;
             color:#071427;
-            font-size:22px;
+            font-size:21px;
             line-height:1;
             font-weight:950;
-            margin-bottom:5px;
+            margin-bottom:4px;
             white-space:nowrap;
         }
         .cash-injection-summary em{
@@ -9816,7 +9820,11 @@ def render_capex10_investor_injection_cash_flow(
             padding-top:31px;
             white-space:nowrap;
         }
-        @media(max-width:900px){.cash-injection-head{display:block;}.cash-injection-pill{display:inline-flex;margin-top:10px;}}
+        @media(max-width:900px){
+            .cash-injection-head{display:block;}
+            .cash-injection-pill{display:inline-flex;margin-top:10px;}
+            .cash-injection-summary{width:100%;max-width:100%;margin:10px 0 0 0;}
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -10813,57 +10821,64 @@ def render_capex10_investor_injection_cash_flow(
                         "Detalle del período seleccionado",
                         f"Acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}",
                     ]
-                    schedule_scope = st.radio(
-                        "Vista cronograma",
-                        schedule_options,
-                        horizontal=True,
-                        key=f"capex10_resp_schedule_scope_{key_suffix}_{normalize_key(responsible_name)}",
-                    )
-                    timeline_source = (
-                        accumulated_timeline_source
-                        if schedule_scope == schedule_options[1]
-                        else period_timeline_source
-                    )
-                    timeline_df = timeline_source.copy()
-                    selected_scope_key = "capex10_accumulated" if schedule_scope == schedule_options[1] else "capex10_period"
-                    selected_pairs = responsible_selected_pairs_by_scope.get(selected_scope_key, set())
-                    if selected_pairs and not timeline_df.empty:
-                        pair_index = pd.MultiIndex.from_arrays(
-                            [timeline_df[phase_col].astype(str), timeline_df[line_col].astype(str)]
+                    with st.container(border=True):
+                        header_left, header_right = st.columns([0.58, 0.42], vertical_alignment="top")
+                        with header_left:
+                            st.markdown(
+                                f"""
+                                <div style="--resp-color:{responsible_color};margin:0 0 4px 0;">
+                                  <b style="display:block;color:#071427;font-size:15px;font-weight:950;line-height:1.1;">Cronograma por responsable</b>
+                                  <span style="display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;">{html.escape(responsible_name)} · Inicio a Fin real.</span>
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
+                            schedule_scope = st.radio(
+                                "Vista cronograma",
+                                schedule_options,
+                                horizontal=True,
+                                key=f"capex10_resp_schedule_scope_{key_suffix}_{normalize_key(responsible_name)}",
+                            )
+                        timeline_source = (
+                            accumulated_timeline_source
+                            if schedule_scope == schedule_options[1]
+                            else period_timeline_source
                         )
-                        timeline_df = timeline_df[pair_index.isin(selected_pairs)].copy()
-                    if timeline_df.empty:
-                        st.info(f"No hay partidas para construir el cronograma de {responsible_name} en {schedule_scope.lower()}.")
-                        return
-                    timeline_df[GANTT_DATE_COL_START] = pd.to_datetime(timeline_df.get(GANTT_DATE_COL_START), errors="coerce")
-                    timeline_df[GANTT_DATE_COL_END_REAL] = pd.to_datetime(timeline_df.get(GANTT_DATE_COL_END_REAL), errors="coerce")
-                    timeline_df = timeline_df[
-                        timeline_df[GANTT_DATE_COL_START].notna()
-                        & timeline_df[GANTT_DATE_COL_END_REAL].notna()
-                    ].copy()
-                    if timeline_df.empty:
-                        st.info(f"No hay fechas Inicio y Fin real suficientes para construir el cronograma de {responsible_name}.")
-                        return
-                    amount_total = float(timeline_df["Disponible_CLP"].sum() or 0.0) if "Disponible_CLP" in timeline_df.columns else 0.0
-                    st.markdown(
-                        f"""
-                        <div class="cash-period-gantt-head" style="--resp-color:{responsible_color};">
-                          <div>
-                            <b>Cronograma por responsable</b>
-                            <span>{html.escape(responsible_name)} · {html.escape(schedule_scope)}{' · selección de tabla' if selected_pairs else ''} · Inicio a Fin real.</span>
-                          </div>
-                          <div class="cash-period-gantt-chip">{len(timeline_df)} tareas · {format_clp(amount_total)}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-                    render_inputs_gantt_custom_chart(
-                        timeline_df,
-                        date_mode="Real",
-                        time_range="Todo",
-                        title=f"Cronograma · {responsible_name} · {schedule_scope}",
-                        sequence_tasks=True,
-                    )
+                        timeline_df = timeline_source.copy()
+                        selected_scope_key = "capex10_accumulated" if schedule_scope == schedule_options[1] else "capex10_period"
+                        selected_pairs = responsible_selected_pairs_by_scope.get(selected_scope_key, set())
+                        if selected_pairs and not timeline_df.empty:
+                            pair_index = pd.MultiIndex.from_arrays(
+                                [timeline_df[phase_col].astype(str), timeline_df[line_col].astype(str)]
+                            )
+                            timeline_df = timeline_df[pair_index.isin(selected_pairs)].copy()
+                        if not timeline_df.empty:
+                            timeline_df[GANTT_DATE_COL_START] = pd.to_datetime(timeline_df.get(GANTT_DATE_COL_START), errors="coerce")
+                            timeline_df[GANTT_DATE_COL_END_REAL] = pd.to_datetime(timeline_df.get(GANTT_DATE_COL_END_REAL), errors="coerce")
+                            timeline_df = timeline_df[
+                                timeline_df[GANTT_DATE_COL_START].notna()
+                                & timeline_df[GANTT_DATE_COL_END_REAL].notna()
+                            ].copy()
+                        amount_total = float(timeline_df["Disponible_CLP"].sum() or 0.0) if not timeline_df.empty and "Disponible_CLP" in timeline_df.columns else 0.0
+                        with header_right:
+                            st.markdown(
+                                f"""
+                                <div style="display:flex;justify-content:flex-end;align-items:flex-start;padding-top:2px;">
+                                  <div class="cash-period-gantt-chip" style="--resp-color:{responsible_color};">{len(timeline_df)} tareas · {format_clp(amount_total)}</div>
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
+                        if timeline_df.empty:
+                            st.info(f"No hay partidas con fechas suficientes para construir el cronograma de {responsible_name} en {schedule_scope.lower()}.")
+                            return
+                        render_inputs_gantt_custom_chart(
+                            timeline_df,
+                            date_mode="Real",
+                            time_range="Todo",
+                            title=f"Cronograma · {responsible_name} · {schedule_scope}",
+                            sequence_tasks=True,
+                        )
 
                 with st.expander(f"Tabla detalle de período {selected_period_label}", expanded=True):
                     render_selectable_phase_line_detail(
