@@ -5712,7 +5712,10 @@ def _gantt_due_soon_mask(df: pd.DataFrame, date_mode: str = "Real", days: int = 
     dfk["_end_plan"] = pd.to_datetime(dfk.get(GANTT_DATE_COL_END_PLAN), errors="coerce")
     dfk["_end_real"] = pd.to_datetime(dfk.get(GANTT_DATE_COL_END_REAL), errors="coerce")
     dfk["_end"] = dfk["_end_real"] if date_mode == "Real" else dfk["_end_plan"]
-    dfk["_end"] = dfk["_end"].fillna(dfk["_end_plan"]).fillna(dfk["_end_real"]).fillna(dfk["_start"])
+    if date_mode == "Real":
+        dfk["_end"] = dfk["_end"].fillna(dfk["_start"])
+    else:
+        dfk["_end"] = dfk["_end"].fillna(dfk["_end_real"]).fillna(dfk["_start"])
     today_ts = pd.Timestamp.today().normalize()
     estado = dfk["Estado"].astype(str) if "Estado" in dfk.columns else pd.Series("", index=dfk.index)
     completed_mask = estado.str.contains("complet", case=False, na=False)
@@ -5726,7 +5729,10 @@ def _gantt_summary(df: pd.DataFrame, date_mode: str = "Real") -> dict[str, objec
     dfk["_end_real"] = pd.to_datetime(dfk.get(GANTT_DATE_COL_END_REAL), errors="coerce")
     dfk["_start"] = dfk["_start"].fillna(dfk["_end_real"]).fillna(dfk["_end_plan"])
     dfk["_end"] = dfk["_end_real"] if date_mode == "Real" else dfk["_end_plan"]
-    dfk["_end"] = dfk["_end"].fillna(dfk["_end_plan"]).fillna(dfk["_end_real"]).fillna(dfk["_start"])
+    if date_mode == "Real":
+        dfk["_end"] = dfk["_end"].fillna(dfk["_start"])
+    else:
+        dfk["_end"] = dfk["_end"].fillna(dfk["_end_real"]).fillna(dfk["_start"])
     bad = dfk["_end"] <= dfk["_start"]
     dfk.loc[bad, "_end"] = dfk.loc[bad, "_start"] + pd.Timedelta(days=1)
     dfk = dfk[dfk["_start"].notna() & dfk["_end"].notna()].copy()
@@ -6135,7 +6141,10 @@ def _build_gantt_pdf_schedule(df: pd.DataFrame, date_mode: str = "Real") -> pd.D
     dfp["_end_real"] = pd.to_datetime(dfp.get(GANTT_DATE_COL_END_REAL), errors="coerce")
     dfp["_start"] = dfp["_start"].fillna(dfp["_end_real"]).fillna(dfp["_end_plan"])
     dfp["_end"] = dfp["_end_real"] if date_mode == "Real" else dfp["_end_plan"]
-    dfp["_end"] = dfp["_end"].fillna(dfp["_end_plan"]).fillna(dfp["_end_real"]).fillna(dfp["_start"])
+    if date_mode == "Real":
+        dfp["_end"] = dfp["_end"].fillna(dfp["_start"])
+    else:
+        dfp["_end"] = dfp["_end"].fillna(dfp["_end_real"]).fillna(dfp["_start"])
     bad = dfp["_end"] <= dfp["_start"]
     dfp.loc[bad, "_end"] = dfp.loc[bad, "_start"] + pd.Timedelta(days=1)
     dfp = dfp[dfp["_start"].notna() & dfp["_end"].notna()].copy()
@@ -8468,7 +8477,10 @@ def build_inputs_gantt_figure(
 
     dfp["_start"] = dfp["_start"].fillna(dfp["_end_real"]).fillna(dfp["_end_plan"])
     dfp["_end"] = dfp["_end_real"] if date_mode == "Real" else dfp["_end_plan"]
-    dfp["_end"] = dfp["_end"].fillna(dfp["_end_plan"]).fillna(dfp["_end_real"]).fillna(dfp["_start"])
+    if date_mode == "Real":
+        dfp["_end"] = dfp["_end"].fillna(dfp["_start"])
+    else:
+        dfp["_end"] = dfp["_end"].fillna(dfp["_end_real"]).fillna(dfp["_start"])
     bad = dfp["_end"] <= dfp["_start"]
     dfp.loc[bad, "_end"] = dfp.loc[bad, "_start"] + pd.Timedelta(days=1)
     dfp = dfp[dfp["_start"].notna() & dfp["_end"].notna()].copy()
@@ -8744,7 +8756,10 @@ def render_inputs_gantt_custom_chart(
     dfc["_end_real"] = pd.to_datetime(dfc.get(GANTT_DATE_COL_END_REAL), errors="coerce")
     dfc["_start"] = dfc["_start"].fillna(dfc["_end_real"]).fillna(dfc["_end_plan"])
     dfc["_end"] = dfc["_end_real"] if date_mode == "Real" else dfc["_end_plan"]
-    dfc["_end"] = dfc["_end"].fillna(dfc["_end_plan"]).fillna(dfc["_end_real"]).fillna(dfc["_start"])
+    if date_mode == "Real":
+        dfc["_end"] = dfc["_end"].fillna(dfc["_start"])
+    else:
+        dfc["_end"] = dfc["_end"].fillna(dfc["_end_real"]).fillna(dfc["_start"])
     bad = dfc["_end"] <= dfc["_start"]
     dfc.loc[bad, "_end"] = dfc.loc[bad, "_start"] + pd.Timedelta(days=1)
     dfc = dfc[dfc["_start"].notna() & dfc["_end"].notna()].copy()
@@ -9703,10 +9718,15 @@ def _capex10_responsible_expander_style(responsible: object) -> tuple[str, str]:
     if key == "jp":
         return "violet", "🟣"
     if key == "grupoec":
-        return "blue", "🔷"
+        return "blue", "🔵"
     if key == "imelsa":
         return "blue", "🔵"
     return "gray", "⚪"
+
+
+CAPEX10_PLAN_A_LABEL = "Plan A - Flexibilidad Proveedores"
+CAPEX10_PLAN_B_LABEL = "Plan B - Flujo de caja libre"
+CAPEX10_LEGACY_PLAN_B_LABEL = "Plan B - Sin Flexibilidad Proveedores"
 
 
 def render_capex10_investor_injection_cash_flow(
@@ -9714,6 +9734,7 @@ def render_capex10_investor_injection_cash_flow(
     responsible_scope_df: pd.DataFrame | None = None,
     milestone_dates: list[dict[str, object]] | None = None,
     cashflow_plan: str | None = None,
+    selected_metodos: list[str] | None = None,
 ) -> None:
     if funds_df.empty or "Disponible_CLP" not in funds_df.columns:
         return
@@ -9741,69 +9762,148 @@ def render_capex10_investor_injection_cash_flow(
     st.markdown(
         """
         <style>
-        .cash-injection-card{margin:8px 0 18px;border-radius:22px;background:#FFFFFF;border:1px solid rgba(203,213,225,.88);box-shadow:0 16px 36px rgba(15,23,42,.07);padding:18px 20px;}
-        .cash-injection-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 12px;}
+        .cash-injection-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 10px;}
         .cash-injection-head b{display:block;color:#071427;font-size:18px;line-height:1.1;font-weight:950;}
         .cash-injection-head span{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}
         .cash-injection-pill{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:7px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}
+        .cash-injection-summary{
+            border:1px solid rgba(203,213,225,.9);
+            border-top:4px solid #0F766E;
+            border-radius:14px;
+            background:
+                linear-gradient(135deg,rgba(236,253,245,.95),rgba(255,255,255,.98) 46%),
+                #FFFFFF;
+            padding:8px 12px;
+            min-height:58px;
+            margin-top:18px;
+            box-shadow:0 6px 14px rgba(15,23,42,.04);
+        }
+        .cash-injection-summary span{
+            display:block;
+            color:#64748B;
+            font-size:8.5px;
+            font-weight:950;
+            letter-spacing:.055em;
+            text-transform:uppercase;
+            margin-bottom:5px;
+        }
+        .cash-injection-summary b{
+            display:block;
+            color:#071427;
+            font-size:22px;
+            line-height:1;
+            font-weight:950;
+            margin-bottom:5px;
+            white-space:nowrap;
+        }
+        .cash-injection-summary em{
+            display:inline-flex;
+            border-radius:999px;
+            background:#DCFCE7;
+            color:#15803D;
+            padding:3px 7px;
+            font-style:normal;
+            font-size:10px;
+            font-weight:900;
+            white-space:nowrap;
+        }
+        .cash-injection-row-label{
+            color:#0F766E;
+            font-size:10px;
+            font-weight:950;
+            letter-spacing:.08em;
+            text-transform:uppercase;
+            padding-top:31px;
+            white-space:nowrap;
+        }
         @media(max-width:900px){.cash-injection-head{display:block;}.cash-injection-pill{display:inline-flex;margin-top:10px;}}
         </style>
-        <div class="cash-injection-card">
-          <div class="cash-injection-head">
-            <div><b>Inyección cliente o inversionista</b><span>Entradas puntuales de caja contra los gastos pendientes calendarizados.</span></div>
-            <div class="cash-injection-pill">Capital externo</div>
-          </div>
-        </div>
         """,
         unsafe_allow_html=True,
     )
-    input_col_1, input_col_2, input_col_3 = st.columns([1, 1, 1.15])
-    with input_col_1:
-        investor_injection_clp = st.number_input(
-            "Monto inyección 1 (CLP)",
-            min_value=0,
-            value=54_000_000,
-            step=1_000_000,
-            format="%d",
-            key="capex10_investor_injection_clp",
-            help="Capital comprometido por un cliente o inversionista para contrastarlo contra los fondos por ejecutar.",
+    injection_entries: list[dict[str, object]] = []
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div class="cash-injection-head">
+              <div><b>Inyección cliente o inversionista</b><span>Entradas puntuales de caja contra los gastos pendientes calendarizados.</span></div>
+              <div class="cash-injection-pill">Capital externo</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-    with input_col_2:
-        investor_injection_date = st.date_input(
-            "Fecha inyección 1",
-            value=pd.Timestamp("2026-08-30").date(),
-            key="capex10_investor_injection_date",
-            help="Fecha estimada en que entra la inyección de capital.",
-        )
-    input_col_4, input_col_5, _input_col_6 = st.columns([1, 1, 1.15])
-    with input_col_4:
-        investor_injection_2_clp = st.number_input(
-            "Monto inyección 2 (CLP)",
-            min_value=0,
-            value=0,
-            step=1_000_000,
-            format="%d",
-            key="capex10_investor_injection_2_clp",
-            help="Segunda entrada puntual de capital. Déjala en 0 si no aplica.",
-        )
-    with input_col_5:
-        investor_injection_2_date = st.date_input(
-            "Fecha inyección 2",
-            value=pd.Timestamp("2026-09-30").date(),
-            key="capex10_investor_injection_2_date",
-            help="Fecha estimada de la segunda inyección de capital.",
-        )
-    total_committed_clp = float(investor_injection_clp or 0.0) + float(investor_injection_2_clp or 0.0)
-    with input_col_3:
-        committed_pct = (total_committed_clp / total_clp * 100.0) if total_clp > 0 else 0.0
-        st.metric(
-            "Cobertura sobre flujo seleccionado",
-            f"{committed_pct:.1f}%",
-            delta=format_clp(total_committed_clp - total_clp),
-            help="Diferencia entre el total de inyecciones comprometidas y el flujo total pendiente de la selección activa.",
-        )
+        inputs_col, coverage_col = st.columns([1.55, .95], gap="large")
+        injection_defaults = [
+            (54_000_000, pd.Timestamp("2026-08-30").date()),
+            (0, pd.Timestamp("2026-09-30").date()),
+            (0, pd.Timestamp("2026-10-30").date()),
+            (0, pd.Timestamp("2026-11-30").date()),
+        ]
+        with inputs_col:
+            count_col, first_amount_col, first_date_col = st.columns([.78, 1, 1], gap="small")
+            with count_col:
+                injection_count = st.selectbox(
+                    "Cantidad",
+                    [1, 2, 3, 4],
+                    index=0,
+                    key="capex10_investor_injection_count",
+                    help="Define cuántas entradas puntuales de capital quieres modelar.",
+                )
+            for injection_idx in range(int(injection_count)):
+                amount_default, date_default = injection_defaults[injection_idx]
+                amount_key = "capex10_investor_injection_clp" if injection_idx == 0 else f"capex10_investor_injection_{injection_idx + 1}_clp"
+                date_key = "capex10_investor_injection_date" if injection_idx == 0 else f"capex10_investor_injection_{injection_idx + 1}_date"
+                if injection_idx == 0:
+                    amount_col, date_col_input = first_amount_col, first_date_col
+                else:
+                    label_col, amount_col, date_col_input = st.columns([.78, 1, 1], gap="small")
+                    with label_col:
+                        st.markdown(
+                            f'<div class="cash-injection-row-label">Inyección {injection_idx + 1}</div>',
+                            unsafe_allow_html=True,
+                        )
+                with amount_col:
+                    injection_amount = st.number_input(
+                        f"Monto {injection_idx + 1} (CLP)",
+                        min_value=0,
+                        value=amount_default,
+                        step=1_000_000,
+                        format="%d",
+                        key=amount_key,
+                        help="Capital comprometido por un cliente o inversionista para contrastarlo contra los fondos por ejecutar.",
+                    )
+                with date_col_input:
+                    injection_date = st.date_input(
+                        f"Fecha {injection_idx + 1}",
+                        value=date_default,
+                        key=date_key,
+                        help="Fecha estimada en que entra la inyección de capital.",
+                    )
+                injection_entries.append(
+                    {
+                        "_month": pd.Timestamp(injection_date).to_period("M").to_timestamp(),
+                        "Inyeccion_CLP": float(injection_amount or 0.0),
+                        "Etiqueta": f"Inyección {injection_idx + 1}",
+                    }
+                )
+        total_committed_clp = sum(float(entry["Inyeccion_CLP"] or 0.0) for entry in injection_entries)
+        with coverage_col:
+            committed_pct = (total_committed_clp / total_clp * 100.0) if total_clp > 0 else 0.0
+            coverage_delta = total_committed_clp - total_clp
+            coverage_delta_color = "#15803D" if coverage_delta >= 0 else "#C2410C"
+            coverage_delta_bg = "#DCFCE7" if coverage_delta >= 0 else "#FFEDD5"
+            st.markdown(
+                f"""
+                <div class="cash-injection-summary">
+                  <span>Cobertura sobre flujo seleccionado</span>
+                  <b>{committed_pct:.1f}%</b>
+                  <em style="color:{coverage_delta_color};background:{coverage_delta_bg};">{format_clp(coverage_delta)}</em>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
     if not cashflow_plan:
-        cashflow_plan = "Plan A - Flexibilidad Proveedores"
+        cashflow_plan = CAPEX10_PLAN_A_LABEL
 
     if cashflow_plan.startswith("Plan A"):
         flow_df["_month"] = flow_df["_chart_date"].dt.to_period("M").dt.to_timestamp()
@@ -9817,20 +9917,7 @@ def render_capex10_investor_injection_cash_flow(
     if monthly.empty:
         return
 
-    injection_df = pd.DataFrame(
-        [
-            {
-                "_month": pd.Timestamp(investor_injection_date).to_period("M").to_timestamp(),
-                "Inyeccion_CLP": float(investor_injection_clp or 0.0),
-                "Etiqueta": "Inyección 1",
-            },
-            {
-                "_month": pd.Timestamp(investor_injection_2_date).to_period("M").to_timestamp(),
-                "Inyeccion_CLP": float(investor_injection_2_clp or 0.0),
-                "Etiqueta": "Inyección 2",
-            },
-        ]
-    )
+    injection_df = pd.DataFrame(injection_entries)
     positive_injections = injection_df[injection_df["Inyeccion_CLP"] > 0].copy()
     valid_milestones = [
         milestone
@@ -9979,14 +10066,23 @@ def render_capex10_investor_injection_cash_flow(
     st.plotly_chart(fig_commitment, use_container_width=True, config={"displaylogo": False})
 
     analysis_month_options = [pd.Timestamp(value) for value in commitment_monthly["_month"].tolist()]
-    selected_analysis_month_values = st.multiselect(
-        "Período para analizar",
-        analysis_month_options,
-        format_func=lambda value: pd.Timestamp(value).strftime("%b %Y"),
-        key="capex10_investor_injection_analysis_months",
-        placeholder="Todos",
-        help="Filtra uno o varios meses. Sin selección muestra todos los períodos, igual que el selector Método.",
-    )
+    analysis_month_key = "capex10_investor_injection_analysis_months"
+    analysis_month_sticky = st.session_state.pop(f"{analysis_month_key}__sticky", None)
+    if analysis_month_sticky is not None:
+        st.session_state[analysis_month_key] = analysis_month_sticky
+    raw_selected_analysis_month_values = st.session_state.get(analysis_month_key, [])
+    if not isinstance(raw_selected_analysis_month_values, (list, tuple, set)):
+        raw_selected_analysis_month_values = [raw_selected_analysis_month_values]
+    analysis_month_option_set = {pd.Timestamp(value).to_period("M").to_timestamp() for value in analysis_month_options}
+    selected_analysis_month_values = [
+        month_value
+        for month_value in (
+            pd.Timestamp(value).to_period("M").to_timestamp()
+            for value in raw_selected_analysis_month_values
+            if pd.notna(value)
+        )
+        if month_value in analysis_month_option_set
+    ]
     selected_analysis_months = (
         sorted({pd.Timestamp(value).to_period("M").to_timestamp() for value in selected_analysis_month_values})
         if selected_analysis_month_values
@@ -10004,9 +10100,9 @@ def render_capex10_investor_injection_cash_flow(
     selected_month_rows = commitment_monthly[commitment_monthly["_month"].isin(selected_analysis_months)].copy()
     selected_cutoff_row = commitment_monthly[commitment_monthly["_month"].eq(selected_analysis_cutoff_month)].iloc[0]
     is_plan_a_selected = cashflow_plan.startswith("Plan A")
-    selected_plan_label = "Plan A - Flexibilidad Proveedores" if is_plan_a_selected else "Plan B - Sin Flexibilidad Proveedores"
+    selected_plan_label = CAPEX10_PLAN_A_LABEL if is_plan_a_selected else CAPEX10_PLAN_B_LABEL
     selected_plan_sort_col = "_chart_date" if is_plan_a_selected else "_cash_date"
-    alternate_plan_label = "Plan B - Sin Flexibilidad Proveedores" if is_plan_a_selected else "Plan A - Flexibilidad Proveedores"
+    alternate_plan_label = CAPEX10_PLAN_B_LABEL if is_plan_a_selected else CAPEX10_PLAN_A_LABEL
     alternate_plan_month_col = "_analysis_month" if is_plan_a_selected else "_chart_date"
     alternate_plan_sort_col = "_cash_date" if is_plan_a_selected else "_chart_date"
     period_injection = float(selected_month_rows["Inyeccion_CLP"].sum() or 0.0)
@@ -10084,6 +10180,23 @@ def render_capex10_investor_injection_cash_flow(
     hito_premontaje_accumulated = hito_accumulated_amount("Hito Pre -Montaje")
     hito_montaje_accumulated = hito_accumulated_amount("Hito Montaje")
     hito_producto_accumulated = hito_accumulated_amount("Hito Producto")
+    selected_hito_labels = {
+        normalize_key(str(spec.get("label", "")))
+        for spec in _capex10_selected_hito_specs(selected_metodos or [])
+    }
+    hito_kpi_specs = [
+        ("Hito Pre-Montaje", "Hito Pre -Montaje", hito_premontaje_accumulated, "#164E63"),
+        ("Hito Montaje", "Hito Montaje", hito_montaje_accumulated, "#1E3A8A"),
+        ("Hito Producto", "Hito Producto", hito_producto_accumulated, "#B7791F"),
+    ]
+    hito_kpi_html = "".join(
+        (
+            f'<div class="cash-period-kpi" style="--c:{color};"><span>{html.escape(display_label)}</span>'
+            f"<b>{format_clp(amount)}</b><em>Acum. hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>"
+        )
+        for display_label, match_label, amount, color in hito_kpi_specs
+        if normalize_key(match_label) in selected_hito_labels
+    )
     phase_period_summary = (
         period_items.groupby("Fase", as_index=False)["Disponible_CLP"].sum().sort_values("Disponible_CLP", ascending=False)
         if not period_items.empty and "Fase" in period_items.columns
@@ -10443,6 +10556,7 @@ def render_capex10_investor_injection_cash_flow(
         )
         responsible_summary = responsible_summary.sort_values(["Disponible_CLP", "Acumulado_CLP"], ascending=False)
 
+        render_inputs_gantt_design_css()
         st.markdown(
             f"""
             <style>
@@ -10471,17 +10585,17 @@ def render_capex10_investor_injection_cash_flow(
               .cash-period-resp-title span{{
                 color:#334155;font-size:12px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
               }}
-              .cash-period-resp-kpis{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 10px;}}
+              .cash-period-resp-kpis{{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:7px;margin:0 0 10px;}}
               .cash-period-resp-kpis div{{
                 border:1px solid rgba(226,232,240,.95);border-top:3px solid var(--resp-color);
-                border-radius:10px;background:#FFFFFF;padding:8px 10px;min-height:56px;
+                border-radius:10px;background:#FFFFFF;padding:7px 8px;min-height:54px;
               }}
               .cash-period-resp-kpis span{{
-                display:block;color:#64748B;font-size:9.5px;font-weight:950;letter-spacing:.055em;
+                display:block;color:#64748B;font-size:8.5px;font-weight:950;letter-spacing:.04em;
                 text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
               }}
               .cash-period-resp-kpis b{{
-                display:block;color:var(--resp-color);font-size:15px;line-height:1.08;font-weight:950;
+                display:block;color:var(--resp-color);font-size:13.5px;line-height:1.08;font-weight:950;
                 margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
               }}
               .cash-period-task-head{{
@@ -10492,16 +10606,22 @@ def render_capex10_investor_injection_cash_flow(
               .cash-period-task-head b{{display:block;color:var(--resp-color);font-size:14px;font-weight:950;line-height:1.15;}}
               .cash-period-task-head span{{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:3px;}}
               .cash-period-task-amount{{color:#071427;font-size:14px;font-weight:950;white-space:nowrap;}}
+              .cash-period-gantt-head{{
+                display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:14px 0 8px;
+                border:1px solid rgba(203,213,225,.86);border-left:6px solid var(--resp-color);
+                border-radius:14px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:11px 13px;
+              }}
+              .cash-period-gantt-head b{{display:block;color:#071427;font-size:15px;font-weight:950;line-height:1.1;}}
+              .cash-period-gantt-head span{{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}}
+              .cash-period-gantt-chip{{
+                color:var(--resp-color);background:#FFFFFF;border:1px solid rgba(203,213,225,.85);
+                border-radius:999px;padding:6px 10px;font-size:10px;font-weight:950;text-transform:uppercase;letter-spacing:.08em;
+                white-space:nowrap;
+              }}
+              @media(max-width:1180px){{.cash-period-resp-kpis{{grid-template-columns:repeat(3,minmax(0,1fr));}}}}
               @media(max-width:980px){{.cash-period-resp-kpis{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
               @media(max-width:620px){{.cash-period-detail-head{{display:block;}}.cash-period-detail-total{{margin-top:8px;}}.cash-period-resp-kpis{{grid-template-columns:1fr;}}}}
             </style>
-            <div class="cash-period-detail-head">
-              <div>
-                <b>Detalle por Responsable, Fase y línea <span>todo lo seleccionado</span></b>
-                <span>{html.escape(plan_label)} · período {html.escape(selected_period_label)} · acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}.</span>
-              </div>
-              <div class="cash-period-detail-total">{format_clp(period_detail_total)} / {format_clp(accumulated_detail_total)}</div>
-            </div>
             """,
             unsafe_allow_html=True,
         )
@@ -10516,6 +10636,7 @@ def render_capex10_investor_injection_cash_flow(
             responsible_end = pd.Timestamp(responsible_row["Fin_real"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Fin_real"]) else "-"
             responsible_period_label = format_clp(responsible_total).replace("$", "\\$")
             responsible_accumulated_label = format_clp(responsible_accumulated_total).replace("$", "\\$")
+            responsible_selected_pairs_by_scope: dict[str, set[tuple[str, str]]] = {}
 
             def render_selectable_phase_line_detail(
                 source_df: pd.DataFrame,
@@ -10548,23 +10669,33 @@ def render_capex10_investor_injection_cash_flow(
                     height=min(300, 38 + (len(display_rows) + 1) * 35),
                     key=f"{key_prefix}_phase_line_{key_suffix}_{normalize_key(responsible_name)}",
                     on_select="rerun",
-                    selection_mode="single-row",
+                    selection_mode="multi-row",
                 )
                 selected_rows = getattr(getattr(selected_state, "selection", None), "rows", []) if selected_state is not None else []
-                if not selected_rows:
+                has_manual_selection = bool(selected_rows)
+                if not has_manual_selection:
+                    responsible_selected_pairs_by_scope[key_prefix] = set()
                     return
-                selected_position = int(selected_rows[0])
-                selected_position = max(0, min(selected_position, len(selectable_rows) - 1))
-                selected_line = selectable_rows.iloc[selected_position]
-                selected_phase_name = str(selected_line["Fase"])
-                selected_line_name = str(selected_line["Línea"])
+                selected_positions = (
+                    sorted(
+                        {
+                            max(0, min(int(selected_row), len(selectable_rows) - 1))
+                            for selected_row in selected_rows
+                        }
+                    )
+                )
+                selected_lines = selectable_rows.iloc[selected_positions].copy()
+                selected_pairs = set(zip(selected_lines["Fase"].astype(str), selected_lines["Línea"].astype(str)))
+                responsible_selected_pairs_by_scope[key_prefix] = selected_pairs
+                pair_index = pd.MultiIndex.from_arrays(
+                    [source_df[phase_col].astype(str), source_df[line_col].astype(str)]
+                )
                 selected_items = source_df[
                     source_df["_responsable_detalle_periodo"].eq(responsible_name)
-                    & source_df[phase_col].astype(str).eq(selected_phase_name)
-                    & source_df[line_col].astype(str).eq(selected_line_name)
+                    & pair_index.isin(selected_pairs)
                 ].copy()
                 if selected_items.empty:
-                    st.info("No hay tareas para la fase/línea seleccionada.")
+                    st.info("No hay tareas para las fases/líneas seleccionadas.")
                     return
                 sort_cols = [col for col in [phase_col, line_col, task_col, "Disponible_CLP"] if col and col in selected_items.columns]
                 if sort_cols:
@@ -10588,12 +10719,25 @@ def render_capex10_investor_injection_cash_flow(
                     if source_col and source_col in selected_items.columns:
                         task_display[display_col] = pd.to_datetime(selected_items[source_col], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
                 selected_total = float(selected_items["Disponible_CLP"].sum() or 0.0)
+                selected_phase_count = int(selected_lines["Fase"].nunique())
+                selected_line_count = int(selected_lines["Línea"].nunique())
+                selected_title = (
+                    str(selected_lines.iloc[0]["Fase"])
+                    if selected_phase_count == 1
+                    else f"{selected_phase_count} fases {'seleccionadas' if has_manual_selection else 'visibles'}"
+                )
+                selected_subtitle = (
+                    str(selected_lines.iloc[0]["Línea"])
+                    if selected_line_count == 1
+                    else f"{selected_line_count} líneas {'seleccionadas' if has_manual_selection else 'visibles'}"
+                )
+                task_scope_note = "seleccionadas" if has_manual_selection else "visibles"
                 st.markdown(
                     f"""
                     <div class="cash-period-task-head" style="--resp-color:{responsible_color};">
                       <div>
-                        <b>{html.escape(selected_phase_name)}</b>
-                        <span>{html.escape(selected_line_name)} · {len(selected_items)} tareas seleccionadas</span>
+                        <b>{html.escape(selected_title)}</b>
+                        <span>{html.escape(selected_subtitle)} · {len(selected_items)} tareas {task_scope_note}</span>
                       </div>
                       <div class="cash-period-task-amount">{format_clp(selected_total)}</div>
                     </div>
@@ -10657,22 +10801,89 @@ def render_capex10_investor_injection_cash_flow(
                 accumulated_responsible_lines = accumulated_line_summary[
                     accumulated_line_summary["_responsable_detalle_periodo"].eq(responsible_name)
                 ].copy()
-                render_selectable_phase_line_detail(
-                    detail_scope_df,
-                    responsible_lines,
-                    f"Detalle de período {selected_period_label}",
-                    "Peso_periodo",
-                    "% período",
-                    "capex10_period",
-                )
-                render_selectable_phase_line_detail(
-                    accumulated_detail_scope_df,
-                    accumulated_responsible_lines,
-                    f"Acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}",
-                    "Peso_acumulado",
-                    "% acumulado",
-                    "capex10_accumulated",
-                )
+
+                def render_responsible_schedule() -> None:
+                    period_timeline_source = detail_scope_df[
+                        detail_scope_df["_responsable_detalle_periodo"].eq(responsible_name)
+                    ].copy()
+                    accumulated_timeline_source = accumulated_detail_scope_df[
+                        accumulated_detail_scope_df["_responsable_detalle_periodo"].eq(responsible_name)
+                    ].copy() if not accumulated_detail_scope_df.empty else pd.DataFrame()
+                    schedule_options = [
+                        "Detalle del período seleccionado",
+                        f"Acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}",
+                    ]
+                    schedule_scope = st.radio(
+                        "Vista cronograma",
+                        schedule_options,
+                        horizontal=True,
+                        key=f"capex10_resp_schedule_scope_{key_suffix}_{normalize_key(responsible_name)}",
+                    )
+                    timeline_source = (
+                        accumulated_timeline_source
+                        if schedule_scope == schedule_options[1]
+                        else period_timeline_source
+                    )
+                    timeline_df = timeline_source.copy()
+                    selected_scope_key = "capex10_accumulated" if schedule_scope == schedule_options[1] else "capex10_period"
+                    selected_pairs = responsible_selected_pairs_by_scope.get(selected_scope_key, set())
+                    if selected_pairs and not timeline_df.empty:
+                        pair_index = pd.MultiIndex.from_arrays(
+                            [timeline_df[phase_col].astype(str), timeline_df[line_col].astype(str)]
+                        )
+                        timeline_df = timeline_df[pair_index.isin(selected_pairs)].copy()
+                    if timeline_df.empty:
+                        st.info(f"No hay partidas para construir el cronograma de {responsible_name} en {schedule_scope.lower()}.")
+                        return
+                    timeline_df[GANTT_DATE_COL_START] = pd.to_datetime(timeline_df.get(GANTT_DATE_COL_START), errors="coerce")
+                    timeline_df[GANTT_DATE_COL_END_REAL] = pd.to_datetime(timeline_df.get(GANTT_DATE_COL_END_REAL), errors="coerce")
+                    timeline_df = timeline_df[
+                        timeline_df[GANTT_DATE_COL_START].notna()
+                        & timeline_df[GANTT_DATE_COL_END_REAL].notna()
+                    ].copy()
+                    if timeline_df.empty:
+                        st.info(f"No hay fechas Inicio y Fin real suficientes para construir el cronograma de {responsible_name}.")
+                        return
+                    amount_total = float(timeline_df["Disponible_CLP"].sum() or 0.0) if "Disponible_CLP" in timeline_df.columns else 0.0
+                    st.markdown(
+                        f"""
+                        <div class="cash-period-gantt-head" style="--resp-color:{responsible_color};">
+                          <div>
+                            <b>Cronograma por responsable</b>
+                            <span>{html.escape(responsible_name)} · {html.escape(schedule_scope)}{' · selección de tabla' if selected_pairs else ''} · Inicio a Fin real.</span>
+                          </div>
+                          <div class="cash-period-gantt-chip">{len(timeline_df)} tareas · {format_clp(amount_total)}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    render_inputs_gantt_custom_chart(
+                        timeline_df,
+                        date_mode="Real",
+                        time_range="Todo",
+                        title=f"Cronograma · {responsible_name} · {schedule_scope}",
+                        sequence_tasks=True,
+                    )
+
+                with st.expander(f"Tabla detalle de período {selected_period_label}", expanded=True):
+                    render_selectable_phase_line_detail(
+                        detail_scope_df,
+                        responsible_lines,
+                        f"Detalle de período {selected_period_label}",
+                        "Peso_periodo",
+                        "% período",
+                        "capex10_period",
+                    )
+                with st.expander(f"Tabla acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}", expanded=False):
+                    render_selectable_phase_line_detail(
+                        accumulated_detail_scope_df,
+                        accumulated_responsible_lines,
+                        f"Acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}",
+                        "Peso_acumulado",
+                        "% acumulado",
+                        "capex10_accumulated",
+                    )
+                render_responsible_schedule()
 
         if not accumulated_detail_scope_df.empty:
             period_chart_summary = (
@@ -10776,47 +10987,6 @@ def render_capex10_investor_injection_cash_flow(
                     key=f"capex10_phase_line_concentration_{key_suffix}",
                 )
 
-    st.markdown(
-        f"""
-        <style>
-          .cash-period-panel{{
-            border:1px solid rgba(203,213,225,.82);
-            border-left:6px solid #0F766E;
-            border-radius:18px;
-            background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
-            padding:14px;
-            margin:10px 0 18px;
-            box-shadow:0 12px 26px rgba(15,23,42,.055);
-          }}
-          .cash-period-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:0 0 12px;}}
-          .cash-period-head b{{display:block;color:#071427;font-size:16px;line-height:1.1;font-weight:950;}}
-          .cash-period-head span{{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}}
-          .cash-period-chip{{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:7px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}}
-          .cash-period-kpis{{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:0 0 12px;}}
-          .cash-period-kpi{{border:1px solid rgba(226,232,240,.95);border-top:3px solid var(--c);border-radius:10px;background:#FFFFFF;padding:9px 10px;min-height:66px;}}
-          .cash-period-kpi span{{display:block;color:#64748B;font-size:9.5px;font-weight:950;letter-spacing:.055em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
-          .cash-period-kpi b{{display:block;color:var(--c);font-size:17px;line-height:1.08;font-weight:950;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
-          .cash-period-kpi em{{display:block;color:#64748B;font-size:10px;font-style:normal;font-weight:800;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
-          @media(max-width:1100px){{.cash-period-kpis{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
-          @media(max-width:720px){{.cash-period-head{{display:block;}}.cash-period-chip{{display:inline-flex;margin-top:10px;}}.cash-period-kpis{{grid-template-columns:1fr;}}}}
-        </style>
-        <div class="cash-period-panel">
-          <div class="cash-period-head">
-            <div><b>Análisis del período seleccionado · {html.escape(selected_plan_label)}</b><span>Detalle de los meses elegidos en el gráfico de inyección según el plan activo.</span></div>
-            <div class="cash-period-chip">{html.escape(selected_plan_label)} · {html.escape(selected_period_label)}</div>
-          </div>
-          <div class="cash-period-kpis">
-            <div class="cash-period-kpi" style="--c:#0E7490;"><span>Monto período seleccionado</span><b>{format_clp(period_flow)}</b><em>{len(period_items)} partidas filtradas</em></div>
-            <div class="cash-period-kpi" style="--c:#0F766E;"><span>Inyección del período</span><b>{format_clp(period_injection)}</b><em>Entrada puntual</em></div>
-            <div class="cash-period-kpi" style="--c:#D7605E;"><span>Saldo plan al mes</span><b>{format_clp(plan_balance_to_period)}</b><em>Inyección - requerido</em></div>
-            <div class="cash-period-kpi" style="--c:#164E63;"><span>Hito Pre-Montaje</span><b>{format_clp(hito_premontaje_accumulated)}</b><em>Acum. hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>
-            <div class="cash-period-kpi" style="--c:#1E3A8A;"><span>Hito Montaje</span><b>{format_clp(hito_montaje_accumulated)}</b><em>Acum. hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>
-            <div class="cash-period-kpi" style="--c:#B7791F;"><span>Hito Producto</span><b>{format_clp(hito_producto_accumulated)}</b><em>Acum. hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     def render_period_tables(
         detail_display: pd.DataFrame,
         items: pd.DataFrame,
@@ -10829,27 +10999,85 @@ def render_capex10_investor_injection_cash_flow(
         render_period_phase_line_detail(items, accumulated_items, plan_label, key_suffix)
         render_period_responsible_contribution(items, accumulated_items, plan_label, key_suffix)
 
-    render_period_tables(
-        period_detail_display,
-        period_items,
-        accumulated_period_items,
-        accumulated_period_detail_display,
-        selected_plan_label,
-        "active",
-        "El período seleccionado no tiene partidas de gasto calendarizadas.",
+    st.markdown(
+        """
+        <style>
+          .cash-period-panel{
+            border:1px solid rgba(203,213,225,.82);
+            border-left:6px solid #0F766E;
+            border-radius:18px;
+            background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
+            padding:14px;
+            margin:10px 0 18px;
+            box-shadow:0 12px 26px rgba(15,23,42,.055);
+          }
+          .cash-period-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:0 0 12px;}
+          .cash-period-head b{display:block;color:#071427;font-size:16px;line-height:1.1;font-weight:950;}
+          .cash-period-head span{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}
+          .cash-period-chip{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:7px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}
+          .cash-period-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:10px 0 10px;}
+          .cash-period-kpi{border:1px solid rgba(226,232,240,.95);border-top:3px solid var(--c);border-radius:10px;background:#FFFFFF;padding:8px 10px;min-height:64px;}
+          .cash-period-kpi span{display:block;color:#64748B;font-size:9px;font-weight:950;letter-spacing:.035em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+          .cash-period-kpi b{display:block;color:var(--c);font-size:16px;line-height:1.08;font-weight:950;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+          .cash-period-kpi em{display:block;color:#64748B;font-size:9.5px;font-style:normal;font-weight:800;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+          @media(max-width:720px){.cash-period-head{display:block;}.cash-period-chip{display:inline-flex;margin-top:10px;}.cash-period-kpis{grid-template-columns:1fr;}}
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
-
-    if is_plan_a_selected:
-        with st.expander(f"Detalle {alternate_plan_label}", expanded=False):
-            render_period_tables(
-                alternate_period_detail_display,
-                alternate_period_items,
-                alternate_accumulated_items,
-                alternate_accumulated_detail_display,
-                alternate_plan_label,
-                "alternate",
-                f"El período seleccionado no tiene partidas calendarizadas en {alternate_plan_label}.",
+    with st.container(border=True):
+        st.markdown(
+            f"""
+          <div class="cash-period-head">
+            <div><b>Análisis del período seleccionado · {html.escape(selected_plan_label)}</b><span>Detalle de los meses elegidos en el gráfico de inyección según el plan activo.</span></div>
+            <div class="cash-period-chip">{html.escape(selected_plan_label)} · {html.escape(selected_period_label)}</div>
+          </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        period_selector_col, _ = st.columns([0.28, 0.72])
+        with period_selector_col:
+            st.multiselect(
+                "Período para analizar",
+                analysis_month_options,
+                format_func=lambda value: pd.Timestamp(value).strftime("%b %Y"),
+                key=analysis_month_key,
+                placeholder="Todos",
+                help="Filtra uno o varios meses. Sin selección muestra todos los períodos, igual que el selector Método.",
             )
+        st.markdown(
+            f"""
+          <div class="cash-period-kpis">
+            <div class="cash-period-kpi" style="--c:#0E7490;"><span>Monto período seleccionado</span><b>{format_clp(period_flow)}</b><em>{len(period_items)} partidas filtradas</em></div>
+            <div class="cash-period-kpi" style="--c:#164E63;"><span>Monto acumulado al período</span><b>{format_clp(accumulated_hito_flow)}</b><em>Hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>
+            <div class="cash-period-kpi" style="--c:#0F766E;"><span>Inyección del período</span><b>{format_clp(period_injection)}</b><em>Entrada puntual</em></div>
+            <div class="cash-period-kpi" style="--c:#D7605E;"><span>Saldo plan al mes</span><b>{format_clp(plan_balance_to_period)}</b><em>Inyección - requerido</em></div>
+            {hito_kpi_html}
+          </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        render_period_tables(
+            period_detail_display,
+            period_items,
+            accumulated_period_items,
+            accumulated_period_detail_display,
+            selected_plan_label,
+            "active",
+            "El período seleccionado no tiene partidas de gasto calendarizadas.",
+        )
+
+        if is_plan_a_selected:
+            with st.expander(f"Detalle {alternate_plan_label}", expanded=False):
+                render_period_tables(
+                    alternate_period_detail_display,
+                    alternate_period_items,
+                    alternate_accumulated_items,
+                    alternate_accumulated_detail_display,
+                    alternate_plan_label,
+                    "alternate",
+                    f"El período seleccionado no tiene partidas calendarizadas en {alternate_plan_label}.",
+                )
 
     responsible_flow_df = responsible_scope_df.copy() if responsible_scope_df is not None and not responsible_scope_df.empty else flow_df.copy()
     if "Disponible_CLP" in responsible_flow_df.columns:
@@ -11519,22 +11747,22 @@ def render_capex10_available_funds_by_phase_line() -> None:
             width:100%;
             max-width:100%;
             border:1px solid rgba(203,213,225,.82);
-            border-radius:24px;
+            border-radius:20px;
             background:#FFFFFF;
             padding:0;
-            margin:8px 0 18px 0;
-            box-shadow:0 24px 52px rgba(15,23,42,.085);
+            margin:6px 0 14px 0;
+            box-shadow:0 18px 40px rgba(15,23,42,.075);
         }}
         .capex10-funds-grid{{
             display:grid;
             grid-template-columns:minmax(0, 7fr) minmax(0, 3fr);
-            min-height:284px;
+            min-height:213px;
             width:100%;
             max-width:100%;
             overflow:hidden;
         }}
         .capex10-funds-left{{
-            padding:28px 30px 26px 30px;
+            padding:21px 24px 19px 24px;
             position:relative;
             z-index:2;
             min-width:0;
@@ -11543,13 +11771,13 @@ def render_capex10_available_funds_by_phase_line() -> None:
         .capex10-funds-brand{{
             display:flex;
             align-items:center;
-            gap:14px;
-            margin:0 0 16px 0;
+            gap:12px;
+            margin:0 0 10px 0;
         }}
         .capex10-funds-logo{{
-            width:58px;
-            height:58px;
-            border-radius:18px;
+            width:46px;
+            height:46px;
+            border-radius:15px;
             display:flex;
             align-items:center;
             justify-content:center;
@@ -11559,24 +11787,24 @@ def render_capex10_available_funds_by_phase_line() -> None:
             color:#0F766E;
         }}
         .capex10-funds-k{{
-            font-size:12px;
+            font-size:10px;
             font-weight:950;
             letter-spacing:.16em;
             text-transform:uppercase;
             color:#0F766E;
-            margin:0 0 7px 0;
+            margin:0 0 5px 0;
         }}
         .capex10-funds-t{{
-            font-size:clamp(26px, 2.35vw, 38px);
+            font-size:clamp(22px, 1.95vw, 30px);
             font-weight:950;
             color:#07142B;
             line-height:1.06;
-            margin:0 0 10px 0;
+            margin:0 0 7px 0;
             max-width:920px;
         }}
         .capex10-funds-s{{
-            font-size:14px;
-            line-height:1.62;
+            font-size:12px;
+            line-height:1.42;
             color:#475569;
             margin:0;
             max-width:900px;
@@ -11584,21 +11812,21 @@ def render_capex10_available_funds_by_phase_line() -> None:
         .capex10-kpi-grid{{
             display:grid;
             grid-template-columns:minmax(260px, 1.22fr) repeat(2,minmax(170px, .72fr));
-            gap:12px;
+            gap:9px;
             align-items:stretch;
-            margin-top:24px;
+            margin-top:14px;
             width:100%;
             max-width:100%;
         }}
         .capex10-kpi-card{{
             position:relative;
             min-width:0;
-            min-height:96px;
+            min-height:72px;
             border:1px solid rgba(203,213,225,.82);
-            border-radius:18px;
+            border-radius:14px;
             background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);
-            padding:15px 16px;
-            box-shadow:0 14px 30px rgba(15,23,42,.07);
+            padding:11px 12px;
+            box-shadow:0 10px 22px rgba(15,23,42,.06);
             transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
             overflow:hidden;
         }}
@@ -11608,8 +11836,8 @@ def render_capex10_available_funds_by_phase_line() -> None:
             box-shadow:0 20px 38px rgba(15,23,42,.11);
         }}
         .capex10-kpi-main{{
-            min-height:124px;
-            padding:18px 20px;
+            min-height:93px;
+            padding:13px 15px;
             background:
                 radial-gradient(circle at 92% 18%, rgba(20,184,166,.18), transparent 34%),
                 linear-gradient(135deg,#FFFFFF 0%,#ECFDF5 100%);
@@ -11618,14 +11846,14 @@ def render_capex10_available_funds_by_phase_line() -> None:
         .capex10-kpi-top{{
             display:flex;
             align-items:center;
-            gap:12px;
+            gap:10px;
             min-width:0;
             max-width:100%;
         }}
         .capex10-kpi-ico{{
-            width:44px;
-            height:44px;
-            border-radius:14px;
+            width:34px;
+            height:34px;
+            border-radius:11px;
             display:flex;
             align-items:center;
             justify-content:center;
@@ -11635,13 +11863,13 @@ def render_capex10_available_funds_by_phase_line() -> None:
             flex:0 0 auto;
         }}
         .capex10-kpi-main .capex10-kpi-ico{{
-            width:56px;
-            height:56px;
-            border-radius:18px;
+            width:42px;
+            height:42px;
+            border-radius:14px;
             background:rgba(15,118,110,.12);
         }}
         .capex10-kpi-value{{
-            font-size:24px;
+            font-size:19px;
             line-height:1;
             font-weight:950;
             color:#0F766E;
@@ -11651,22 +11879,22 @@ def render_capex10_available_funds_by_phase_line() -> None:
             text-overflow:ellipsis;
         }}
         .capex10-kpi-main .capex10-kpi-value{{
-            font-size:34px;
+            font-size:27px;
             letter-spacing:-.01em;
         }}
         .capex10-kpi-label{{
-            font-size:12px;
+            font-size:10px;
             line-height:1.25;
             color:#334155;
             font-weight:850;
-            margin:7px 0 0 0;
+            margin:5px 0 0 0;
             overflow-wrap:anywhere;
         }}
         .capex10-kpi-note{{
-            font-size:11px;
+            font-size:9.5px;
             line-height:1.32;
             color:#64748B;
-            margin:6px 0 0 0;
+            margin:4px 0 0 0;
             overflow-wrap:anywhere;
         }}
         .capex10-kpi-badge{{
@@ -11674,11 +11902,11 @@ def render_capex10_available_funds_by_phase_line() -> None:
             align-items:center;
             width:max-content;
             border-radius:999px;
-            padding:5px 9px;
-            margin:0 0 12px 0;
+            padding:4px 8px;
+            margin:0 0 8px 0;
             background:#0F766E;
             color:#FFFFFF;
-            font-size:10px;
+            font-size:8.5px;
             font-weight:950;
             letter-spacing:.06em;
             text-transform:uppercase;
@@ -11707,7 +11935,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
         }}
         .capex10-kpi-milestone .capex10-kpi-value{{
             color:#164E63;
-            font-size:21px;
+            font-size:17px;
         }}
         .capex10-kpi-milestone .capex10-kpi-label{{
             text-transform:uppercase;
@@ -11717,7 +11945,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
         }}
         .capex10-funds-art{{
             position:relative;
-            min-height:284px;
+            min-height:213px;
             isolation:isolate;
             min-width:0;
             overflow:hidden;
@@ -11743,30 +11971,30 @@ def render_capex10_available_funds_by_phase_line() -> None:
         }}
         .capex10-art-caption{{
             position:absolute;
-            right:22px;
-            bottom:20px;
+            right:18px;
+            bottom:15px;
             z-index:3;
             text-align:right;
             color:rgba(255,255,255,.92);
             font-weight:900;
-            font-size:11px;
+            font-size:9.5px;
             letter-spacing:.12em;
             text-transform:uppercase;
         }}
         @media (max-width: 1180px){{
             .capex10-funds-grid{{grid-template-columns:1fr;}}
-            .capex10-funds-art{{min-height:220px;}}
+            .capex10-funds-art{{min-height:165px;}}
             .capex10-kpi-grid{{grid-template-columns:1fr;}}
             .capex10-kpi-main{{grid-column:auto;}}
             .capex10-kpi-phase{{grid-column:auto;}}
         }}
         @media (max-width: 720px){{
-            .capex10-funds-left{{padding:22px 18px;}}
+            .capex10-funds-left{{padding:18px 15px;}}
             .capex10-funds-brand{{align-items:flex-start;}}
-            .capex10-funds-logo{{width:48px;height:48px;border-radius:15px;}}
+            .capex10-funds-logo{{width:40px;height:40px;border-radius:13px;}}
             .capex10-kpi-grid{{grid-template-columns:1fr;}}
             .capex10-kpi-main,.capex10-kpi-phase{{grid-column:auto;}}
-            .capex10-kpi-main .capex10-kpi-value{{font-size:28px;white-space:normal;}}
+            .capex10-kpi-main .capex10-kpi-value{{font-size:24px;white-space:normal;}}
         }}
         </style>
         <div class="capex10-funds-head">
@@ -11784,8 +12012,6 @@ def render_capex10_available_funds_by_phase_line() -> None:
                 </div>
                 <div>
                   <p class="capex10-funds-k">{html.escape(funds_heading)}</p>
-                  <p class="capex10-funds-t">Fondos faltantes para cumplir hitos, desglosados por fase y línea</p>
-                  <p class="capex10-funds-s">Lectura de primer nivel para entender dónde queda concentrado el capital pendiente para cumplir los hitos del piloto 10 kW y qué frentes explican el uso esperado de fondos.</p>
                 </div>
               </div>
               <div class="capex10-kpi-grid">
@@ -11882,7 +12108,11 @@ def render_capex10_available_funds_by_phase_line() -> None:
         unsafe_allow_html=True,
     )
 
-    with st.container(border=True):
+    plan_selector_key = "capex10_investor_injection_cashflow_plan"
+    if st.session_state.get(plan_selector_key) == CAPEX10_LEGACY_PLAN_B_LABEL:
+        st.session_state[plan_selector_key] = CAPEX10_PLAN_B_LABEL
+
+    with st.expander("FILTROS DE FONDOS FALTANTES", expanded=False):
         st.markdown(
             """
             <div style="font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#0F766E;margin:0 0 8px 0;">
@@ -11895,10 +12125,10 @@ def render_capex10_available_funds_by_phase_line() -> None:
         with filter_col_1:
             selected_cashflow_plan = st.selectbox(
                 "Plan de calendarización",
-                ["Plan A - Flexibilidad Proveedores", "Plan B - Sin Flexibilidad Proveedores"],
+                [CAPEX10_PLAN_A_LABEL, CAPEX10_PLAN_B_LABEL],
                 index=1,
-                key="capex10_investor_injection_cashflow_plan",
-                help="Plan A usa Fecha FC para reflejar flexibilidad de proveedores. Plan B usa Inicio (AAAA-MM-DD), sin flexibilidad de proveedores.",
+                key=plan_selector_key,
+                help="Plan A usa Fecha FC para reflejar flexibilidad de proveedores. Plan B usa Inicio (AAAA-MM-DD), como lectura de flujo de caja libre.",
             )
         with filter_col_2:
             selected_metodos = st.multiselect(
@@ -11946,6 +12176,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
         injection_responsible_scope_df,
         injection_milestone_dates,
         selected_cashflow_plan,
+        selected_metodos,
     )
     return
 
@@ -23446,7 +23677,10 @@ def render_inputs_capex_10kw_detail():
         .capex10-foot-v{font-size:12px;color:#18345c;margin:0;font-weight:600;}
         .capex10-subnav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 16px 0;align-items:stretch;}
         .capex10-subcard{border:1px solid #d9e2ee;border-radius:13px;background:linear-gradient(180deg,#fff,#f8fbff);padding:15px 16px;min-height:126px;height:100%;display:flex;flex-direction:column;box-shadow:0 10px 24px rgba(15,23,42,.045);}
-        .capex10-subcard.active{border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.10),0 12px 28px rgba(15,23,42,.06);}
+        .capex10-subcard.active{border-color:#ff4b4b;background:linear-gradient(135deg,#fff1f2 0%,#ffffff 52%,#ffe4e6 100%);box-shadow:0 0 0 2px rgba(255,75,75,.12),0 12px 28px rgba(127,29,29,.08);}
+        .capex10-subcard.active .capex10-sub-k,
+        .capex10-subcard.active .capex10-sub-t{color:#c91f1f;}
+        .capex10-subcard.active .capex10-sub-s{color:#991b1b;}
         .capex10-sub-k{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:0 0 7px 0;}
         .capex10-sub-t{font-size:15px;font-weight:950;color:#0b1730;line-height:1.15;margin:0 0 6px 0;}
         .capex10-sub-s{font-size:11.5px;line-height:1.35;color:#475569;margin:0;flex:1;}
@@ -23490,20 +23724,20 @@ def render_inputs_capex_10kw_detail():
         (
             "Sub bloque 1",
             "control_fondos",
-            "Control de Fondos y Costos de Liberación",
-            "Fondos requeridos, costos pendientes y composición de la brecha para completar la liberación del piloto 10 kW.",
+            "Capital y Brecha de Liberación",
+            "Fondos, inyecciones y brecha pendiente para liberar los hitos del piloto 10 kW.",
         ),
         (
             "Sub bloque 2",
             "vista_integrada",
-            "Cronograma",
-            "Vista Gantt y filtros de avance.",
+            "Cronograma e Hitos",
+            "Gantt, avance y fechas clave para controlar la ejecución del piloto.",
         ),
         (
             "Sub bloque 3",
             "control_cost",
-            "Control Cost",
-            "Gestión de cortes históricos, snapshots EVM y comparación mensual de control PMO.",
+            "Control PMO de Costos",
+            "Cortes, EVM y desviaciones mensuales para seguimiento financiero.",
         ),
     ]
     sub_cols = st.columns(len(capex10_subblocks))
@@ -25007,6 +25241,7 @@ if st.sidebar.button("🔁 Actualizar datos desde URL"):
         "capex10_funds_etapa_selector",
         "capex10_funds_metodo_selector",
         "capex10_funds_responsable_selector",
+        "capex10_investor_injection_analysis_months",
         "capex10_stage_detail_etapa_selector",
         "telecom_market_tab_selector",
     ):
