@@ -5469,14 +5469,13 @@ def render_cut_traceability(history_df: pd.DataFrame) -> None:
 
 def render_control_cost_detail_filters(df_actual: pd.DataFrame) -> pd.DataFrame:
     filtered_df = df_actual.copy()
+    base_count = len(filtered_df)
 
+    metodo_col = _control_find_col(filtered_df, ["Método", "Metodo"])
     etapa_col = _control_find_col(filtered_df, ["ETAPA", "Etapa"])
     fase_col = _control_find_col(filtered_df, ["Fase"])
     linea_col = _control_find_col(filtered_df, ["Línea", "Linea"])
     estado_col = _control_find_col(filtered_df, ["Estado"])
-
-    st.markdown("### Filtros de Control de Costos")
-    c1, c2, c3, c4 = st.columns(4)
 
     def _clean_options(col_name: str | None, source_df: pd.DataFrame) -> list[str]:
         if not col_name or col_name not in source_df.columns:
@@ -5492,47 +5491,157 @@ def render_control_cost_detail_filters(df_actual: pd.DataFrame) -> pd.DataFrame:
             .tolist()
         )
 
-    with c1:
-        etapa_sel = st.multiselect(
-            "Etapa",
-            _clean_options(etapa_col, filtered_df),
-            placeholder="Todas las etapas",
-            key="control_cost_detail_etapa",
-        )
-    if etapa_sel and etapa_col:
-        filtered_df = filtered_df[filtered_df[etapa_col].astype(str).str.strip().isin(etapa_sel)].copy()
+    def _sync_filter_state(key: str, options: list[str]) -> None:
+        current = st.session_state.get(key, [])
+        if isinstance(current, str):
+            current = [current]
+        option_keys = {normalize_key(option): option for option in options}
+        synced = []
+        for value in current or []:
+            matched = option_keys.get(normalize_key(value))
+            if matched is not None:
+                synced.append(matched)
+        if len(synced) != len(current or []) or synced != list(current or []):
+            st.session_state[key] = list(dict.fromkeys(synced))
 
-    with c2:
-        fase_sel = st.multiselect(
-            "Fase",
-            _clean_options(fase_col, filtered_df),
-            placeholder="Todas las fases",
-            key="control_cost_detail_fase",
-        )
-    if fase_sel and fase_col:
-        filtered_df = filtered_df[filtered_df[fase_col].astype(str).str.strip().isin(fase_sel)].copy()
+    def _filter_by_selected_values(source_df: pd.DataFrame, col_name: str | None, selected_values: list[str]) -> pd.DataFrame:
+        if not selected_values or not col_name or col_name not in source_df.columns:
+            return source_df
+        selected_keys = {normalize_key(value) for value in selected_values if normalize_key(value)}
+        if not selected_keys:
+            return source_df
+        value_keys = source_df[col_name].fillna("").astype(str).map(normalize_key)
+        return source_df[value_keys.isin(selected_keys)].copy()
 
-    with c3:
-        linea_sel = st.multiselect(
-            "Línea",
-            _clean_options(linea_col, filtered_df),
-            placeholder="Todas las líneas",
-            key="control_cost_detail_linea",
-        )
-    if linea_sel and linea_col:
-        filtered_df = filtered_df[filtered_df[linea_col].astype(str).str.strip().isin(linea_sel)].copy()
+    active_filter_labels: list[str] = []
 
-    with c4:
-        estado_sel = st.multiselect(
-            "Estado",
-            _clean_options(estado_col, filtered_df),
-            placeholder="Todos los estados",
-            key="control_cost_detail_estado",
+    st.markdown(
+        """
+        <style>
+        .control-filter-marker{display:none;}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.control-filter-marker){
+            border:1px solid rgba(226,232,240,.96)!important;
+            border-radius:18px!important;
+            background:linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%)!important;
+            box-shadow:0 12px 28px rgba(15,23,42,.055)!important;
+            padding:16px 18px 14px!important;
+            margin:6px 0 16px!important;
+        }
+        .control-filter-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px;}
+        .control-filter-k{font-size:10px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#EF4444;margin:0 0 5px;}
+        .control-filter-t{font-size:20px;line-height:1.08;font-weight:950;color:#071427;margin:0;}
+        .control-filter-s{font-size:12px;line-height:1.35;color:#64748B;font-weight:780;margin:5px 0 0;}
+        .control-filter-pill{border-radius:999px;background:#FFF1F2;border:1px solid rgba(239,68,68,.22);color:#C91F1F;padding:8px 11px;font-size:11px;font-weight:950;white-space:nowrap;}
+        .control-active-filters{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0;}
+        .control-active-filter{display:inline-flex;align-items:center;border-radius:999px;background:#F8FAFC;border:1px solid #D8E2EC;color:#334155;padding:7px 10px;font-size:11px;font-weight:900;}
+        .control-active-filter b{color:#C91F1F;margin-right:4px;}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.control-filter-marker) label p{
+            font-size:10.5px!important;font-weight:950!important;letter-spacing:.06em!important;text-transform:uppercase!important;color:#334155!important;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.control-filter-marker) div[data-baseweb="select"] > div{
+            border-radius:10px!important;border-color:#D8E2EC!important;background:#FFFFFF!important;min-height:42px!important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.container(border=True):
+        st.markdown('<span class="control-filter-marker"></span>', unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div class="control-filter-head">
+              <div>
+                <p class="control-filter-k">Selectores PMO</p>
+                <h3 class="control-filter-t">Filtros de Control de Costos</h3>
+                <p class="control-filter-s">El método gobierna primero la lectura; etapa, fase, línea y estado se recalculan sobre la selección activa.</p>
+              </div>
+              <div class="control-filter-pill">Filtro en cascada</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-    if estado_sel and estado_col:
-        filtered_df = filtered_df[filtered_df[estado_col].astype(str).str.strip().isin(estado_sel)].copy()
 
-    st.caption(f"Control de costos recalculado sobre {len(filtered_df):,} partidas visibles.".replace(",", "."))
+        c0, c1, c2, c3, c4 = st.columns([1.12, 1, 1, 1, 1], gap="small")
+        with c0:
+            metodo_options = _clean_options(metodo_col, filtered_df)
+            _sync_filter_state("control_cost_detail_metodo", metodo_options)
+            metodo_sel = st.multiselect(
+                "Método",
+                metodo_options,
+                placeholder="Todos los métodos",
+                key="control_cost_detail_metodo",
+            )
+        if metodo_sel:
+            active_filter_labels.append(f"Método: {len(metodo_sel)}")
+        filtered_df = _filter_by_selected_values(filtered_df, metodo_col, metodo_sel)
+
+        with c1:
+            etapa_options = _clean_options(etapa_col, filtered_df)
+            _sync_filter_state("control_cost_detail_etapa", etapa_options)
+            etapa_sel = st.multiselect(
+                "Etapa",
+                etapa_options,
+                placeholder="Todas las etapas",
+                key="control_cost_detail_etapa",
+            )
+        if etapa_sel:
+            active_filter_labels.append(f"Etapa: {len(etapa_sel)}")
+        filtered_df = _filter_by_selected_values(filtered_df, etapa_col, etapa_sel)
+
+        with c2:
+            fase_options = _clean_options(fase_col, filtered_df)
+            _sync_filter_state("control_cost_detail_fase", fase_options)
+            fase_sel = st.multiselect(
+                "Fase",
+                fase_options,
+                placeholder="Todas las fases",
+                key="control_cost_detail_fase",
+            )
+        if fase_sel:
+            active_filter_labels.append(f"Fase: {len(fase_sel)}")
+        filtered_df = _filter_by_selected_values(filtered_df, fase_col, fase_sel)
+
+        with c3:
+            linea_options = _clean_options(linea_col, filtered_df)
+            _sync_filter_state("control_cost_detail_linea", linea_options)
+            linea_sel = st.multiselect(
+                "Línea",
+                linea_options,
+                placeholder="Todas las líneas",
+                key="control_cost_detail_linea",
+            )
+        if linea_sel:
+            active_filter_labels.append(f"Línea: {len(linea_sel)}")
+        filtered_df = _filter_by_selected_values(filtered_df, linea_col, linea_sel)
+
+        with c4:
+            estado_options = _clean_options(estado_col, filtered_df)
+            _sync_filter_state("control_cost_detail_estado", estado_options)
+            estado_sel = st.multiselect(
+                "Estado",
+                estado_options,
+                placeholder="Todos los estados",
+                key="control_cost_detail_estado",
+            )
+        if estado_sel:
+            active_filter_labels.append(f"Estado: {len(estado_sel)}")
+        filtered_df = _filter_by_selected_values(filtered_df, estado_col, estado_sel)
+
+        filter_chips = "".join(
+            f'<span class="control-active-filter"><b>{html.escape(label.split(":")[0])}</b>{html.escape(label.split(":", 1)[1].strip())}</span>'
+            for label in active_filter_labels
+        )
+        if not filter_chips:
+            filter_chips = '<span class="control-active-filter"><b>Vista</b>sin filtros activos</span>'
+        st.markdown(
+            f"""
+            <div class="control-active-filters">
+              <span class="control-active-filter"><b>Partidas</b>{len(filtered_df):,} de {base_count:,}</span>
+              {filter_chips}
+            </div>
+            """.replace(",", "."),
+            unsafe_allow_html=True,
+        )
     return filtered_df
 
 
@@ -5560,31 +5669,51 @@ def render_control_cost_block(df_actual: pd.DataFrame) -> None:
         <style>
         .controlcost-inner-card{
             border:1px solid #DCE6EF;
-            border-radius:14px;
+            border-radius:16px;
             background:linear-gradient(180deg,#FFFFFF 0%,#F8FBFF 100%);
-            padding:14px 15px;
-            min-height:94px;
+            padding:18px 20px;
+            min-height:132px;
             box-shadow:0 10px 24px rgba(15,23,42,.045);
             overflow:hidden;
             box-sizing:border-box;
+            position:relative;
+        }
+        .controlcost-inner-card:before{
+            content:"";
+            position:absolute;
+            left:0;
+            top:0;
+            bottom:0;
+            width:5px;
+            background:#CBD5E1;
         }
         .controlcost-inner-card.active{
-            border-color:#0F766E;
-            box-shadow:0 0 0 2px rgba(15,118,110,.10),0 12px 28px rgba(15,23,42,.06);
-            background:linear-gradient(135deg,#FFFFFF 0%,#EEFDF9 100%);
+            border-color:#FF4B4B;
+            box-shadow:0 0 0 2px rgba(239,68,68,.10),0 14px 30px rgba(239,68,68,.10);
+            background:linear-gradient(135deg,#FFF7F7 0%,#FFFFFF 52%,#FFE8E8 100%);
+        }
+        .controlcost-inner-card.active:before{
+            background:linear-gradient(180deg,#EF4444,#FF6B6B);
         }
         .controlcost-inner-k{
             margin:0 0 7px 0;
             color:#64748B;
-            font-size:10px;
+            font-size:12px;
             font-weight:950;
-            letter-spacing:.08em;
+            letter-spacing:.14em;
             text-transform:uppercase;
         }
+        .controlcost-inner-card.active .controlcost-inner-k,
+        .controlcost-inner-card.active .controlcost-inner-t{
+            color:#C91F1F;
+        }
+        .controlcost-inner-card.active .controlcost-inner-s{
+            color:#991B1B;
+        }
         .controlcost-inner-t{
-            margin:0 0 6px 0;
+            margin:0 0 8px 0;
             color:#071427;
-            font-size:16px;
+            font-size:19px;
             line-height:1.1;
             font-weight:950;
             overflow-wrap:anywhere;
@@ -5592,9 +5721,9 @@ def render_control_cost_block(df_actual: pd.DataFrame) -> None:
         .controlcost-inner-s{
             margin:0;
             color:#475569;
-            font-size:11.5px;
-            line-height:1.35;
-            font-weight:750;
+            font-size:13.5px;
+            line-height:1.42;
+            font-weight:800;
             overflow-wrap:anywhere;
         }
         </style>
@@ -5609,7 +5738,7 @@ def render_control_cost_block(df_actual: pd.DataFrame) -> None:
             st.markdown(
                 f"""
                 <div class="controlcost-inner-card {'active' if is_active else ''}">
-                  <p class="controlcost-inner-k">Bloque {idx + 1}</p>
+                  <p class="controlcost-inner-k">BLOQUE {idx + 1}</p>
                   <p class="controlcost-inner-t">{html.escape(title)}</p>
                   <p class="controlcost-inner-s">{html.escape(copy)}</p>
                 </div>
@@ -6653,8 +6782,11 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         "fin_plan": find_col(["Fin plan (AAAA-MM-DD)", "Fin plan", "Fecha fin plan"]),
         "fin_real": find_col(["Fin real", "Fecha fin real"]),
         "fase": find_col(["Fase", "Hito Ejecutivo", "ETAPA"]),
+        "etapa": find_col(["ETAPA", "Etapa"]),
+        "linea": find_col(["Línea", "Linea"]),
         "estado": find_col(["Estado", "Estado.1"]),
         "id": find_col(["ID"]),
+        "tarea": find_col(["Tarea / Entregable", "Descripción Técnica / Acción", "Descripcion Técnica / Accion", "Actividad", "Tarea"]),
     }
     required_any = [col_map["bac"], col_map["ac"], col_map["ev"], col_map["pv"]]
     if not any(required_any):
@@ -6812,8 +6944,17 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
     curve_source_df = evm_df[evm_df["_evm_perf_scope"]].copy()
     if curve_source_df.empty:
         curve_source_df = evm_df.copy()
-    curve_df = curve_source_df[["_axis", "_pv", "_ev", "_ac", "_eac"]].copy()
-    curve_df = curve_df.groupby("_axis", sort=False, as_index=False).sum()
+    if "_axis_date" in curve_source_df.columns and curve_source_df["_axis_date"].notna().any():
+        curve_df = curve_source_df[["_axis_date", "_axis", "_pv", "_ev", "_ac", "_eac"]].copy()
+        curve_df["_axis_date"] = pd.to_datetime(curve_df["_axis_date"], errors="coerce")
+        curve_df = curve_df.dropna(subset=["_axis_date"]).sort_values("_axis_date")
+        curve_df["_plot_axis"] = curve_df["_axis_date"].dt.normalize()
+        curve_df = curve_df.groupby("_plot_axis", sort=True, as_index=False)[["_pv", "_ev", "_ac", "_eac"]].sum()
+        curve_df["_axis"] = curve_df["_plot_axis"].dt.strftime("%d-%m-%Y")
+    else:
+        curve_df = curve_source_df[["_axis", "_pv", "_ev", "_ac", "_eac"]].copy()
+        curve_df = curve_df.groupby("_axis", sort=False, as_index=False).sum()
+        curve_df["_plot_axis"] = curve_df["_axis"]
     for metric in ["_pv", "_ev", "_ac", "_eac"]:
         curve_df[metric] = curve_df[metric].cumsum()
     if len(curve_df) > 42:
@@ -6821,34 +6962,160 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         curve_df = curve_df.iloc[::step].copy()
 
     curve_fig = go.Figure()
+    x_axis_curve = curve_df["_plot_axis"]
+    y_max_curve = max(
+        float(curve_df[["_pv", "_ev", "_ac", "_eac"]].max().max() or 0.0) / 1_000_000,
+        float(total_bac or 0.0) / 1_000_000,
+        1.0,
+    )
+    if len(curve_df) > 0 and total_bac > 0:
+        curve_fig.add_hrect(
+            y0=(total_bac / 1_000_000) * 0.98,
+            y1=(total_bac / 1_000_000) * 1.02,
+            fillcolor="rgba(15,23,42,.055)",
+            line_width=0,
+            annotation_text=f"BAC {money_mm(total_bac)}",
+            annotation_position="top left",
+            annotation_font=dict(size=11, color="#334155"),
+        )
+    curve_fig.add_trace(
+        go.Scatter(
+            x=x_axis_curve,
+            y=curve_df["_ev"] / 1_000_000,
+            mode="lines",
+            line=dict(color="rgba(15,118,110,.18)", width=0, shape="hv"),
+            fill="tozeroy",
+            fillcolor="rgba(15,118,110,.075)",
+            name="Área EV",
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
     curve_series = [
-        ("PV Planificado", "_pv", "#2D74B8", "dash"),
-        ("EV Valor ganado", "_ev", "#006B4A", "solid"),
-        ("AC Costo real", "_ac", "#D00000", "solid"),
-        ("EAC Forecast", "_eac", "#003B78", "dot"),
+        ("PV Planificado", "_pv", "#2D74B8", "dash", 2.6),
+        ("EV Valor ganado", "_ev", "#0F766E", "solid", 3.9),
+        ("AC Costo real", "_ac", "#C00000", "solid", 3.4),
+        ("EAC Forecast", "_eac", "#071427", "dot", 3.0),
     ]
-    for label, metric, color, dash in curve_series:
+    x_hover_label = "Fecha: %{x|%d-%m-%Y}" if pd.api.types.is_datetime64_any_dtype(curve_df["_plot_axis"]) else "Corte: %{x}"
+    for label, metric, color, dash, width in curve_series:
         curve_fig.add_trace(
             go.Scatter(
-                x=curve_df["_axis"],
+                x=x_axis_curve,
                 y=curve_df[metric] / 1_000_000,
                 mode="lines+markers",
                 name=label,
-                line=dict(color=color, width=3.4 if metric in {"_ev", "_ac"} else 2.7, dash=dash, shape="spline", smoothing=0.45),
-                marker=dict(size=5.5, color=color, line=dict(color="#FFFFFF", width=1.2)),
-                hovertemplate=f"<b>{label}</b><br>%{{x}}<br>%{{y:.1f}} MM CLP<extra></extra>",
+                line=dict(color=color, width=width, dash=dash, shape="hv"),
+                marker=dict(size=6.5 if metric in {"_ev", "_ac"} else 5.4, color="#FFFFFF", line=dict(color=color, width=2.0)),
+                hovertemplate=f"<b>{label}</b><br>{x_hover_label}<br>Monto acumulado: %{{y:.1f}} MM CLP<extra></extra>",
             )
         )
+    if not curve_df.empty:
+        last_x = curve_df["_plot_axis"].iloc[-1]
+        last_values = [
+            ("EV", float(curve_df["_ev"].iloc[-1]) / 1_000_000, "#0F766E", 70),
+            ("AC", float(curve_df["_ac"].iloc[-1]) / 1_000_000, "#C00000", 28),
+            ("PV", float(curve_df["_pv"].iloc[-1]) / 1_000_000, "#2D74B8", -18),
+            ("EAC", float(curve_df["_eac"].iloc[-1]) / 1_000_000, "#071427", -62),
+        ]
+        for label, value, color, ay in last_values:
+            curve_fig.add_annotation(
+                x=last_x,
+                y=value,
+                text=f"<b>{label}</b> {value:.1f} MM",
+                showarrow=True,
+                arrowhead=2,
+                arrowsize=0.8,
+                arrowwidth=1.4,
+                arrowcolor=color,
+                ax=96,
+                ay=ay,
+                bgcolor="rgba(255,255,255,.92)",
+                bordercolor=color,
+                borderwidth=1,
+                borderpad=4,
+                font=dict(size=10, color=color),
+            )
+        if pd.api.types.is_datetime64_any_dtype(curve_df["_plot_axis"]):
+            curve_fig.add_shape(
+                type="line",
+                x0=cutoff_ts,
+                x1=cutoff_ts,
+                xref="x",
+                y0=0,
+                y1=1,
+                yref="paper",
+                line=dict(color="#64748B", width=1.6, dash="dash"),
+            )
+            curve_fig.add_annotation(
+                x=cutoff_ts,
+                y=1.0,
+                xref="x",
+                yref="paper",
+                text="Corte PMO",
+                showarrow=False,
+                yshift=30,
+                bgcolor="rgba(255,255,255,.92)",
+                bordercolor="rgba(100,116,139,.35)",
+                borderwidth=1,
+                borderpad=4,
+                font=dict(size=11, color="#475569"),
+            )
+    subtitle = (
+        f"CV {money_display(total_cv)} · SV {money_display(total_sv)} · "
+        f"CPI {idx_fmt(cpi)} · SPI {idx_fmt(spi)}"
+    )
     curve_fig.update_layout(
-        height=310,
-        margin=dict(l=24, r=24, t=56, b=52),
-        title=dict(text="Curva S · Valor ganado, costo real y forecast", font=dict(size=20, color="#071427", family="Source Sans Pro, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"), x=0.01, xanchor="left"),
+        height=516,
+        margin=dict(l=34, r=150, t=120, b=68),
+        title=dict(
+            text=f"Curva S de control PMO<br><sup>{html.escape(subtitle)}</sup>",
+            font=dict(size=22, color="#071427", family="Source Sans Pro, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"),
+            x=0.01,
+            xanchor="left",
+        ),
         plot_bgcolor="#FFFFFF",
         paper_bgcolor="rgba(0,0,0,0)",
         hovermode="x unified",
-        legend=dict(orientation="h", y=1.08, x=0.06, font=dict(size=11, color="#334155"), bgcolor="rgba(255,255,255,.86)"),
-        xaxis=dict(title="", showgrid=False, tickangle=-38, tickfont=dict(size=9, color="#475569"), zeroline=False),
-        yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.20)", tickfont=dict(size=11, color="#475569"), title_font=dict(size=13, color="#071427"), zeroline=False),
+        legend=dict(
+            orientation="h",
+            y=1.16,
+            x=0.34,
+            font=dict(size=11, color="#334155"),
+            bgcolor="rgba(255,255,255,.92)",
+            bordercolor="rgba(226,232,240,.95)",
+            borderwidth=1,
+        ),
+        xaxis=dict(
+            title="Fecha de control",
+            showgrid=False,
+            tickangle=-35,
+            tickfont=dict(size=10, color="#475569"),
+            title_font=dict(size=12, color="#334155"),
+            zeroline=False,
+            nticks=14,
+            showline=True,
+            linecolor="rgba(148,163,184,.45)",
+        ),
+        yaxis=dict(
+            title="Monto acumulado (MM CLP)",
+            gridcolor="rgba(148,163,184,.22)",
+            tickfont=dict(size=11, color="#475569"),
+            title_font=dict(size=13, color="#071427"),
+            zeroline=False,
+            rangemode="tozero",
+            range=[0, y_max_curve * 1.18],
+        ),
+    )
+    curve_fig.add_annotation(
+        x=0.01,
+        y=1.04,
+        xref="paper",
+        yref="paper",
+        showarrow=False,
+        text="Lectura ingeniería: PV define línea base, EV mide producción valorizada, AC muestra consumo real y EAC proyecta cierre.",
+        align="left",
+        font=dict(size=11, color="#64748B"),
     )
 
     def gauge_fig(title: str, value: float, status: str, color: str) -> go.Figure:
@@ -6873,7 +7140,7 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
                 },
             )
         )
-        fig.update_layout(height=198, margin=dict(l=8, r=8, t=38, b=8), paper_bgcolor="rgba(0,0,0,0)")
+        fig.update_layout(height=172, margin=dict(l=6, r=6, t=30, b=4), paper_bgcolor="rgba(0,0,0,0)")
         return fig
 
     max_var = max(abs(total_cv), abs(total_sv), 1.0)
@@ -6971,11 +7238,22 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
     )
 
     def kpi_card(title: str, value: str, note: str, color: str, icon: str, status: str = "") -> str:
+        clean_title = str(title).replace(" (CLP)", "")
+        status_html = (
+            f'<span class="evm-kpi-state">{html.escape(status)}</span>'
+            if status
+            else '<span class="evm-kpi-state neutral">BASE PMO</span>'
+        )
         return f"""
         <div class="evm-kpi" style="--accent:{color};">
-          <div class="evm-kpi-title">{html.escape(title)}</div>
-          <div class="evm-kpi-body"><div class="evm-kpi-icon">{html.escape(icon)}</div><div><b>{html.escape(value)}</b><span>{html.escape(note)}</span></div></div>
-          {f'<div class="evm-kpi-status">{html.escape(status)}</div>' if status else ''}
+          <div class="evm-kpi-top">
+            <div class="evm-kpi-icon">{html.escape(icon)}</div>
+            {status_html}
+          </div>
+          <div class="evm-kpi-title">{html.escape(clean_title)}</div>
+          <div class="evm-kpi-value">{html.escape(value)}</div>
+          <div class="evm-kpi-note">{html.escape(note)}</div>
+          <div class="evm-kpi-track"><i></i></div>
         </div>
         """
 
@@ -7187,35 +7465,44 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         .evm-update-date{{font-size:11px;color:#475569;font-weight:800;}}
         .evm-divider{{height:1px;background:#DDE6EF;margin:0 0 22px;}}
         .evm-kpi-grid{{width:100%;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;padding:0;overflow:hidden;}}
-        .evm-kpi{{min-width:0;position:relative;overflow:hidden;min-height:118px;border-radius:13px;background:linear-gradient(145deg,var(--accent),color-mix(in srgb,var(--accent) 70%,#031B33));color:#FFFFFF;padding:14px 13px 32px;box-shadow:0 12px 22px rgba(15,23,42,.14);border:1px solid rgba(255,255,255,.30);}}
-        .evm-kpi-title{{font-size:10.5px;line-height:1.16;font-weight:950;text-align:center;text-transform:uppercase;min-height:25px;overflow-wrap:anywhere;}}
-        .evm-kpi-body{{display:grid;grid-template-columns:42px minmax(0,1fr);gap:10px;align-items:center;margin-top:10px;min-width:0;}}.evm-kpi-icon{{width:40px;height:40px;border:2.5px solid rgba(255,255,255,.92);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:950;}}
-        .evm-kpi b{{display:block;font-size:clamp(17px,1.22vw,22px);line-height:1.02;font-weight:950;white-space:nowrap;overflow:visible;text-overflow:clip;letter-spacing:0;}}.evm-kpi span{{display:block;margin-top:6px;font-size:10.5px;font-weight:850;color:#FFFFFF;line-height:1.18;overflow-wrap:anywhere;}}
-        .evm-kpi-status{{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.22);padding:6px 9px;text-align:center;font-size:12px;font-weight:950;}}
+        .evm-kpi{{min-width:0;position:relative;overflow:hidden;min-height:146px;border-radius:8px;background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);color:#071427;padding:13px 13px 12px;border:1px solid rgba(203,213,225,.92);border-top:4px solid var(--accent);box-shadow:0 10px 22px rgba(15,23,42,.055);}}
+        .evm-kpi::before{{content:"";position:absolute;right:-28px;top:-34px;width:86px;height:86px;border-radius:999px;background:var(--accent);opacity:.075;}}
+        .evm-kpi-top{{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:11px;}}
+        .evm-kpi-icon{{width:34px;height:34px;border-radius:8px;background:color-mix(in srgb,var(--accent) 12%,#FFFFFF);border:1px solid color-mix(in srgb,var(--accent) 28%,#FFFFFF);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:950;line-height:1;}}
+        .evm-kpi-state{{max-width:108px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:color-mix(in srgb,var(--accent) 10%,#FFFFFF);border:1px solid color-mix(in srgb,var(--accent) 24%,#FFFFFF);color:var(--accent);padding:5px 8px;font-size:9px;font-weight:950;line-height:1;white-space:nowrap;text-transform:uppercase;}}
+        .evm-kpi-state.neutral{{background:#F1F5F9;border-color:#D8E2EC;color:#475569;}}
+        .evm-kpi-title{{position:relative;z-index:1;color:#475569;font-size:10px;line-height:1.14;font-weight:950;text-transform:uppercase;letter-spacing:.045em;min-height:24px;overflow-wrap:anywhere;}}
+        .evm-kpi-value{{position:relative;z-index:1;color:#071427;font-size:clamp(19px,1.42vw,26px);line-height:1;font-weight:950;margin:8px 0 6px;white-space:nowrap;letter-spacing:0;}}
+        .evm-kpi-note{{position:relative;z-index:1;color:#64748B;font-size:10.5px;font-weight:800;line-height:1.24;min-height:27px;overflow-wrap:anywhere;}}
+        .evm-kpi-track{{position:absolute;left:13px;right:13px;bottom:10px;height:5px;border-radius:999px;background:#E8EDF5;overflow:hidden;}}
+        .evm-kpi-track i{{display:block;width:72%;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 58%,#FFFFFF));}}
         .evm-main{{width:100%;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;padding:0 14px 14px;overflow:hidden;}}
         .evm-center{{display:grid;gap:12px;min-width:0;}}.evm-row{{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.98fr);gap:12px;}}
         .evm-panel{{width:100%;background:rgba(255,255,255,.82);border:1px solid rgba(203,213,225,.75);border-radius:18px;box-shadow:0 12px 28px rgba(15,23,42,.055);overflow:hidden;min-width:0;}}
         .evm-panel.pad{{padding:12px;}}.evm-panel-title{{width:100%;max-width:100%;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:950;color:#071427;text-align:left;margin:0 0 6px;text-transform:uppercase;letter-spacing:.08em;overflow-wrap:anywhere;}}
-        .evm-gauge-grid{{display:grid;grid-template-columns:1fr 1fr;gap:0;}}.evm-gauge-grid>div:first-child{{border-right:1px solid #D8E2EC;}}
-        .evm-side{{display:grid;gap:10px;align-content:start;}}.evm-side-title{{background:linear-gradient(180deg,#FFFFFF,#F8FAFC);border:1px solid rgba(203,213,225,.82);border-radius:16px;padding:12px 14px;text-align:left;color:#071427;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:950;box-shadow:0 10px 22px rgba(15,23,42,.045);}}
-        .evm-side-card{{width:100%;overflow:hidden;position:relative;background:linear-gradient(135deg,#FFFFFF 0%,color-mix(in srgb,var(--accent) 5%,#FFFFFF) 100%);border:1px solid rgba(203,213,225,.86);border-left:7px solid var(--accent);border-radius:15px;padding:12px 13px 11px;box-shadow:0 10px 22px rgba(15,23,42,.04);}}
+        .evm-gauge-grid{{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:stretch;}}
+        .evm-gauge-grid>div{{border:1px solid rgba(226,232,240,.95);border-radius:14px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:5px 4px 0;box-shadow:0 8px 18px rgba(15,23,42,.035);overflow:hidden;}}
+        .evm-side{{display:grid;gap:10px;align-content:start;}}.evm-side-title{{position:relative;background:transparent;border:0;border-radius:0;padding:0 0 10px 0;text-align:left;color:#071427;font-size:12px;letter-spacing:.105em;text-transform:uppercase;font-weight:950;box-shadow:none;}}
+        .evm-side-title::after{{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,#071427 0%,rgba(148,163,184,.34) 46%,transparent 100%);}}
+        .evm-side-card{{width:100%;overflow:hidden;position:relative;background:linear-gradient(135deg,#FFFFFF 0%,color-mix(in srgb,var(--accent) 4%,#FFFFFF) 100%);border:1px solid rgba(203,213,225,.86);border-left:5px solid var(--accent);border-radius:12px;padding:12px 12px 10px;box-shadow:0 8px 18px rgba(15,23,42,.04);}}
         .evm-side-card-top{{display:grid;grid-template-columns:28px minmax(0,1fr);gap:9px;align-items:center;min-width:0;}}
         .evm-side-card-top i{{width:26px;height:26px;border-radius:999px;background:color-mix(in srgb,var(--accent) 14%,#FFFFFF);color:var(--accent);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:15px;font-weight:950;}}
         .evm-side-card span{{display:block;color:#071427;font-size:10.5px;line-height:1.14;font-weight:950;overflow-wrap:anywhere;text-transform:uppercase;letter-spacing:.02em;}}
-        .evm-side-card b{{display:block;color:var(--accent);font-size:clamp(17px,1.10vw,20px);line-height:1.02;margin:8px 0 4px;font-weight:950;overflow-wrap:anywhere;}}
-        .evm-side-card small{{display:block;color:#475569;font-size:10.5px;line-height:1.20;font-weight:800;overflow-wrap:anywhere;min-height:24px;}}
+        .evm-side-card b{{display:block;color:var(--accent);font-size:clamp(18px,1.20vw,22px);line-height:1.02;margin:8px 0 4px;font-weight:950;overflow-wrap:anywhere;}}
+        .evm-side-card small{{display:block;color:#475569;font-size:10.5px;line-height:1.20;font-weight:800;overflow-wrap:anywhere;min-height:22px;}}
         .evm-side-card>em{{display:block;width:100%;height:5px;border-radius:999px;background:#E8EDF5;margin-top:8px;overflow:hidden;}}
         .evm-side-card>em strong{{display:block;width:var(--bar);height:100%;border-radius:999px;background:var(--accent);}}
-        .evm-summary-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}}
-        .evm-summary-grid .evm-side-card{{min-height:106px;}}
-        .evm-var-grid{{display:grid;grid-template-columns:1fr;gap:10px;width:100%;overflow:hidden;}}
-        .evm-var-card{{min-width:0;width:100%;overflow:hidden;position:relative;border-radius:17px;border:1px solid color-mix(in srgb,var(--accent) 28%,#D8E2EC);background:radial-gradient(circle at 92% 72%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 32%),linear-gradient(135deg,rgba(255,255,255,.94),color-mix(in srgb,var(--accent) 7%,#FFFFFF));border-left:8px solid var(--accent);padding:14px 15px 13px;box-shadow:0 10px 20px rgba(15,23,42,.05);min-height:106px;}}
-        .evm-var-head{{display:grid;grid-template-columns:35px minmax(0,1fr);gap:9px;align-items:center;}}
-        .evm-var-head i{{width:32px;height:32px;border-radius:11px;border:2px solid var(--accent);color:var(--accent);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:14px;font-weight:950;background:#FFFFFF;}}
-        .evm-var-card span{{display:block;color:#0B1F3A;font-size:11px;line-height:1.14;font-weight:950;text-transform:uppercase;overflow-wrap:anywhere;}}
-        .evm-var-card b{{display:block;color:var(--accent);font-size:clamp(22px,1.70vw,28px);line-height:1;margin:9px 0 6px;font-weight:950;overflow-wrap:anywhere;}}
-        .evm-var-card small{{display:block;color:#475569;font-size:11px;font-weight:850;line-height:1.22;overflow-wrap:anywhere;max-width:78%;}}
-        .evm-var-card>em{{position:absolute;right:13px;bottom:13px;border-radius:999px;background:color-mix(in srgb,var(--accent) 10%,#FFFFFF);color:var(--accent);padding:5px 8px;font-size:10px;font-style:normal;font-weight:950;}}
+        .evm-summary-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}}
+        .evm-summary-grid .evm-side-card{{min-height:112px;}}
+        .evm-var-grid{{display:grid;grid-template-columns:1fr;gap:11px;width:100%;overflow:hidden;}}
+        .evm-var-card{{min-width:0;width:100%;overflow:hidden;position:relative;border-radius:12px;border:1px solid color-mix(in srgb,var(--accent) 24%,#D8E2EC);background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 8%,#FFFFFF) 0%,#FFFFFF 58%,color-mix(in srgb,var(--accent) 5%,#FFFFFF) 100%);border-left:6px solid var(--accent);padding:13px 14px 12px;box-shadow:0 8px 18px rgba(15,23,42,.045);min-height:118px;}}
+        .evm-var-card::after{{content:"";position:absolute;right:-34px;bottom:-42px;width:116px;height:116px;border-radius:999px;background:var(--accent);opacity:.055;}}
+        .evm-var-head{{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:center;position:relative;z-index:1;}}
+        .evm-var-head i{{width:32px;height:32px;border-radius:8px;border:2px solid var(--accent);color:var(--accent);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:13px;font-weight:950;background:#FFFFFF;}}
+        .evm-var-card span{{display:block;color:#0B1F3A;font-size:10.5px;line-height:1.14;font-weight:950;text-transform:uppercase;overflow-wrap:anywhere;}}
+        .evm-var-card b{{position:relative;z-index:1;display:block;color:var(--accent);font-size:clamp(24px,1.9vw,32px);line-height:1;margin:12px 0 7px;font-weight:950;overflow-wrap:anywhere;letter-spacing:-.01em;}}
+        .evm-var-card small{{position:relative;z-index:1;display:block;color:#475569;font-size:11px;font-weight:850;line-height:1.22;overflow-wrap:anywhere;max-width:76%;}}
+        .evm-var-card>em{{position:absolute;right:12px;bottom:12px;z-index:2;border-radius:999px;background:color-mix(in srgb,var(--accent) 9%,#FFFFFF);color:var(--accent);padding:6px 9px;font-size:10px;font-style:normal;font-weight:950;}}
         .evm-type-shell{{width:100%;display:grid;grid-template-columns:minmax(0,1fr);gap:7px;overflow:hidden;border:1px solid rgba(203,213,225,.78);border-radius:15px;background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);padding:8px;box-shadow:0 8px 18px rgba(15,23,42,.035);}}
         .evm-type-read{{border-radius:12px;background:linear-gradient(135deg,#F8FAFC,#EEFDF9);border:1px solid rgba(203,213,225,.86);color:#071427;padding:8px 10px;font-size:11px;font-weight:900;line-height:1.22;overflow-wrap:anywhere;}}
         .evm-type-list{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;overflow:hidden;padding:0;}}
@@ -7269,11 +7556,11 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
             overflow:hidden!important;max-width:100%!important;
         }}
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.evm-panel-marker){{
-            border:1px solid rgba(226,232,240,.96)!important;border-radius:16px!important;background:#FFFFFF!important;
-            box-shadow:0 10px 24px rgba(15,23,42,.06)!important;padding:14px 15px!important;overflow:hidden!important;max-width:100%!important;
-            min-height:314px!important;height:100%!important;
+            border:1px solid rgba(226,232,240,.96)!important;border-radius:14px!important;background:linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%)!important;
+            box-shadow:0 10px 24px rgba(15,23,42,.052)!important;padding:16px!important;overflow:hidden!important;max-width:100%!important;
+            min-height:288px!important;height:100%!important;
         }}
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.evm-panel-marker) div[data-testid="stVerticalBlock"]{{gap:.45rem!important;min-height:284px!important;}}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.evm-panel-marker) div[data-testid="stVerticalBlock"]{{gap:.55rem!important;min-height:254px!important;}}
         @media(max-width:1450px){{.evm-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.evm-main{{grid-template-columns:1fr;}}.evm-side{{grid-template-columns:repeat(2,minmax(0,1fr));}}.evm-side-title{{grid-column:1/-1;}}}}
         @media(max-width:1180px){{.evm-head{{display:grid;grid-template-columns:64px minmax(0,1fr);}}.evm-update{{grid-column:1/-1;justify-items:stretch;}}}}
         @media(max-width:950px){{.evm-row,.evm-gauge-grid,.evm-type-shell{{grid-template-columns:1fr;}}.evm-dashboard{{padding:18px;}}.evm-kpi-grid,.evm-side,.evm-scale-kpis{{grid-template-columns:1fr;}}.evm-flow{{grid-template-columns:1fr;}}.evm-flow-arrow{{transform:rotate(90deg);}}}}
@@ -7302,7 +7589,7 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         st.markdown('<span class="evm-chart-marker"></span>', unsafe_allow_html=True)
         st.plotly_chart(curve_fig, use_container_width=True, key=f"evm_curve_s_{evm_chart_sig}")
 
-    summary_col, gauge_col, variation_col = st.columns([1.05, 1.15, 0.95], gap="small")
+    summary_col, gauge_col, variation_col = st.columns([1.08, 1.0, 0.92], gap="medium")
     with summary_col:
         with st.container(border=True):
             st.markdown('<span class="evm-panel-marker"></span>', unsafe_allow_html=True)
@@ -7566,6 +7853,300 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         </div>
         """,
         unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <style>
+        .pmo-center-head{
+            margin:18px 0 12px;
+            padding:16px 18px;
+            border:1px solid rgba(226,232,240,.96);
+            border-radius:18px;
+            background:linear-gradient(135deg,#FFFFFF 0%,#F8FAFC 58%,#FFF1F2 100%);
+            box-shadow:0 12px 28px rgba(15,23,42,.055);
+        }
+        .pmo-center-k{font-size:10px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#EF4444;margin:0 0 6px;}
+        .pmo-center-t{font-size:22px;line-height:1.08;font-weight:950;color:#071427;margin:0;}
+        .pmo-center-s{font-size:13px;line-height:1.42;color:#475569;font-weight:780;margin:7px 0 0;max-width:980px;}
+        </style>
+        <div class="pmo-center-head">
+          <p class="pmo-center-k">Centro PMO</p>
+          <h3 class="pmo-center-t">Seguimiento por KPI y partidas críticas</h3>
+          <p class="pmo-center-s">Ajusta umbrales de control, revisa el desarrollo del cálculo y prioriza partidas para seguimiento semanal.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    controls_cols = st.columns([0.9, 0.9, 0.9, 0.9, 1.25])
+    with controls_cols[0]:
+        threshold_cpi = st.number_input(
+            "Umbral CPI",
+            min_value=0.50,
+            max_value=1.20,
+            value=0.95,
+            step=0.01,
+            key="control_cost_threshold_cpi",
+            help="Partidas con CPI bajo este valor entran al radar de costo.",
+        )
+    with controls_cols[1]:
+        threshold_spi = st.number_input(
+            "Umbral SPI",
+            min_value=0.50,
+            max_value=1.20,
+            value=0.95,
+            step=0.01,
+            key="control_cost_threshold_spi",
+            help="Partidas con SPI bajo este valor entran al radar de plazo.",
+        )
+    with controls_cols[2]:
+        threshold_dev_pct = st.number_input(
+            "Desv. presupuesto %",
+            min_value=0.0,
+            max_value=50.0,
+            value=5.0,
+            step=0.5,
+            key="control_cost_threshold_dev_pct",
+            help="Tolerancia de sobrecosto proyectado EAC/BAC.",
+        ) / 100.0
+    with controls_cols[3]:
+        top_n_watch = st.number_input(
+            "Top partidas",
+            min_value=5,
+            max_value=50,
+            value=15,
+            step=5,
+            key="control_cost_watch_top_n",
+        )
+    with controls_cols[4]:
+        focus_metric = st.selectbox(
+            "KPI para priorizar",
+            ["Riesgo combinado", "CPI", "SPI", "CV", "SV", "EAC / VAC", "AC / BAC"],
+            key="control_cost_focus_metric",
+        )
+
+    kpi_development_df = pd.DataFrame(
+        [
+            {
+                "KPI": "CPI",
+                "Fórmula": "EV / AC",
+                "Numerador": money_display(total_ev),
+                "Denominador": money_display(total_ac),
+                "Resultado": idx_fmt(cpi),
+                "Umbral PMO": f">= {threshold_cpi:.2f}".replace(".", ","),
+                "Estado": "En control" if cpi >= threshold_cpi else "Bajo umbral",
+                "Input requerido": "Validar AC imputado y avance real de partidas con CPI bajo umbral.",
+            },
+            {
+                "KPI": "SPI",
+                "Fórmula": "EV / PV",
+                "Numerador": money_display(total_ev),
+                "Denominador": money_display(total_pv),
+                "Resultado": idx_fmt(spi),
+                "Umbral PMO": f">= {threshold_spi:.2f}".replace(".", ","),
+                "Estado": "En control" if spi >= threshold_spi else "Bajo umbral",
+                "Input requerido": "Actualizar avance planificado y fecha de término de partidas atrasadas.",
+            },
+            {
+                "KPI": "CV",
+                "Fórmula": "EV - AC",
+                "Numerador": money_display(total_ev),
+                "Denominador": money_display(total_ac),
+                "Resultado": money_display(total_cv),
+                "Umbral PMO": ">= $0",
+                "Estado": "Favorable" if total_cv >= 0 else "Desfavorable",
+                "Input requerido": "Explicar partidas donde el costo real supera el valor ganado.",
+            },
+            {
+                "KPI": "SV",
+                "Fórmula": "EV - PV",
+                "Numerador": money_display(total_ev),
+                "Denominador": money_display(total_pv),
+                "Resultado": money_display(total_sv),
+                "Umbral PMO": ">= $0",
+                "Estado": "Favorable" if total_sv >= 0 else "Desfavorable",
+                "Input requerido": "Confirmar recuperación de avance o reprogramación del hito.",
+            },
+            {
+                "KPI": "EAC / VAC",
+                "Fórmula": "BAC - EAC",
+                "Numerador": money_display(total_bac),
+                "Denominador": money_display(total_eac),
+                "Resultado": money_display(total_vac),
+                "Umbral PMO": f"Sobrecosto <= {threshold_dev_pct * 100:.1f}%".replace(".", ","),
+                "Estado": "En control" if deviation_pct <= threshold_dev_pct else "Presión al cierre",
+                "Input requerido": "Actualizar forecast y acciones para contener sobrecosto al cierre.",
+            },
+            {
+                "KPI": "AC / BAC",
+                "Fórmula": "AC / BAC",
+                "Numerador": money_display(total_ac),
+                "Denominador": money_display(total_bac),
+                "Resultado": pct_fmt(ac_bac_ratio),
+                "Umbral PMO": "Lectura de consumo",
+                "Estado": "Seguimiento",
+                "Input requerido": "Comparar consumo presupuestario contra avance real y compromisos pendientes.",
+            },
+        ]
+    )
+    def _style_kpi_development(table: pd.DataFrame):
+        def _row_style(row: pd.Series) -> list[str]:
+            state = str(row.get("Estado", "")).casefold()
+            if any(token in state for token in ["bajo", "desfavorable", "presión"]):
+                return ["background-color:#FFF1F2;color:#7F1D1D;font-weight:800"] * len(row)
+            if any(token in state for token in ["favorable", "control"]):
+                return ["background-color:#F0FDF4;color:#14532D;font-weight:800"] * len(row)
+            return ["background-color:#FFFFFF;color:#0F172A;font-weight:750"] * len(row)
+
+        return (
+            table.style.apply(_row_style, axis=1)
+            .set_properties(
+                subset=["KPI", "Resultado", "Estado"],
+                **{"font-weight": "950", "color": "#071427"},
+            )
+            .set_properties(
+                subset=["Fórmula", "Numerador", "Denominador", "Umbral PMO"],
+                **{"font-family": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", "font-size": "12px"},
+            )
+            .set_table_styles(
+                [
+                    {"selector": "th", "props": [("background-color", "#071427"), ("color", "#FFFFFF"), ("font-weight", "950"), ("font-size", "11px")]},
+                    {"selector": "td", "props": [("border-bottom", "1px solid #E2E8F0"), ("font-size", "12px")]},
+                ]
+            )
+        )
+
+    st.dataframe(
+        _style_kpi_development(kpi_development_df),
+        use_container_width=True,
+        hide_index=True,
+        height=250,
+    )
+
+    watch_df = evm_perf_df.copy()
+    watch_df["_item_cpi"] = np.where(watch_df["_ac"] > 0, watch_df["_ev"] / watch_df["_ac"], np.nan)
+    watch_df["_item_spi"] = np.where(watch_df["_pv"] > 0, watch_df["_ev"] / watch_df["_pv"], np.nan)
+    watch_df["_item_ac_bac"] = np.where(watch_df["_bac"] > 0, watch_df["_ac"] / watch_df["_bac"], np.nan)
+    watch_df["_item_dev_pct"] = np.where(watch_df["_bac"] > 0, (watch_df["_eac"] - watch_df["_bac"]) / watch_df["_bac"], 0.0)
+    watch_df["_risk_points"] = 0.0
+    watch_df["_risk_points"] += np.where(watch_df["_item_cpi"].fillna(1.0) < threshold_cpi, 30.0, 0.0)
+    watch_df["_risk_points"] += np.where(watch_df["_item_spi"].fillna(1.0) < threshold_spi, 25.0, 0.0)
+    watch_df["_risk_points"] += np.where(watch_df["_cv"] < 0, 20.0, 0.0)
+    watch_df["_risk_points"] += np.where(watch_df["_sv"] < 0, 15.0, 0.0)
+    watch_df["_risk_points"] += np.where(watch_df["_item_dev_pct"] > threshold_dev_pct, 20.0, 0.0)
+    watch_df["_risk_points"] += np.where(watch_df["_bac"] > 0, np.minimum(20.0, watch_df["_bac"] / max(total_bac, 1.0) * 100.0), 0.0)
+    if focus_metric == "CPI":
+        watch_df["_sort_metric"] = watch_df["_item_cpi"].fillna(99.0)
+        ascending_watch = True
+    elif focus_metric == "SPI":
+        watch_df["_sort_metric"] = watch_df["_item_spi"].fillna(99.0)
+        ascending_watch = True
+    elif focus_metric == "CV":
+        watch_df["_sort_metric"] = watch_df["_cv"]
+        ascending_watch = True
+    elif focus_metric == "SV":
+        watch_df["_sort_metric"] = watch_df["_sv"]
+        ascending_watch = True
+    elif focus_metric == "EAC / VAC":
+        watch_df["_sort_metric"] = watch_df["_vac"]
+        ascending_watch = True
+    elif focus_metric == "AC / BAC":
+        watch_df["_sort_metric"] = watch_df["_item_ac_bac"].fillna(0.0)
+        ascending_watch = False
+    else:
+        watch_df["_sort_metric"] = watch_df["_risk_points"]
+        ascending_watch = False
+    watch_df = watch_df.sort_values(["_sort_metric", "_bac"], ascending=[ascending_watch, False]).head(int(top_n_watch)).copy()
+
+    def _watch_col(col_key: str, fallback: str = "") -> pd.Series:
+        col = col_map.get(col_key)
+        if col and col in watch_df.columns:
+            return watch_df[col].fillna("").astype(str)
+        return pd.Series([fallback] * len(watch_df), index=watch_df.index)
+
+    def _fmt_ratio_or_dash(value: object) -> str:
+        try:
+            number = float(value)
+        except Exception:
+            return "-"
+        return idx_fmt(number) if np.isfinite(number) else "-"
+
+    def _action_required(row: pd.Series) -> str:
+        actions = []
+        if float(row.get("_item_cpi", 1.0) if pd.notna(row.get("_item_cpi", np.nan)) else 1.0) < threshold_cpi:
+            actions.append("revisar costo real")
+        if float(row.get("_item_spi", 1.0) if pd.notna(row.get("_item_spi", np.nan)) else 1.0) < threshold_spi:
+            actions.append("recuperar avance")
+        if float(row.get("_item_dev_pct", 0.0) or 0.0) > threshold_dev_pct:
+            actions.append("actualizar forecast")
+        if float(row.get("_cv", 0.0) or 0.0) < 0 and not actions:
+            actions.append("explicar variación costo")
+        return " + ".join(actions) if actions else "mantener seguimiento"
+
+    watch_table = pd.DataFrame(
+        {
+            "ID": _watch_col("id", "-"),
+            "Partida": _watch_col("tarea", "Actividad sin nombre"),
+            "Etapa": _watch_col("etapa", "Sin etapa"),
+            "Fase": _watch_col("fase", "Sin fase"),
+            "Línea": _watch_col("linea", "Sin línea"),
+            "Estado": _watch_col("estado", "Sin estado"),
+            "BAC": watch_df["_bac"].apply(money_display),
+            "AC": watch_df["_ac"].apply(money_display),
+            "EV": watch_df["_ev"].apply(money_display),
+            "PV": watch_df["_pv"].apply(money_display),
+            "CPI": watch_df["_item_cpi"].apply(_fmt_ratio_or_dash),
+            "SPI": watch_df["_item_spi"].apply(_fmt_ratio_or_dash),
+            "CV": watch_df["_cv"].apply(money_display),
+            "SV": watch_df["_sv"].apply(money_display),
+            "VAC": watch_df["_vac"].apply(money_display),
+            "Riesgo PMO": watch_df["_risk_points"].round(0).astype(int).astype(str),
+            "Input seguimiento": watch_df.apply(_action_required, axis=1),
+        }
+    )
+    def _style_watch_table(table: pd.DataFrame):
+        def _risk_cell(value: object) -> str:
+            try:
+                score = float(value)
+            except Exception:
+                score = 0.0
+            if score >= 65:
+                return "background-color:#FEE2E2;color:#991B1B;font-weight:950"
+            if score >= 35:
+                return "background-color:#FEF3C7;color:#92400E;font-weight:950"
+            return "background-color:#DCFCE7;color:#166534;font-weight:950"
+
+        def _money_variance(value: object) -> str:
+            text = str(value)
+            return "color:#991B1B;font-weight:950" if text.startswith("$-") or text.startswith("-$") else "color:#166534;font-weight:950"
+
+        return (
+            table.style
+            .map(_risk_cell, subset=["Riesgo PMO"])
+            .map(_money_variance, subset=["CV", "SV", "VAC"])
+            .set_properties(subset=["ID", "CPI", "SPI"], **{"font-weight": "950", "color": "#071427"})
+            .set_properties(subset=["Partida"], **{"font-weight": "850", "color": "#0F172A"})
+            .set_table_styles(
+                [
+                    {"selector": "th", "props": [("background-color", "#0B1633"), ("color", "#FFFFFF"), ("font-weight", "950"), ("font-size", "11px")]},
+                    {"selector": "td", "props": [("border-bottom", "1px solid #E2E8F0"), ("font-size", "12px")]},
+                ]
+            )
+        )
+
+    st.dataframe(
+        _style_watch_table(watch_table),
+        use_container_width=True,
+        hide_index=True,
+        height=430,
+    )
+    st.download_button(
+        "Descargar tabla de seguimiento PMO",
+        data=watch_table.to_csv(index=False).encode("utf-8-sig"),
+        file_name="seguimiento_pmo_costos_kpi.csv",
+        mime="text/csv",
+        use_container_width=True,
+        key="control_cost_watch_download",
     )
 
     st.markdown(
@@ -23799,9 +24380,9 @@ def render_inputs_capex_10kw_detail():
 
     valid_capex10_subblocks = {"control_fondos", "vista_integrada", "control_cost"}
     if capex10_subblock_key not in st.session_state:
-        st.session_state[capex10_subblock_key] = "control_fondos"
+        st.session_state[capex10_subblock_key] = "control_cost"
     elif st.session_state[capex10_subblock_key] not in valid_capex10_subblocks:
-        st.session_state[capex10_subblock_key] = "control_fondos"
+        st.session_state[capex10_subblock_key] = "control_cost"
 
     capex10_subblocks = [
         (
@@ -28261,8 +28842,8 @@ input_cards = [
     ("mercado", "04 · Mercado y Propuesta Comercial"),
 ]
 
-if "inputs_bloque_sel" not in st.session_state:
-    st.session_state["inputs_bloque_sel"] = None
+if not st.session_state.get("inputs_bloque_sel"):
+    st.session_state["inputs_bloque_sel"] = "escalamiento"
 
 def selector_button_label(label: str, is_active: bool, action_label: str = "Abrir bloque") -> str:
     return f"{label} · Seleccionado" if is_active else action_label
@@ -28272,7 +28853,8 @@ def _set_inputs_bloque(value: str):
     if value == "estado_actual":
         st.session_state["inputs_estado_actual_subbloque_sel"] = None
     elif value == "escalamiento":
-        st.session_state["inputs_escalamiento_capex_sel"] = None
+        st.session_state["inputs_escalamiento_capex_sel"] = "10kw"
+        st.session_state["inputs_capex10_subblock_sel"] = "control_cost"
     elif value == "valorizacion":
         st.session_state["inputs_val_bloque_sel"] = None
     elif value == "mercado":
@@ -28532,8 +29114,8 @@ elif selected_input_block == "escalamiento":
     def _set_capex_80kw_view(value: str):
         st.session_state[capex_80kw_view_state_key] = value
 
-    if capex_selector_state_key not in st.session_state:
-        st.session_state[capex_selector_state_key] = None
+    if not st.session_state.get(capex_selector_state_key):
+        st.session_state[capex_selector_state_key] = "10kw"
 
     try:
         capex_10kw_val = get_brecha_piloto_10kw_clp(refresh_nonce=data_refresh_nonce)
