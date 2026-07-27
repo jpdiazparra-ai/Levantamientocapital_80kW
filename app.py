@@ -106,6 +106,12 @@ EERRV2_CSV_URL_DEFAULT = (
     "2PACX-1vQfQcSn40boiOyRvYeX1j5SO2O9w3WoA6DkOEMxxf85v-WiWXuMC-uyBWb3-ff82pUfk1cSaBnmrcqU/"
     "pub?gid=372370214&single=true&output=csv"
 )
+CAPEX10_PLAN_A_INJECTION_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vTtNr0ewSt0JQSemU9wlOhwnQQjjlRQ8IUltArZqnQ-m_V_8JpOt7ls3dRfcLNs71-hI_OC8wMvNWJw/"
+    "pub?output=csv"
+)
+CAPEX10_PLAN_A_INJECTION_SOURCE_VERSION = 2026072702
 
 _HERO_CANDIDATES = [
     (Path(__file__).parent / "assets" / "hero_vawt.jpg").resolve(),
@@ -1370,6 +1376,41 @@ def parse_money_clp_robusto(x: str) -> float:
         return -val if neg else val
     except ValueError:
         return 0.0
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_capex10_plan_a_injection_schedule(refresh_nonce: int = 0) -> pd.DataFrame:
+    df = read_remote_csv(
+        CAPEX10_PLAN_A_INJECTION_CSV_URL_DEFAULT,
+        refresh_nonce=refresh_nonce + CAPEX10_PLAN_A_INJECTION_SOURCE_VERSION,
+        dtype=str,
+    ).fillna("")
+    if df.empty:
+        return pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Etiqueta"])
+    date_col = first_matching_column(df, ["FECHA", "Fecha", "Date"])
+    amount_col = first_matching_column(df, ["Monto", "MONTO", "Inyección", "Inyeccion", "Capital"])
+    if not date_col or not amount_col:
+        return pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Etiqueta"])
+    schedule = pd.DataFrame(
+        {
+            "Fecha": pd.to_datetime(df[date_col], errors="coerce", dayfirst=True),
+            "Inyeccion_CLP": df[amount_col].apply(parse_money_clp_robusto),
+        }
+    )
+    schedule = schedule[schedule["Fecha"].notna() & (schedule["Inyeccion_CLP"] > 0)].copy()
+    if schedule.empty:
+        return pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Etiqueta"])
+    schedule["_month"] = schedule["Fecha"].dt.to_period("M").dt.to_timestamp()
+    schedule = (
+        schedule.groupby("_month", as_index=False)
+        .agg(
+            Fecha=("Fecha", "min"),
+            Inyeccion_CLP=("Inyeccion_CLP", "sum"),
+        )
+        .sort_values("_month")
+    )
+    schedule["Etiqueta"] = schedule["Fecha"].dt.strftime("Plan A · %d-%m-%Y")
+    return schedule.reset_index(drop=True)
 
 
 def gantt_selected_funds_series(df: pd.DataFrame) -> pd.Series:
@@ -10229,6 +10270,11 @@ def _capex10_selected_hito_specs(selected_metodos: list[str]) -> list[dict[str, 
                 "label": "Hito Producto",
                 "aliases": ["hitoproducto", "hito3", "producto"],
             }
+        elif "hitopiloto80kw" in key or "piloto80kw" in key or "80kw" in key:
+            spec = {
+                "label": "Hito Piloto 80 kW",
+                "aliases": ["hitopiloto80kw", "piloto80kw", "80kw", "80k"],
+            }
         elif "hitopremontaje" in key or "hito1" in key or "premontaje" in key:
             spec = {
                 "label": "Hito Pre -Montaje",
@@ -10305,7 +10351,7 @@ def _capex10_responsible_expander_style(responsible: object) -> tuple[str, str]:
     return "gray", "⚪"
 
 
-CAPEX10_PLAN_A_LABEL = "Plan A - Flexibilidad Proveedores"
+CAPEX10_PLAN_A_LABEL = "Plan A - Flujo de caja integrado"
 CAPEX10_PLAN_B_LABEL = "Plan B - Flujo de caja libre"
 CAPEX10_LEGACY_PLAN_B_LABEL = "Plan B - Sin Flexibilidad Proveedores"
 
@@ -10326,33 +10372,45 @@ def render_capex10_investor_injection_cash_flow(
     date_col = GANTT_DATE_COL_START if GANTT_DATE_COL_START in flow_df.columns else None
     fallback_col = GANTT_DATE_COL_END_PLAN if GANTT_DATE_COL_END_PLAN in flow_df.columns else None
     if date_col:
-        flow_df["_cash_date"] = pd.to_datetime(flow_df[date_col], errors="coerce")
+        flow_df["_cash_date"] = pd.to_datetime(flow_df[date_col], errors="coerce", dayfirst=True)
     else:
         flow_df["_cash_date"] = pd.NaT
     if fallback_col:
-        flow_df["_cash_date"] = flow_df["_cash_date"].fillna(pd.to_datetime(flow_df[fallback_col], errors="coerce"))
+        flow_df["_cash_date"] = flow_df["_cash_date"].fillna(pd.to_datetime(flow_df[fallback_col], errors="coerce", dayfirst=True))
     flow_df["_cash_date"] = flow_df["_cash_date"].fillna(pd.Timestamp.today().normalize())
     flow_df["_analysis_month"] = flow_df["_cash_date"].dt.to_period("M").dt.to_timestamp()
     chart_date_col = first_matching_column(flow_df, ["Fecha FC", "Fecha_FC", "Fecha flujo caja", "Fecha flujo de caja"])
     if chart_date_col and chart_date_col in flow_df.columns:
-        flow_df["_chart_date"] = pd.to_datetime(flow_df[chart_date_col], errors="coerce")
+        flow_df["_chart_date"] = pd.to_datetime(flow_df[chart_date_col], errors="coerce", dayfirst=True)
     else:
         flow_df["_chart_date"] = pd.NaT
     flow_df["_chart_date"] = flow_df["_chart_date"].fillna(flow_df["_cash_date"])
     if date_col:
-        detail_flow_df["_cash_date"] = pd.to_datetime(detail_flow_df[date_col], errors="coerce")
+        detail_flow_df["_cash_date"] = pd.to_datetime(detail_flow_df[date_col], errors="coerce", dayfirst=True)
     else:
         detail_flow_df["_cash_date"] = pd.NaT
     if fallback_col:
-        detail_flow_df["_cash_date"] = detail_flow_df["_cash_date"].fillna(pd.to_datetime(detail_flow_df[fallback_col], errors="coerce"))
+        detail_flow_df["_cash_date"] = detail_flow_df["_cash_date"].fillna(pd.to_datetime(detail_flow_df[fallback_col], errors="coerce", dayfirst=True))
     detail_flow_df["_cash_date"] = detail_flow_df["_cash_date"].fillna(pd.Timestamp.today().normalize())
     detail_flow_df["_analysis_month"] = detail_flow_df["_cash_date"].dt.to_period("M").dt.to_timestamp()
     if chart_date_col and chart_date_col in detail_flow_df.columns:
-        detail_flow_df["_chart_date"] = pd.to_datetime(detail_flow_df[chart_date_col], errors="coerce")
+        detail_flow_df["_chart_date"] = pd.to_datetime(detail_flow_df[chart_date_col], errors="coerce", dayfirst=True)
     else:
         detail_flow_df["_chart_date"] = pd.NaT
     detail_flow_df["_chart_date"] = detail_flow_df["_chart_date"].fillna(detail_flow_df["_cash_date"])
     total_clp = float(flow_df["Disponible_CLP"].sum() or 0.0)
+    if not cashflow_plan:
+        cashflow_plan = CAPEX10_PLAN_A_LABEL
+    is_plan_a_cashflow = cashflow_plan.startswith("Plan A")
+    plan_a_schedule_error = ""
+    if is_plan_a_cashflow:
+        try:
+            plan_a_schedule_df = load_capex10_plan_a_injection_schedule(refresh_nonce=data_refresh_nonce)
+        except Exception as exc:
+            plan_a_schedule_df = pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Etiqueta"])
+            plan_a_schedule_error = str(exc)
+    else:
+        plan_a_schedule_df = pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Etiqueta"])
 
     st.markdown(
         """
@@ -10404,7 +10462,21 @@ def render_capex10_investor_injection_cash_flow(
             font-style:normal;
             font-size:10px;
             font-weight:900;
-            white-space:nowrap;
+            max-width:100%;
+            line-height:1.25;
+            white-space:normal;
+            overflow-wrap:anywhere;
+        }
+        .cash-injection-plan-summary{
+            width:100%;
+            min-width:0;
+            margin:0;
+            overflow:hidden;
+        }
+        .cash-injection-plan-summary em{
+            display:block;
+            width:100%;
+            box-sizing:border-box;
         }
         .cash-injection-row-label{
             color:#0F766E;
@@ -10414,6 +10486,18 @@ def render_capex10_investor_injection_cash_flow(
             text-transform:uppercase;
             padding-top:31px;
             white-space:nowrap;
+        }
+        .cash-injection-input-stack{
+            border:1px solid rgba(203,213,225,.72);
+            border-radius:16px;
+            padding:10px 12px 8px;
+            background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
+        }
+        .cash-injection-input-stack [data-testid="stWidgetLabel"] p{
+            font-size:12px;
+            line-height:1.25;
+            font-weight:850;
+            color:#334155;
         }
         @media(max-width:900px){
             .cash-injection-head{display:block;}
@@ -10442,24 +10526,43 @@ def render_capex10_investor_injection_cash_flow(
             (0, pd.Timestamp("2026-10-30").date()),
             (0, pd.Timestamp("2026-11-30").date()),
         ]
-        with inputs_col:
-            count_col, first_amount_col, first_date_col = st.columns([.78, 1, 1], gap="small")
+
+        def render_manual_injection_controls(key_suffix: str, title: str = "") -> list[dict[str, object]]:
+            manual_entries: list[dict[str, object]] = []
+            if title:
+                st.markdown(
+                    f'<div class="cash-injection-row-label" style="padding-top:0;margin-bottom:6px;">{html.escape(title)}</div>',
+                    unsafe_allow_html=True,
+                )
+            count_key = f"capex10_investor_injection_count_{key_suffix}"
+            count_sticky_key = f"{count_key}__sticky"
+            if count_sticky_key in st.session_state:
+                st.session_state[count_key] = st.session_state.pop(count_sticky_key)
+            count_col, first_amount_col, first_date_col = st.columns([.72, 1, 1], gap="small")
             with count_col:
                 injection_count = st.selectbox(
                     "Cantidad",
                     [1, 2, 3, 4],
                     index=0,
-                    key="capex10_investor_injection_count",
+                    key=count_key,
                     help="Define cuántas entradas puntuales de capital quieres modelar.",
                 )
-            for injection_idx in range(int(injection_count)):
-                amount_default, date_default = injection_defaults[injection_idx]
-                amount_key = "capex10_investor_injection_clp" if injection_idx == 0 else f"capex10_investor_injection_{injection_idx + 1}_clp"
-                date_key = "capex10_investor_injection_date" if injection_idx == 0 else f"capex10_investor_injection_{injection_idx + 1}_date"
+            injection_count_int = max(1, min(int(injection_count or 1), len(injection_defaults)))
+            for injection_idx, (amount_default, date_default) in enumerate(injection_defaults):
+                amount_key = f"capex10_investor_injection_{key_suffix}_{injection_idx + 1}_clp"
+                date_key = f"capex10_investor_injection_{key_suffix}_{injection_idx + 1}_date"
+                amount_sticky_key = f"{amount_key}__sticky"
+                date_sticky_key = f"{date_key}__sticky"
+                if amount_sticky_key in st.session_state:
+                    st.session_state[amount_key] = st.session_state.pop(amount_sticky_key)
+                if date_sticky_key in st.session_state:
+                    st.session_state[date_key] = st.session_state.pop(date_sticky_key)
+                if injection_idx >= injection_count_int:
+                    continue
                 if injection_idx == 0:
                     amount_col, date_col_input = first_amount_col, first_date_col
                 else:
-                    label_col, amount_col, date_col_input = st.columns([.78, 1, 1], gap="small")
+                    label_col, amount_col, date_col_input = st.columns([.72, 1, 1], gap="small")
                     with label_col:
                         st.markdown(
                             f'<div class="cash-injection-row-label">Inyección {injection_idx + 1}</div>',
@@ -10473,7 +10576,7 @@ def render_capex10_investor_injection_cash_flow(
                         step=1_000_000,
                         format="%d",
                         key=amount_key,
-                        help="Capital comprometido por un cliente o inversionista para contrastarlo contra los fondos por ejecutar.",
+                        help="Capital adicional para contrastarlo contra los fondos por ejecutar.",
                     )
                 with date_col_input:
                     injection_date = st.date_input(
@@ -10482,13 +10585,64 @@ def render_capex10_investor_injection_cash_flow(
                         key=date_key,
                         help="Fecha estimada en que entra la inyección de capital.",
                     )
-                injection_entries.append(
+                manual_entries.append(
                     {
                         "_month": pd.Timestamp(injection_date).to_period("M").to_timestamp(),
                         "Inyeccion_CLP": float(injection_amount or 0.0),
-                        "Etiqueta": f"Inyección {injection_idx + 1}",
+                        "Etiqueta": f"Inyección adicional {injection_idx + 1}",
+                        "Fuente": "Manual",
                     }
                 )
+            return manual_entries
+
+        with inputs_col:
+            if is_plan_a_cashflow:
+                plan_a_col, manual_col = st.columns([.95, 1.35], gap="large")
+                with plan_a_col:
+                    if plan_a_schedule_df.empty:
+                        if plan_a_schedule_error:
+                            st.warning(f"No se pudo cargar la inyección mensual Plan A: {plan_a_schedule_error}")
+                        else:
+                            st.warning("La planilla Plan A no contiene inyecciones mensuales válidas.")
+                    else:
+                        injection_entries = [
+                            {
+                                "_month": pd.Timestamp(row["_month"]),
+                                "Inyeccion_CLP": float(row["Inyeccion_CLP"] or 0.0),
+                                "Etiqueta": str(row["Etiqueta"]),
+                                "Fuente": "Plan A",
+                            }
+                            for _, row in plan_a_schedule_df.iterrows()
+                        ]
+                        plan_a_first_date = pd.to_datetime(plan_a_schedule_df["Fecha"], errors="coerce").min()
+                        plan_a_last_date = pd.to_datetime(plan_a_schedule_df["Fecha"], errors="coerce").max()
+                        plan_a_amounts = plan_a_schedule_df["Inyeccion_CLP"].astype(float).tolist()
+                        plan_a_initial_amount = plan_a_amounts[0] if plan_a_amounts else 0.0
+                        plan_a_max_month_amount = max(plan_a_amounts) if plan_a_amounts else 0.0
+                        plan_a_detail_html = (
+                            "Columna Monto<br>"
+                            f"inicial {format_clp(plan_a_initial_amount)} · mayor mes {format_clp(plan_a_max_month_amount)}<br>"
+                            f"{plan_a_first_date.strftime('%d-%m-%Y')} a {plan_a_last_date.strftime('%d-%m-%Y')}"
+                        )
+                        st.markdown(
+                            f"""
+                            <div class="cash-injection-summary cash-injection-plan-summary">
+                              <span>Plan A conectado a planilla mensual</span>
+                              <b>{format_clp(float(plan_a_schedule_df["Inyeccion_CLP"].sum() or 0.0))}</b>
+                              <em>{plan_a_detail_html}</em>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                with manual_col:
+                    injection_entries.extend(
+                        render_manual_injection_controls(
+                            "plan_a_extra",
+                            "Inyección adicional sobre Plan A",
+                        )
+                    )
+            else:
+                injection_entries.extend(render_manual_injection_controls("plan_b"))
         total_committed_clp = sum(float(entry["Inyeccion_CLP"] or 0.0) for entry in injection_entries)
         with coverage_col:
             committed_pct = (total_committed_clp / total_clp * 100.0) if total_clp > 0 else 0.0
@@ -10505,9 +10659,6 @@ def render_capex10_investor_injection_cash_flow(
                 """,
                 unsafe_allow_html=True,
             )
-    if not cashflow_plan:
-        cashflow_plan = CAPEX10_PLAN_A_LABEL
-
     if cashflow_plan.startswith("Plan A"):
         flow_df["_month"] = flow_df["_chart_date"].dt.to_period("M").dt.to_timestamp()
         detail_flow_df["_month"] = detail_flow_df["_chart_date"].dt.to_period("M").dt.to_timestamp()
@@ -10523,18 +10674,31 @@ def render_capex10_investor_injection_cash_flow(
         return
 
     injection_df = pd.DataFrame(injection_entries)
+    if injection_df.empty:
+        injection_df = pd.DataFrame(columns=["_month", "Inyeccion_CLP", "Etiqueta"])
     positive_injections = injection_df[injection_df["Inyeccion_CLP"] > 0].copy()
+    def parse_cashflow_date(value) -> pd.Timestamp:
+        return pd.to_datetime(value, errors="coerce", dayfirst=True)
+
     valid_milestones = [
         milestone
         for milestone in (milestone_dates or [])
-        if pd.notna(pd.to_datetime(milestone.get("date"), errors="coerce"))
+        if pd.notna(parse_cashflow_date(milestone.get("date")))
     ]
     milestone_months = [
-        pd.Timestamp(milestone["date"]).to_period("M").to_timestamp()
+        parse_cashflow_date(milestone["date"]).to_period("M").to_timestamp()
         for milestone in valid_milestones
     ]
-    timeline_start_candidates = [monthly["_month"].min(), injection_df["_month"].min(), *milestone_months]
-    timeline_end_candidates = [monthly["_month"].max(), injection_df["_month"].max(), *milestone_months]
+    timeline_start_candidates = [
+        candidate
+        for candidate in [monthly["_month"].min(), injection_df["_month"].min(), *milestone_months]
+        if pd.notna(candidate)
+    ]
+    timeline_end_candidates = [
+        candidate
+        for candidate in [monthly["_month"].max(), injection_df["_month"].max(), *milestone_months]
+        if pd.notna(candidate)
+    ]
     timeline_start = min(timeline_start_candidates)
     timeline_end = max(timeline_end_candidates)
     commitment_monthly = pd.DataFrame({"_month": pd.date_range(timeline_start, timeline_end, freq="MS")})
@@ -10555,13 +10719,31 @@ def render_capex10_investor_injection_cash_flow(
         go.Bar(
             x=commitment_labels,
             y=commitment_monthly["Flujo_CLP"] / 1_000_000,
-            name="Flujo mensual pendiente",
-            marker_color="#7FA8A4",
+            name="Flujo mensual pendiente por Fecha FC" if is_plan_a_cashflow else "Flujo mensual pendiente",
+            marker_color="#6B86A3",
+            marker_line=dict(color="rgba(255,255,255,.86)", width=1.2),
+            opacity=.92,
             text=[format_clp(value) if value > 0 else "" for value in commitment_monthly["Flujo_CLP"]],
             textposition="outside",
-            hovertemplate="<b>%{x}</b><br>Flujo pendiente: %{text}<extra></extra>",
+            hovertemplate=(
+                "<b>%{x}</b><br>Flujo pendiente según Fecha FC: %{text}<extra></extra>"
+                if is_plan_a_cashflow
+                else "<b>%{x}</b><br>Flujo pendiente: %{text}<extra></extra>"
+            ),
         )
     )
+    if not is_plan_a_cashflow:
+        fig_commitment.add_trace(
+            go.Bar(
+                x=commitment_labels,
+                y=commitment_monthly["Inyeccion_CLP"] / 1_000_000,
+                name="Inyección mensual",
+                marker_color="#0F766E",
+                text=[format_clp(value) if value > 0 else "" for value in commitment_monthly["Inyeccion_CLP"]],
+                textposition="outside",
+                hovertemplate="<b>%{x}</b><br>Inyección: %{text}<extra></extra>",
+            )
+        )
     fig_commitment.add_trace(
         go.Scatter(
             x=commitment_labels,
@@ -10576,6 +10758,17 @@ def render_capex10_investor_injection_cash_flow(
     fig_commitment.add_trace(
         go.Scatter(
             x=commitment_labels,
+            y=commitment_monthly["Inyeccion_acumulada_CLP"] / 1_000_000,
+            name="Capital acumulado disponible",
+            mode="lines+markers",
+            line=dict(color="#0F766E", width=3, dash="dot" if is_plan_a_cashflow else "solid"),
+            marker=dict(size=8, color="#FFFFFF", line=dict(color="#0F766E", width=2)),
+            hovertemplate="<b>%{x}</b><br>Capital acumulado: $%{y:.1f} MM<extra></extra>",
+        )
+    )
+    fig_commitment.add_trace(
+        go.Scatter(
+            x=commitment_labels,
             y=commitment_monthly["Saldo_caja_CLP"] / 1_000_000,
             name="Saldo caja acumulado",
             mode="lines+markers",
@@ -10584,8 +10777,33 @@ def render_capex10_investor_injection_cash_flow(
             hovertemplate="<b>%{x}</b><br>Saldo caja: $%{y:.1f} MM<extra></extra>",
         )
     )
+    event_month_index = {
+        pd.Timestamp(row["_month"]).to_period("M").to_timestamp(): idx
+        for idx, row in commitment_monthly.reset_index(drop=True).iterrows()
+    }
+    event_annotation_slots: list[tuple[int, int]] = []
+
+    def event_annotation_y(event_month: pd.Timestamp) -> float:
+        event_idx = event_month_index.get(pd.Timestamp(event_month).to_period("M").to_timestamp())
+        if event_idx is None:
+            return 1.025
+        for level in (0, 1):
+            if all(level != used_level or abs(event_idx - used_idx) > 1 for used_idx, used_level in event_annotation_slots):
+                event_annotation_slots.append((event_idx, level))
+                return 1.025 + (level * 0.095)
+        fallback_level = len(event_annotation_slots) % 2
+        event_annotation_slots.append((event_idx, fallback_level))
+        return 1.025 + (fallback_level * 0.095)
+
     for _, injection in positive_injections.iterrows():
-        injection_label = pd.Timestamp(injection["_month"]).strftime("%b %Y")
+        injection_month = pd.Timestamp(injection["_month"]).to_period("M").to_timestamp()
+        injection_label = injection_month.strftime("%b %Y")
+        injection_source = str(injection.get("Fuente", "Manual"))
+        is_manual_injection = injection_source == "Manual"
+        if is_plan_a_cashflow and not is_manual_injection:
+            continue
+        should_annotate_injection = (not is_plan_a_cashflow) or is_manual_injection
+        injection_line_color = "#047857" if is_manual_injection else "#0F766E"
         fig_commitment.add_shape(
             type="line",
             x0=injection_label,
@@ -10594,22 +10812,39 @@ def render_capex10_investor_injection_cash_flow(
             y1=1,
             xref="x",
             yref="paper",
-            line=dict(color="#0F766E", width=2, dash="dot"),
+            line=dict(
+                color=injection_line_color,
+                width=3 if is_manual_injection else 1.8,
+                dash="solid" if is_manual_injection else "dot",
+            ),
         )
-        fig_commitment.add_annotation(
-            x=injection_label,
-            y=1,
-            xref="x",
-            yref="paper",
-            text=f"{injection['Etiqueta']} · {format_clp(float(injection['Inyeccion_CLP']))}",
-            showarrow=False,
-            xanchor="left",
-            yanchor="bottom",
-            font=dict(size=11, color="#0F766E"),
-        )
+        if should_annotate_injection:
+            injection_label_prefix = "Inyección adicional" if is_manual_injection else "Inyección Plan A"
+            injection_event_date = injection_month.strftime("%b %Y")
+            fig_commitment.add_annotation(
+                x=injection_label,
+                y=event_annotation_y(injection_month),
+                xref="x",
+                yref="paper",
+                text=(
+                    f"<b>{injection_label_prefix if is_plan_a_cashflow else injection['Etiqueta']}</b>"
+                    f"<br>{injection_event_date}"
+                    f"<br>{format_clp(float(injection['Inyeccion_CLP']))}"
+                ),
+                showarrow=False,
+                xanchor="center",
+                yanchor="bottom",
+                align="center",
+                font=dict(size=8, color=injection_line_color),
+                bgcolor="rgba(236,253,245,.96)",
+                bordercolor=injection_line_color,
+                borderwidth=1,
+                borderpad=2,
+            )
     milestone_colors = ["#B7791F", "#7C2D12", "#0E7490"]
     for milestone_idx, milestone in enumerate(valid_milestones):
-        milestone_month = pd.Timestamp(milestone["date"]).to_period("M").to_timestamp()
+        milestone_date = parse_cashflow_date(milestone["date"])
+        milestone_month = milestone_date.to_period("M").to_timestamp()
         milestone_label = milestone_month.strftime("%b %Y")
         milestone_name = str(milestone.get("label", "Hito"))
         milestone_color = milestone_colors[milestone_idx % len(milestone_colors)]
@@ -10625,28 +10860,39 @@ def render_capex10_investor_injection_cash_flow(
         )
         fig_commitment.add_annotation(
             x=milestone_label,
-            y=0.98 - (milestone_idx * 0.08),
+            y=event_annotation_y(milestone_month),
             xref="x",
             yref="paper",
-            text=f"{milestone_name} · {pd.Timestamp(milestone['date']).strftime('%d-%m-%Y')}",
+            text=(
+                f"<b>{milestone_name}</b>"
+                f"<br>{milestone_date.strftime('%d-%m-%Y')}"
+                f"<br>Hito seleccionado"
+            ),
             showarrow=False,
-            xanchor="right" if milestone_idx % 2 else "left",
-            yanchor="top",
-            font=dict(size=11, color=milestone_color),
+            xanchor="center",
+            yanchor="bottom",
+            align="center",
+            font=dict(size=8, color=milestone_color),
             bgcolor="rgba(255,255,255,.92)",
             bordercolor=milestone_color,
             borderwidth=1,
-            borderpad=4,
+            borderpad=2,
         )
     final_commitment = commitment_monthly.iloc[-1]
     final_commitment_label = pd.Timestamp(final_commitment["_month"]).strftime("%b %Y")
+    final_label_positions: list[float] = []
     for value_col, label_color, bg_color in [
         ("Acumulado_CLP", "#1E3A8A", "rgba(239,246,255,.96)"),
+        ("Inyeccion_acumulada_CLP", "#0F766E", "rgba(236,253,245,.96)"),
         ("Saldo_caja_CLP", "#D7605E", "rgba(255,247,237,.96)"),
     ]:
+        final_y = float(final_commitment[value_col]) / 1_000_000
+        while any(abs(final_y - used_y) < 18 for used_y in final_label_positions):
+            final_y += 18
+        final_label_positions.append(final_y)
         fig_commitment.add_annotation(
             x=final_commitment_label,
-            y=float(final_commitment[value_col]) / 1_000_000,
+            y=final_y,
             text=format_clp(float(final_commitment[value_col])),
             showarrow=False,
             xanchor="left",
@@ -10659,10 +10905,10 @@ def render_capex10_investor_injection_cash_flow(
             borderpad=6,
         )
     fig_commitment.update_layout(
-        height=468,
+        height=702,
         barmode="group",
-        margin=dict(l=12, r=112, t=24, b=40),
-        legend=dict(orientation="h", y=1.12, x=0, title=None),
+        margin=dict(l=12, r=112, t=126, b=40),
+        legend=dict(orientation="h", y=1.24, x=0, title=None),
         yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False),
         xaxis=dict(title=None),
         paper_bgcolor="rgba(0,0,0,0)",
@@ -10773,35 +11019,48 @@ def render_capex10_investor_injection_cash_flow(
         if "Disponible_CLP" in accumulated_period_items.columns
         else 0.0
     )
-    def hito_accumulated_amount(label: str) -> float:
+    selected_hito_specs = _capex10_selected_hito_specs(selected_metodos or [])
+    selected_hito_labels = {
+        normalize_key(str(spec.get("label", "")))
+        for spec in selected_hito_specs
+    }
+
+    def hito_accumulated_amount(label: str, aliases: list[str] | None = None) -> float:
         if accumulated_period_items.empty or "Disponible_CLP" not in accumulated_period_items.columns:
             return 0.0
         hito_df = accumulated_period_items.copy()
-        hito_key = normalize_key(label)
+        hito_keys = {normalize_key(label)}
+        hito_keys.update(normalize_key(alias) for alias in (aliases or []) if normalize_key(alias))
         line_match = (
-            hito_df["Línea"].astype(str).map(normalize_key).eq(hito_key)
+            pd.Series(False, index=hito_df.index)
             if "Línea" in hito_df.columns
             else pd.Series(False, index=hito_df.index)
         )
         method_col = first_matching_column(hito_df, ["Método", "Metodo"])
         method_match = (
-            hito_df[method_col].astype(str).map(normalize_key).str.contains(hito_key, na=False, regex=False)
+            pd.Series(False, index=hito_df.index)
             if method_col and method_col in hito_df.columns
             else pd.Series(False, index=hito_df.index)
         )
+        if "Línea" in hito_df.columns:
+            line_keys = hito_df["Línea"].astype(str).map(normalize_key)
+            for hito_key in hito_keys:
+                line_match |= line_keys.eq(hito_key) | line_keys.str.contains(hito_key, na=False, regex=False)
+        if method_col and method_col in hito_df.columns:
+            method_keys = hito_df[method_col].astype(str).map(normalize_key)
+            for hito_key in hito_keys:
+                method_match |= method_keys.eq(hito_key) | method_keys.str.contains(hito_key, na=False, regex=False)
         return float(hito_df[line_match | method_match]["Disponible_CLP"].sum() or 0.0)
 
-    hito_premontaje_accumulated = hito_accumulated_amount("Hito Pre -Montaje")
-    hito_montaje_accumulated = hito_accumulated_amount("Hito Montaje")
-    hito_producto_accumulated = hito_accumulated_amount("Hito Producto")
-    selected_hito_labels = {
-        normalize_key(str(spec.get("label", "")))
-        for spec in _capex10_selected_hito_specs(selected_metodos or [])
-    }
+    hito_premontaje_accumulated = hito_accumulated_amount("Hito Pre -Montaje", ["hitopremontaje", "hito1", "premontaje", "pre montaje"])
+    hito_montaje_accumulated = hito_accumulated_amount("Hito Montaje", ["hitomontaje", "hito2"])
+    hito_producto_accumulated = hito_accumulated_amount("Hito Producto", ["hitoproducto", "hito3", "producto"])
+    hito_piloto_80kw_accumulated = hito_accumulated_amount("Hito Piloto 80 kW", ["hitopiloto80kw", "piloto80kw", "piloto 80 kw", "80kw", "80k"])
     hito_kpi_specs = [
         ("Hito Pre-Montaje", "Hito Pre -Montaje", hito_premontaje_accumulated, "#164E63"),
         ("Hito Montaje", "Hito Montaje", hito_montaje_accumulated, "#1E3A8A"),
         ("Hito Producto", "Hito Producto", hito_producto_accumulated, "#B7791F"),
+        ("Hito Piloto 80 kW", "Hito Piloto 80 kW", hito_piloto_80kw_accumulated, "#0E7490"),
     ]
     hito_kpi_html = "".join(
         (
@@ -11276,9 +11535,9 @@ def render_capex10_investor_injection_cash_flow(
                     "Sin monto",
                 )
                 selectable_rows[weight_label] = selectable_rows[weight_col].map(lambda value: f"{value:.1f}%")
-                selectable_rows["Inicio"] = pd.to_datetime(selectable_rows["Inicio"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
-                selectable_rows["Fin plan"] = pd.to_datetime(selectable_rows["Fin_plan"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
-                selectable_rows["Fin real"] = pd.to_datetime(selectable_rows["Fin_real"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                selectable_rows["Inicio"] = pd.to_datetime(selectable_rows["Inicio"], errors="coerce", dayfirst=True).dt.strftime("%d-%m-%Y").fillna("-")
+                selectable_rows["Fin plan"] = pd.to_datetime(selectable_rows["Fin_plan"], errors="coerce", dayfirst=True).dt.strftime("%d-%m-%Y").fillna("-")
+                selectable_rows["Fin real"] = pd.to_datetime(selectable_rows["Fin_real"], errors="coerce", dayfirst=True).dt.strftime("%d-%m-%Y").fillna("-")
                 selectable_rows = selectable_rows.rename(columns={phase_col: "Fase", line_col: "Línea"})
                 display_rows = selectable_rows[["Fase", "Línea", "Partidas", "Disponible", "Tipo", weight_label, "Inicio", "Fin plan", "Fin real"]]
                 selected_state = st.dataframe(
@@ -12286,6 +12545,8 @@ def render_capex10_available_funds_by_phase_line() -> None:
         if normalize_key(metodo) in {"hitopremontaje", "hitomontaje", "hito-pre-montaje", "hito-montaje"}
         or "premontaje" in normalize_key(metodo)
         or "montaje" in normalize_key(metodo)
+        or "80kw" in normalize_key(metodo)
+        or "80k" in normalize_key(metodo)
     ]
     default_metodos = [
         metodo
@@ -12370,12 +12631,24 @@ def render_capex10_available_funds_by_phase_line() -> None:
             milestone_source_df["ETAPA"].astype(str).str.strip().isin(selected_etapas)
         ].copy()
 
-    def _capex10_hito_info(line_name: str) -> dict[str, object]:
+    def _capex10_hito_info(line_name: str, aliases: list[str] | None = None) -> dict[str, object]:
         if "Línea" not in milestone_source_df.columns or GANTT_DATE_COL_END_REAL not in milestone_source_df.columns:
             return {"label": line_name, "date": pd.NaT, "date_fmt": "-"}
-        wanted_key = normalize_key(line_name)
+        wanted_keys = {normalize_key(line_name), *{normalize_key(alias) for alias in (aliases or [])}}
         line_keys = milestone_source_df["Línea"].astype(str).map(normalize_key)
-        matching_rows = milestone_source_df.loc[line_keys.eq(wanted_key)].copy()
+        matching_mask = pd.Series(False, index=milestone_source_df.index)
+        for wanted_key in wanted_keys:
+            if wanted_key:
+                matching_mask |= line_keys.eq(wanted_key)
+                matching_mask |= line_keys.str.contains(wanted_key, na=False, regex=False)
+        method_col = first_matching_column(milestone_source_df, ["Método", "Metodo"])
+        if method_col:
+            method_keys = milestone_source_df[method_col].astype(str).map(normalize_key)
+            for wanted_key in wanted_keys:
+                if wanted_key:
+                    matching_mask |= method_keys.eq(wanted_key)
+                    matching_mask |= method_keys.str.contains(wanted_key, na=False, regex=False)
+        matching_rows = milestone_source_df.loc[matching_mask].copy()
         if matching_rows.empty:
             return {"label": line_name, "date": pd.NaT, "date_fmt": "-"}
         milestone_dates = pd.to_datetime(
@@ -12394,7 +12667,8 @@ def render_capex10_available_funds_by_phase_line() -> None:
     premontaje_hito = _capex10_hito_info("Hito Pre -Montaje")
     montaje_hito = _capex10_hito_info("Hito Montaje")
     producto_hito = _capex10_hito_info("Hito Producto")
-    capex10_milestone_dates = [premontaje_hito, montaje_hito, producto_hito]
+    piloto_80kw_hito = _capex10_hito_info("Hito Piloto 80 kW", aliases=["Piloto 80 kW", "Hito Piloto 80KW", "80 kW", "80KW"])
+    capex10_milestone_dates = [premontaje_hito, montaje_hito, producto_hito, piloto_80kw_hito]
 
     st.markdown(
         f"""
@@ -12775,6 +13049,11 @@ def render_capex10_available_funds_by_phase_line() -> None:
     plan_selector_key = "capex10_investor_injection_cashflow_plan"
     if st.session_state.get(plan_selector_key) == CAPEX10_LEGACY_PLAN_B_LABEL:
         st.session_state[plan_selector_key] = CAPEX10_PLAN_B_LABEL
+    plan_a_default_migration_key = "capex10_cashflow_plan_a_default_migrated_v1"
+    if not st.session_state.get(plan_a_default_migration_key):
+        if st.session_state.get(plan_selector_key, CAPEX10_PLAN_A_LABEL) == CAPEX10_PLAN_B_LABEL:
+            st.session_state[plan_selector_key] = CAPEX10_PLAN_A_LABEL
+        st.session_state[plan_a_default_migration_key] = True
 
     with st.expander("FILTROS DE FONDOS FALTANTES", expanded=False):
         st.markdown(
@@ -12790,15 +13069,18 @@ def render_capex10_available_funds_by_phase_line() -> None:
             selected_cashflow_plan = st.selectbox(
                 "Plan de calendarización",
                 [CAPEX10_PLAN_A_LABEL, CAPEX10_PLAN_B_LABEL],
-                index=1,
+                index=0,
                 key=plan_selector_key,
-                help="Plan A usa Fecha FC para reflejar flexibilidad de proveedores. Plan B usa Inicio (AAAA-MM-DD), como lectura de flujo de caja libre.",
+                help="Plan A usa Fecha FC y la inyección mensual publicada. Plan B usa Inicio (AAAA-MM-DD) y permite entradas puntuales manuales.",
             )
+        metodo_selector_key = "capex10_funds_metodo_selector"
+        if selected_cashflow_plan == CAPEX10_PLAN_A_LABEL:
+            st.session_state[metodo_selector_key] = list(metodo_options)
         with filter_col_2:
             selected_metodos = st.multiselect(
                 "Método",
                 metodo_options,
-                key="capex10_funds_metodo_selector",
+                key=metodo_selector_key,
                 placeholder="Todos",
                 help="Filtra por la columna V Método. Sin selección muestra todos los métodos.",
             )
@@ -25911,6 +26193,9 @@ if st.sidebar.button("🔁 Actualizar datos desde URL"):
     ):
         if key in st.session_state:
             st.session_state[f"{key}__sticky"] = st.session_state[key]
+    for key in list(st.session_state.keys()):
+        if str(key).startswith("capex10_investor_injection_") and not str(key).endswith("__sticky"):
+            st.session_state[f"{key}__sticky"] = st.session_state[key]
     if "telecom_market_tab_selector" in st.session_state:
         st.session_state["restore_telecom_market_tab_after_refresh"] = True
     fetch_remote_file_bytes.clear()
@@ -27212,6 +27497,17 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
     def resolve_fluxial_pre_money(valuation_basis: str, base_usd: float, ebitda_value: float) -> float:
         return base_usd if valuation_basis == "BASE INVERSION + KNOW-HOW" else ebitda_value
 
+    def get_initial_ebitda_average_from_payload(eerr_payload: dict, fallback_value: float) -> float:
+        chart_df = eerr_payload.get("chart_df", pd.DataFrame()) if isinstance(eerr_payload, dict) else pd.DataFrame()
+        if chart_df.empty or "Año" not in chart_df.columns or "EBITDA" not in chart_df.columns:
+            return float(fallback_value or 0.0)
+        year_keys = chart_df["Año"].astype(str).map(normalize_key)
+        early_years = chart_df.loc[year_keys.isin({normalize_key("AÑO 1"), normalize_key("AÑO 2")}), "EBITDA"]
+        early_years = pd.to_numeric(early_years, errors="coerce").dropna()
+        if early_years.empty:
+            return float(fallback_value or 0.0)
+        return float(early_years.mean())
+
     group_widget_defaults = {
         "base": widget_defaults,
         "post": {
@@ -27228,6 +27524,13 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
     # Keep block 2 investment aligned with the "Capital a recaudar" KPI.
     st.session_state[shared_state_key("inv_clp", "base")] = int(round(inversion_clp_default))
     st.session_state.pop(shared_widget_key("inv_clp", "base"), None)
+
+    model_items_tuple = tuple(sorted((str(k), "" if pd.isna(v) else str(v)) for k, v in model_map.items()))
+    eerr_payload_base = (
+        build_eerrv2_payload(df_eerrv2, model_items_tuple, ebitda_unit_default)
+        if not eerrv2_error and not df_eerrv2.empty
+        else {}
+    )
 
     st.markdown(
         """
@@ -27330,12 +27633,10 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
         base_currency_preview = str(st.session_state.get(shared_state_key("investment_currency", "base"), "CLP"))
         volume_preview = float(st.session_state.get(shared_state_key("volume", "base"), volumen_default))
         ebitda_unit_preview = float(st.session_state.get(shared_state_key("ebitda_unit", "base"), ebitda_unit_default))
-        multiple_preview = float(st.session_state.get(shared_state_key("multiple", "base"), multiple_default or 1))
-        valuation_basis_preview = str(st.session_state.get(shared_state_key("valuation_basis", "base"), "EBITDA potencial ciclo inicial"))
-        base_en_usd_preview = (total_base_knowhow_clp / base_fx_preview) if base_fx_preview > 0 else 0.0
-        market_ebitda_base_preview = volume_preview * ebitda_unit_preview
-        ebitda_preview = volume_preview * ebitda_unit_preview * multiple_preview
-        valorizacion_fluxial_preview = resolve_fluxial_pre_money(valuation_basis_preview, base_en_usd_preview, ebitda_preview)
+        ebitda_driver_preview = volume_preview * ebitda_unit_preview
+        market_ebitda_base_preview = get_initial_ebitda_average_from_payload(eerr_payload_base, ebitda_driver_preview)
+        ebitda_preview = market_ebitda_base_preview
+        valorizacion_fluxial_preview = ebitda_preview
         market_multiple_values = [1.0, 3.0, 7.0]
         market_multiple_rows = []
         for market_multiple in market_multiple_values:
@@ -27358,23 +27659,17 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
             f'</div>'
             + "".join(market_multiple_rows)
         )
-        if valuation_basis_preview == "BASE INVERSION + KNOW-HOW":
-            if base_currency_preview == "CLP":
-                valorizacion_fluxial_preview_display = format_clp(valorizacion_fluxial_preview * base_fx_preview)
-            else:
-                valorizacion_fluxial_preview_display = format_usd(valorizacion_fluxial_preview)
-        else:
-            valorizacion_fluxial_preview_display = format_clp(valorizacion_fluxial_preview * base_fx_preview) if base_currency_preview == "CLP" else format_usd(valorizacion_fluxial_preview)
+        valorizacion_fluxial_preview_display = format_clp(valorizacion_fluxial_preview * base_fx_preview) if base_currency_preview == "CLP" else format_usd(valorizacion_fluxial_preview)
         st.markdown(
             f"""
             <div class="val-summary-hero">
               <div class="val-summary-grid">
                 <div>
                   <div class="val-summary-k">EBITDA OBJETIVO EN REGIMEN</div>
-                  <div class="val-summary-t">EBITDA proyectado en escenario de escalamiento</div>
+                  <div class="val-summary-t">EBITDA promedio de arranque comercial</div>
                   <div class="val-summary-v">{valorizacion_fluxial_preview_display}</div>
                   <div class="val-summary-p">
-                    Estimación del EBITDA anual en escenario de operación escalada, considerando venta de turbinas bajo modelo industrial proyectado.
+                    Promedio simple entre el EBITDA del Año 1 y Año 2 de la proyección financiera integrada; la tabla de múltiplos aplica esta base como referencia de valorización.
                   </div>
                 </div>
                 <div class="val-summary-panel">
@@ -28149,11 +28444,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
                 """,
                 unsafe_allow_html=True,
             )
-            eerr_payload = build_eerrv2_payload(
-                df_eerrv2,
-                tuple(sorted((str(k), "" if pd.isna(v) else str(v)) for k, v in model_map.items())),
-                ebitda_unit_default,
-            )
+            eerr_payload = eerr_payload_base
             eerr_data = eerr_payload["eerr_data"]
             cash_data = eerr_payload["cash_data"]
             kpi_map = eerr_payload["kpi_map"]
