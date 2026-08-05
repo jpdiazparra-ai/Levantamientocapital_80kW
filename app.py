@@ -103,15 +103,40 @@ VALORIZACION_CSV_URL_DEFAULT = (
 )
 EERRV2_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vTjX7kyYUm6T9p6Yv21mawfnzO-u67wtKL5Q3YgAh3guZktj2JPW6UCqyk-aspyCYyihnwUNEyOqZZv/"
+    "pub?gid=113353760&single=true&output=csv"
+)
+EERR_DRIVERS_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vQfQcSn40boiOyRvYeX1j5SO2O9w3WoA6DkOEMxxf85v-WiWXuMC-uyBWb3-ff82pUfk1cSaBnmrcqU/"
-    "pub?gid=372370214&single=true&output=csv"
+    "pub?gid=1958901451&single=true&output=csv"
+)
+EERRV2_80KW_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vTjX7kyYUm6T9p6Yv21mawfnzO-u67wtKL5Q3YgAh3guZktj2JPW6UCqyk-aspyCYyihnwUNEyOqZZv/"
+    "pub?gid=1289948636&single=true&output=csv"
+)
+EERRV2_CONSOLIDATED_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vTjX7kyYUm6T9p6Yv21mawfnzO-u67wtKL5Q3YgAh3guZktj2JPW6UCqyk-aspyCYyihnwUNEyOqZZv/"
+    "pub?gid=2128136725&single=true&output=csv"
+)
+EERR_KPIS_MASTER_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vTjX7kyYUm6T9p6Yv21mawfnzO-u67wtKL5Q3YgAh3guZktj2JPW6UCqyk-aspyCYyihnwUNEyOqZZv/"
+    "pub?gid=96206271&single=true&output=csv"
+)
+EERR_DRIVERS_80KW_CSV_URL_DEFAULT = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vRU_XHx8epvcDqQWE2tOc9p7pIr71gsirF2dDyndQIcDvdEeRBuYLKV4lXqwyf2EpX-et3zomThObo7/"
+    "pub?gid=1958901451&single=true&output=csv"
 )
 CAPEX10_PLAN_A_INJECTION_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vTtNr0ewSt0JQSemU9wlOhwnQQjjlRQ8IUltArZqnQ-m_V_8JpOt7ls3dRfcLNs71-hI_OC8wMvNWJw/"
     "pub?output=csv"
 )
-CAPEX10_PLAN_A_INJECTION_SOURCE_VERSION = 2026072702
+CAPEX10_PLAN_A_INJECTION_SOURCE_VERSION = 2026080301
 
 _HERO_CANDIDATES = [
     (Path(__file__).parent / "assets" / "hero_vawt.jpg").resolve(),
@@ -399,6 +424,7 @@ REMOTE_FETCH_TTL_SECONDS = 3600
 REMOTE_CONNECT_TIMEOUT_SECONDS = 5
 REMOTE_READ_TIMEOUT_SECONDS = 45
 REMOTE_FETCH_RETRIES = 2
+INPUT_NAV_EMPTY_DEFAULT_VERSION = 2026080502
 CONTROL_CUT_HISTORY_PATH = Path(__file__).parent / "data" / "historial_cortes.csv"
 CONTROL_CUT_HISTORY_COLUMNS = [
     "ID Corte",
@@ -1386,23 +1412,32 @@ def load_capex10_plan_a_injection_schedule(refresh_nonce: int = 0) -> pd.DataFra
         dtype=str,
     ).fillna("")
     if df.empty:
-        return pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Etiqueta"])
+        return pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Responsable", "Etiqueta"])
     date_col = first_matching_column(df, ["FECHA", "Fecha", "Date"])
     amount_col = first_matching_column(df, ["Monto", "MONTO", "Inyección", "Inyeccion", "Capital"])
+    responsible_col = first_matching_column(df, ["Responsable", "RESPONSABLE"])
     if not date_col or not amount_col:
-        return pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Etiqueta"])
+        return pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Responsable", "Etiqueta"])
     schedule = pd.DataFrame(
         {
             "Fecha": pd.to_datetime(df[date_col], errors="coerce", dayfirst=True),
             "Inyeccion_CLP": df[amount_col].apply(parse_money_clp_robusto),
+            "Responsable": (
+                df[responsible_col].astype(str).str.strip()
+                if responsible_col and responsible_col in df.columns
+                else "Sin responsable"
+            ),
         }
+    )
+    schedule["Responsable"] = schedule["Responsable"].replace(
+        {"": "Sin responsable", "nan": "Sin responsable", "None": "Sin responsable"}
     )
     schedule = schedule[schedule["Fecha"].notna() & (schedule["Inyeccion_CLP"] > 0)].copy()
     if schedule.empty:
-        return pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Etiqueta"])
+        return pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Responsable", "Etiqueta"])
     schedule["_month"] = schedule["Fecha"].dt.to_period("M").dt.to_timestamp()
     schedule = (
-        schedule.groupby("_month", as_index=False)
+        schedule.groupby(["_month", "Responsable"], as_index=False)
         .agg(
             Fecha=("Fecha", "min"),
             Inyeccion_CLP=("Inyeccion_CLP", "sum"),
@@ -1519,6 +1554,11 @@ def load_knowhow_resumen_raw_data(url: str, refresh_nonce: int = 0) -> pd.DataFr
 
 @st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_eerrv2_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
+    return read_remote_csv(url, refresh_nonce=refresh_nonce, dtype=str, header=None)
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def load_eerr_drivers_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
     return read_remote_csv(url, refresh_nonce=refresh_nonce, dtype=str, header=None)
 
 
@@ -2023,13 +2063,22 @@ def style_engineering_table(df: pd.DataFrame, header_color: str = "#2C5783", row
     )
 
 
-def render_engineering_html_table(df: pd.DataFrame, *, bold_labels: set[str] | None = None, height: int = 360) -> None:
+def render_engineering_html_table(
+    df: pd.DataFrame,
+    *,
+    bold_labels: set[str] | None = None,
+    section_labels: set[str] | None = None,
+    height: int = 360,
+) -> None:
     bold_labels = bold_labels or set()
+    section_labels = section_labels or set()
+    section_keys = {normalize_key(label) for label in section_labels}
     header_html = "".join(f"<th>{html.escape(str(col))}</th>" for col in df.columns)
     body_rows = []
     for idx, (_, row) in enumerate(df.iterrows()):
-        row_class = "eng-html-row-alt" if idx % 2 == 0 else ""
         label = clean_sheet_cell(row.iloc[0]) if len(row) > 0 else ""
+        is_section = normalize_key(label) in section_keys
+        row_class = "eng-html-section" if is_section else ("eng-html-row-alt" if idx % 2 == 0 else "")
         emphasis_class = " eng-html-strong" if label in bold_labels else ""
         cells = "".join(
             f'<td class="{emphasis_class.strip()}">{html.escape(str("" if pd.isna(val) else val))}</td>'
@@ -2085,9 +2134,19 @@ def render_engineering_html_table(df: pd.DataFrame, *, bold_labels: set[str] | N
         .eng-html-row-alt td {{
             background:#EAF6FF;
         }}
+        .eng-html-section td {{
+            background:#1F5A86;
+            color:#ffffff;
+            font-weight:900;
+            text-transform:uppercase;
+            letter-spacing:.02em;
+        }}
         .eng-html-strong {{
             font-weight:900;
             color:#0f172a;
+        }}
+        .eng-html-section .eng-html-strong {{
+            color:#ffffff;
         }}
         </style>
         <div class="eng-html-table-wrap">
@@ -2109,6 +2168,7 @@ def parse_model_number(value) -> float:
     s = str(value).strip()
     if not s:
         return 0.0
+    neg = bool(re.search(r"\([^)]*\d[^)]*\)", s))
     s = s.replace("US$", "").replace("USD", "").replace("USS", "").replace("$", "").replace("x", "").replace("%", "")
     s = s.replace(" ", "").replace("\u00a0", "")
     s = re.sub(r"[^0-9,.\-]", "", s)
@@ -2130,7 +2190,8 @@ def parse_model_number(value) -> float:
             if len(right) == 3 and left.replace("-", "").isdigit():
                 s = left + right
     try:
-        return float(s)
+        num = float(s)
+        return -num if neg and num > 0 else num
     except ValueError:
         return 0.0
 
@@ -2166,12 +2227,379 @@ def get_valorizacion_model_map(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     return model_df, model_map
 
 
+def get_eerr_drivers_model_map(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    if df is None or df.empty or df.shape[1] < 2:
+        return pd.DataFrame(columns=["Label", "Value", "Comment"]), {}
+
+    header_idx = None
+    for idx in range(len(df.index)):
+        row_keys = [normalize_key(clean_sheet_cell(value)) for value in df.iloc[idx].tolist()]
+        if "variable" in row_keys and "valor" in row_keys:
+            header_idx = idx
+            break
+    if header_idx is None:
+        return pd.DataFrame(columns=["Label", "Value", "Comment"]), {}
+
+    headers = [clean_sheet_cell(value) for value in df.iloc[header_idx].tolist()]
+    data = df.iloc[header_idx + 1 :].copy()
+    data.columns = headers
+    label_col = next((col for col in data.columns if normalize_key(col) == "variable"), data.columns[0])
+    value_col = next((col for col in data.columns if normalize_key(col) == "valor"), data.columns[1])
+    comment_col = next((col for col in data.columns if normalize_key(col) in {"comentarios", "comentario"}), None)
+
+    model_df = pd.DataFrame(
+        {
+            "Label": data[label_col].map(clean_sheet_cell),
+            "Value": data[value_col].map(clean_sheet_cell),
+            "Comment": data[comment_col].map(clean_sheet_cell) if comment_col else "",
+        }
+    )
+    model_df = model_df[model_df["Label"] != ""].reset_index(drop=True)
+    model_map = {normalize_key(row["Label"]): row["Value"] for _, row in model_df.iterrows()}
+    return model_df, model_map
+
+
+def get_eerr_kpis_master_map(df: pd.DataFrame) -> dict:
+    if df is None or df.empty or df.shape[1] < 2:
+        return {}
+
+    header_idx = None
+    for idx in range(len(df.index)):
+        row_keys = [normalize_key(clean_sheet_cell(value)) for value in df.iloc[idx].tolist()]
+        if "indicador" in row_keys and "consolidado" in row_keys:
+            header_idx = idx
+            break
+    if header_idx is None:
+        return {}
+
+    headers = [clean_sheet_cell(value) or f"Campo {col_idx + 1}" for col_idx, value in enumerate(df.iloc[header_idx].tolist())]
+    data = df.iloc[header_idx + 1 :].copy()
+    data.columns = headers
+    indicator_col = next((col for col in data.columns if normalize_key(col) == "indicador"), data.columns[0])
+    consolidated_col = next((col for col in data.columns if normalize_key(col) == "consolidado"), data.columns[1])
+
+    kpi_map = {}
+    for _, row in data.iterrows():
+        label = clean_sheet_cell(row.get(indicator_col, ""))
+        if not label or normalize_key(label) == normalize_key("COMPARACIÓN POR PRODUCTO"):
+            break
+        value = clean_sheet_cell(row.get(consolidated_col, ""))
+        if value:
+            kpi_map[normalize_key(label)] = value
+    return kpi_map
+
+
+def get_eerr_kpis_master_product_map(df: pd.DataFrame, product_label: str) -> dict:
+    if df is None or df.empty or df.shape[1] < 3:
+        return {}
+
+    header_idx = None
+    product_key = normalize_key(product_label)
+    for idx in range(len(df.index)):
+        row_keys = [normalize_key(clean_sheet_cell(value)) for value in df.iloc[idx].tolist()]
+        if "indicador" in row_keys and product_key in row_keys:
+            header_idx = idx
+            break
+    if header_idx is None:
+        return {}
+
+    headers = [clean_sheet_cell(value) or f"Campo {col_idx + 1}" for col_idx, value in enumerate(df.iloc[header_idx].tolist())]
+    data = df.iloc[header_idx + 1 :].copy()
+    data.columns = headers
+    indicator_col = next((col for col in data.columns if normalize_key(col) == "indicador"), data.columns[0])
+    product_col = next((col for col in data.columns if normalize_key(col) == product_key), None)
+    if not product_col:
+        return {}
+
+    kpi_map = {}
+    for _, row in data.iterrows():
+        label = clean_sheet_cell(row.get(indicator_col, ""))
+        if not label:
+            continue
+        value = clean_sheet_cell(row.get(product_col, ""))
+        if value:
+            kpi_map[normalize_key(label)] = value
+    return kpi_map
+
+
+def apply_kpis_master_to_payload(payload: dict, kpis_master_map: dict, *, source_label: str = "KPIs Maestro") -> dict:
+    if not payload or not kpis_master_map:
+        return payload
+    updated_payload = dict(payload)
+    financial_kpis = dict(updated_payload.get("financial_kpis", {}))
+
+    if normalize_key("VAN proyecto") in kpis_master_map:
+        financial_kpis["van"] = parse_model_number(kpis_master_map[normalize_key("VAN proyecto")])
+    elif normalize_key("VAN") in kpis_master_map:
+        financial_kpis["van"] = parse_model_number(kpis_master_map[normalize_key("VAN")])
+    if normalize_key("TIR proyecto") in kpis_master_map:
+        financial_kpis["tir"] = parse_model_percent(kpis_master_map[normalize_key("TIR proyecto")])
+    elif normalize_key("TIR") in kpis_master_map:
+        financial_kpis["tir"] = parse_model_percent(kpis_master_map[normalize_key("TIR")])
+    if normalize_key("Payback simple") in kpis_master_map:
+        financial_kpis["payback"] = parse_model_number(kpis_master_map[normalize_key("Payback simple")])
+    if normalize_key("Capital trabajo máximo") in kpis_master_map:
+        financial_kpis["capital_trabajo_max"] = parse_model_number(kpis_master_map[normalize_key("Capital trabajo máximo")])
+    if normalize_key("EBITDA año 5") in kpis_master_map:
+        financial_kpis["ebitda_year_5"] = parse_model_number(kpis_master_map[normalize_key("EBITDA año 5")])
+
+    kpi_map = dict(updated_payload.get("kpi_map", {}))
+    if normalize_key("Margen EBITDA promedio") in kpis_master_map:
+        kpi_map["Margen EBITDA promedio (%)"] = kpis_master_map[normalize_key("Margen EBITDA promedio")]
+    updated_payload["financial_kpis"] = financial_kpis
+    updated_payload["kpi_map"] = kpi_map
+    updated_payload["kpis_master_source"] = True
+    updated_payload["kpis_master_source_label"] = source_label
+    return updated_payload
+
+
 def get_first_model_value(model_map: dict, candidates: list[str], default=0.0) -> float:
     for candidate in candidates:
         key = normalize_key(candidate)
         if key in model_map:
             return parse_model_number(model_map.get(key))
     return float(default)
+
+
+def build_eerr10_summary_payload(df_eerrv2: pd.DataFrame, ebitda_unit_default: float) -> dict:
+    summary_items: list[tuple[str, str]] = []
+    status_items: list[tuple[str, str]] = []
+    active_section = ""
+
+    for _, raw_row in df_eerrv2.fillna("").iterrows():
+        label = clean_sheet_cell(raw_row.iloc[0] if len(raw_row) > 0 else "")
+        value = clean_sheet_cell(raw_row.iloc[1] if len(raw_row) > 1 else "")
+        if not label and not value:
+            continue
+        label_key = normalize_key(label)
+        if label_key in {"modelostatus", "resultadosconsolidados"}:
+            active_section = label_key
+            continue
+        if not value:
+            continue
+        if active_section == "modelostatus":
+            status_items.append((label, value))
+        elif active_section == "resultadosconsolidados":
+            summary_items.append((label, value))
+
+    values_by_key = {normalize_key(label): value for label, value in [*status_items, *summary_items]}
+    ingresos_year_5 = parse_model_number(values_by_key.get(normalize_key("Ingresos año 5")))
+    ebitda_year_5 = parse_model_number(values_by_key.get(normalize_key("EBITDA año 5")))
+    van_project = parse_model_number(values_by_key.get(normalize_key("VAN proyecto – escenario seleccionado")))
+    tir_project = parse_model_percent(values_by_key.get(normalize_key("TIR proyecto")))
+    payback_simple = parse_model_number(values_by_key.get(normalize_key("Payback simple")))
+    capex_initial = parse_model_number(values_by_key.get(normalize_key("Aporte de capital inicial requerido")))
+    van_without_terminal = parse_model_number(values_by_key.get(normalize_key("VAN sin valor terminal")))
+    tir_shareholder = parse_model_percent(values_by_key.get(normalize_key("TIR del accionista")))
+    ebitda_margin = ebitda_year_5 / ingresos_year_5 if ingresos_year_5 else 0.0
+
+    eerr_rows = [
+        ("Ingresos año 5", format_usd(ingresos_year_5)),
+        ("EBITDA año 5", format_usd(ebitda_year_5)),
+        ("Margen EBITDA año 5", f"{ebitda_margin:.1%}"),
+        ("VAN proyecto", format_usd(van_project)),
+        ("TIR proyecto", f"{tir_project:.1%}" if tir_project else "-"),
+        ("Payback simple", values_by_key.get(normalize_key("Payback simple"), "-")),
+        ("Payback descontado", values_by_key.get(normalize_key("Payback descontado"), "-")),
+        ("DSCR mínimo", values_by_key.get(normalize_key("DSCR mínimo"), "-")),
+    ]
+    eerr_data = pd.DataFrame(eerr_rows, columns=["Partida", "Valor"])
+
+    cash_rows = [
+        ("Aporte de capital inicial requerido", values_by_key.get(normalize_key("Aporte de capital inicial requerido"), "-")),
+        ("VAN sin valor terminal", format_usd(van_without_terminal)),
+        ("TIR del accionista", f"{tir_shareholder:.1%}" if tir_shareholder else "-"),
+    ]
+    cash_data = pd.DataFrame(cash_rows, columns=["Partida", "Valor"])
+
+    chart_df = pd.DataFrame(
+        {
+            "Año": ["AÑO 0", "AÑO 1", "AÑO 2", "AÑO 3", "AÑO 4", "AÑO 5"],
+            "Ingresos": [0.0, 0.0, 0.0, 0.0, 0.0, ingresos_year_5],
+            "EBITDA": [0.0, 0.0, 0.0, 0.0, 0.0, ebitda_year_5],
+            "Caja_neta": [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan],
+        }
+    )
+    chart_df["Ingresos_MM"] = chart_df["Ingresos"] / 1e6
+    chart_df["EBITDA_MM"] = chart_df["EBITDA"] / 1e6
+    chart_df["Caja_MM"] = chart_df["Caja_neta"] / 1e6
+
+    return {
+        "eerr_data": eerr_data,
+        "cash_data": cash_data,
+        "kpi_map": {
+            "Ingresos promedio (USD)": format_usd(ingresos_year_5),
+            "EBITDA promedio (USD)": format_usd(ebitda_year_5),
+            "Margen EBITDA promedio (%)": f"{ebitda_margin:.1%}",
+            "Saldo caja final año 5 (USD)": "-",
+        },
+        "precio_venta_turbina": 0.0,
+        "costo_estimado_turbina": 0.0,
+        "ebitda_unitario_val": ebitda_year_5 or float(ebitda_unit_default or 0.0),
+        "capex_inicial_eerr": capex_initial,
+        "equity_inicial": capex_initial,
+        "chart_df": chart_df,
+        "financial_kpis": {
+            "van": van_project,
+            "tir": tir_project,
+            "payback": payback_simple,
+            "ebitda_year_5": ebitda_year_5,
+            "cash_year_5": np.nan,
+            "profitability_index": np.nan,
+        },
+        "source_structure": "summary_kv",
+    }
+
+
+def build_eerr_projection_matrix_payload(df_eerrv2: pd.DataFrame, ebitda_unit_default: float) -> dict:
+    df_raw = df_eerrv2.fillna("").copy()
+    header_idx = None
+    for idx in range(len(df_raw.index)):
+        row_keys = [normalize_key(clean_sheet_cell(value)) for value in df_raw.iloc[idx].tolist()]
+        if "partida" in row_keys and "unidad" in row_keys and any(key.startswith("ano") for key in row_keys):
+            header_idx = idx
+            break
+    if header_idx is None:
+        return build_eerr10_summary_payload(df_eerrv2, ebitda_unit_default)
+
+    headers = [clean_sheet_cell(value) for value in df_raw.iloc[header_idx].tolist()]
+    deduped_headers = []
+    seen_headers: dict[str, int] = {}
+    for col_idx, header in enumerate(headers):
+        clean_header = header or f"Campo {col_idx + 1}"
+        count = seen_headers.get(clean_header, 0)
+        seen_headers[clean_header] = count + 1
+        deduped_headers.append(clean_header if count == 0 else f"{clean_header}_{count + 1}")
+
+    records = []
+    for row_idx in range(header_idx + 1, len(df_raw.index)):
+        values = [clean_sheet_cell(value) for value in df_raw.iloc[row_idx].tolist()]
+        if not any(values):
+            continue
+        first_key = normalize_key(values[0] if values else "")
+        second_key = normalize_key(values[1] if len(values) > 1 else "")
+        if not first_key and not second_key:
+            continue
+        if first_key == "" and all(normalize_key(value).isdigit() for value in values[2:] if clean_sheet_cell(value)):
+            continue
+        records.append({deduped_headers[col_idx]: values[col_idx] if col_idx < len(values) else "" for col_idx in range(len(deduped_headers))})
+
+    full_table = pd.DataFrame(records, columns=deduped_headers)
+    if full_table.empty or "Partida" not in full_table.columns:
+        return build_eerr10_summary_payload(df_eerrv2, ebitda_unit_default)
+
+    section_keys = {
+        normalize_key("ESTADO DE RESULTADOS"),
+        normalize_key("CAPITAL DE TRABAJO"),
+        normalize_key("FLUJO LIBRE DEL PROYECTO"),
+    }
+    full_table["_section_key"] = full_table["Partida"].map(normalize_key)
+    section_positions = {
+        section_key: int(full_table.index[full_table["_section_key"] == section_key][0])
+        for section_key in section_keys
+        if not full_table.index[full_table["_section_key"] == section_key].empty
+    }
+    flujo_start = section_positions.get(normalize_key("FLUJO LIBRE DEL PROYECTO"), len(full_table))
+
+    year_cols = [col for col in full_table.columns if normalize_key(col).startswith("ano")]
+    display_cols = [col for col in ["Partida", "Unidad", *year_cols] if col in full_table.columns]
+    detected_section_labels = set()
+    for _, row in full_table.iterrows():
+        label = clean_sheet_cell(row.get("Partida", ""))
+        if not label:
+            continue
+        unit = clean_sheet_cell(row.get("Unidad", ""))
+        year_values = [clean_sheet_cell(row.get(year, "")) for year in year_cols]
+        if not unit and not any(year_values):
+            detected_section_labels.add(label)
+
+    section_positions = {
+        normalize_key(row["Partida"]): int(idx)
+        for idx, row in full_table.iterrows()
+        if clean_sheet_cell(row.get("Partida", "")) in detected_section_labels
+    }
+    cash_start_candidates = [
+        pos
+        for section_key, pos in section_positions.items()
+        if "flujolibre" in section_key or ("capitaldetrabajo" in section_key and "flujo" in section_key)
+    ]
+    flujo_start = min(cash_start_candidates) if cash_start_candidates else section_positions.get(normalize_key("FLUJO LIBRE DEL PROYECTO"), len(full_table))
+
+    eerr_data = full_table.loc[full_table.index < flujo_start, display_cols].reset_index(drop=True)
+    cash_data = full_table.loc[full_table.index >= flujo_start, display_cols].reset_index(drop=True)
+
+    def table_value(label: str, year: str) -> float:
+        if not year_cols:
+            return 0.0
+        label_rows = full_table.loc[full_table["Partida"].astype(str).map(normalize_key) == normalize_key(label)]
+        if label_rows.empty or year not in full_table.columns:
+            return 0.0
+        return parse_model_number(label_rows.iloc[0][year])
+
+    def first_table_value(labels: list[str], year: str) -> float:
+        for label in labels:
+            value = table_value(label, year)
+            if value:
+                return value
+        return 0.0
+
+    chart_df = pd.DataFrame({"Año": year_cols})
+    chart_df["Ingresos"] = [first_table_value(["Ingresos", "Ingresos consolidados"], year) for year in year_cols]
+    chart_df["EBITDA"] = [first_table_value(["EBITDA", "EBITDA consolidado"], year) for year in year_cols]
+    chart_df["Caja_neta"] = [first_table_value(["Flujo libre proyecto", "FCFF antes valor terminal"], year) for year in year_cols]
+    chart_df["Ingresos_MM"] = chart_df["Ingresos"] / 1e6
+    chart_df["EBITDA_MM"] = chart_df["EBITDA"] / 1e6
+    chart_df["Caja_MM"] = chart_df["Caja_neta"] / 1e6
+
+    active_years = [year for year in year_cols if normalize_key(year) != normalize_key("Año 0")]
+    ingresos_series = pd.Series(pd.to_numeric([first_table_value(["Ingresos", "Ingresos consolidados"], year) for year in active_years], errors="coerce")).replace(0, np.nan).dropna()
+    ebitda_series = pd.Series(pd.to_numeric([first_table_value(["EBITDA", "EBITDA consolidado"], year) for year in active_years], errors="coerce")).replace(0, np.nan).dropna()
+    ingresos_prom = float(ingresos_series.mean()) if not ingresos_series.empty else 0.0
+    ebitda_prom = float(ebitda_series.mean()) if not ebitda_series.empty else 0.0
+    ebitda_margin_prom = ebitda_prom / ingresos_prom if ingresos_prom else 0.0
+    last_year = year_cols[-1] if year_cols else "Año 10"
+    capex_initial = abs(table_value("CAPEX inicial / sostenimiento", "Año 0"))
+    cash_last = first_table_value(["Flujo libre proyecto", "FCFF antes valor terminal"], last_year)
+    free_cashflows = [first_table_value(["Flujo libre proyecto", "FCFF antes valor terminal"], year) for year in year_cols]
+    initial_investment = abs(free_cashflows[0]) if free_cashflows else capex_initial
+    operating_cashflows = free_cashflows[1:] if len(free_cashflows) > 1 else []
+    van_fin = financial_npv(0.12, free_cashflows) if free_cashflows else np.nan
+    tir_fin = financial_irr(free_cashflows) if free_cashflows else np.nan
+    payback_fin = financial_payback_years(initial_investment, operating_cashflows) if initial_investment > 0 else np.nan
+    pv_positive_cashflows = sum(
+        cashflow / ((1.0 + 0.12) ** idx)
+        for idx, cashflow in enumerate(operating_cashflows, start=1)
+    )
+    profitability_index_fin = pv_positive_cashflows / initial_investment if initial_investment > 0 else np.nan
+
+    return {
+        "eerr_data": eerr_data,
+        "cash_data": cash_data,
+        "kpi_map": {
+            "Ingresos promedio (USD)": format_usd(ingresos_prom),
+            "EBITDA promedio (USD)": format_usd(ebitda_prom),
+            "Margen EBITDA promedio (%)": f"{ebitda_margin_prom:.1%}",
+            "Saldo caja final año 5 (USD)": format_usd(first_table_value(["Flujo libre proyecto", "FCFF antes valor terminal"], "Año 5")),
+        },
+        "precio_venta_turbina": table_value("Precio promedio", "Año 1"),
+        "costo_estimado_turbina": table_value("Costo unitario", "Año 1"),
+        "ebitda_unitario_val": table_value("EBITDA", "Año 1") / table_value("Unidades vendidas", "Año 1") if table_value("Unidades vendidas", "Año 1") else float(ebitda_unit_default or 0.0),
+        "capex_inicial_eerr": capex_initial,
+        "equity_inicial": capex_initial,
+        "chart_df": chart_df,
+        "financial_kpis": {
+            "van": van_fin,
+            "tir": tir_fin,
+            "payback": payback_fin,
+            "ebitda_year_5": first_table_value(["EBITDA", "EBITDA consolidado"], "Año 5"),
+            "cash_year_5": first_table_value(["Flujo libre proyecto", "FCFF antes valor terminal"], "Año 5"),
+            "profitability_index": profitability_index_fin,
+        },
+        "section_labels": detected_section_labels,
+        "source_structure": "projection_matrix",
+        "last_projection_year": last_year,
+        "last_cashflow": cash_last,
+    }
 
 
 def _build_sheet_table_from_row(raw_df: pd.DataFrame, start_row_idx: int = 19, first_col_name: str = "PoP") -> pd.DataFrame:
@@ -2290,7 +2718,12 @@ def first_matching_column(df: pd.DataFrame, candidates: list[str]) -> str | None
 
 
 @st.cache_data(show_spinner=False, ttl=120)
-def build_eerrv2_payload(df_eerrv2: pd.DataFrame, model_items: tuple[tuple[str, str], ...], ebitda_unit_default: float) -> dict:
+def build_eerrv2_payload(
+    df_eerrv2: pd.DataFrame,
+    model_items: tuple[tuple[str, str], ...],
+    ebitda_unit_default: float,
+    driver_items: tuple[tuple[str, str], ...] = (),
+) -> dict:
     payload = {
         "eerr_data": pd.DataFrame(),
         "cash_data": pd.DataFrame(),
@@ -2299,12 +2732,23 @@ def build_eerrv2_payload(df_eerrv2: pd.DataFrame, model_items: tuple[tuple[str, 
         "costo_estimado_turbina": 0.0,
         "ebitda_unitario_val": float(ebitda_unit_default or 0.0),
         "capex_inicial_eerr": 0.0,
+        "equity_inicial": 0.0,
         "chart_df": pd.DataFrame(columns=["Año", "Ingresos", "EBITDA", "Caja_neta", "Ingresos_MM", "EBITDA_MM", "Caja_MM"]),
     }
     if df_eerrv2 is None or df_eerrv2.empty or df_eerrv2.shape[0] < 3:
         return payload
+    first_col_keys = {normalize_key(clean_sheet_cell(value)) for value in df_eerrv2.iloc[:, 0].tolist()}
+    row_keys = [
+        {normalize_key(clean_sheet_cell(value)) for value in df_eerrv2.iloc[idx].tolist()}
+        for idx in range(min(len(df_eerrv2.index), 8))
+    ]
+    if any("partida" in keys and "unidad" in keys and any(key.startswith("ano") for key in keys) for keys in row_keys):
+        return build_eerr_projection_matrix_payload(df_eerrv2, ebitda_unit_default)
+    if {"modelostatus", "resultadosconsolidados"}.issubset(first_col_keys):
+        return build_eerr10_summary_payload(df_eerrv2, ebitda_unit_default)
 
     model_map = dict(model_items)
+    driver_map = dict(driver_items)
 
     eerr_headers = [clean_sheet_cell(v) for v in df_eerrv2.iloc[1, 1:8].tolist()]
     eerr_data = df_eerrv2.iloc[2:10, 1:8].copy()
@@ -2329,20 +2773,42 @@ def build_eerrv2_payload(df_eerrv2: pd.DataFrame, model_items: tuple[tuple[str, 
         if clean_sheet_cell(row[kpi_headers[0]])
     }
 
+    active_driver_map = driver_map or model_map
     precio_venta_turbina = get_first_model_value(
-        model_map,
-        ["Precio venta / turbina", "Precio venta/turbina", "Precio venta turbina"],
+        active_driver_map,
+        [
+            "Precio venta / turbina",
+            "Precio venta/turbina",
+            "Precio venta turbina",
+            "Precio por turbina 10kW (USD)",
+            "Precio por turbina 80kW (USD)",
+        ],
     )
     costo_estimado_turbina = get_first_model_value(
-        model_map,
-        ["Costo estimado / turbina", "Costo estimado/turbina", "Costo estimado turbina"],
+        active_driver_map,
+        [
+            "Costo estimado / turbina",
+            "Costo estimado/turbina",
+            "Costo estimado turbina",
+            "Costo variable base por unidad (USD)",
+        ],
     )
+    unidades_base_driver = get_first_model_value(active_driver_map, ["Unidades vendidas (año base)"])
+    opex_pct_driver = parse_model_percent(active_driver_map.get(normalize_key("OPEX sobre ingresos (%)"), "0%"))
+    arriendo_driver = get_first_model_value(active_driver_map, ["Arriendo"])
+    ebitda_unitario_driver = 0.0
+    if precio_venta_turbina and unidades_base_driver:
+        opex_unitario_driver = ((precio_venta_turbina * unidades_base_driver * opex_pct_driver) + arriendo_driver) / unidades_base_driver
+        ebitda_unitario_driver = precio_venta_turbina - costo_estimado_turbina - opex_unitario_driver
     ebitda_unitario_val = get_first_model_value(
-        model_map,
+        active_driver_map,
         ["EBITDA unitario", "EBITDA unitario de referencia"],
-        default=ebitda_unit_default,
+        default=ebitda_unitario_driver or ebitda_unit_default,
     )
-    capex_inicial_eerr = parse_model_number(clean_sheet_cell(df_eerrv2.iloc[14, 2])) if df_eerrv2.shape[0] > 14 and df_eerrv2.shape[1] > 2 else 0.0
+    capex_inicial_eerr = get_first_model_value(active_driver_map, ["CAPEX inicial (USD)", "CAPEX inicial"])
+    if not capex_inicial_eerr:
+        capex_inicial_eerr = parse_model_number(clean_sheet_cell(df_eerrv2.iloc[14, 2])) if df_eerrv2.shape[0] > 14 and df_eerrv2.shape[1] > 2 else 0.0
+    equity_inicial = get_first_model_value(active_driver_map, ["Equity", "Equity inicial (USD)", "Equity inicial"])
 
     eerr_numeric = eerr_data.copy()
     series_cols = [c for c in eerr_numeric.columns if c != "Partida"]
@@ -2379,10 +2845,191 @@ def build_eerrv2_payload(df_eerrv2: pd.DataFrame, model_items: tuple[tuple[str, 
             "costo_estimado_turbina": costo_estimado_turbina,
             "ebitda_unitario_val": ebitda_unitario_val,
             "capex_inicial_eerr": capex_inicial_eerr,
+            "equity_inicial": equity_inicial,
             "chart_df": chart_df,
         }
     )
     return payload
+
+
+def combine_eerrv2_payloads(base_payload: dict, extra_payload: dict) -> dict:
+    def table_value(table: pd.DataFrame, label: str, year: str) -> float:
+        if table is None or table.empty or "Partida" not in table.columns or year not in table.columns:
+            return 0.0
+        rows = table.loc[table["Partida"].astype(str).map(normalize_key) == normalize_key(label), year]
+        if rows.empty:
+            return 0.0
+        return parse_model_number(rows.iloc[0])
+
+    def money_cell(value: float) -> str:
+        formatted = format_usd(abs(float(value or 0.0)))
+        return f"({formatted})" if value < 0 else formatted
+
+    def pct_cell(value: float) -> str:
+        return f"{value:.0%}" if np.isfinite(value) else "0%"
+
+    base_chart = base_payload.get("chart_df", pd.DataFrame()) if isinstance(base_payload, dict) else pd.DataFrame()
+    extra_chart = extra_payload.get("chart_df", pd.DataFrame()) if isinstance(extra_payload, dict) else pd.DataFrame()
+    years = []
+    for chart_df in (base_chart, extra_chart):
+        if not chart_df.empty and "Año" in chart_df.columns:
+            for year in chart_df["Año"].astype(str).tolist():
+                if year not in years:
+                    years.append(year)
+    if not years:
+        years = ["AÑO 0", "AÑO 1", "AÑO 2", "AÑO 3", "AÑO 4", "AÑO 5"]
+
+    eerr_base = base_payload.get("eerr_data", pd.DataFrame()) if isinstance(base_payload, dict) else pd.DataFrame()
+    eerr_extra = extra_payload.get("eerr_data", pd.DataFrame()) if isinstance(extra_payload, dict) else pd.DataFrame()
+    cash_base = base_payload.get("cash_data", pd.DataFrame()) if isinstance(base_payload, dict) else pd.DataFrame()
+    cash_extra = extra_payload.get("cash_data", pd.DataFrame()) if isinstance(extra_payload, dict) else pd.DataFrame()
+
+    eerr_rows = []
+    if base_payload and extra_payload:
+        split_specs = [
+            ("Unidades 10kW", eerr_base, "Unidades", False),
+            ("Unidades 80kW", eerr_extra, "Unidades", False),
+            ("Ingresos 10kW (USD)", eerr_base, "Ingresos (USD)", True),
+            ("Ingresos 80kW (USD)", eerr_extra, "Ingresos (USD)", True),
+            ("Costo de ventas 10kW (USD)", eerr_base, "Costo de ventas (USD)", True),
+            ("Costo de ventas 80kW (USD)", eerr_extra, "Costo de ventas (USD)", True),
+        ]
+        for display_label, source_table, source_label, is_money in split_specs:
+            row = {"Partida": display_label}
+            for year in years:
+                value = table_value(source_table, source_label, year)
+                row[year] = money_cell(value) if is_money else f"{value:,.0f}".replace(",", ".")
+            eerr_rows.append(row)
+
+    for label in ["Unidades", "Ingresos (USD)", "Costo de ventas (USD)", "Margen bruto (USD)", "Margen bruto (%)", "OPEX (GAV + Mrkt + I+D+ARR)", "EBITDA (USD)", "Margen EBITDA (%)"]:
+        row = {"Partida": label}
+        for year in years:
+            ingresos = table_value(eerr_base, "Ingresos (USD)", year) + table_value(eerr_extra, "Ingresos (USD)", year)
+            margen_bruto = table_value(eerr_base, "Margen bruto (USD)", year) + table_value(eerr_extra, "Margen bruto (USD)", year)
+            ebitda = table_value(eerr_base, "EBITDA (USD)", year) + table_value(eerr_extra, "EBITDA (USD)", year)
+            if label == "Unidades":
+                row[year] = f"{table_value(eerr_base, label, year) + table_value(eerr_extra, label, year):,.0f}".replace(",", ".")
+            elif label == "Margen bruto (%)":
+                row[year] = pct_cell(margen_bruto / ingresos if ingresos else 0.0)
+            elif label == "Margen EBITDA (%)":
+                row[year] = pct_cell(ebitda / ingresos if ingresos else 0.0)
+            else:
+                row[year] = money_cell(table_value(eerr_base, label, year) + table_value(eerr_extra, label, year))
+        eerr_rows.append(row)
+    eerr_data = pd.DataFrame(eerr_rows, columns=["Partida", *years])
+
+    cash_labels = []
+    for table in (cash_base, cash_extra):
+        if table is not None and not table.empty and "Partida" in table.columns:
+            for label in table["Partida"].astype(str).tolist():
+                if label and label not in cash_labels:
+                    cash_labels.append(label)
+    cash_rows = []
+    for label in cash_labels:
+        row = {"Partida": label}
+        for year in years:
+            row[year] = money_cell(table_value(cash_base, label, year) + table_value(cash_extra, label, year))
+        cash_rows.append(row)
+    cash_data = pd.DataFrame(cash_rows, columns=["Partida", *years])
+
+    chart_df = pd.DataFrame({"Año": years})
+    chart_df["Ingresos"] = [table_value(eerr_data, "Ingresos (USD)", year) for year in years]
+    chart_df["EBITDA"] = [table_value(eerr_data, "EBITDA (USD)", year) for year in years]
+    chart_df["Caja_neta"] = [table_value(cash_data, "Flujo de caja neto", year) for year in years]
+    chart_df["Ingresos_MM"] = chart_df["Ingresos"] / 1e6
+    chart_df["EBITDA_MM"] = chart_df["EBITDA"] / 1e6
+    chart_df["Caja_MM"] = chart_df["Caja_neta"] / 1e6
+
+    ingresos_prom = float(pd.to_numeric(chart_df.loc[chart_df["Año"] != "AÑO 0", "Ingresos"], errors="coerce").mean() or 0.0)
+    ebitda_prom = float(pd.to_numeric(chart_df.loc[chart_df["Año"] != "AÑO 0", "EBITDA"], errors="coerce").mean() or 0.0)
+    saldo_year_5 = get_ebitda_for_year_from_chart(chart_df, "Caja_neta", "AÑO 5")
+    year_1_units = table_value(eerr_data, "Unidades", "AÑO 1")
+    precio_unit = table_value(eerr_data, "Ingresos (USD)", "AÑO 1") / year_1_units if year_1_units else 0.0
+    costo_unit = table_value(eerr_data, "Costo de ventas (USD)", "AÑO 1") / year_1_units if year_1_units else 0.0
+    ebitda_unit = table_value(eerr_data, "EBITDA (USD)", "AÑO 1") / year_1_units if year_1_units else 0.0
+
+    return {
+        "eerr_data": eerr_data,
+        "cash_data": cash_data,
+        "kpi_map": {
+            "Ingresos promedio (USD)": format_usd(ingresos_prom),
+            "EBITDA promedio (USD)": format_usd(ebitda_prom),
+            "Margen EBITDA promedio (%)": pct_cell(ebitda_prom / ingresos_prom if ingresos_prom else 0.0),
+            "Saldo caja final año 5 (USD)": format_usd(saldo_year_5),
+        },
+        "precio_venta_turbina": precio_unit,
+        "costo_estimado_turbina": costo_unit,
+        "ebitda_unitario_val": ebitda_unit,
+        "capex_inicial_eerr": float(base_payload.get("capex_inicial_eerr", 0.0) or 0.0) + float(extra_payload.get("capex_inicial_eerr", 0.0) or 0.0),
+        "equity_inicial": float(base_payload.get("equity_inicial", 0.0) or 0.0) + float(extra_payload.get("equity_inicial", 0.0) or 0.0),
+        "drivers_by_source": {
+            "10kW": {
+                "precio_venta_turbina": float(base_payload.get("precio_venta_turbina", 0.0) or 0.0),
+                "costo_estimado_turbina": float(base_payload.get("costo_estimado_turbina", 0.0) or 0.0),
+                "ebitda_unitario_val": float(base_payload.get("ebitda_unitario_val", 0.0) or 0.0),
+                "capex_inicial_eerr": float(base_payload.get("capex_inicial_eerr", 0.0) or 0.0),
+            },
+            "80kW": {
+                "precio_venta_turbina": float(extra_payload.get("precio_venta_turbina", 0.0) or 0.0),
+                "costo_estimado_turbina": float(extra_payload.get("costo_estimado_turbina", 0.0) or 0.0),
+                "ebitda_unitario_val": float(extra_payload.get("ebitda_unitario_val", 0.0) or 0.0),
+                "capex_inicial_eerr": float(extra_payload.get("capex_inicial_eerr", 0.0) or 0.0),
+            },
+        },
+        "chart_df": chart_df,
+    }
+
+
+def get_ebitda_for_year_from_chart(chart_df: pd.DataFrame, value_col: str, year_label: str) -> float:
+    if chart_df is None or chart_df.empty or "Año" not in chart_df.columns or value_col not in chart_df.columns:
+        return 0.0
+    year_rows = chart_df.loc[chart_df["Año"].astype(str).map(normalize_key) == normalize_key(year_label), value_col]
+    year_rows = pd.to_numeric(year_rows, errors="coerce").dropna()
+    return float(year_rows.iloc[0]) if not year_rows.empty else 0.0
+
+
+def financial_npv(rate: float, cashflows: list[float]) -> float:
+    return sum(float(value or 0.0) / ((1.0 + rate) ** idx) for idx, value in enumerate(cashflows))
+
+
+def financial_irr(cashflows: list[float]) -> float:
+    values = [float(value or 0.0) for value in cashflows]
+    if not values or min(values) >= 0 or max(values) <= 0:
+        return np.nan
+    low, high = -0.95, 10.0
+    low_npv = financial_npv(low, values)
+    high_npv = financial_npv(high, values)
+    while np.isfinite(low_npv) and np.isfinite(high_npv) and low_npv * high_npv > 0 and high < 10_000:
+        high *= 2.0
+        high_npv = financial_npv(high, values)
+    if not np.isfinite(low_npv) or not np.isfinite(high_npv) or low_npv * high_npv > 0:
+        return np.nan
+    for _ in range(100):
+        mid = (low + high) / 2.0
+        mid_npv = financial_npv(mid, values)
+        if abs(mid_npv) < 1e-6:
+            return mid
+        if low_npv * mid_npv <= 0:
+            high = mid
+            high_npv = mid_npv
+        else:
+            low = mid
+            low_npv = mid_npv
+    return (low + high) / 2.0
+
+
+def financial_payback_years(investment: float, annual_cashflows: list[float]) -> float:
+    remaining = float(investment or 0.0)
+    if remaining <= 0:
+        return np.nan
+    for idx, cashflow in enumerate(annual_cashflows, start=1):
+        cashflow = float(cashflow or 0.0)
+        if cashflow <= 0:
+            continue
+        if cashflow >= remaining:
+            return (idx - 1) + (remaining / cashflow)
+        remaining -= cashflow
+    return np.nan
 
 
 def get_knowhow_resumen_payload() -> dict:
@@ -10540,13 +11187,15 @@ def render_capex10_investor_injection_cash_flow(
                 st.session_state[count_key] = st.session_state.pop(count_sticky_key)
             count_col, first_amount_col, first_date_col = st.columns([.72, 1, 1], gap="small")
             with count_col:
-                injection_count = st.selectbox(
-                    "Cantidad",
-                    [1, 2, 3, 4],
-                    index=0,
-                    key=count_key,
-                    help="Define cuántas entradas puntuales de capital quieres modelar.",
-                )
+                count_widget_kwargs = {
+                    "label": "Cantidad",
+                    "options": [1, 2, 3, 4],
+                    "key": count_key,
+                    "help": "Define cuántas entradas puntuales de capital quieres modelar.",
+                }
+                if count_key not in st.session_state:
+                    count_widget_kwargs["index"] = 0
+                injection_count = st.selectbox(**count_widget_kwargs)
             injection_count_int = max(1, min(int(injection_count or 1), len(injection_defaults)))
             for injection_idx, (amount_default, date_default) in enumerate(injection_defaults):
                 amount_key = f"capex10_investor_injection_{key_suffix}_{injection_idx + 1}_clp"
@@ -10557,6 +11206,9 @@ def render_capex10_investor_injection_cash_flow(
                     st.session_state[amount_key] = st.session_state.pop(amount_sticky_key)
                 if date_sticky_key in st.session_state:
                     st.session_state[date_key] = st.session_state.pop(date_sticky_key)
+                if key_suffix == "plan_a_extra" and injection_idx == 0:
+                    date_default = pd.Timestamp("2026-09-30").date()
+                    st.session_state[date_key] = date_default
                 if injection_idx >= injection_count_int:
                     continue
                 if injection_idx == 0:
@@ -10569,22 +11221,26 @@ def render_capex10_investor_injection_cash_flow(
                             unsafe_allow_html=True,
                         )
                 with amount_col:
-                    injection_amount = st.number_input(
-                        f"Monto {injection_idx + 1} (CLP)",
-                        min_value=0,
-                        value=amount_default,
-                        step=1_000_000,
-                        format="%d",
-                        key=amount_key,
-                        help="Capital adicional para contrastarlo contra los fondos por ejecutar.",
-                    )
+                    amount_widget_kwargs = {
+                        "label": f"Monto {injection_idx + 1} (CLP)",
+                        "min_value": 0,
+                        "step": 1_000_000,
+                        "format": "%d",
+                        "key": amount_key,
+                        "help": "Capital adicional para contrastarlo contra los fondos por ejecutar.",
+                    }
+                    if amount_key not in st.session_state:
+                        amount_widget_kwargs["value"] = amount_default
+                    injection_amount = st.number_input(**amount_widget_kwargs)
                 with date_col_input:
-                    injection_date = st.date_input(
-                        f"Fecha {injection_idx + 1}",
-                        value=date_default,
-                        key=date_key,
-                        help="Fecha estimada en que entra la inyección de capital.",
-                    )
+                    date_widget_kwargs = {
+                        "label": f"Fecha {injection_idx + 1}",
+                        "key": date_key,
+                        "help": "Fecha estimada en que entra la inyección de capital.",
+                    }
+                    if date_key not in st.session_state:
+                        date_widget_kwargs["value"] = date_default
+                    injection_date = st.date_input(**date_widget_kwargs)
                 manual_entries.append(
                     {
                         "_month": pd.Timestamp(injection_date).to_period("M").to_timestamp(),
@@ -10713,11 +11369,11 @@ def render_capex10_investor_injection_cash_flow(
     commitment_monthly["Acumulado_CLP"] = commitment_monthly["Flujo_CLP"].cumsum()
     commitment_monthly["Inyeccion_acumulada_CLP"] = commitment_monthly["Inyeccion_CLP"].cumsum()
     commitment_monthly["Saldo_caja_CLP"] = commitment_monthly["Inyeccion_acumulada_CLP"] - commitment_monthly["Acumulado_CLP"]
-    commitment_labels = commitment_monthly["_month"].dt.strftime("%b %Y")
+    commitment_x = commitment_monthly["_month"]
     fig_commitment = go.Figure()
     fig_commitment.add_trace(
         go.Bar(
-            x=commitment_labels,
+            x=commitment_x,
             y=commitment_monthly["Flujo_CLP"] / 1_000_000,
             name="Flujo mensual pendiente por Fecha FC" if is_plan_a_cashflow else "Flujo mensual pendiente",
             marker_color="#6B86A3",
@@ -10735,7 +11391,7 @@ def render_capex10_investor_injection_cash_flow(
     if not is_plan_a_cashflow:
         fig_commitment.add_trace(
             go.Bar(
-                x=commitment_labels,
+                x=commitment_x,
                 y=commitment_monthly["Inyeccion_CLP"] / 1_000_000,
                 name="Inyección mensual",
                 marker_color="#0F766E",
@@ -10746,7 +11402,7 @@ def render_capex10_investor_injection_cash_flow(
         )
     fig_commitment.add_trace(
         go.Scatter(
-            x=commitment_labels,
+            x=commitment_x,
             y=commitment_monthly["Acumulado_CLP"] / 1_000_000,
             name="Acumulado requerido",
             mode="lines+markers",
@@ -10757,7 +11413,7 @@ def render_capex10_investor_injection_cash_flow(
     )
     fig_commitment.add_trace(
         go.Scatter(
-            x=commitment_labels,
+            x=commitment_x,
             y=commitment_monthly["Inyeccion_acumulada_CLP"] / 1_000_000,
             name="Capital acumulado disponible",
             mode="lines+markers",
@@ -10768,7 +11424,7 @@ def render_capex10_investor_injection_cash_flow(
     )
     fig_commitment.add_trace(
         go.Scatter(
-            x=commitment_labels,
+            x=commitment_x,
             y=commitment_monthly["Saldo_caja_CLP"] / 1_000_000,
             name="Saldo caja acumulado",
             mode="lines+markers",
@@ -10797,7 +11453,6 @@ def render_capex10_investor_injection_cash_flow(
 
     for _, injection in positive_injections.iterrows():
         injection_month = pd.Timestamp(injection["_month"]).to_period("M").to_timestamp()
-        injection_label = injection_month.strftime("%b %Y")
         injection_source = str(injection.get("Fuente", "Manual"))
         is_manual_injection = injection_source == "Manual"
         if is_plan_a_cashflow and not is_manual_injection:
@@ -10806,8 +11461,8 @@ def render_capex10_investor_injection_cash_flow(
         injection_line_color = "#047857" if is_manual_injection else "#0F766E"
         fig_commitment.add_shape(
             type="line",
-            x0=injection_label,
-            x1=injection_label,
+            x0=injection_month,
+            x1=injection_month,
             y0=0,
             y1=1,
             xref="x",
@@ -10822,7 +11477,7 @@ def render_capex10_investor_injection_cash_flow(
             injection_label_prefix = "Inyección adicional" if is_manual_injection else "Inyección Plan A"
             injection_event_date = injection_month.strftime("%b %Y")
             fig_commitment.add_annotation(
-                x=injection_label,
+                x=injection_month,
                 y=event_annotation_y(injection_month),
                 xref="x",
                 yref="paper",
@@ -10845,13 +11500,12 @@ def render_capex10_investor_injection_cash_flow(
     for milestone_idx, milestone in enumerate(valid_milestones):
         milestone_date = parse_cashflow_date(milestone["date"])
         milestone_month = milestone_date.to_period("M").to_timestamp()
-        milestone_label = milestone_month.strftime("%b %Y")
         milestone_name = str(milestone.get("label", "Hito"))
         milestone_color = milestone_colors[milestone_idx % len(milestone_colors)]
         fig_commitment.add_shape(
             type="line",
-            x0=milestone_label,
-            x1=milestone_label,
+            x0=milestone_date,
+            x1=milestone_date,
             y0=0,
             y1=1,
             xref="x",
@@ -10859,7 +11513,7 @@ def render_capex10_investor_injection_cash_flow(
             line=dict(color=milestone_color, width=2, dash="dash"),
         )
         fig_commitment.add_annotation(
-            x=milestone_label,
+            x=milestone_date,
             y=event_annotation_y(milestone_month),
             xref="x",
             yref="paper",
@@ -10879,7 +11533,7 @@ def render_capex10_investor_injection_cash_flow(
             borderpad=2,
         )
     final_commitment = commitment_monthly.iloc[-1]
-    final_commitment_label = pd.Timestamp(final_commitment["_month"]).strftime("%b %Y")
+    final_commitment_label = pd.Timestamp(final_commitment["_month"])
     final_label_positions: list[float] = []
     for value_col, label_color, bg_color in [
         ("Acumulado_CLP", "#1E3A8A", "rgba(239,246,255,.96)"),
@@ -10910,13 +11564,15 @@ def render_capex10_investor_injection_cash_flow(
         margin=dict(l=12, r=112, t=126, b=40),
         legend=dict(orientation="h", y=1.24, x=0, title=None),
         yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False),
-        xaxis=dict(title=None),
+        xaxis=dict(title=None, tickformat="%b %Y", dtick="M1"),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
     )
     st.plotly_chart(fig_commitment, use_container_width=True, config={"displaylogo": False})
 
     analysis_month_options = [pd.Timestamp(value).to_period("M").to_timestamp() for value in commitment_monthly["_month"].tolist()]
+    analysis_all_option = "__all__"
+    analysis_period_options = [analysis_all_option, *analysis_month_options]
     analysis_month_key = "capex10_investor_injection_analysis_month"
     legacy_analysis_month_key = "capex10_investor_injection_analysis_months"
     analysis_month_sticky = st.session_state.pop(f"{analysis_month_key}__sticky", None)
@@ -10926,6 +11582,8 @@ def render_capex10_investor_injection_cash_flow(
     def normalize_single_analysis_month(value) -> pd.Timestamp | None:
         if isinstance(value, (list, tuple, set)):
             value = next(iter(value), None)
+        if value == analysis_all_option:
+            return None
         if value is None or pd.isna(value):
             return None
         return pd.Timestamp(value).to_period("M").to_timestamp()
@@ -10940,14 +11598,17 @@ def render_capex10_investor_injection_cash_flow(
         if legacy_month in analysis_month_option_set:
             st.session_state[analysis_month_key] = legacy_month
 
-    selected_analysis_month = normalize_single_analysis_month(st.session_state.get(analysis_month_key))
-    if selected_analysis_month not in analysis_month_option_set:
-        selected_analysis_month = analysis_month_options[0]
-        st.session_state[analysis_month_key] = selected_analysis_month
-    selected_analysis_months = [selected_analysis_month]
-    selected_analysis_cutoff_month = selected_analysis_month
-    selected_period_label = selected_analysis_month.strftime("%b %Y")
-    selected_month_rows = commitment_monthly[commitment_monthly["_month"].eq(selected_analysis_month)].copy()
+    selected_analysis_raw = st.session_state.get(analysis_month_key)
+    selected_analysis_is_all = selected_analysis_raw == analysis_all_option
+    selected_analysis_month = normalize_single_analysis_month(selected_analysis_raw)
+    if not selected_analysis_is_all and selected_analysis_month not in analysis_month_option_set:
+        selected_analysis_is_all = True
+        selected_analysis_month = None
+        st.session_state[analysis_month_key] = analysis_all_option
+    selected_analysis_months = analysis_month_options if selected_analysis_is_all else [selected_analysis_month]
+    selected_analysis_cutoff_month = max(selected_analysis_months)
+    selected_period_label = "Todo" if selected_analysis_is_all else selected_analysis_month.strftime("%b %Y")
+    selected_month_rows = commitment_monthly[commitment_monthly["_month"].isin(selected_analysis_months)].copy()
     selected_cutoff_row = commitment_monthly[commitment_monthly["_month"].eq(selected_analysis_cutoff_month)].iloc[0]
     is_plan_a_selected = cashflow_plan.startswith("Plan A")
     selected_plan_label = CAPEX10_PLAN_A_LABEL if is_plan_a_selected else CAPEX10_PLAN_B_LABEL
@@ -11064,8 +11725,9 @@ def render_capex10_investor_injection_cash_flow(
     ]
     hito_kpi_html = "".join(
         (
-            f'<div class="cash-period-kpi" style="--c:{color};"><span>{html.escape(display_label)}</span>'
-            f"<b>{format_clp(amount)}</b><em>Acum. hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>"
+            f'<div class="cash-period-kpi cash-period-kpi-milestone" style="--c:{color};">'
+            f'<div class="cash-period-kpi-top"><span>HITO</span><strong>{html.escape(display_label)}</strong></div>'
+            f"<b>{format_clp(amount)}</b><em>Acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>"
         )
         for display_label, match_label, amount, color in hito_kpi_specs
         if normalize_key(match_label) in selected_hito_labels
@@ -11114,164 +11776,6 @@ def render_capex10_investor_injection_cash_flow(
             st.info(f"No hay aportes por responsable acumulados para {plan_label}.")
             return
         contribution_summary = contribution_summary.sort_values("Acumulado_CLP", ascending=False).copy()
-        contribution_summary["Periodo_MM"] = contribution_summary["Periodo_CLP"] / 1_000_000
-        contribution_summary["Acumulado_MM"] = contribution_summary["Acumulado_CLP"] / 1_000_000
-        contribution_summary["Periodo_fmt"] = contribution_summary["Periodo_CLP"].apply(format_clp)
-        contribution_summary["Acumulado_fmt"] = contribution_summary["Acumulado_CLP"].apply(format_clp)
-        contribution_responsibles = contribution_summary["_responsable"].tolist()
-        contribution_color_map = _capex10_responsible_color_map(contribution_responsibles)
-        contribution_total_period_clp = float(contribution_summary["Periodo_CLP"].sum() or 0.0)
-        contribution_total_accumulated_clp = float(contribution_summary["Acumulado_CLP"].sum() or 0.0)
-        contribution_leader = contribution_summary.iloc[0]
-        contribution_leader_name = str(contribution_leader["_responsable"])
-        contribution_leader_clp = float(contribution_leader["Acumulado_CLP"] or 0.0)
-        contribution_leader_share = (
-            contribution_leader_clp / contribution_total_accumulated_clp * 100.0
-            if contribution_total_accumulated_clp > 0
-            else 0.0
-        )
-        contribution_total_parts = int(contribution_summary["Partidas_acumulado"].sum() or 0)
-        st.markdown(
-            f"""
-            <style>
-              .capex10-contribution-kpis{{
-                display:grid;
-                grid-template-columns:repeat(4,minmax(0,1fr));
-                gap:10px;
-                margin:0 0 12px;
-              }}
-              .capex10-contribution-kpi{{
-                border:1px solid rgba(203,213,225,.82);
-                border-top:4px solid var(--c);
-                border-radius:12px;
-                background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
-                padding:10px 12px;
-                min-height:72px;
-                box-shadow:0 10px 22px rgba(15,23,42,.045);
-              }}
-              .capex10-contribution-kpi span{{
-                display:block;
-                color:#64748B;
-                font-size:10px;
-                font-weight:950;
-                letter-spacing:.06em;
-                text-transform:uppercase;
-                white-space:nowrap;
-                overflow:hidden;
-                text-overflow:ellipsis;
-              }}
-              .capex10-contribution-kpi b{{
-                display:block;
-                color:var(--c);
-                font-size:18px;
-                line-height:1.08;
-                margin-top:7px;
-                font-weight:950;
-                white-space:nowrap;
-                overflow:hidden;
-                text-overflow:ellipsis;
-              }}
-              .capex10-contribution-kpi em{{
-                display:block;
-                color:#64748B;
-                font-size:10.5px;
-                line-height:1.12;
-                margin-top:4px;
-                font-style:normal;
-                font-weight:800;
-                white-space:nowrap;
-                overflow:hidden;
-                text-overflow:ellipsis;
-              }}
-              @media(max-width:1100px){{.capex10-contribution-kpis{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
-              @media(max-width:720px){{.capex10-contribution-kpis{{grid-template-columns:1fr;}}}}
-            </style>
-            <div class="cash-injection-head" style="margin-top:14px;border-top:1px solid rgba(226,232,240,.92);padding-top:14px;">
-              <div><b>Aporte por responsable seleccionado</b><span>Período {format_clp(contribution_total_period_clp)} · acumulado {format_clp(contribution_total_accumulated_clp)} hasta {selected_analysis_cutoff_month.strftime("%b %Y")}.</span></div>
-              <div class="cash-injection-pill">Responsable</div>
-            </div>
-            <div class="capex10-contribution-kpis">
-              <div class="capex10-contribution-kpi" style="--c:#0F766E;"><span>Total período</span><b>{format_clp(contribution_total_period_clp)}</b><em>Selección activa</em></div>
-              <div class="capex10-contribution-kpi" style="--c:#164E63;"><span>Total acumulado</span><b>{format_clp(contribution_total_accumulated_clp)}</b><em>Hasta {selected_analysis_cutoff_month.strftime("%b %Y")}</em></div>
-              <div class="capex10-contribution-kpi" style="--c:{contribution_color_map.get(contribution_leader_name, "#1E3A8A")};"><span>Mayor responsable</span><b>{html.escape(contribution_leader_name)}</b><em>{format_clp(contribution_leader_clp)} · {contribution_leader_share:.1f}%</em></div>
-              <div class="capex10-contribution-kpi" style="--c:#B7791F;"><span>Partidas acumuladas</span><b>{contribution_total_parts}</b><em>{len(contribution_summary)} responsables visibles</em></div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        fig_period_responsible = go.Figure()
-        fig_period_responsible.add_trace(
-            go.Bar(
-                x=contribution_summary["_responsable"],
-                y=contribution_summary["Periodo_MM"],
-                name="Período seleccionado",
-                marker_color=[contribution_color_map.get(str(responsible), "#1E3A8A") for responsible in contribution_summary["_responsable"]],
-                marker_line=dict(color="rgba(255,255,255,.85)", width=1.5),
-                text=contribution_summary["Periodo_fmt"],
-                textposition="inside",
-                insidetextanchor="end",
-                textfont=dict(size=11, color="#FFFFFF"),
-                cliponaxis=False,
-                width=0.58,
-                customdata=np.stack([contribution_summary["Periodo_fmt"], contribution_summary["Partidas_periodo"].astype(int)], axis=-1),
-                hovertemplate=(
-                    "<b>%{x}</b><br>"
-                    "Período seleccionado: %{customdata[0]}<br>"
-                    "Partidas: %{customdata[1]}<br>"
-                    "<extra></extra>"
-                ),
-            )
-        )
-        fig_period_responsible.add_trace(
-            go.Scatter(
-                x=contribution_summary["_responsable"],
-                y=contribution_summary["Acumulado_MM"],
-                name="Acumulado",
-                mode="lines+markers+text",
-                line=dict(color="#071427", width=3),
-                marker=dict(size=9, color="#FFFFFF", line=dict(color="#071427", width=2)),
-                text=contribution_summary["Acumulado_fmt"],
-                textposition=[
-                    "top center" if idx % 2 == 0 else "bottom center"
-                    for idx in range(len(contribution_summary))
-                ],
-                textfont=dict(size=10, color="#071427"),
-                customdata=np.stack([contribution_summary["Acumulado_fmt"], contribution_summary["Partidas_acumulado"].astype(int)], axis=-1),
-                hovertemplate=(
-                    "<b>%{x}</b><br>"
-                    "Acumulado: %{customdata[0]}<br>"
-                    "Partidas acumuladas: %{customdata[1]}<br>"
-                    "<extra></extra>"
-                ),
-            )
-        )
-        responsible_axis_top = max(
-            float(contribution_summary["Periodo_MM"].max() or 0.0),
-            float(contribution_summary["Acumulado_MM"].max() or 0.0),
-        )
-        fig_period_responsible.update_layout(
-            height=500,
-            margin=dict(l=12, r=22, t=42, b=88),
-            barmode="group",
-            showlegend=True,
-            legend=dict(orientation="h", y=1.12, x=0, title=None, font=dict(size=11, color="#334155")),
-            yaxis=dict(
-                title="MM CLP",
-                gridcolor="rgba(148,163,184,.18)",
-                zeroline=False,
-                range=[0, responsible_axis_top * 1.28 if responsible_axis_top > 0 else 1],
-            ),
-            xaxis=dict(title=None, tickangle=-25, automargin=True),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
-        )
-        st.plotly_chart(
-            fig_period_responsible,
-            use_container_width=True,
-            config={"displaylogo": False, "displayModeBar": False},
-            key=f"capex10_period_responsible_{key_suffix}",
-        )
         return
 
     def render_period_phase_line_detail(
@@ -11279,6 +11783,8 @@ def render_capex10_investor_injection_cash_flow(
         accumulated_scope_df: pd.DataFrame,
         plan_label: str,
         key_suffix: str,
+        show_responsible_detail: bool = True,
+        show_concentration: bool = True,
     ) -> None:
         if scope_df.empty or "Disponible_CLP" not in scope_df.columns:
             st.info("No hay detalle por responsable, fase y línea para el período seleccionado.")
@@ -11441,35 +11947,175 @@ def render_capex10_investor_injection_cash_flow(
               .cash-period-detail-head b{{display:block;color:#071427;font-size:15px;line-height:1.1;font-weight:950;}}
               .cash-period-detail-head span{{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}}
               .cash-period-detail-total{{color:#0F766E;font-size:17px;font-weight:950;white-space:nowrap;}}
+              div[data-testid="stExpander"] details{{
+                border:1px solid rgba(148,163,184,.34);
+                border-radius:10px;
+                overflow:hidden;
+                background:#FFFFFF;
+                box-shadow:0 8px 18px rgba(15,23,42,.04);
+              }}
+              div[data-testid="stExpander"] summary{{
+                min-height:54px;
+                background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
+                border-bottom:1px solid rgba(226,232,240,.72);
+              }}
+              div[data-testid="stExpander"] summary p{{
+                font-size:14px;
+                font-weight:950;
+                letter-spacing:0;
+              }}
               .cash-period-resp-card{{
-                border:1px solid var(--resp-color);border-left:8px solid var(--resp-color);
-                border-radius:14px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
-                padding:12px;margin:0 0 10px;box-shadow:0 10px 22px rgba(15,23,42,.045);
+                position:relative;
+                overflow:hidden;
+                border:1px solid rgba(148,163,184,.32);
+                border-radius:10px;
+                background:
+                  linear-gradient(90deg,rgba(15,23,42,.035) 1px,transparent 1px),
+                  linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);
+                background-size:18px 100%,100% 100%;
+                padding:12px;
+                margin:0 0 10px;
+                box-shadow:0 10px 22px rgba(15,23,42,.045);
+              }}
+              .cash-period-resp-card:before{{
+                content:"";
+                position:absolute;
+                top:0;
+                left:0;
+                right:0;
+                height:5px;
+                background:linear-gradient(90deg,var(--resp-color),rgba(255,255,255,0));
               }}
               .cash-period-resp-title{{
-                display:flex;align-items:center;justify-content:space-between;gap:10px;
-                border:1px solid rgba(226,232,240,.95);border-left:5px solid var(--resp-color);
-                border-radius:12px;background:#FFFFFF;padding:10px 12px;margin:0 0 10px;
+                display:grid;
+                grid-template-columns:minmax(0,1fr) auto;
+                gap:14px;
+                align-items:start;
+                border:1px solid rgba(226,232,240,.95);
+                border-left:5px solid var(--resp-color);
+                border-radius:8px;
+                background:rgba(255,255,255,.92);
+                padding:10px 12px;
+                margin:0 0 10px;
               }}
               .cash-period-resp-title b{{
-                color:var(--resp-color);font-size:15px;line-height:1.1;font-weight:950;
+                display:block;
+                color:#071427;
+                font-size:18px;
+                line-height:1.05;
+                font-weight:950;
                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
               }}
               .cash-period-resp-title span{{
-                color:#334155;font-size:12px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+                display:block;
+                color:#64748B;
+                font-size:10.5px;
+                font-weight:950;
+                letter-spacing:.08em;
+                text-transform:uppercase;
+                margin-bottom:4px;
+                white-space:nowrap;
+                overflow:hidden;
+                text-overflow:ellipsis;
               }}
-              .cash-period-resp-kpis{{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:7px;margin:0 0 10px;}}
+              .cash-period-resp-pill{{
+                border:1px solid color-mix(in srgb,var(--resp-color) 34%,#CBD5E1);
+                background:color-mix(in srgb,var(--resp-color) 10%,#FFFFFF);
+                color:var(--resp-color);
+                border-radius:999px;
+                padding:5px 9px;
+                font-size:10px;
+                font-weight:950;
+                letter-spacing:.08em;
+                text-transform:uppercase;
+                white-space:nowrap;
+              }}
+              .cash-period-resp-kpis{{display:grid;grid-template-columns:1.08fr 1.08fr .84fr .84fr;gap:8px;margin:0 0 10px;}}
               .cash-period-resp-kpis div{{
-                border:1px solid rgba(226,232,240,.95);border-top:3px solid var(--resp-color);
-                border-radius:10px;background:#FFFFFF;padding:7px 8px;min-height:54px;
+                border:1px solid rgba(226,232,240,.95);
+                border-top:3px solid var(--resp-color);
+                border-radius:8px;
+                background:#FFFFFF;
+                padding:8px 9px;
+                min-height:58px;
               }}
               .cash-period-resp-kpis span{{
                 display:block;color:#64748B;font-size:8.5px;font-weight:950;letter-spacing:.04em;
                 text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
               }}
               .cash-period-resp-kpis b{{
-                display:block;color:var(--resp-color);font-size:13.5px;line-height:1.08;font-weight:950;
-                margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+                display:block;color:#071427;font-size:15px;line-height:1.08;font-weight:950;
+                margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+              }}
+              .cash-period-resp-bars{{
+                display:grid;
+                grid-template-columns:1fr 1fr;
+                gap:8px;
+                margin:0 0 10px;
+              }}
+              .cash-period-resp-bar{{
+                border:1px solid rgba(226,232,240,.95);
+                border-radius:8px;
+                background:#FFFFFF;
+                padding:8px 9px;
+              }}
+              .cash-period-resp-bar-top{{
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:8px;
+                color:#334155;
+                font-size:10px;
+                font-weight:950;
+                letter-spacing:.06em;
+                text-transform:uppercase;
+                margin-bottom:7px;
+              }}
+              .cash-period-resp-track{{
+                height:7px;
+                border-radius:999px;
+                background:#E2E8F0;
+                overflow:hidden;
+              }}
+              .cash-period-resp-fill{{
+                width:var(--w);
+                height:100%;
+                border-radius:999px;
+                background:linear-gradient(90deg,var(--resp-color),color-mix(in srgb,var(--resp-color) 42%,#FFFFFF));
+              }}
+              .cash-period-resp-meta{{
+                display:grid;
+                grid-template-columns:repeat(4,minmax(0,1fr));
+                gap:8px;
+                margin:0;
+              }}
+              .cash-period-resp-meta div{{
+                border:1px solid rgba(226,232,240,.95);
+                border-radius:8px;
+                background:rgba(255,255,255,.88);
+                padding:7px 8px;
+              }}
+              .cash-period-resp-meta span{{
+                display:block;
+                color:#64748B;
+                font-size:8.5px;
+                font-weight:950;
+                letter-spacing:.04em;
+                text-transform:uppercase;
+                white-space:nowrap;
+                overflow:hidden;
+                text-overflow:ellipsis;
+              }}
+              .cash-period-resp-meta b{{
+                display:block;
+                color:var(--resp-color);
+                font-size:13px;
+                line-height:1.05;
+                font-weight:950;
+                margin-top:5px;
+                white-space:nowrap;
+                overflow:hidden;
+                text-overflow:ellipsis;
               }}
               .cash-period-task-head{{
                 display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:12px 0 8px;
@@ -11491,24 +12137,30 @@ def render_capex10_investor_injection_cash_flow(
                 border-radius:999px;padding:6px 10px;font-size:10px;font-weight:950;text-transform:uppercase;letter-spacing:.08em;
                 white-space:nowrap;
               }}
-              @media(max-width:1180px){{.cash-period-resp-kpis{{grid-template-columns:repeat(3,minmax(0,1fr));}}}}
-              @media(max-width:980px){{.cash-period-resp-kpis{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
-              @media(max-width:620px){{.cash-period-detail-head{{display:block;}}.cash-period-detail-total{{margin-top:8px;}}.cash-period-resp-kpis{{grid-template-columns:1fr;}}}}
+              @media(max-width:1180px){{.cash-period-resp-kpis,.cash-period-resp-meta{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
+              @media(max-width:780px){{.cash-period-resp-title,.cash-period-resp-bars{{grid-template-columns:1fr;}}}}
+              @media(max-width:620px){{.cash-period-detail-head{{display:block;}}.cash-period-detail-total{{margin-top:8px;}}.cash-period-resp-kpis,.cash-period-resp-meta{{grid-template-columns:1fr;}}}}
             </style>
             """,
             unsafe_allow_html=True,
         )
+        if not show_responsible_detail:
+            responsible_summary = responsible_summary.iloc[0:0].copy()
 
         for _, responsible_row in responsible_summary.iterrows():
             responsible_name = str(responsible_row["_responsable_detalle_periodo"])
             responsible_total = float(responsible_row["Disponible_CLP"] or 0.0)
             responsible_accumulated_total = float(responsible_row["Acumulado_CLP"] or 0.0)
             responsible_color = _capex10_responsible_color(responsible_name)
-            _, responsible_icon = _capex10_responsible_expander_style(responsible_name)
             responsible_start = pd.Timestamp(responsible_row["Inicio"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Inicio"]) else "-"
             responsible_end = pd.Timestamp(responsible_row["Fin_real"]).strftime("%d-%m-%Y") if pd.notna(responsible_row["Fin_real"]) else "-"
             responsible_period_label = format_clp(responsible_total).replace("$", "\\$")
             responsible_accumulated_label = format_clp(responsible_accumulated_total).replace("$", "\\$")
+            responsible_period_share = float(responsible_row["Peso_periodo"] or 0.0)
+            responsible_accumulated_share = float(responsible_row["Peso_acumulado"] or 0.0)
+            responsible_period_width = f"{min(100.0, max(0.0, responsible_period_share)):.1f}%"
+            responsible_accumulated_width = f"{min(100.0, max(0.0, responsible_accumulated_share)):.1f}%"
+            responsible_activity_window = f"{responsible_start} a {responsible_end}" if responsible_start != "-" or responsible_end != "-" else "Sin fechas"
             responsible_selected_pairs_by_scope: dict[str, set[tuple[str, str]]] = {}
 
             def render_selectable_phase_line_detail(
@@ -11668,26 +12320,39 @@ def render_capex10_investor_injection_cash_flow(
                     key=f"{key_prefix}_task_detail_{key_suffix}_{normalize_key(responsible_name)}",
                 )
 
-            expander_label = (
-                f"**{responsible_name}** · "
-                f"**Período {responsible_period_label}** · "
-                f"**Acumulado {responsible_accumulated_label}**"
-            )
-            with st.expander(expander_label, expanded=False, icon=responsible_icon):
+            expander_label = f"{responsible_name} | Periodo {responsible_period_label} | Acumulado {responsible_accumulated_label}"
+            with st.expander(expander_label, expanded=False):
                 st.markdown(
                     f"""
                     <div class="cash-period-resp-card" style="--resp-color:{responsible_color};">
                       <div class="cash-period-resp-title">
-                        <b>{html.escape(responsible_name)}</b>
-                        <span>Período {format_clp(responsible_total)} · Acumulado {format_clp(responsible_accumulated_total)}</span>
+                        <div>
+                          <span>Responsable / proveedor</span>
+                          <b>{html.escape(responsible_name)}</b>
+                        </div>
+                        <div class="cash-period-resp-pill">{html.escape(plan_label)} · {html.escape(selected_period_label)}</div>
                       </div>
                       <div class="cash-period-resp-kpis">
                         <div><span>Aporte período</span><b>{format_clp(responsible_total)}</b></div>
                         <div><span>Aporte acumulado</span><b>{format_clp(responsible_accumulated_total)}</b></div>
-                        <div><span>Peso período</span><b>{float(responsible_row["Peso_periodo"]):.1f}%</b></div>
-                        <div><span>Peso acumulado</span><b>{float(responsible_row["Peso_acumulado"]):.1f}%</b></div>
-                        <div><span>Período líneas / partidas</span><b>{int(responsible_row["Lineas"])} / {int(responsible_row["Partidas"])}</b></div>
-                        <div><span>Acum. líneas / partidas</span><b>{int(responsible_row["Lineas_acumuladas"])} / {int(responsible_row["Partidas_acumuladas"])}</b></div>
+                        <div><span>Partidas período</span><b>{int(responsible_row["Partidas"])}</b></div>
+                        <div><span>Ventana ejecución</span><b>{html.escape(responsible_activity_window)}</b></div>
+                      </div>
+                      <div class="cash-period-resp-bars">
+                        <div class="cash-period-resp-bar">
+                          <div class="cash-period-resp-bar-top"><span>Peso período</span><b>{responsible_period_share:.1f}%</b></div>
+                          <div class="cash-period-resp-track"><div class="cash-period-resp-fill" style="--w:{responsible_period_width};"></div></div>
+                        </div>
+                        <div class="cash-period-resp-bar">
+                          <div class="cash-period-resp-bar-top"><span>Peso acumulado</span><b>{responsible_accumulated_share:.1f}%</b></div>
+                          <div class="cash-period-resp-track"><div class="cash-period-resp-fill" style="--w:{responsible_accumulated_width};"></div></div>
+                        </div>
+                      </div>
+                      <div class="cash-period-resp-meta">
+                        <div><span>Líneas período</span><b>{int(responsible_row["Lineas"])}</b></div>
+                        <div><span>Líneas acumuladas</span><b>{int(responsible_row["Lineas_acumuladas"])}</b></div>
+                        <div><span>Partidas acumuladas</span><b>{int(responsible_row["Partidas_acumuladas"])}</b></div>
+                        <div><span>Rango base</span><b>{html.escape(responsible_start)} / {html.escape(responsible_end)}</b></div>
                       </div>
                     </div>
                     """,
@@ -11801,7 +12466,7 @@ def render_capex10_investor_injection_cash_flow(
                     )
                 render_responsible_schedule()
 
-        if not accumulated_detail_scope_df.empty:
+        if show_concentration and not accumulated_detail_scope_df.empty:
             period_chart_summary = (
                 detail_scope_df.groupby([phase_col, line_col], as_index=False)
                 .agg(
@@ -11884,24 +12549,269 @@ def render_capex10_investor_injection_cash_flow(
                     plot_bgcolor="rgba(0,0,0,0)",
                     font=dict(color="#334155", size=12),
                 )
-                st.markdown(
-                    f"""
-                    <div class="cash-period-detail-head" style="margin-top:16px;">
-                      <div>
-                        <b>Concentración por fase y línea</b>
-                        <span>Área por acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')} · color por gasto del período seleccionado.</span>
-                      </div>
-                      <div class="cash-period-detail-total">{format_clp(accumulated_detail_total)}</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
+                with st.expander("Concentración por fase y línea", expanded=False):
+                    st.markdown(
+                        f"""
+                        <div class="cash-period-detail-head" style="margin-top:4px;">
+                          <div>
+                            <b>Concentración por fase y línea</b>
+                            <span>Área por acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')} · color por gasto del período seleccionado.</span>
+                          </div>
+                          <div class="cash-period-detail-total">{format_clp(accumulated_detail_total)}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    st.plotly_chart(
+                        fig_concentration,
+                        use_container_width=True,
+                        config={"displaylogo": False, "displayModeBar": False},
+                        key=f"capex10_phase_line_concentration_{key_suffix}",
+                    )
+
+    def render_period_aportes_detail(plan_label: str, key_suffix: str) -> None:
+        if not plan_label.startswith("Plan A"):
+            return
+        aporte_timeline_df = commitment_monthly[["_month", "Saldo_caja_CLP"]].sort_values("_month").copy()
+        if aporte_timeline_df.empty:
+            return
+        aporte_detail_base = plan_a_schedule_df.copy() if not plan_a_schedule_df.empty else pd.DataFrame()
+        if not aporte_detail_base.empty:
+            if "Responsable" not in aporte_detail_base.columns:
+                aporte_detail_base["Responsable"] = "Sin responsable"
+            aporte_detail_base["Responsable"] = (
+                aporte_detail_base["Responsable"]
+                .astype(str)
+                .str.strip()
+                .replace({"": "Sin responsable", "nan": "Sin responsable", "None": "Sin responsable"})
+            )
+        responsible_options = ["Todos"]
+        if not aporte_detail_base.empty and "Responsable" in aporte_detail_base.columns:
+            responsible_options.extend(sorted(aporte_detail_base["Responsable"].dropna().astype(str).unique().tolist()))
+
+        with st.expander("Aportes", expanded=False):
+            selected_aporte_responsible = st.selectbox(
+                "Responsable",
+                responsible_options,
+                key=f"capex10_aportes_responsable_{key_suffix}",
+                help="Filtra los aportes por responsable. Todos mantiene el calendario completo.",
+            )
+            aporte_source_df = aporte_detail_base.copy()
+            if selected_aporte_responsible != "Todos" and not aporte_source_df.empty:
+                aporte_source_df = aporte_source_df[aporte_source_df["Responsable"].eq(selected_aporte_responsible)].copy()
+            aporte_monthly = (
+                aporte_source_df.groupby("_month", as_index=False)["Inyeccion_CLP"].sum()
+                if not aporte_source_df.empty
+                else pd.DataFrame(columns=["_month", "Inyeccion_CLP"])
+            )
+            aporte_df = aporte_timeline_df.merge(aporte_monthly, on="_month", how="left")
+            aporte_df["Inyeccion_CLP"] = aporte_df["Inyeccion_CLP"].fillna(0.0)
+            aporte_df["Capital_acumulado_disponible_CLP"] = aporte_df["Inyeccion_CLP"].cumsum()
+            aporte_df["Mes"] = aporte_df["_month"].dt.strftime("%b %Y")
+            aporte_df["Inyeccion_fmt"] = aporte_df["Inyeccion_CLP"].apply(format_clp)
+            aporte_df["Capital_fmt"] = aporte_df["Capital_acumulado_disponible_CLP"].apply(format_clp)
+            aporte_df["Saldo_fmt"] = aporte_df["Saldo_caja_CLP"].apply(format_clp)
+            aporte_display_df = aporte_df[aporte_df["_month"].isin(selected_analysis_months)].copy()
+            if aporte_display_df.empty:
+                st.info("No hay aportes para el período seleccionado.")
+                return
+            aporte_cutoff_df = aporte_df[aporte_df["_month"].le(selected_analysis_cutoff_month)].copy()
+            aporte_final_clp = float(aporte_display_df["Capital_acumulado_disponible_CLP"].iloc[-1])
+            aporte_to_cutoff_clp = (
+                float(aporte_cutoff_df["Capital_acumulado_disponible_CLP"].iloc[-1])
+                if not aporte_cutoff_df.empty
+                else 0.0
+            )
+            aporte_period_clp = float(aporte_display_df["Inyeccion_CLP"].sum() or 0.0)
+            aporte_peak_row = aporte_display_df.sort_values("Inyeccion_CLP", ascending=False).iloc[0]
+            aporte_peak_label = (
+                pd.Timestamp(aporte_peak_row["_month"]).strftime("%b %Y")
+                if float(aporte_peak_row["Inyeccion_CLP"] or 0.0) > 0
+                else "-"
+            )
+            aporte_peak_value = format_clp(float(aporte_peak_row["Inyeccion_CLP"]))
+            st.markdown(
+                f"""
+                <style>
+                  .cashflow-kpi-strip {{
+                    display:grid;
+                    grid-template-columns:repeat(4,minmax(0,1fr));
+                    gap:8px;
+                    margin:0 0 6px;
+                  }}
+                  .cashflow-kpi-card {{
+                    min-height:58px;
+                    border:1px solid rgba(203,213,225,.78);
+                    border-radius:10px;
+                    background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(248,250,252,.96));
+                    padding:8px 10px;
+                    box-shadow:0 8px 18px rgba(15,23,42,.045);
+                    overflow:hidden;
+                  }}
+                  .cashflow-kpi-card span {{
+                    display:block;
+                    color:#64748B;
+                    font-size:10px;
+                    font-weight:900;
+                    letter-spacing:.055em;
+                    line-height:1.05;
+                    text-transform:uppercase;
+                    white-space:nowrap;
+                    overflow:hidden;
+                    text-overflow:ellipsis;
+                  }}
+                  .cashflow-kpi-card b {{
+                    display:block;
+                    color:#071427;
+                    font-size:16px;
+                    line-height:1.1;
+                    margin-top:6px;
+                    font-weight:950;
+                    white-space:nowrap;
+                    overflow:hidden;
+                    text-overflow:ellipsis;
+                  }}
+                  .cashflow-kpi-card em {{
+                    display:block;
+                    color:#7C8798;
+                    font-size:10.5px;
+                    line-height:1.1;
+                    margin-top:3px;
+                    font-style:normal;
+                    white-space:nowrap;
+                    overflow:hidden;
+                    text-overflow:ellipsis;
+                  }}
+                  @media (max-width:1100px) {{
+                    .cashflow-kpi-strip {{grid-template-columns:repeat(2,minmax(0,1fr));}}
+                  }}
+                </style>
+                <div class="cash-injection-head" style="margin-top:4px;">
+                  <div><b>Aportes</b><span>Curva de capital acumulado disponible desde el calendario de aportes Plan A.</span></div>
+                  <div class="cash-injection-pill">Plan A</div>
+                </div>
+                <div class="cashflow-kpi-strip">
+                  <div class="cashflow-kpi-card"><span>Capital al corte</span><b>{format_clp(aporte_to_cutoff_clp)}</b><em>Hasta {selected_analysis_cutoff_month.strftime("%b %Y")}</em></div>
+                  <div class="cashflow-kpi-card"><span>Capital mostrado</span><b>{format_clp(aporte_final_clp)}</b><em>Selección activa</em></div>
+                  <div class="cashflow-kpi-card"><span>Aporte período</span><b>{format_clp(aporte_period_clp)}</b><em>{selected_period_label}</em></div>
+                  <div class="cashflow-kpi-card"><span>Mayor aporte</span><b>{aporte_peak_value}</b><em>{html.escape(aporte_peak_label)}</em></div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            fig_aportes = go.Figure()
+            fig_aportes.add_trace(
+                go.Bar(
+                    x=aporte_display_df["_month"],
+                    y=aporte_display_df["Inyeccion_CLP"] / 1_000_000,
+                    name="Aporte mensual",
+                    marker_color="#A7F3D0",
+                    marker_line=dict(color="#0F766E", width=1.2),
+                    text=[format_clp(value) if value > 0 else "" for value in aporte_display_df["Inyeccion_CLP"]],
+                    textposition="outside",
+                    hovertemplate="<b>%{x|%b %Y}</b><br>Aporte mensual: %{text}<extra></extra>",
                 )
-                st.plotly_chart(
-                    fig_concentration,
-                    use_container_width=True,
-                    config={"displaylogo": False, "displayModeBar": False},
-                    key=f"capex10_phase_line_concentration_{key_suffix}",
+            )
+            fig_aportes.add_trace(
+                go.Scatter(
+                    x=aporte_display_df["_month"],
+                    y=aporte_display_df["Capital_acumulado_disponible_CLP"] / 1_000_000,
+                    name="Capital acumulado disponible",
+                    mode="lines+markers+text",
+                    line=dict(color="#0F766E", width=4),
+                    marker=dict(size=9, color="#FFFFFF", line=dict(color="#0F766E", width=2)),
+                    text=[
+                        format_clp(value) if value > 0 and idx in {0, len(aporte_display_df) - 1} else ""
+                        for idx, value in enumerate(aporte_display_df["Capital_acumulado_disponible_CLP"])
+                    ],
+                    textposition="top center",
+                    textfont=dict(size=11, color="#0F766E"),
+                    hovertemplate="<b>%{x|%b %Y}</b><br>Capital acumulado disponible: $%{y:.1f} MM<extra></extra>",
                 )
+            )
+            fig_aportes.add_shape(
+                type="line",
+                x0=selected_analysis_cutoff_month,
+                x1=selected_analysis_cutoff_month,
+                y0=0,
+                y1=1,
+                xref="x",
+                yref="paper",
+                line=dict(color="#164E63", width=2, dash="dash"),
+            )
+            fig_aportes.add_annotation(
+                x=selected_analysis_cutoff_month,
+                y=1.02,
+                xref="x",
+                yref="paper",
+                text=f"Corte · {selected_period_label}",
+                showarrow=False,
+                xanchor="center",
+                yanchor="bottom",
+                font=dict(size=11, color="#164E63"),
+                bgcolor="rgba(255,255,255,.94)",
+                bordercolor="#164E63",
+                borderwidth=1,
+                borderpad=4,
+            )
+            fig_aportes.update_layout(
+                height=430,
+                margin=dict(l=12, r=34, t=42, b=42),
+                legend=dict(orientation="h", y=1.12, x=0, title=None),
+                yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False),
+                xaxis=dict(title=None, tickformat="%b %Y", dtick="M1"),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                hovermode="x unified",
+                hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
+            )
+            st.plotly_chart(
+                fig_aportes,
+                use_container_width=True,
+                config={"displaylogo": False},
+                key=f"capex10_aportes_period_{key_suffix}",
+            )
+            aporte_detail_df = aporte_source_df.copy() if not aporte_source_df.empty else pd.DataFrame()
+            if not aporte_detail_df.empty:
+                aporte_detail_df = aporte_detail_df[aporte_detail_df["_month"].isin(selected_analysis_months)].copy()
+                aporte_detail_df["Fecha"] = pd.to_datetime(aporte_detail_df["Fecha"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+                aporte_detail_df["Mes"] = pd.to_datetime(aporte_detail_df["_month"], errors="coerce").dt.strftime("%b %Y").fillna("-")
+                aporte_detail_df["Aporte mensual"] = aporte_detail_df["Inyeccion_CLP"].apply(format_clp)
+                aporte_detail_df = aporte_detail_df.merge(
+                    aporte_df[["_month", "Capital_fmt", "Saldo_fmt"]],
+                    on="_month",
+                    how="left",
+                )
+                aporte_table = aporte_detail_df[["Fecha", "Mes", "Responsable", "Aporte mensual", "Capital_fmt", "Saldo_fmt"]].rename(
+                    columns={
+                        "Capital_fmt": "Capital acumulado disponible",
+                        "Saldo_fmt": "Saldo caja acumulado",
+                    }
+                )
+            else:
+                aporte_table = aporte_display_df[["Mes", "Inyeccion_fmt", "Capital_fmt", "Saldo_fmt"]].rename(
+                    columns={
+                        "Inyeccion_fmt": "Aporte mensual",
+                        "Capital_fmt": "Capital acumulado disponible",
+                        "Saldo_fmt": "Saldo caja acumulado",
+                    }
+                )
+                aporte_table["Responsable"] = "Sin responsable"
+                aporte_table = aporte_table[["Mes", "Responsable", "Aporte mensual", "Capital acumulado disponible", "Saldo caja acumulado"]]
+            st.dataframe(
+                aporte_table,
+                use_container_width=True,
+                hide_index=True,
+                height=min(360, 42 + (len(aporte_table) + 1) * 35),
+                column_config={
+                    "Fecha": st.column_config.TextColumn("Fecha", width="small"),
+                    "Mes": st.column_config.TextColumn("Mes", width="small"),
+                    "Responsable": st.column_config.TextColumn("Responsable", width="medium"),
+                    "Aporte mensual": st.column_config.TextColumn("Aporte mensual", width="medium"),
+                    "Capital acumulado disponible": st.column_config.TextColumn("Capital acumulado disponible", width="medium"),
+                    "Saldo caja acumulado": st.column_config.TextColumn("Saldo caja acumulado", width="medium"),
+                },
+            )
 
     def render_period_tables(
         detail_display: pd.DataFrame,
@@ -11916,7 +12826,14 @@ def render_capex10_investor_injection_cash_flow(
     ) -> None:
         table_items = detail_items if detail_items is not None else items
         table_accumulated_items = accumulated_detail_items if accumulated_detail_items is not None else accumulated_items
-        render_period_phase_line_detail(table_items, table_accumulated_items, plan_label, key_suffix)
+        render_period_phase_line_detail(
+            table_items,
+            table_accumulated_items,
+            plan_label,
+            key_suffix,
+            show_responsible_detail=True,
+            show_concentration=False,
+        )
         render_period_responsible_contribution(items, accumulated_items, plan_label, key_suffix)
 
     st.markdown(
@@ -11935,12 +12852,119 @@ def render_capex10_investor_injection_cash_flow(
           .cash-period-head b{display:block;color:#071427;font-size:16px;line-height:1.1;font-weight:950;}
           .cash-period-head span{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}
           .cash-period-chip{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:7px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}
-          .cash-period-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:10px 0 10px;}
-          .cash-period-kpi{border:1px solid rgba(226,232,240,.95);border-top:3px solid var(--c);border-radius:10px;background:#FFFFFF;padding:8px 10px;min-height:64px;}
-          .cash-period-kpi span{display:block;color:#64748B;font-size:9px;font-weight:950;letter-spacing:.035em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-          .cash-period-kpi b{display:block;color:var(--c);font-size:16px;line-height:1.08;font-weight:950;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-          .cash-period-kpi em{display:block;color:#64748B;font-size:9.5px;font-style:normal;font-weight:800;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-          @media(max-width:720px){.cash-period-head{display:block;}.cash-period-chip{display:inline-flex;margin-top:10px;}.cash-period-kpis{grid-template-columns:1fr;}}
+          .cash-period-kpis{
+            display:grid;
+            gap:10px;
+            margin:12px 0 12px;
+          }
+          .cash-period-kpi-row{
+            display:grid;
+            width:100%;
+            gap:10px;
+          }
+          .cash-period-kpi-row-main{
+            grid-template-columns:repeat(4,minmax(0,1fr));
+          }
+          .cash-period-kpi-row-milestones{
+            grid-template-columns:repeat(auto-fit,minmax(188px,1fr));
+          }
+          .cash-period-kpi{
+            position:relative;
+            overflow:hidden;
+            border:1px solid rgba(148,163,184,.36);
+            border-radius:8px;
+            background:
+              linear-gradient(90deg,rgba(15,23,42,.045) 1px,transparent 1px),
+              linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);
+            background-size:18px 100%,100% 100%;
+            padding:8px 10px 7px;
+            min-height:72px;
+            box-shadow:0 8px 18px rgba(15,23,42,.045);
+          }
+          .cash-period-kpi:before{
+            content:"";
+            position:absolute;
+            top:0;
+            left:0;
+            right:0;
+            height:4px;
+            background:linear-gradient(90deg,var(--c),rgba(255,255,255,0));
+          }
+          .cash-period-kpi:after{
+            content:"";
+            position:absolute;
+            top:8px;
+            right:8px;
+            width:18px;
+            height:18px;
+            border-top:2px solid rgba(100,116,139,.26);
+            border-right:2px solid rgba(100,116,139,.26);
+          }
+          .cash-period-kpi-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px;min-width:0;}
+          .cash-period-kpi-top span{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            min-width:38px;
+            border:1px solid color-mix(in srgb,var(--c) 38%,#CBD5E1);
+            background:color-mix(in srgb,var(--c) 10%,#FFFFFF);
+            color:var(--c);
+            border-radius:4px;
+            padding:2px 5px;
+            font-size:8.5px;
+            font-weight:950;
+            letter-spacing:.08em;
+            line-height:1;
+            text-transform:uppercase;
+          }
+          .cash-period-kpi-top strong{
+            display:block;
+            color:#334155;
+            font-size:9px;
+            font-weight:950;
+            letter-spacing:.055em;
+            line-height:1.15;
+            text-align:right;
+            text-transform:uppercase;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+          }
+          .cash-period-kpi b{
+            display:block;
+            color:#071427;
+            font-size:18px;
+            line-height:1.04;
+            font-weight:950;
+            margin-top:1px;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+          }
+          .cash-period-kpi em{
+            display:block;
+            width:max-content;
+            max-width:100%;
+            border-left:3px solid var(--c);
+            background:rgba(248,250,252,.88);
+            color:#475569;
+            font-size:9px;
+            line-height:1.2;
+            font-style:normal;
+            font-weight:850;
+            margin-top:6px;
+            padding:3px 6px;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+          }
+          .cash-period-kpi-milestone{background:
+            linear-gradient(90deg,rgba(15,23,42,.04) 1px,transparent 1px),
+            linear-gradient(180deg,#FFFFFF 0%,color-mix(in srgb,var(--c) 7%,#FFFFFF) 100%);
+            background-size:18px 100%,100% 100%;
+          }
+          @media(max-width:1100px){.cash-period-kpi-row-main{grid-template-columns:repeat(2,minmax(0,1fr));}}
+          @media(max-width:720px){.cash-period-head{display:block;}.cash-period-chip{display:inline-flex;margin-top:10px;}.cash-period-kpi-row,.cash-period-kpi-row-main,.cash-period-kpi-row-milestones{grid-template-columns:1fr;}.cash-period-kpi b{font-size:17px;}}
         </style>
         """,
         unsafe_allow_html=True,
@@ -11959,19 +12983,23 @@ def render_capex10_investor_injection_cash_flow(
         with period_selector_col:
             st.selectbox(
                 "Período para analizar",
-                analysis_month_options,
-                format_func=lambda value: pd.Timestamp(value).strftime("%b %Y"),
+                analysis_period_options,
+                format_func=lambda value: "Todo" if value == analysis_all_option else pd.Timestamp(value).strftime("%b %Y"),
                 key=analysis_month_key,
-                help="Selecciona un único mes para el análisis del período.",
+                help="Selecciona todo el calendario o un único mes para el análisis del período.",
             )
         st.markdown(
             f"""
           <div class="cash-period-kpis">
-            <div class="cash-period-kpi" style="--c:#0E7490;"><span>Monto período seleccionado</span><b>{format_clp(period_flow)}</b><em>{len(period_items)} partidas filtradas</em></div>
-            <div class="cash-period-kpi" style="--c:#164E63;"><span>Monto acumulado al período</span><b>{format_clp(accumulated_hito_flow)}</b><em>Hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>
-            <div class="cash-period-kpi" style="--c:#0F766E;"><span>Inyección del período</span><b>{format_clp(period_injection)}</b><em>Entrada puntual</em></div>
-            <div class="cash-period-kpi" style="--c:#D7605E;"><span>Saldo plan al mes</span><b>{format_clp(plan_balance_to_period)}</b><em>Inyección - requerido</em></div>
-            {hito_kpi_html}
+            <div class="cash-period-kpi-row cash-period-kpi-row-main">
+              <div class="cash-period-kpi" style="--c:#0E7490;"><div class="cash-period-kpi-top"><span>REQ</span><strong>Período seleccionado</strong></div><b>{format_clp(period_flow)}</b><em>{len(period_items)} partidas filtradas</em></div>
+              <div class="cash-period-kpi" style="--c:#164E63;"><div class="cash-period-kpi-top"><span>ACUM</span><strong>Requerido al corte</strong></div><b>{format_clp(accumulated_hito_flow)}</b><em>Hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>
+              <div class="cash-period-kpi" style="--c:#0F766E;"><div class="cash-period-kpi-top"><span>IN</span><strong>Inyección período</strong></div><b>{format_clp(period_injection)}</b><em>Entrada puntual Plan A</em></div>
+              <div class="cash-period-kpi" style="--c:#D7605E;"><div class="cash-period-kpi-top"><span>GAP</span><strong>Saldo plan al mes</strong></div><b>{format_clp(plan_balance_to_period)}</b><em>Inyección - requerido</em></div>
+            </div>
+            <div class="cash-period-kpi-row cash-period-kpi-row-milestones">
+              {hito_kpi_html}
+            </div>
           </div>
             """,
             unsafe_allow_html=True,
@@ -11988,19 +13016,15 @@ def render_capex10_investor_injection_cash_flow(
             accumulated_period_table_items,
         )
 
-        if is_plan_a_selected:
-            with st.expander(f"Detalle {alternate_plan_label}", expanded=False):
-                render_period_tables(
-                    alternate_period_detail_display,
-                    alternate_period_items,
-                    alternate_accumulated_items,
-                    alternate_accumulated_detail_display,
-                    alternate_plan_label,
-                    "alternate",
-                    f"El período seleccionado no tiene partidas calendarizadas en {alternate_plan_label}.",
-                    alternate_period_table_items,
-                    alternate_accumulated_table_items,
-                )
+    render_period_aportes_detail(selected_plan_label, "active")
+    render_period_phase_line_detail(
+        period_table_items,
+        accumulated_period_table_items,
+        selected_plan_label,
+        "active",
+        show_responsible_detail=False,
+        show_concentration=True,
+    )
 
     responsible_flow_df = responsible_scope_df.copy() if responsible_scope_df is not None and not responsible_scope_df.empty else flow_df.copy()
     if "Disponible_CLP" in responsible_flow_df.columns:
@@ -12636,13 +13660,17 @@ def render_capex10_available_funds_by_phase_line() -> None:
             return {"label": line_name, "date": pd.NaT, "date_fmt": "-"}
         wanted_keys = {normalize_key(line_name), *{normalize_key(alias) for alias in (aliases or [])}}
         line_keys = milestone_source_df["Línea"].astype(str).map(normalize_key)
-        matching_mask = pd.Series(False, index=milestone_source_df.index)
+        exact_line_mask = pd.Series(False, index=milestone_source_df.index)
         for wanted_key in wanted_keys:
             if wanted_key:
-                matching_mask |= line_keys.eq(wanted_key)
-                matching_mask |= line_keys.str.contains(wanted_key, na=False, regex=False)
+                exact_line_mask |= line_keys.eq(wanted_key)
+        matching_mask = exact_line_mask.copy()
+        if not matching_mask.any():
+            for wanted_key in wanted_keys:
+                if wanted_key:
+                    matching_mask |= line_keys.str.contains(wanted_key, na=False, regex=False)
         method_col = first_matching_column(milestone_source_df, ["Método", "Metodo"])
-        if method_col:
+        if not matching_mask.any() and method_col:
             method_keys = milestone_source_df[method_col].astype(str).map(normalize_key)
             for wanted_key in wanted_keys:
                 if wanted_key:
@@ -12654,10 +13682,19 @@ def render_capex10_available_funds_by_phase_line() -> None:
         milestone_dates = pd.to_datetime(
             matching_rows[GANTT_DATE_COL_END_REAL],
             errors="coerce",
+            dayfirst=True,
         ).dropna()
         if milestone_dates.empty:
             return {"label": line_name, "date": pd.NaT, "date_fmt": "-"}
-        milestone_date = pd.Timestamp(milestone_dates.max())
+        if exact_line_mask.loc[matching_rows.index].any():
+            exact_dates = pd.to_datetime(
+                matching_rows.loc[exact_line_mask.loc[matching_rows.index], GANTT_DATE_COL_END_REAL],
+                errors="coerce",
+                dayfirst=True,
+            ).dropna()
+            milestone_date = pd.Timestamp(exact_dates.iloc[0] if not exact_dates.empty else milestone_dates.iloc[0])
+        else:
+            milestone_date = pd.Timestamp(milestone_dates.iloc[0])
         return {
             "label": line_name,
             "date": milestone_date,
@@ -24660,11 +25697,11 @@ def render_inputs_capex_10kw_detail():
             ):
                 st.session_state.pop(gantt_key, None)
 
-    valid_capex10_subblocks = {"control_fondos", "vista_integrada", "control_cost"}
+    valid_capex10_subblocks = {None, "control_fondos", "vista_integrada", "control_cost"}
     if capex10_subblock_key not in st.session_state:
-        st.session_state[capex10_subblock_key] = "control_cost"
+        st.session_state[capex10_subblock_key] = None
     elif st.session_state[capex10_subblock_key] not in valid_capex10_subblocks:
-        st.session_state[capex10_subblock_key] = "control_cost"
+        st.session_state[capex10_subblock_key] = None
 
     capex10_subblocks = [
         (
@@ -24710,6 +25747,8 @@ def render_inputs_capex_10kw_detail():
             )
 
     selected_capex10_subblock = st.session_state.get(capex10_subblock_key)
+    if selected_capex10_subblock is None:
+        return
     if selected_capex10_subblock == "vista_integrada":
         st.markdown(
             """
@@ -27377,9 +28416,49 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
         except Exception as exc:
             df_eerrv2 = pd.DataFrame()
             eerrv2_error = str(exc)
+        try:
+            df_eerr_drivers = load_eerr_drivers_data(EERR_DRIVERS_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+            eerr_drivers_error = None
+        except Exception as exc:
+            df_eerr_drivers = pd.DataFrame()
+            eerr_drivers_error = str(exc)
+        try:
+            df_eerrv2_80kw = load_eerrv2_data(EERRV2_80KW_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+            eerrv2_80kw_error = None
+        except Exception as exc:
+            df_eerrv2_80kw = pd.DataFrame()
+            eerrv2_80kw_error = str(exc)
+        try:
+            df_eerrv2_consolidated = load_eerrv2_data(EERRV2_CONSOLIDATED_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+            eerrv2_consolidated_error = None
+        except Exception as exc:
+            df_eerrv2_consolidated = pd.DataFrame()
+            eerrv2_consolidated_error = str(exc)
+        try:
+            df_eerr_kpis_master = load_eerrv2_data(EERR_KPIS_MASTER_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+            eerr_kpis_master_error = None
+        except Exception as exc:
+            df_eerr_kpis_master = pd.DataFrame()
+            eerr_kpis_master_error = str(exc)
+        try:
+            df_eerr_drivers_80kw = load_eerr_drivers_data(EERR_DRIVERS_80KW_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+            eerr_drivers_80kw_error = None
+        except Exception as exc:
+            df_eerr_drivers_80kw = pd.DataFrame()
+            eerr_drivers_80kw_error = str(exc)
     else:
         df_eerrv2 = pd.DataFrame()
         eerrv2_error = None
+        df_eerr_drivers = pd.DataFrame()
+        eerr_drivers_error = None
+        df_eerrv2_80kw = pd.DataFrame()
+        eerrv2_80kw_error = None
+        df_eerrv2_consolidated = pd.DataFrame()
+        eerrv2_consolidated_error = None
+        df_eerr_kpis_master = pd.DataFrame()
+        eerr_kpis_master_error = None
+        df_eerr_drivers_80kw = pd.DataFrame()
+        eerr_drivers_80kw_error = None
 
     if valorizacion_error:
         st.error(f"No se pudo cargar la valorización: {valorizacion_error}")
@@ -27499,14 +28578,29 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
 
     def get_initial_ebitda_average_from_payload(eerr_payload: dict, fallback_value: float) -> float:
         chart_df = eerr_payload.get("chart_df", pd.DataFrame()) if isinstance(eerr_payload, dict) else pd.DataFrame()
+        if not chart_df.empty and "Año" in chart_df.columns and "EBITDA" in chart_df.columns:
+            year_keys = chart_df["Año"].astype(str).map(normalize_key)
+            early_years = chart_df.loc[year_keys.isin({normalize_key("Año 1"), normalize_key("Año 2")}), "EBITDA"]
+            early_years = pd.to_numeric(early_years, errors="coerce").dropna()
+            if not early_years.empty:
+                return float(early_years.mean())
+        financial_kpis = eerr_payload.get("financial_kpis", {}) if isinstance(eerr_payload, dict) else {}
+        if isinstance(financial_kpis, dict):
+            summary_ebitda = float(financial_kpis.get("ebitda_year_5", 0.0) or 0.0)
+            if summary_ebitda:
+                return summary_ebitda
+        return float(fallback_value or 0.0)
+
+    def get_ebitda_for_year_from_payload(eerr_payload: dict, year_label: str, fallback_value: float) -> float:
+        chart_df = eerr_payload.get("chart_df", pd.DataFrame()) if isinstance(eerr_payload, dict) else pd.DataFrame()
         if chart_df.empty or "Año" not in chart_df.columns or "EBITDA" not in chart_df.columns:
             return float(fallback_value or 0.0)
-        year_keys = chart_df["Año"].astype(str).map(normalize_key)
-        early_years = chart_df.loc[year_keys.isin({normalize_key("AÑO 1"), normalize_key("AÑO 2")}), "EBITDA"]
-        early_years = pd.to_numeric(early_years, errors="coerce").dropna()
-        if early_years.empty:
+        year_key = normalize_key(year_label)
+        year_rows = chart_df.loc[chart_df["Año"].astype(str).map(normalize_key) == year_key, "EBITDA"]
+        year_rows = pd.to_numeric(year_rows, errors="coerce").dropna()
+        if year_rows.empty:
             return float(fallback_value or 0.0)
-        return float(early_years.mean())
+        return float(year_rows.iloc[0])
 
     group_widget_defaults = {
         "base": widget_defaults,
@@ -27526,11 +28620,31 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
     st.session_state.pop(shared_widget_key("inv_clp", "base"), None)
 
     model_items_tuple = tuple(sorted((str(k), "" if pd.isna(v) else str(v)) for k, v in model_map.items()))
+    _, eerr_drivers_map = get_eerr_drivers_model_map(df_eerr_drivers)
+    eerr_drivers_items_tuple = tuple(sorted((str(k), "" if pd.isna(v) else str(v)) for k, v in eerr_drivers_map.items()))
+    _, eerr_drivers_80kw_map = get_eerr_drivers_model_map(df_eerr_drivers_80kw)
+    eerr_drivers_80kw_items_tuple = tuple(sorted((str(k), "" if pd.isna(v) else str(v)) for k, v in eerr_drivers_80kw_map.items()))
     eerr_payload_base = (
-        build_eerrv2_payload(df_eerrv2, model_items_tuple, ebitda_unit_default)
+        build_eerrv2_payload(df_eerrv2, model_items_tuple, ebitda_unit_default, eerr_drivers_items_tuple)
         if not eerrv2_error and not df_eerrv2.empty
         else {}
     )
+    eerr_payload_80kw = (
+        build_eerrv2_payload(df_eerrv2_80kw, model_items_tuple, ebitda_unit_default, eerr_drivers_80kw_items_tuple)
+        if not eerrv2_80kw_error and not df_eerrv2_80kw.empty
+        else {}
+    )
+    eerr_payload_combined = (
+        build_eerrv2_payload(df_eerrv2_consolidated, model_items_tuple, ebitda_unit_default)
+        if not eerrv2_consolidated_error and not df_eerrv2_consolidated.empty
+        else {}
+    )
+    eerr_kpis_master_map = get_eerr_kpis_master_map(df_eerr_kpis_master) if not eerr_kpis_master_error else {}
+    eerr_kpis_master_80kw_map = get_eerr_kpis_master_product_map(df_eerr_kpis_master, "80 kW") if not eerr_kpis_master_error else {}
+    eerr_kpis_master_10kw_map = get_eerr_kpis_master_product_map(df_eerr_kpis_master, "10 kW") if not eerr_kpis_master_error else {}
+    eerr_payload_base = apply_kpis_master_to_payload(eerr_payload_base, eerr_kpis_master_10kw_map, source_label="KPIs Maestro · 10 kW")
+    eerr_payload_80kw = apply_kpis_master_to_payload(eerr_payload_80kw, eerr_kpis_master_80kw_map, source_label="KPIs Maestro · 80 kW")
+    eerr_payload_combined = apply_kpis_master_to_payload(eerr_payload_combined, eerr_kpis_master_map)
 
     st.markdown(
         """
@@ -27629,12 +28743,56 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
     )
 
     if bloque_sel == "1. Fundamentos de Creación de Valor":
+        financial_eval_options = [
+            "evaluación financiera 10kW",
+            "evaluación financiera 80kW",
+            "Evaluación financiera 10kw+80kw",
+        ]
+        financial_eval_view = st.selectbox(
+            "Selector de evaluación financiera",
+            financial_eval_options,
+            index=None,
+            placeholder="Selector de evaluación financiera",
+            key=widget_key("financial_eval_view"),
+        )
+        if financial_eval_view is None:
+            st.markdown(
+                """
+                <div class="inputs-info-box">
+                  <div class="inputs-info-k">EVALUACIÓN FINANCIERA SIN SELECCIÓN</div>
+                  <div class="inputs-info-t">Selecciona una evaluación financiera</div>
+                  <p class="inputs-info-p">El selector parte sin tomar 10kW, 80kW ni consolidado hasta que el usuario elija una opción.</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            return
+
         base_fx_preview = float(st.session_state.get(shared_state_key("fx", "base"), fx_default or 1))
         base_currency_preview = str(st.session_state.get(shared_state_key("investment_currency", "base"), "CLP"))
         volume_preview = float(st.session_state.get(shared_state_key("volume", "base"), volumen_default))
         ebitda_unit_preview = float(st.session_state.get(shared_state_key("ebitda_unit", "base"), ebitda_unit_default))
         ebitda_driver_preview = volume_preview * ebitda_unit_preview
-        market_ebitda_base_preview = get_initial_ebitda_average_from_payload(eerr_payload_base, ebitda_driver_preview)
+        if financial_eval_view == "Evaluación financiera 10kw+80kw":
+            active_eerr_payload = eerr_payload_combined
+            active_eerr_error = eerrv2_consolidated_error
+            active_eerr_label = "EERR Consolidado"
+        elif financial_eval_view == "evaluación financiera 80kW":
+            active_eerr_payload = eerr_payload_80kw
+            active_eerr_error = eerrv2_80kw_error
+            active_eerr_label = "EERR-80kW"
+        else:
+            active_eerr_payload = eerr_payload_base
+            active_eerr_error = eerrv2_error
+            active_eerr_label = "EERR-10kW"
+        if financial_eval_view in {"evaluación financiera 80kW", "Evaluación financiera 10kw+80kw"}:
+            market_ebitda_base_preview = get_initial_ebitda_average_from_payload(active_eerr_payload, ebitda_driver_preview)
+            ebitda_summary_title = "EBITDA promedio de arranque comercial"
+            ebitda_summary_note = "Promedio simple entre el EBITDA del Año 1 y Año 2 de la proyección financiera integrada; la tabla de múltiplos aplica esta base como referencia de valorización."
+        else:
+            market_ebitda_base_preview = get_initial_ebitda_average_from_payload(active_eerr_payload, ebitda_driver_preview)
+            ebitda_summary_title = "EBITDA promedio de arranque comercial"
+            ebitda_summary_note = "Promedio simple entre el EBITDA del Año 1 y Año 2 de la proyección financiera integrada; la tabla de múltiplos aplica esta base como referencia de valorización."
         ebitda_preview = market_ebitda_base_preview
         valorizacion_fluxial_preview = ebitda_preview
         market_multiple_values = [1.0, 3.0, 7.0]
@@ -27660,27 +28818,35 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
             + "".join(market_multiple_rows)
         )
         valorizacion_fluxial_preview_display = format_clp(valorizacion_fluxial_preview * base_fx_preview) if base_currency_preview == "CLP" else format_usd(valorizacion_fluxial_preview)
-        st.markdown(
-            f"""
-            <div class="val-summary-hero">
-              <div class="val-summary-grid">
-                <div>
-                  <div class="val-summary-k">EBITDA OBJETIVO EN REGIMEN</div>
-                  <div class="val-summary-t">EBITDA promedio de arranque comercial</div>
-                  <div class="val-summary-v">{valorizacion_fluxial_preview_display}</div>
-                  <div class="val-summary-p">
-                    Promedio simple entre el EBITDA del Año 1 y Año 2 de la proyección financiera integrada; la tabla de múltiplos aplica esta base como referencia de valorización.
+        if financial_eval_view in {"evaluación financiera 10kW", "evaluación financiera 80kW", "Evaluación financiera 10kw+80kw"}:
+            if active_eerr_error:
+                st.warning(f"No se pudo cargar {active_eerr_label}: {active_eerr_error}", icon="⚠️")
+            st.markdown(
+                f"""
+                <div class="val-summary-hero">
+                  <div class="val-summary-grid">
+                    <div>
+                      <div class="val-summary-k">EBITDA OBJETIVO EN REGIMEN</div>
+                      <div class="val-summary-t">{ebitda_summary_title}</div>
+                      <div class="val-summary-v">{valorizacion_fluxial_preview_display}</div>
+                      <div class="val-summary-p">
+                        {ebitda_summary_note}
+                      </div>
+                    </div>
+                    <div class="val-summary-panel">
+                      <div class="val-summary-panel-h">Rango de Valor según Múltiplos de Mercado</div>
+                      {composition_rows_preview}
+                    </div>
                   </div>
                 </div>
-                <div class="val-summary-panel">
-                  <div class="val-summary-panel-h">Rango de Valor según Múltiplos de Mercado</div>
-                  {composition_rows_preview}
-                </div>
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.info(
+                f"{financial_eval_view} está disponible en el selector. Falta conectar su modelo financiero para renderizar esta vista.",
+                icon="ℹ️",
+            )
     elif bloque_sel == "4. Serie B: Escalamiento Comercial":
         base_fx_preview = float(st.session_state.get(shared_state_key("fx", "base"), fx_default or 1))
         base_volume_preview = float(st.session_state.get(shared_state_key("volume", "base"), volumen_default))
@@ -28424,10 +29590,30 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
             unsafe_allow_html=True,
         )
 
-        if eerrv2_error:
-            st.error(f"No se pudo cargar EERRv2: {eerrv2_error}")
-        elif df_eerrv2.empty:
-            st.warning("La hoja EERRv2 no tiene datos disponibles.")
+        active_financial_eval_view = st.session_state.get(widget_key("financial_eval_view"), "evaluación financiera 10kW")
+        if active_financial_eval_view == "Evaluación financiera 10kw+80kw":
+            active_eerr_payload = eerr_payload_combined
+            active_eerr_error = eerrv2_consolidated_error
+            active_eerr_empty = not bool(eerr_payload_combined)
+            active_eerr_name = "EERR Consolidado"
+            active_chart_title = "Trayectoria operativa del modelo EERR Consolidado"
+        elif active_financial_eval_view == "evaluación financiera 80kW":
+            active_eerr_payload = eerr_payload_80kw
+            active_eerr_error = eerrv2_80kw_error
+            active_eerr_empty = df_eerrv2_80kw.empty
+            active_eerr_name = "EERR-80kW"
+            active_chart_title = "Trayectoria operativa del modelo EERR-80kW"
+        else:
+            active_eerr_payload = eerr_payload_base
+            active_eerr_error = eerrv2_error
+            active_eerr_empty = df_eerrv2.empty
+            active_eerr_name = "EERR-10kW"
+            active_chart_title = "Trayectoria operativa del modelo EERR-10kW"
+
+        if active_eerr_error:
+            st.error(f"No se pudo cargar {active_eerr_name}: {active_eerr_error}")
+        elif active_eerr_empty:
+            st.warning(f"La hoja {active_eerr_name} no tiene datos disponibles.")
         else:
             st.markdown(
                 """
@@ -28440,11 +29626,50 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
                 .eerr-mini-h{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748B;margin-bottom:6px}
                 .eerr-mini-v{font-size:28px;font-weight:800;color:#0f172a;line-height:1.05;margin-bottom:4px}
                 .eerr-mini-s{font-size:12px;color:#475569}
+                .fin-impact-grid{
+                    display:grid;
+                    grid-template-columns:repeat(6,minmax(0,1fr));
+                    gap:10px;
+                    margin:8px 0 18px 0;
+                }
+                @media (max-width:1200px){.fin-impact-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
+                @media (max-width:760px){.fin-impact-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+                .fin-impact-card{
+                    border-radius:12px;
+                    padding:12px 12px 11px 12px;
+                    border:1px solid rgba(14,116,144,.20);
+                    background:linear-gradient(180deg,#ffffff 0%,#f0fdfa 100%);
+                    box-shadow:0 10px 20px rgba(15,23,42,.055);
+                    min-height:104px;
+                }
+                .fin-impact-top{
+                    font-size:10px;
+                    line-height:1.15;
+                    font-weight:900;
+                    letter-spacing:.08em;
+                    text-transform:uppercase;
+                    color:#0f766e;
+                    margin-bottom:9px;
+                }
+                .fin-impact-value{
+                    font-size:22px;
+                    line-height:1.02;
+                    font-weight:950;
+                    color:#0f172a;
+                    white-space:nowrap;
+                }
+                .fin-impact-sub{
+                    font-size:11px;
+                    line-height:1.25;
+                    font-weight:650;
+                    color:#64748B;
+                    margin-top:8px;
+                }
                 </style>
                 """,
                 unsafe_allow_html=True,
             )
-            eerr_payload = eerr_payload_base
+            eerr_payload = active_eerr_payload
             eerr_data = eerr_payload["eerr_data"]
             cash_data = eerr_payload["cash_data"]
             kpi_map = eerr_payload["kpi_map"]
@@ -28454,34 +29679,160 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
             capex_inicial_eerr = eerr_payload["capex_inicial_eerr"]
             chart_df = eerr_payload["chart_df"]
 
-            col_eerr_1, col_eerr_2 = st.columns([1.7, 1])
-            with col_eerr_1:
-                st.markdown('<div class="eng-section-label">Lectura financiera integrada</div>', unsafe_allow_html=True)
-                st.markdown('<div class="eng-body-title">Proyección Financiera Integrada " Etapa comercial-escenario conservador"</div>', unsafe_allow_html=True)
-                render_engineering_html_table(
-                    eerr_data,
-                    bold_labels={"Margen bruto (USD)", "EBITDA (USD)"},
-                    height=360,
-                )
-            with col_eerr_2:
-                st.markdown('<div class="eng-section-label">Drivers técnicos del modelo</div>', unsafe_allow_html=True)
-                st.markdown('<div class="eng-body-title">Drivers unitarios del modelo</div>', unsafe_allow_html=True)
-                drv_row_1 = st.columns(2)
-                with drv_row_1[0]:
-                    kpi_card("Precio venta / turbina", format_usd(precio_venta_turbina), "Supuesto comercial unitario del modelo.", variant="sky")
-                with drv_row_1[1]:
-                    kpi_card("Costo estimado / turbina", format_usd(costo_estimado_turbina), "Costo directo unitario usado en valorización.", variant="sky")
-                drv_row_2 = st.columns(2)
-                with drv_row_2[0]:
-                    kpi_card("EBITDA unitario", format_usd(ebitda_unitario_val), "Margen operativo unitario por turbina.", variant="sky")
-            with drv_row_2[1]:
-                kpi_card("CAPEX inicial", format_usd(capex_inicial_eerr), "Valor base tomado de EERRv2 celda C15.", variant="sky")
+            financial_kpis = eerr_payload.get("financial_kpis", {})
+            if eerr_payload.get("source_structure") == "projection_matrix" and not precio_venta_turbina and not costo_estimado_turbina:
+                driver_cards = [
+                    ("CAPEX inicial", "Año 0 de la matriz", format_usd(capex_inicial_eerr)),
+                    ("EBITDA Año 5", "Régimen operativo", format_usd(financial_kpis.get("ebitda_year_5", 0.0))),
+                    ("Flujo libre Año 5", "Flujo libre del proyecto", format_usd(financial_kpis.get("cash_year_5", 0.0))),
+                    ("VAN @ 12%", "Serie de flujo libre", format_usd(financial_kpis.get("van", 0.0))),
+                ]
+            else:
+                driver_cards = [
+                    ("Precio venta / turbina", "Supuesto comercial unitario", format_usd(precio_venta_turbina)),
+                    ("Costo estimado / turbina", "Costo directo unitario", format_usd(costo_estimado_turbina)),
+                    ("EBITDA unitario", "Margen operativo por turbina", format_usd(ebitda_unitario_val)),
+                    ("CAPEX inicial", "Año 0 de la matriz", format_usd(capex_inicial_eerr)),
+                ]
+            driver_cards_html = "".join(
+                '<div class="fin-impact-card">'
+                f'<div class="fin-impact-top">{html.escape(str(label))}</div>'
+                f'<div class="fin-impact-value">{html.escape(str(value))}</div>'
+                f'<div class="fin-impact-sub">{html.escape(str(subtitle))}</div>'
+                '</div>'
+                for label, subtitle, value in driver_cards
+            )
+            st.markdown('<div class="eng-section-label">Drivers técnicos del modelo</div>', unsafe_allow_html=True)
+            st.markdown('<div class="eng-body-title">Drivers unitarios del modelo</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="fin-impact-grid">{driver_cards_html}</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="eng-section-label">Lectura financiera integrada</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="eng-body-title">Proyección Financiera Integrada "{active_eerr_name} - Etapa comercial-escenario conservador"</div>', unsafe_allow_html=True)
+            render_engineering_html_table(
+                eerr_data,
+                bold_labels={"Margen bruto (USD)", "EBITDA (USD)", "EBITDA", "Flujo libre proyecto"},
+                section_labels=set(eerr_payload.get("section_labels", set())),
+                height=520 if active_financial_eval_view == "Evaluación financiera 10kw+80kw" else 360,
+            )
 
             st.markdown('<div class="eng-body-title">Flujo de Caja del Proyecto y Estrategia de Reinversión</div>', unsafe_allow_html=True)
             render_engineering_html_table(
                 cash_data,
-                bold_labels={"EBITDA", "Flujo de caja neto"},
+                bold_labels={"EBITDA", "Flujo de caja neto", "Flujo libre proyecto"},
+                section_labels=set(eerr_payload.get("section_labels", set())),
                 height=420,
+            )
+            discount_rate = 0.12
+            investment_fin = float(eerr_payload.get("equity_inicial", 0.0) or 0.0)
+            if investment_fin <= 0:
+                investment_fin = float(eerr_payload.get("capex_inicial_eerr", 0.0) or 0.0)
+            if investment_fin <= 0:
+                investment_fin = abs(get_ebitda_for_year_from_chart(chart_df, "Caja_neta", "AÑO 0"))
+            yearly_cashflows_fin = [
+                get_ebitda_for_year_from_chart(chart_df, "Caja_neta", year)
+                for year in ["AÑO 1", "AÑO 2", "AÑO 3", "AÑO 4", "AÑO 5"]
+            ]
+            valuation_cashflows_fin = [-investment_fin, *yearly_cashflows_fin]
+            van_fin = financial_npv(discount_rate, valuation_cashflows_fin) if investment_fin > 0 else np.nan
+            tir_fin = financial_irr(valuation_cashflows_fin) if investment_fin > 0 else np.nan
+            payback_fin = financial_payback_years(investment_fin, yearly_cashflows_fin) if investment_fin > 0 else np.nan
+            ebitda_year_5_fin = get_ebitda_for_year_from_chart(chart_df, "EBITDA", "AÑO 5")
+            cash_year_5_fin = get_ebitda_for_year_from_chart(chart_df, "Caja_neta", "AÑO 5")
+            pv_positive_cashflows = sum(
+                cashflow / ((1.0 + discount_rate) ** idx)
+                for idx, cashflow in enumerate(yearly_cashflows_fin, start=1)
+            )
+            profitability_index_fin = pv_positive_cashflows / investment_fin if investment_fin > 0 else np.nan
+            direct_financial_kpis = eerr_payload.get("financial_kpis", {}) if isinstance(eerr_payload, dict) else {}
+            if direct_financial_kpis:
+                van_fin = float(direct_financial_kpis.get("van", van_fin) or 0.0)
+                tir_fin = float(direct_financial_kpis.get("tir", tir_fin) or 0.0)
+                payback_fin = float(direct_financial_kpis.get("payback", payback_fin) or 0.0)
+                ebitda_year_5_fin = float(direct_financial_kpis.get("ebitda_year_5", ebitda_year_5_fin) or 0.0)
+                cash_year_5_fin = float(direct_financial_kpis.get("cash_year_5", cash_year_5_fin) or 0.0)
+                profitability_index_fin = float(direct_financial_kpis.get("profitability_index", profitability_index_fin) or np.nan)
+
+            def fmt_pct_or_na(value: float) -> str:
+                return "N/A" if not np.isfinite(value) else f"{value:.1%}"
+
+            def fmt_years_or_na(value: float) -> str:
+                return "N/A" if not np.isfinite(value) else f"{value:.1f} años"
+
+            def fmt_ratio_or_na(value: float) -> str:
+                return "N/A" if not np.isfinite(value) else f"{value:.2f}x"
+
+            def fmt_money_or_na(value: float) -> str:
+                return "N/A" if not np.isfinite(value) else format_usd(value)
+
+            kpis_master_source_label = eerr_payload.get("kpis_master_source_label", "KPIs Maestro")
+            van_label = "VAN proyecto" if eerr_payload.get("kpis_master_source") else "VAN @ 12%"
+            van_subtitle = kpis_master_source_label if eerr_payload.get("kpis_master_source") else "Valor actual neto"
+            tir_subtitle = kpis_master_source_label if eerr_payload.get("kpis_master_source") else "Retorno del flujo"
+            payback_subtitle = kpis_master_source_label if eerr_payload.get("kpis_master_source") else "Recuperación"
+            first_level_cards = [
+                (van_label, van_subtitle, fmt_money_or_na(van_fin)),
+                ("TIR", tir_subtitle, fmt_pct_or_na(tir_fin)),
+                ("Payback", payback_subtitle, fmt_years_or_na(payback_fin)),
+                ("EBITDA Año 5", "Régimen operativo", fmt_money_or_na(ebitda_year_5_fin)),
+                ("Caja Año 5", "Flujo neto final", fmt_money_or_na(cash_year_5_fin)),
+                ("VP/Inversión", "Índice de rentabilidad", fmt_ratio_or_na(profitability_index_fin)),
+            ]
+            first_level_html = "".join(
+                '<div class="fin-impact-card">'
+                f'<div class="fin-impact-top">{html.escape(str(label))}</div>'
+                f'<div class="fin-impact-value">{html.escape(str(value))}</div>'
+                f'<div class="fin-impact-sub">{html.escape(str(subtitle))}</div>'
+                '</div>'
+                for label, subtitle, value in first_level_cards
+            )
+            st.markdown('<div class="eng-section-label">KPI financieros de primer nivel</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="eng-body-title">Lectura ejecutiva de retorno {active_eerr_name}</div>', unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <style>
+                .fin-impact-grid{{
+                    display:grid;
+                    grid-template-columns:repeat(6,minmax(0,1fr));
+                    gap:10px;
+                    margin:8px 0 18px 0;
+                }}
+                @media (max-width:1200px){{.fin-impact-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}}}
+                @media (max-width:760px){{.fin-impact-grid{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
+                .fin-impact-card{{
+                    border-radius:12px;
+                    padding:12px 12px 11px 12px;
+                    border:1px solid rgba(14,116,144,.20);
+                    background:linear-gradient(180deg,#ffffff 0%,#f0fdfa 100%);
+                    box-shadow:0 10px 20px rgba(15,23,42,.055);
+                    min-height:104px;
+                }}
+                .fin-impact-top{{
+                    font-size:10px;
+                    line-height:1.15;
+                    font-weight:900;
+                    letter-spacing:.08em;
+                    text-transform:uppercase;
+                    color:#0f766e;
+                    margin-bottom:9px;
+                }}
+                .fin-impact-value{{
+                    font-size:22px;
+                    line-height:1.02;
+                    font-weight:950;
+                    color:#0f172a;
+                    white-space:nowrap;
+                }}
+                .fin-impact-sub{{
+                    font-size:11px;
+                    line-height:1.25;
+                    font-weight:650;
+                    color:#64748B;
+                    margin-top:8px;
+                }}
+                </style>
+                <div class="fin-impact-grid">{first_level_html}</div>
+                """,
+                unsafe_allow_html=True,
             )
             st.markdown('<div class="eng-section-label">Desempeño consolidado</div>', unsafe_allow_html=True)
             st.markdown('<div class="eng-body-title">Desempeño Financiero y Operativo del Proyecto</div>', unsafe_allow_html=True)
@@ -28505,11 +29856,19 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
                         unsafe_allow_html=True,
                     )
 
+            chart_display_df = chart_df.copy()
+            if "Año" in chart_display_df.columns:
+                chart_display_df = chart_display_df[
+                    chart_display_df["Año"].astype(str).map(normalize_key) != normalize_key("Año 0")
+                ].copy()
+            if chart_display_df.empty:
+                chart_display_df = chart_df.copy()
+
             fig_eerr = go.Figure()
-            fig_eerr.add_trace(go.Bar(x=chart_df["Año"], y=chart_df["Ingresos_MM"], name="Ingresos", marker_color="#CFE8DA", hovertemplate="Ingresos %{x}: US$%{customdata:,.0f}<extra></extra>", customdata=chart_df["Ingresos"]))
-            fig_eerr.add_trace(go.Bar(x=chart_df["Año"], y=chart_df["EBITDA_MM"], name="EBITDA", marker_color="#0F766E", hovertemplate="EBITDA %{x}: US$%{customdata:,.0f}<extra></extra>", customdata=chart_df["EBITDA"]))
-            fig_eerr.add_trace(go.Scatter(x=chart_df["Año"], y=chart_df["Caja_MM"], name="Flujo caja neto", mode="lines+markers", line=dict(color="#1D4ED8", width=3), marker=dict(size=9, color="#1D4ED8"), hovertemplate="Caja neta %{x}: US$%{customdata:,.0f}<extra></extra>", customdata=chart_df["Caja_neta"], yaxis="y2"))
-            fig_eerr.update_layout(title="Trayectoria operativa del modelo EERRv2", barmode="group", height=420, margin=dict(l=10, r=10, t=60, b=10), plot_bgcolor="white", paper_bgcolor="rgba(0,0,0,0)", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0), yaxis=dict(title="Ingresos / EBITDA (MM USD)", showgrid=True, gridcolor="rgba(148,163,184,0.22)", zeroline=False), yaxis2=dict(title="Caja neta (MM USD)", overlaying="y", side="right", showgrid=False, zeroline=False))
+            fig_eerr.add_trace(go.Bar(x=chart_display_df["Año"], y=chart_display_df["Ingresos_MM"], name="Ingresos", marker_color="#CFE8DA", hovertemplate="Ingresos %{x}: US$%{customdata:,.0f}<extra></extra>", customdata=chart_display_df["Ingresos"]))
+            fig_eerr.add_trace(go.Bar(x=chart_display_df["Año"], y=chart_display_df["EBITDA_MM"], name="EBITDA", marker_color="#0F766E", hovertemplate="EBITDA %{x}: US$%{customdata:,.0f}<extra></extra>", customdata=chart_display_df["EBITDA"]))
+            fig_eerr.add_trace(go.Scatter(x=chart_display_df["Año"], y=chart_display_df["Caja_MM"], name="Flujo libre proyecto", mode="lines+markers", line=dict(color="#1D4ED8", width=3), marker=dict(size=9, color="#1D4ED8"), hovertemplate="Flujo libre %{x}: US$%{customdata:,.0f}<extra></extra>", customdata=chart_display_df["Caja_neta"], yaxis="y2"))
+            fig_eerr.update_layout(title=f"{active_chart_title} · datos {active_eerr_name}", barmode="group", height=420, margin=dict(l=10, r=10, t=60, b=10), plot_bgcolor="white", paper_bgcolor="rgba(0,0,0,0)", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0), yaxis=dict(title="Ingresos / EBITDA (MM USD)", showgrid=True, gridcolor="rgba(148,163,184,0.22)", zeroline=False), yaxis2=dict(title="Flujo libre (MM USD)", overlaying="y", side="right", showgrid=False, zeroline=False))
             st.plotly_chart(fig_eerr, use_container_width=True)
             actions_anchor = st.container()
 
@@ -29133,8 +30492,14 @@ input_cards = [
     ("mercado", "04 · Mercado y Propuesta Comercial"),
 ]
 
-if not st.session_state.get("inputs_bloque_sel"):
-    st.session_state["inputs_bloque_sel"] = "escalamiento"
+if st.session_state.get("inputs_nav_empty_default_version") != INPUT_NAV_EMPTY_DEFAULT_VERSION:
+    st.session_state["inputs_bloque_sel"] = None
+    st.session_state["inputs_val_bloque_sel"] = None
+    st.session_state.pop("inputs_val_financial_eval_view", None)
+    st.session_state.pop("val_financial_eval_view", None)
+    st.session_state["inputs_nav_empty_default_version"] = INPUT_NAV_EMPTY_DEFAULT_VERSION
+if "inputs_bloque_sel" not in st.session_state:
+    st.session_state["inputs_bloque_sel"] = None
 
 def selector_button_label(label: str, is_active: bool, action_label: str = "Abrir bloque") -> str:
     return f"{label} · Seleccionado" if is_active else action_label
@@ -29145,9 +30510,10 @@ def _set_inputs_bloque(value: str):
         st.session_state["inputs_estado_actual_subbloque_sel"] = None
     elif value == "escalamiento":
         st.session_state["inputs_escalamiento_capex_sel"] = "10kw"
-        st.session_state["inputs_capex10_subblock_sel"] = "control_cost"
+        st.session_state["inputs_capex10_subblock_sel"] = None
     elif value == "valorizacion":
         st.session_state["inputs_val_bloque_sel"] = None
+        st.session_state.pop("inputs_val_financial_eval_view", None)
     elif value == "mercado":
         st.session_state["inputs_market_block_sel"] = None
 
@@ -29399,6 +30765,8 @@ elif selected_input_block == "escalamiento":
 
     def _set_capex_focus(value: str):
         st.session_state[capex_selector_state_key] = value
+        if value == "10kw":
+            st.session_state["inputs_capex10_subblock_sel"] = None
 
     capex_80kw_view_state_key = "inputs_capex_80kw_view_sel"
 
@@ -29821,7 +31189,16 @@ elif selected_input_block == "valorizacion":
 elif selected_input_block == "mercado":
     render_telecom_tower_eval_analysis()
 else:
-    st.info("Selecciona uno de los KPIs principales para abrir sus sub-bloques y contenido.")
+    st.markdown(
+        """
+        <div class="inputs-info-box">
+          <div class="inputs-info-k">SIN BLOQUE SELECCIONADO</div>
+          <div class="inputs-info-t">Selecciona un bloque para comenzar</div>
+          <p class="inputs-info-p">Al abrir o actualizar la página, el panel principal queda sin selección activa.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # -------------------------
 # TAB RESUMEN
