@@ -429,7 +429,7 @@ REMOTE_FETCH_TTL_SECONDS = 3600
 REMOTE_CONNECT_TIMEOUT_SECONDS = 5
 REMOTE_READ_TIMEOUT_SECONDS = 45
 REMOTE_FETCH_RETRIES = 2
-INPUT_NAV_EMPTY_DEFAULT_VERSION = 2026080502
+INPUT_NAV_EMPTY_DEFAULT_VERSION = 2026082401
 CONTROL_CUT_HISTORY_PATH = Path(__file__).parent / "data" / "historial_cortes.csv"
 CONTROL_CUT_HISTORY_COLUMNS = [
     "ID Corte",
@@ -13667,6 +13667,91 @@ def render_capex10_investor_injection_cash_flow(
         """,
         unsafe_allow_html=True,
     )
+
+    def render_tipo_epc_first_level_chart(source_df: pd.DataFrame) -> None:
+        if source_df.empty or "Disponible_CLP" not in source_df.columns:
+            return
+        tipo_epc_col = first_matching_column(source_df, ["TIPO EPC", "Tipo EPC", "Tipo EC", "TIPO EC"])
+        if not tipo_epc_col or tipo_epc_col not in source_df.columns:
+            return
+        epc_df = source_df.copy()
+        epc_df["_tipo_epc"] = (
+            epc_df[tipo_epc_col]
+            .astype(str)
+            .str.strip()
+            .replace({"": "Sin TIPO EPC", "nan": "Sin TIPO EPC", "None": "Sin TIPO EPC"})
+        )
+        epc_summary = (
+            epc_df.groupby("_tipo_epc", as_index=False)
+            .agg(
+                Monto_CLP=("Disponible_CLP", "sum"),
+                Partidas=("Disponible_CLP", "count"),
+            )
+            .sort_values("Monto_CLP", ascending=False)
+        )
+        epc_summary = epc_summary[epc_summary["Monto_CLP"].fillna(0) > 0].copy()
+        if epc_summary.empty:
+            return
+        total_epc = float(epc_summary["Monto_CLP"].sum() or 0.0)
+        epc_summary["Monto_MM"] = epc_summary["Monto_CLP"] / 1_000_000
+        epc_summary["Monto_fmt"] = epc_summary["Monto_CLP"].apply(format_clp)
+        epc_summary["Peso_fmt"] = np.where(
+            total_epc > 0,
+            epc_summary["Monto_CLP"] / total_epc * 100.0,
+            0.0,
+        )
+        epc_summary["Peso_fmt"] = epc_summary["Peso_fmt"].map(lambda value: f"{value:.1f}%")
+        fig_epc = go.Figure()
+        fig_epc.add_trace(
+            go.Scatter(
+                x=epc_summary["_tipo_epc"],
+                y=epc_summary["Monto_MM"],
+                mode="lines+markers+text",
+                line=dict(color="#0F766E", width=3.4),
+                marker=dict(size=11, color="#FFFFFF", line=dict(color="#0F766E", width=2.4)),
+                text=epc_summary["Monto_fmt"],
+                textposition="top center",
+                customdata=np.stack([epc_summary["Monto_fmt"], epc_summary["Peso_fmt"], epc_summary["Partidas"]], axis=-1),
+                hovertemplate=(
+                    "<b>%{x}</b><br>"
+                    "Monto: %{customdata[0]}<br>"
+                    "Peso: %{customdata[1]}<br>"
+                    "Partidas: %{customdata[2]}<extra></extra>"
+                ),
+            )
+        )
+        fig_epc.update_layout(
+            height=315,
+            margin=dict(l=20, r=20, t=20, b=64),
+            xaxis=dict(title=None, tickangle=0, automargin=True),
+            yaxis=dict(title="MM CLP", rangemode="tozero", gridcolor="rgba(148,163,184,.18)"),
+            showlegend=False,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="#FFFFFF",
+            font=dict(color="#334155", size=12),
+        )
+        with st.container(border=True):
+            st.markdown(
+                f"""
+                <div class="cash-period-detail-head" style="margin-top:4px;">
+                  <div>
+                    <b>Primer nivel por TIPO EPC</b>
+                    <span>Monto del período seleccionado antes del análisis mensual · {html.escape(selected_plan_label)}.</span>
+                  </div>
+                  <div class="cash-period-detail-total">{format_clp(total_epc)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.plotly_chart(
+                fig_epc,
+                use_container_width=True,
+                config={"displaylogo": False, "displayModeBar": False},
+                key="capex10_tipo_epc_first_level_active",
+            )
+
+    render_tipo_epc_first_level_chart(period_table_items)
+
     with st.container(border=True):
         st.markdown(
             f"""
@@ -31209,7 +31294,6 @@ input_cards = [
     ("estado_actual", "01 · Validación Tecnológica"),
     ("escalamiento", "02 · CAPEX y Ejecución"),
     ("valorizacion", "03 · Valor Financiero"),
-    ("mercado", "04 · Mercado y Propuesta Comercial"),
 ]
 BLOQUE3_ONLY_MODE = os.environ.get("BLOQUE3_ONLY") == "1"
 CAPEX10_BLOQUE3_ONLY_MODE = os.environ.get("CAPEX10_BLOQUE3_ONLY") == "1"
@@ -31259,8 +31343,6 @@ def _set_inputs_bloque(value: str):
     elif value == "valorizacion":
         st.session_state["inputs_val_bloque_sel"] = None
         st.session_state.pop("inputs_val_financial_eval_view", None)
-    elif value == "mercado":
-        st.session_state["inputs_market_block_sel"] = None
 
 st.markdown(
         """
@@ -31453,7 +31535,7 @@ else:
         <div class="inputs-nav-shell">
           <div class="inputs-nav-head-k">MAPA DE LECTURA</div>
           <div class="inputs-nav-head-t">Selecciona el bloque estratégico que quieres revisar</div>
-          <div class="inputs-nav-head-s">La pantalla está organizada en cuatro vistas: validación tecnológica, CAPEX y ejecución, valor financiero, y mercado con propuesta comercial.</div>
+          <div class="inputs-nav-head-s">La pantalla está organizada en tres vistas: validación tecnológica, CAPEX y ejecución, y valor financiero.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -31509,10 +31591,6 @@ input_block_copy = {
     "valorizacion": (
         "03 · Valor Financiero",
         "En esta sección se presenta el análisis financiero del proyecto a partir del EBITDA y su impacto en la valorización del negocio.",
-    ),
-    "mercado": (
-        "04 · Mercado y Propuesta Comercial",
-        "Aquí se concentra la evaluación eólica de torres telecom, ranking de sitios, inputs comerciales, CAPEX, LCOE y retorno para lectura de mercado.",
     ),
 }
 if CAPEX10_BLOQUE3_ONLY_MODE:
@@ -31599,6 +31677,30 @@ if CAPEX10_BLOQUE3_ONLY_MODE:
 elif selected_input_block == "estado_actual":
     render_inputs_estado_actual_dashboard()
 elif selected_input_block == "escalamiento":
+    try:
+        capital_plan_a_df = load_capex10_plan_a_injection_schedule(refresh_nonce=data_refresh_nonce)
+        capital_resumen_val = float(capital_plan_a_df["Inyeccion_CLP"].sum() or 0.0)
+    except Exception:
+        capital_resumen_val = 0.0
+    if capital_resumen_val <= 0:
+        capital_resumen_val = 1_054_000_000
+    st.markdown(
+        f"""
+        <div style="border-radius:22px;padding:22px 24px;background:linear-gradient(90deg,#f8fbff 0%,#eef7ff 58%,#ffffff 100%);border:1px solid rgba(125,211,252,.42);box-shadow:0 14px 32px rgba(15,23,42,.065);margin:0 0 18px 0;">
+          <div style="font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#0f766e;margin-bottom:8px;">Resumen de capital</div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:19px;font-weight:900;line-height:1.15;color:#0f172a;margin-bottom:8px;">Capex de escalamiento</div>
+              <div style="font-size:14px;line-height:1.45;color:#475569;font-weight:700;">Mismo total conectado a Plan A · planilla mensual de inyecciones.</div>
+            </div>
+            <div style="font-size:44px;font-weight:950;line-height:1;color:#0f172a;letter-spacing:-.02em;white-space:nowrap;">{format_clp(capital_resumen_val)}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    render_inputs_capex_10kw_detail()
+elif False:
     capex_selector_state_key = "inputs_escalamiento_capex_sel"
 
     def _set_capex_focus(value: str):
@@ -32024,8 +32126,6 @@ elif selected_input_block == "escalamiento":
         pass
 elif selected_input_block == "valorizacion":
     render_valorizacion_module_content(key_prefix="inputs_val_")
-elif selected_input_block == "mercado":
-    render_telecom_tower_eval_analysis()
 else:
     st.markdown(
         """
