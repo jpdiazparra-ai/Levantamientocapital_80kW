@@ -16,6 +16,7 @@ import math
 import html
 import textwrap
 import time
+import os
 import requests
 import plotly.graph_objects as go
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -45,7 +46,7 @@ except ModuleNotFoundError:
 # CONFIGURACIÓN GLOBAL
 # =========================
 st.set_page_config(
-    page_title="CAPEX Piloto Eólico 80 kW",
+    page_title="CAPEX 10kW + Valor Financiero" if os.environ.get("CAPEX10_BLOQUE3_ONLY") == "1" else ("Valor Financiero · Bloque 3" if os.environ.get("BLOQUE3_ONLY") == "1" else "CAPEX Piloto Eólico 80 kW"),
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -136,7 +137,7 @@ CAPEX10_PLAN_A_INJECTION_CSV_URL_DEFAULT = (
     "2PACX-1vTtNr0ewSt0JQSemU9wlOhwnQQjjlRQ8IUltArZqnQ-m_V_8JpOt7ls3dRfcLNs71-hI_OC8wMvNWJw/"
     "pub?output=csv"
 )
-CAPEX10_PLAN_A_INJECTION_SOURCE_VERSION = 2026080301
+CAPEX10_PLAN_A_INJECTION_SOURCE_VERSION = 2026080701
 
 _HERO_CANDIDATES = [
     (Path(__file__).parent / "assets" / "hero_vawt.jpg").resolve(),
@@ -413,12 +414,16 @@ GANTT_DATE_COL_START = "Inicio (AAAA-MM-DD)"
 GANTT_DATE_COL_END_PLAN = "Fin plan (AAAA-MM-DD)"
 GANTT_DATE_COL_END_REAL = "Fin real"
 ASPAS_FRP_GANTT_PHASE_OPTION = "Fabricación ASPAS frp"
-GANTT_PROJECT_SOURCE_VERSION = 6
+GANTT_PROJECT_SOURCE_VERSION = 8
 GANTT_COLUMN_ALIASES = {
     "LÃ\xadnea": "Línea",
     "MÃ©todo": "Método",
     "UbicaciÃ³n": "Ubicación",
     "MitigaciÃ³n breve": "Mitigación breve",
+    "Sub-categoria": "Sub-categoria",
+    "Sub-categoría": "Sub-categoria",
+    "sub-categoria": "Sub-categoria",
+    "sub-categoría": "Sub-categoria",
 }
 REMOTE_FETCH_TTL_SECONDS = 3600
 REMOTE_CONNECT_TIMEOUT_SECONDS = 5
@@ -1404,17 +1409,24 @@ def parse_money_clp_robusto(x: str) -> float:
         return 0.0
 
 
-@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
 def load_capex10_plan_a_injection_schedule(refresh_nonce: int = 0) -> pd.DataFrame:
-    df = read_remote_csv(
-        CAPEX10_PLAN_A_INJECTION_CSV_URL_DEFAULT,
-        refresh_nonce=refresh_nonce + CAPEX10_PLAN_A_INJECTION_SOURCE_VERSION,
-        dtype=str,
-    ).fillna("")
+    source_url = (
+        f"{CAPEX10_PLAN_A_INJECTION_CSV_URL_DEFAULT}"
+        f"&_cb={CAPEX10_PLAN_A_INJECTION_SOURCE_VERSION}_{refresh_nonce}_{int(time.time() // 60)}"
+    )
+    response = requests.get(
+        source_url,
+        timeout=(REMOTE_CONNECT_TIMEOUT_SECONDS, REMOTE_READ_TIMEOUT_SECONDS),
+        headers={"User-Agent": "streamlit-render-capex-dashboard/1.0"},
+    )
+    response.raise_for_status()
+    df = pd.read_csv(BytesIO(response.content), dtype=str).fillna("")
     if df.empty:
         return pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Responsable", "Etiqueta"])
     date_col = first_matching_column(df, ["FECHA", "Fecha", "Date"])
-    amount_col = first_matching_column(df, ["Monto", "MONTO", "Inyección", "Inyeccion", "Capital"])
+    amount_col = next((col for col in df.columns if normalize_key(col) == normalize_key("Monto")), None)
+    if not amount_col:
+        amount_col = first_matching_column(df, ["Monto", "MONTO"])
     responsible_col = first_matching_column(df, ["Responsable", "RESPONSABLE"])
     if not date_col or not amount_col:
         return pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Responsable", "Etiqueta"])
@@ -5572,7 +5584,24 @@ def gantt_process_df(df: pd.DataFrame) -> pd.DataFrame:
         else:
             df[col] = pd.NaT
     if "%" in df.columns:
-        df["%"] = pd.to_numeric(df["%"], errors="coerce")
+        def _parse_gantt_progress(value: object) -> float:
+            if pd.isna(value):
+                return np.nan
+            if isinstance(value, (int, float, np.integer, np.floating)):
+                number = float(value)
+            else:
+                text = str(value).strip()
+                if not text or text.lower() in {"nan", "none", "-", "—"}:
+                    return np.nan
+                has_pct = "%" in text
+                number = parse_model_number(text)
+                if has_pct and number <= 1:
+                    number *= 100
+            if number <= 1:
+                number *= 100
+            return max(0.0, min(100.0, number))
+
+        df["%"] = df["%"].apply(_parse_gantt_progress)
         try:
             max_val = df["%"].max()
             if pd.notna(max_val) and max_val <= 1:
@@ -5586,9 +5615,11 @@ def gantt_process_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(show_spinner=False, ttl=60)
 def load_project_gantt_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
-    df = read_remote_csv(url, refresh_nonce=refresh_nonce + GANTT_PROJECT_SOURCE_VERSION + int(time.time() // 60), encoding="utf-8-sig")
+    fresh_token = refresh_nonce + GANTT_PROJECT_SOURCE_VERSION + int(time.time() // 60)
+    separator = "&" if "?" in url else "?"
+    fresh_url = f"{url}{separator}_cb={fresh_token}"
+    df = read_remote_csv(fresh_url, refresh_nonce=fresh_token, encoding="utf-8-sig")
     df.columns = [GANTT_COLUMN_ALIASES.get(str(c).strip(), str(c).strip()) for c in df.columns]
     return gantt_process_df(df)
 
@@ -6586,7 +6617,15 @@ def _gantt_summary(df: pd.DataFrame, date_mode: str = "Real") -> dict[str, objec
     ) if "Línea" in dfk.columns else 0
     avg_duration = int(round(((dfk["_end"] - dfk["_start"]).dt.days.clip(lower=1)).mean()))
     total_tasks = int(len(dfk))
-    progress_pct = int(round(100 * completed_tasks / total_tasks)) if total_tasks else 0
+    progress_col = first_matching_column(dfk, ["%", "Avance", "Avance Real %"])
+    if progress_col and progress_col in dfk.columns:
+        progress_values = pd.to_numeric(dfk[progress_col], errors="coerce").dropna()
+    else:
+        progress_values = pd.Series(dtype=float)
+    if not progress_values.empty:
+        progress_pct = int(round(float(progress_values.clip(lower=0, upper=100).mean())))
+    else:
+        progress_pct = int(round(100 * completed_tasks / total_tasks)) if total_tasks else 0
     dfk["_delay_days"] = (dfk["_end_real"] - dfk["_end_plan"]).dt.days
     delay_value = "0 d"
     delay_note = "Sin brecha positiva entre fin plan y fin real"
@@ -7112,7 +7151,7 @@ def render_inputs_gantt_kpis(df: pd.DataFrame, date_mode: str = "Real") -> None:
     st.markdown(f'<div class="gantt-kpi-band">{cards_html}</div>', unsafe_allow_html=True)
 
 
-def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real") -> tuple[str, str]:
+def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real") -> tuple[str, str, str]:
     def normalized_group(value: object) -> str:
         if pd.isna(value):
             return "Sin clasificación"
@@ -7132,10 +7171,46 @@ def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real"
     ) or '<span class="gantt-control-chip">Sin clasificación</span>'
     due_soon_active = bool(st.session_state.get("inputs_gantt_due_soon_only", False))
     due_soon_count = int(_gantt_due_soon_mask(df, date_mode=date_mode, days=7).sum())
+    subcategoria_col = first_matching_column(df, ["Sub-categoria", "Sub categoría", "Subcategoria"])
+    requested_subcategorias = [
+        "Ingeniería y Desarrollo Técnico",
+        "Gestión y Control de Proyecto",
+    ]
+    if subcategoria_col and subcategoria_col in df.columns:
+        available_subcategorias = (
+            df[subcategoria_col]
+            .astype(str)
+            .str.strip()
+            .replace({"": np.nan, "nan": np.nan, "None": np.nan})
+            .dropna()
+            .drop_duplicates()
+            .tolist()
+        )
+    else:
+        available_subcategorias = []
+    subcategoria_by_key = {normalize_key(value): value for value in available_subcategorias}
+    subcategoria_options = ["Todas"] + [
+        subcategoria_by_key.get(normalize_key(label), label)
+        for label in requested_subcategorias
+    ]
+    for value in sorted(available_subcategorias, key=lambda item: str(item).casefold()):
+        if normalize_key(value) not in {normalize_key(option) for option in subcategoria_options}:
+            subcategoria_options.append(value)
+    default_subcategoria = subcategoria_by_key.get(
+        normalize_key("Ingeniería y Desarrollo Técnico"),
+        "Ingeniería y Desarrollo Técnico",
+    )
+    if default_subcategoria not in subcategoria_options:
+        default_subcategoria = "Todas"
+    if (
+        st.session_state.get("inputs_gantt_subcategoria") not in subcategoria_options
+        or st.session_state.get("inputs_gantt_subcategoria") == "Todas"
+    ):
+        st.session_state["inputs_gantt_subcategoria"] = default_subcategoria
 
     with st.container(border=True):
         st.markdown('<span class="gantt-controls-marker"></span>', unsafe_allow_html=True)
-        legend_col, horizon_col, view_col, symbol_col = st.columns([3.0, 1.85, 2.15, 2.0])
+        legend_col, horizon_col, subcategoria_col_ui, view_col, symbol_col = st.columns([2.55, 1.55, 2.25, 2.05, 1.75])
         with legend_col:
             st.markdown(
                 f'<div class="gantt-control-label">Barras por {html.escape(color_field)}</div>'
@@ -7165,6 +7240,12 @@ def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real"
                 key="inputs_gantt_time_range",
                 help="Muestra actividades que intersectan el horizonte contado desde el inicio del bloque filtrado.",
             )
+        with subcategoria_col_ui:
+            subcategoria_sel = st.selectbox(
+                "Sub-categoria",
+                subcategoria_options,
+                key="inputs_gantt_subcategoria",
+            )
         with view_col:
             gantt_view_mode = st.radio(
                 "Vista Gantt",
@@ -7183,7 +7264,7 @@ def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real"
                 '</div>',
                 unsafe_allow_html=True,
             )
-    return time_range, gantt_view_mode
+    return time_range, gantt_view_mode, subcategoria_sel
 
 
 def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Real") -> None:
@@ -7347,8 +7428,6 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
         </div>
     """).strip()
     summary_html = "\n".join(line.lstrip() for line in summary_html.splitlines())
-    with st.expander("Resumen ejecutivo", expanded=False):
-        st.markdown(summary_html, unsafe_allow_html=True)
 
     if delayed_df.empty:
         return
@@ -7376,9 +7455,9 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
         delay_rows.append(
             f'<tr>'
             f'<td><span class="gantt-delay-rank">#{rank}</span></td>'
-            f'<td><div class="gantt-delay-task"><b>{html.escape(task)}</b><small>{html.escape(task_id or "Sin ID")} · {html.escape(etapa)}</small></div></td>'
-            f'<td>{html.escape(fase)}</td>'
-            f'<td>{html.escape(linea)}</td>'
+            f'<td class="gantt-delay-task-cell"><div class="gantt-delay-task"><span>{html.escape(task)}</span><small>{html.escape(task_id or "Sin ID")} · {html.escape(etapa)}</small></div></td>'
+            f'<td class="gantt-delay-fase">{html.escape(fase)}</td>'
+            f'<td class="gantt-delay-linea">{html.escape(linea)}</td>'
             f'<td><span class="gantt-delay-status">{html.escape(estado_val)}</span></td>'
             f'<td>{html.escape(_fmt_delay_date(row.get("_end_plan")))}</td>'
             f'<td>{html.escape(_fmt_delay_date(row.get("_end_real")))}</td>'
@@ -7397,11 +7476,13 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
         ".gantt-delay-table{width:100%;border-collapse:separate;border-spacing:0;min-width:1080px;color:#071427;}"
         ".gantt-delay-table th{position:sticky;top:0;background:#F8FAFC;color:#64748B;font-size:10px;letter-spacing:.075em;text-transform:uppercase;font-weight:950;text-align:left;padding:11px 12px;border-bottom:1px solid rgba(226,232,240,.96);}"
         ".gantt-delay-table td{padding:12px;border-bottom:1px solid rgba(226,232,240,.78);vertical-align:middle;font-size:12px;font-weight:800;}"
+        ".gantt-delay-table td.gantt-delay-task-cell,.gantt-delay-table td.gantt-delay-linea{font-weight:400;color:#334155;}"
+        ".gantt-delay-table td.gantt-delay-fase{font-weight:400;color:#334155;}"
         ".gantt-delay-table tr:last-child td{border-bottom:0;}"
         ".gantt-delay-table tr:hover td{background:#FBFDFC;}"
         ".gantt-delay-rank{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;border-radius:999px;background:#071427;color:#FFFFFF;font-size:12px;font-weight:950;}"
         ".gantt-delay-task{display:grid;gap:3px;min-width:0;}"
-        ".gantt-delay-task b{display:block;font-size:13px;line-height:1.16;color:#071427;font-weight:950;overflow-wrap:anywhere;}"
+        ".gantt-delay-task span{display:block;font-size:13px;line-height:1.16;color:#334155;font-weight:400;overflow-wrap:anywhere;}"
         ".gantt-delay-task small{display:block;color:#64748B;font-size:11px;line-height:1.2;font-weight:850;overflow-wrap:anywhere;}"
         ".gantt-delay-status{display:inline-flex;align-items:center;max-width:170px;border-radius:999px;background:#F1F5F9;color:#334155;padding:5px 9px;font-size:10.5px;font-weight:950;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}"
         ".gantt-delay-days{display:grid;grid-template-columns:54px minmax(110px,1fr);gap:10px;align-items:center;}"
@@ -10512,6 +10593,7 @@ def render_inputs_project_gantt():
 
     render_inputs_gantt_design_css()
     gantt_header_slot = st.empty()
+    gantt_kpi_slot = st.empty()
 
     has_linea = "Línea" in df_gantt.columns
     metodo_col = first_matching_column(df_gantt, ["Método", "Metodo"])
@@ -10534,7 +10616,6 @@ def render_inputs_project_gantt():
                     if any(token in str(etapa).casefold() for token in ("primera", "segunda"))
                 ] or raw_etapas
                 etapa_options = sorted(etapa_options, key=lambda value: 0 if "segunda" in str(value).casefold() else 1)
-                etapa_default = next((etapa for etapa in etapa_options if "segunda" in str(etapa).casefold()), etapa_options[0] if etapa_options else "Todas")
                 if not etapa_options:
                     etapa_options = ["Todas"]
                 etapa_saved = st.session_state.pop("inputs_gantt_etapa__sticky", None)
@@ -10544,7 +10625,7 @@ def render_inputs_project_gantt():
                     restored_etapas = [etapa for etapa in etapa_saved if etapa in etapa_options and etapa != "Todas"]
                     st.session_state["inputs_gantt_etapa"] = restored_etapas
                 elif "inputs_gantt_etapa" not in st.session_state:
-                    st.session_state["inputs_gantt_etapa"] = [etapa_default] if etapa_default in etapa_options else []
+                    st.session_state["inputs_gantt_etapa"] = []
                 elif isinstance(st.session_state["inputs_gantt_etapa"], str):
                     etapa_value = st.session_state["inputs_gantt_etapa"]
                     st.session_state["inputs_gantt_etapa"] = [] if etapa_value == "Todas" else [etapa_value]
@@ -10635,6 +10716,15 @@ def render_inputs_project_gantt():
             if isinstance(estado_default, str):
                 estado_default = [] if estado_default == "Todos" else [estado_default]
             estado_default = [estado for estado in estado_default if estado in estados]
+            if "inputs_gantt_estado" not in st.session_state or not estado_default:
+                default_estado_keys = {"pendiente", "encurso"}
+                default_estado = [
+                    estado
+                    for estado in estados
+                    if normalize_key(estado) in default_estado_keys
+                ]
+                if default_estado:
+                    estado_default = default_estado
             st.session_state["inputs_gantt_estado"] = estado_default
             estado_sel = st.multiselect(
                 "Estado",
@@ -10704,14 +10794,26 @@ def render_inputs_project_gantt():
             st.info("No hay actividades con vencimiento en menos de 7 días para los filtros seleccionados.")
             return
 
-    with gantt_header_slot.container():
-        render_inputs_gantt_header(plot_df, date_mode=date_mode)
-    render_inputs_gantt_kpis(plot_df, date_mode=date_mode)
-
     gantt_title = "Cronograma" if fase_sel == "Todas" else f"Cronograma {fase_sel}"
     if due_soon_only:
         gantt_title = f"{gantt_title} · Vencen en menos de 7 días"
-    time_range, gantt_view_mode = render_inputs_gantt_chart_controls(plot_df, date_mode=date_mode)
+    time_range, gantt_view_mode, subcategoria_sel = render_inputs_gantt_chart_controls(plot_df, date_mode=date_mode)
+    subcategoria_filter_col = first_matching_column(plot_df, ["Sub-categoria", "Sub categoría", "Subcategoria"])
+    if subcategoria_sel != "Todas" and subcategoria_filter_col and subcategoria_filter_col in plot_df.columns:
+        selected_subcategoria_key = normalize_key(subcategoria_sel)
+        plot_df = plot_df[
+            plot_df[subcategoria_filter_col].astype(str).map(normalize_key).eq(selected_subcategoria_key)
+        ].copy()
+        gantt_title = f"{gantt_title} · {subcategoria_sel}"
+        if plot_df.empty:
+            with gantt_header_slot.container():
+                render_inputs_gantt_header(plot_df, date_mode=date_mode)
+            st.info("No hay tareas para la sub-categoria seleccionada.")
+            return
+    with gantt_header_slot.container():
+        render_inputs_gantt_header(plot_df, date_mode=date_mode)
+    with gantt_kpi_slot.container():
+        render_inputs_gantt_kpis(plot_df, date_mode=date_mode)
     sequence_tasks = gantt_view_mode == "Secuencia tareas"
     if sequence_tasks:
         gantt_title = f"{gantt_title} · Secuencia de tareas"
@@ -10912,7 +11014,12 @@ def _capex10_selected_hito_specs(selected_metodos: list[str]) -> list[dict[str, 
     for metodo in selected_metodos or []:
         key = normalize_key(metodo)
         spec: dict[str, object] | None = None
-        if "hitoproducto" in key or "hito3" in key or key == "producto":
+        if ("hitoproducto" in key and "80kw" in key) or "hitoproducto80kw" in key or "producto80kw" in key:
+            spec = {
+                "label": "Hito Producto 80 kW",
+                "aliases": ["hitoproducto80kw", "producto80kw", "hito producto 80 kw", "producto 80 kw"],
+            }
+        elif "hitoproducto" in key or "hito3" in key or key == "producto":
             spec = {
                 "label": "Hito Producto",
                 "aliases": ["hitoproducto", "hito3", "producto"],
@@ -11207,6 +11314,11 @@ def render_capex10_investor_injection_cash_flow(
                 if date_sticky_key in st.session_state:
                     st.session_state[date_key] = st.session_state.pop(date_sticky_key)
                 if key_suffix == "plan_a_extra" and injection_idx == 0:
+                    amount_default = 0
+                    migration_key = "capex10_plan_a_extra_default_zero_v1"
+                    if not st.session_state.get(migration_key) and st.session_state.get(amount_key, 54_000_000) == 54_000_000:
+                        st.session_state[amount_key] = 0
+                        st.session_state[migration_key] = True
                     date_default = pd.Timestamp("2026-09-30").date()
                     st.session_state[date_key] = date_default
                 if injection_idx >= injection_count_int:
@@ -11369,6 +11481,80 @@ def render_capex10_investor_injection_cash_flow(
     commitment_monthly["Acumulado_CLP"] = commitment_monthly["Flujo_CLP"].cumsum()
     commitment_monthly["Inyeccion_acumulada_CLP"] = commitment_monthly["Inyeccion_CLP"].cumsum()
     commitment_monthly["Saldo_caja_CLP"] = commitment_monthly["Inyeccion_acumulada_CLP"] - commitment_monthly["Acumulado_CLP"]
+    hito_strip_cutoff_month = pd.Timestamp(commitment_monthly["_month"].max()).to_period("M").to_timestamp()
+
+    hito_strip_scope_df = flow_df[flow_df["_month"].le(hito_strip_cutoff_month)].copy()
+    text_columns = [
+        col
+        for col in [
+            first_matching_column(hito_strip_scope_df, ["Método", "Metodo"]),
+            "Línea",
+            "Fase",
+            "Tarea / Entregable",
+        ]
+        if col and col in hito_strip_scope_df.columns
+    ]
+    hito_strip_scope_df["_hito_key"] = ""
+    for col in text_columns:
+        hito_strip_scope_df["_hito_key"] = hito_strip_scope_df["_hito_key"] + hito_strip_scope_df[col].astype(str).map(normalize_key)
+    hito_strip_scope_df["_hito_label"] = "Sin hito"
+    hito_key_series = hito_strip_scope_df["_hito_key"]
+    hito_strip_scope_df.loc[
+        hito_key_series.str.contains("hitopremontaje|premontaje", regex=True, na=False),
+        "_hito_label",
+    ] = "Hito Pre-Montaje"
+    hito_strip_scope_df.loc[
+        hito_key_series.str.contains("hitomontaje", regex=False, na=False)
+        & ~hito_key_series.str.contains("premontaje", regex=False, na=False),
+        "_hito_label",
+    ] = "Hito Montaje"
+    hito_strip_scope_df.loc[
+        hito_key_series.str.contains("hitoproducto", regex=False, na=False)
+        & ~hito_key_series.str.contains("hitoproducto80kw|producto80kw", regex=True, na=False),
+        "_hito_label",
+    ] = "Hito Producto"
+    hito_strip_scope_df.loc[
+        hito_key_series.str.contains("hitopiloto80kw|piloto80kw", regex=True, na=False),
+        "_hito_label",
+    ] = "Hito Piloto 80 kW"
+    hito_strip_scope_df.loc[
+        hito_key_series.str.contains("hitoproducto80kw|producto80kw", regex=True, na=False),
+        "_hito_label",
+    ] = "Hito Producto 80 kW"
+    hito_strip_amounts = hito_strip_scope_df.groupby("_hito_label")["Disponible_CLP"].sum().to_dict()
+    hito_strip_specs = [
+        ("Hito Pre-Montaje", float(hito_strip_amounts.get("Hito Pre-Montaje", 0.0)), "#164E63"),
+        ("Hito Montaje", float(hito_strip_amounts.get("Hito Montaje", 0.0)), "#1E3A8A"),
+        ("Hito Producto", float(hito_strip_amounts.get("Hito Producto", 0.0)), "#B7791F"),
+        ("Hito Piloto 80 kW", float(hito_strip_amounts.get("Hito Piloto 80 kW", 0.0)), "#0E7490"),
+        ("Hito Producto 80 kW", float(hito_strip_amounts.get("Hito Producto 80 kW", 0.0)), "#C27A16"),
+    ]
+    unclassified_hito_amount = float(hito_strip_amounts.get("Sin hito", 0.0))
+    if unclassified_hito_amount:
+        hito_strip_specs.append(("Sin hito clasificado", unclassified_hito_amount, "#64748B"))
+    hito_strip_sum_clp = sum(float(amount or 0.0) for _, amount, _ in hito_strip_specs)
+    hito_strip_required_clp = float(commitment_monthly["Flujo_CLP"].sum() or 0.0)
+    hito_strip_delta_clp = hito_strip_sum_clp - hito_strip_required_clp
+    hito_strip_html = "".join(
+        f"""
+        <div class="cash-hito-kpi" style="--c:{color};">
+          <div class="cash-hito-top">HITO</div>
+          <div class="cash-hito-name">{html.escape(label.upper())}</div>
+          <div class="cash-hito-value">{format_clp(amount)}</div>
+          <div class="cash-hito-sub">Acumulado hasta {hito_strip_cutoff_month.strftime('%b %Y')}</div>
+        </div>
+        """
+        for label, amount, color in hito_strip_specs
+    )
+    hito_strip_delta_color = "#15803D" if abs(hito_strip_delta_clp) < 1 else "#C2410C"
+    hito_strip_html += f"""
+        <div class="cash-hito-kpi cash-hito-total" style="--c:#071427;">
+          <div class="cash-hito-top">CONTROL</div>
+          <div class="cash-hito-name">SUMA HITOS = ACUMULADO REQUERIDO</div>
+          <div class="cash-hito-value">{format_clp(hito_strip_sum_clp)}</div>
+          <div class="cash-hito-sub" style="color:{hito_strip_delta_color};">Diferencia {format_clp(hito_strip_delta_clp)}</div>
+        </div>
+    """
     commitment_x = commitment_monthly["_month"]
     fig_commitment = go.Figure()
     fig_commitment.add_trace(
@@ -11496,7 +11682,7 @@ def render_capex10_investor_injection_cash_flow(
                 borderwidth=1,
                 borderpad=2,
             )
-    milestone_colors = ["#B7791F", "#7C2D12", "#0E7490"]
+    milestone_colors = ["#B7791F", "#7C2D12", "#0E7490", "#C27A16"]
     for milestone_idx, milestone in enumerate(valid_milestones):
         milestone_date = parse_cashflow_date(milestone["date"])
         milestone_month = milestone_date.to_period("M").to_timestamp()
@@ -11535,10 +11721,10 @@ def render_capex10_investor_injection_cash_flow(
     final_commitment = commitment_monthly.iloc[-1]
     final_commitment_label = pd.Timestamp(final_commitment["_month"])
     final_label_positions: list[float] = []
-    for value_col, label_color, bg_color in [
-        ("Acumulado_CLP", "#1E3A8A", "rgba(239,246,255,.96)"),
-        ("Inyeccion_acumulada_CLP", "#0F766E", "rgba(236,253,245,.96)"),
-        ("Saldo_caja_CLP", "#D7605E", "rgba(255,247,237,.96)"),
+    for value_col, label_color, bg_color, yshift in [
+        ("Acumulado_CLP", "#1E3A8A", "rgba(239,246,255,.96)", 24),
+        ("Inyeccion_acumulada_CLP", "#0F766E", "rgba(236,253,245,.96)", 0),
+        ("Saldo_caja_CLP", "#D7605E", "rgba(255,247,237,.96)", -24),
     ]:
         final_y = float(final_commitment[value_col]) / 1_000_000
         while any(abs(final_y - used_y) < 18 for used_y in final_label_positions):
@@ -11551,6 +11737,7 @@ def render_capex10_investor_injection_cash_flow(
             showarrow=False,
             xanchor="left",
             xshift=12,
+            yshift=yshift,
             align="left",
             font=dict(size=13, color=label_color),
             bgcolor=bg_color,
@@ -11569,6 +11756,102 @@ def render_capex10_investor_injection_cash_flow(
         plot_bgcolor="rgba(0,0,0,0)",
     )
     st.plotly_chart(fig_commitment, use_container_width=True, config={"displaylogo": False})
+    components.html(
+        f"""
+        <style>
+          html,body{{
+            margin:0;
+            padding:0;
+            background:transparent;
+            font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+          }}
+          .cash-hito-head{{
+            margin:16px 0 7px 0;
+            padding:0 2px;
+          }}
+          .cash-hito-head b{{
+            display:block;
+            color:#071427;
+            font-size:15px;
+            line-height:1.08;
+            font-weight:950;
+          }}
+          .cash-hito-head span{{
+            display:block;
+            color:#64748B;
+            font-size:10px;
+            line-height:1.2;
+            font-weight:850;
+            margin-top:3px;
+          }}
+          .cash-hito-strip{{
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:7px;
+            margin:0 0 28px 0;
+          }}
+          .cash-hito-kpi{{
+            border:1px solid color-mix(in srgb,var(--c) 32%,#CBD5E1);
+            border-left:5px solid var(--c);
+            border-radius:8px;
+            background:
+              linear-gradient(90deg,rgba(15,23,42,.035) 1px,transparent 1px),
+              linear-gradient(180deg,#FFFFFF 0%,color-mix(in srgb,var(--c) 7%,#FFFFFF) 100%);
+            background-size:18px 100%,100% 100%;
+            padding:5px 8px;
+            min-height:52px;
+            box-shadow:0 7px 16px rgba(15,23,42,.04);
+          }}
+          .cash-hito-top{{
+            width:max-content;
+            border-radius:999px;
+            background:color-mix(in srgb,var(--c) 12%,#FFFFFF);
+            color:var(--c);
+            border:1px solid color-mix(in srgb,var(--c) 24%,#CBD5E1);
+            padding:1px 5px;
+            font-size:7px;
+            font-weight:950;
+            letter-spacing:.08em;
+          }}
+          .cash-hito-name{{
+            color:#334155;
+            font-size:8.5px;
+            font-weight:950;
+            margin-top:3px;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+          }}
+          .cash-hito-value{{
+            color:#071427;
+            font-size:14px;
+            line-height:1;
+            font-weight:950;
+            margin-top:3px;
+            white-space:nowrap;
+          }}
+          .cash-hito-sub{{
+            color:#64748B;
+            font-size:7.5px;
+            font-weight:850;
+            margin-top:2px;
+          }}
+          .cash-hito-total{{
+            background:linear-gradient(180deg,#F8FAFC,#FFFFFF);
+            border-style:double;
+          }}
+          @media(max-width:1100px){{.cash-hito-strip{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
+          @media(max-width:720px){{.cash-hito-strip{{grid-template-columns:1fr;}}}}
+        </style>
+        <div class="cash-hito-head">
+          <b>Lectura funcional por hito</b>
+          <span>Montos no pagados acumulados hasta el corte del plan</span>
+        </div>
+        <div class="cash-hito-strip">{hito_strip_html}</div>
+        """,
+        height=201,
+        scrolling=False,
+    )
 
     analysis_month_options = [pd.Timestamp(value).to_period("M").to_timestamp() for value in commitment_monthly["_month"].tolist()]
     analysis_all_option = "__all__"
@@ -11785,6 +12068,7 @@ def render_capex10_investor_injection_cash_flow(
         key_suffix: str,
         show_responsible_detail: bool = True,
         show_concentration: bool = True,
+        show_consolidated_detail: bool = False,
     ) -> None:
         if scope_df.empty or "Disponible_CLP" not in scope_df.columns:
             st.info("No hay detalle por responsable, fase y línea para el período seleccionado.")
@@ -11967,15 +12251,16 @@ def render_capex10_investor_injection_cash_flow(
               .cash-period-resp-card{{
                 position:relative;
                 overflow:hidden;
-                border:1px solid rgba(148,163,184,.32);
+                border:1px solid color-mix(in srgb,var(--resp-color) 34%,#CBD5E1);
                 border-radius:10px;
                 background:
-                  linear-gradient(90deg,rgba(15,23,42,.035) 1px,transparent 1px),
-                  linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);
-                background-size:18px 100%,100% 100%;
+                  linear-gradient(90deg,color-mix(in srgb,var(--resp-color) 16%,transparent) 1px,transparent 1px),
+                  radial-gradient(circle at 100% 0%,color-mix(in srgb,var(--resp-color) 24%,transparent),transparent 34%),
+                  linear-gradient(180deg,color-mix(in srgb,var(--resp-color) 18%,#FFFFFF) 0%,color-mix(in srgb,var(--resp-color) 8%,#F8FAFC) 100%);
+                background-size:18px 100%,100% 100%,100% 100%;
                 padding:12px;
                 margin:0 0 10px;
-                box-shadow:0 10px 22px rgba(15,23,42,.045);
+                box-shadow:0 10px 22px color-mix(in srgb,var(--resp-color) 12%,rgba(15,23,42,.045));
               }}
               .cash-period-resp-card:before{{
                 content:"";
@@ -11984,17 +12269,27 @@ def render_capex10_investor_injection_cash_flow(
                 left:0;
                 right:0;
                 height:5px;
-                background:linear-gradient(90deg,var(--resp-color),rgba(255,255,255,0));
+                background:linear-gradient(90deg,var(--resp-color),color-mix(in srgb,var(--resp-color) 20%,rgba(255,255,255,0)));
+              }}
+              .cash-period-resp-card:after{{
+                content:"";
+                position:absolute;
+                inset:0;
+                pointer-events:none;
+                background:linear-gradient(180deg,rgba(255,255,255,.18) 0%,rgba(255,255,255,.04) 100%);
+                opacity:.18;
               }}
               .cash-period-resp-title{{
                 display:grid;
                 grid-template-columns:minmax(0,1fr) auto;
                 gap:14px;
                 align-items:start;
-                border:1px solid rgba(226,232,240,.95);
-                border-left:5px solid var(--resp-color);
+                position:relative;
+                z-index:1;
+                border:1px solid color-mix(in srgb,var(--resp-color) 42%,#CBD5E1);
+                border-left:7px solid var(--resp-color);
                 border-radius:8px;
-                background:rgba(255,255,255,.92);
+                background:linear-gradient(90deg,color-mix(in srgb,var(--resp-color) 22%,#FFFFFF),rgba(255,255,255,.96));
                 padding:10px 12px;
                 margin:0 0 10px;
               }}
@@ -12020,7 +12315,7 @@ def render_capex10_investor_injection_cash_flow(
               }}
               .cash-period-resp-pill{{
                 border:1px solid color-mix(in srgb,var(--resp-color) 34%,#CBD5E1);
-                background:color-mix(in srgb,var(--resp-color) 10%,#FFFFFF);
+                background:color-mix(in srgb,var(--resp-color) 18%,#FFFFFF);
                 color:var(--resp-color);
                 border-radius:999px;
                 padding:5px 9px;
@@ -12032,10 +12327,12 @@ def render_capex10_investor_injection_cash_flow(
               }}
               .cash-period-resp-kpis{{display:grid;grid-template-columns:1.08fr 1.08fr .84fr .84fr;gap:8px;margin:0 0 10px;}}
               .cash-period-resp-kpis div{{
-                border:1px solid rgba(226,232,240,.95);
+                position:relative;
+                z-index:1;
+                border:1px solid color-mix(in srgb,var(--resp-color) 30%,#DDE6F0);
                 border-top:3px solid var(--resp-color);
                 border-radius:8px;
-                background:#FFFFFF;
+                background:linear-gradient(180deg,color-mix(in srgb,var(--resp-color) 12%,#FFFFFF),#FFFFFF);
                 padding:8px 9px;
                 min-height:58px;
               }}
@@ -12054,9 +12351,11 @@ def render_capex10_investor_injection_cash_flow(
                 margin:0 0 10px;
               }}
               .cash-period-resp-bar{{
-                border:1px solid rgba(226,232,240,.95);
+                position:relative;
+                z-index:1;
+                border:1px solid color-mix(in srgb,var(--resp-color) 26%,#DDE6F0);
                 border-radius:8px;
-                background:#FFFFFF;
+                background:linear-gradient(180deg,color-mix(in srgb,var(--resp-color) 9%,#FFFFFF),#FFFFFF);
                 padding:8px 9px;
               }}
               .cash-period-resp-bar-top{{
@@ -12144,6 +12443,304 @@ def render_capex10_investor_injection_cash_flow(
             """,
             unsafe_allow_html=True,
         )
+
+        def build_consolidated_line_summary(summary_df: pd.DataFrame, total_amount: float, weight_col: str) -> pd.DataFrame:
+            if summary_df.empty:
+                return pd.DataFrame(
+                    columns=[
+                        phase_col,
+                        line_col,
+                        "Disponible_CLP",
+                        "Partidas",
+                        "Responsables",
+                        "Inicio",
+                        "Fin_plan",
+                        "Fin_real",
+                        weight_col,
+                    ]
+                )
+            consolidated_df = (
+                summary_df.groupby([phase_col, line_col], as_index=False)
+                .agg(
+                    Disponible_CLP=("Disponible_CLP", "sum"),
+                    Partidas=("Partidas", "sum"),
+                    Responsables=("_responsable_detalle_periodo", "nunique"),
+                    Inicio=("Inicio", "min"),
+                    Fin_plan=("Fin_plan", "max"),
+                    Fin_real=("Fin_real", "max"),
+                )
+                .sort_values("Disponible_CLP", ascending=False)
+            )
+            consolidated_df[weight_col] = np.where(
+                total_amount > 0,
+                consolidated_df["Disponible_CLP"] / total_amount * 100.0,
+                0.0,
+            )
+            return consolidated_df
+
+        def render_consolidated_line_table(summary_df: pd.DataFrame, total_amount: float, weight_col: str, weight_label: str, table_key: str) -> pd.DataFrame:
+            consolidated_rows = build_consolidated_line_summary(summary_df, total_amount, weight_col)
+            if consolidated_rows.empty:
+                st.info("No hay partidas para mostrar en esta vista consolidada.")
+                return pd.DataFrame()
+            display_rows = consolidated_rows.copy()
+            display_rows["Disponible"] = display_rows["Disponible_CLP"].apply(format_clp)
+            display_rows[weight_label] = display_rows[weight_col].map(lambda value: f"{value:.1f}%")
+            display_rows["Inicio"] = pd.to_datetime(display_rows["Inicio"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+            display_rows["Fin plan"] = pd.to_datetime(display_rows["Fin_plan"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+            display_rows["Fin real"] = pd.to_datetime(display_rows["Fin_real"], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+            display_rows = display_rows.rename(columns={phase_col: "Fase", line_col: "Línea"})
+            display_rows = display_rows[["Fase", "Línea", "Partidas", "Responsables", "Disponible", weight_label, "Inicio", "Fin plan", "Fin real"]]
+            selected_state = st.dataframe(
+                display_rows,
+                use_container_width=True,
+                hide_index=True,
+                height=min(520, 42 + (len(display_rows) + 1) * 38),
+                row_height=38,
+                column_config={
+                    "Fase": st.column_config.TextColumn("Fase", width="medium"),
+                    "Línea": st.column_config.TextColumn("Línea", width="large"),
+                    "Partidas": st.column_config.NumberColumn("Partidas", width="small"),
+                    "Responsables": st.column_config.NumberColumn("Responsables", width="small"),
+                    "Disponible": st.column_config.TextColumn("Disponible", width="small"),
+                    weight_label: st.column_config.TextColumn(weight_label, width="small"),
+                    "Inicio": st.column_config.TextColumn("Inicio", width="small"),
+                    "Fin plan": st.column_config.TextColumn("Fin plan", width="small"),
+                    "Fin real": st.column_config.TextColumn("Fin real", width="small"),
+                },
+                key=table_key,
+                on_select="rerun",
+                selection_mode="multi-row",
+            )
+            selected_rows = getattr(getattr(selected_state, "selection", None), "rows", []) if selected_state is not None else []
+            if not selected_rows:
+                return pd.DataFrame()
+            selected_positions = sorted(
+                {
+                    max(0, min(int(selected_row), len(consolidated_rows) - 1))
+                    for selected_row in selected_rows
+                }
+            )
+            return consolidated_rows.iloc[selected_positions].copy()
+
+        def render_consolidated_task_table(source_df: pd.DataFrame, table_key: str) -> None:
+            if source_df.empty:
+                st.info("No hay tareas para el período seleccionado.")
+                return
+            task_rows = source_df.copy()
+            sort_cols = [col for col in [phase_col, line_col, "_responsable_detalle_periodo", task_col, "Disponible_CLP"] if col and col in task_rows.columns]
+            if sort_cols:
+                task_rows = task_rows.sort_values(sort_cols, ascending=[True] * (len(sort_cols) - 1) + [False], na_position="last")
+            task_display = pd.DataFrame()
+            task_display["Responsable"] = task_rows["_responsable_detalle_periodo"].astype(str).replace({"nan": "-", "None": "-"})
+            task_display["Fase"] = task_rows[phase_col].astype(str).replace({"nan": "-", "None": "-"})
+            task_display["Línea"] = task_rows[line_col].astype(str).replace({"nan": "-", "None": "-"})
+            task_display["Tarea / Entregable"] = (
+                task_rows[task_col].astype(str).replace({"nan": "-", "None": "-"})
+                if task_col and task_col in task_rows.columns
+                else "-"
+            )
+            task_display["Disponible"] = task_rows["Disponible_CLP"].apply(format_clp)
+            status_col = first_matching_column(task_rows, ["Estado.1", "Estado"])
+            if status_col:
+                task_display["Estado"] = task_rows[status_col].astype(str).replace({"nan": "-", "None": "-"})
+            for source_col, display_col in [
+                (chart_date_col, "Fecha FC") if chart_date_col else (None, "Fecha FC"),
+                (GANTT_DATE_COL_START, "Inicio"),
+                (GANTT_DATE_COL_END_PLAN, "Fin plan"),
+                (GANTT_DATE_COL_END_REAL, "Fin real"),
+            ]:
+                if source_col and source_col in task_rows.columns:
+                    task_display[display_col] = pd.to_datetime(task_rows[source_col], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
+            task_text_max_len = (
+                int(task_display["Tarea / Entregable"].astype(str).str.len().max())
+                if "Tarea / Entregable" in task_display.columns and not task_display.empty
+                else 0
+            )
+            task_row_height = min(190, max(82, 54 + math.ceil(task_text_max_len / 78) * 20))
+            task_table_height = min(900, 52 + (len(task_display) + 1) * task_row_height)
+            st.dataframe(
+                task_display,
+                use_container_width=True,
+                hide_index=True,
+                height=task_table_height,
+                row_height=task_row_height,
+                column_config={
+                    "Responsable": st.column_config.TextColumn("Resp.", width=56),
+                    "Fase": st.column_config.TextColumn("Fase", width=150),
+                    "Línea": st.column_config.TextColumn("Línea", width=160),
+                    "Tarea / Entregable": st.column_config.TextColumn("Tarea / Entregable", width=460),
+                    "Disponible": st.column_config.TextColumn("Disponible", width=110),
+                    "Estado": st.column_config.TextColumn("Estado", width=88),
+                    "Fecha FC": st.column_config.TextColumn("Fecha FC", width=92),
+                    "Inicio": st.column_config.TextColumn("Inicio", width=92),
+                    "Fin plan": st.column_config.TextColumn("Fin plan", width=92),
+                    "Fin real": st.column_config.TextColumn("Fin real", width=92),
+                },
+                key=f"{table_key}_dataframe",
+            )
+
+        if show_consolidated_detail:
+            st.markdown(
+                f"""
+                <div class="cash-period-detail-head">
+                  <div>
+                    <b>Detalle consolidado del período</b>
+                    <span>{html.escape(plan_label)} · {html.escape(selected_period_label)} · sin separación por proveedor.</span>
+                  </div>
+                  <div class="cash-period-detail-total">{format_clp(period_detail_total)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            selected_consolidated_lines = render_consolidated_line_table(
+                line_summary,
+                period_detail_total,
+                "Peso_periodo",
+                "% período",
+                f"capex10_consolidated_lines_{key_suffix}",
+            )
+            selected_period_pairs: set[tuple[str, str]] = set()
+            selected_accumulated_pairs: set[tuple[str, str]] = set()
+            if not selected_consolidated_lines.empty:
+                selected_pair_index = pd.MultiIndex.from_arrays(
+                    [detail_scope_df[phase_col].astype(str), detail_scope_df[line_col].astype(str)]
+                )
+                selected_period_pairs = set(
+                    zip(
+                        selected_consolidated_lines[phase_col].astype(str),
+                        selected_consolidated_lines[line_col].astype(str),
+                    )
+                )
+                selected_detail_scope_df = detail_scope_df[selected_pair_index.isin(selected_period_pairs)].copy()
+                selected_detail_total = float(selected_detail_scope_df["Disponible_CLP"].sum() or 0.0)
+                selected_phase_count = int(selected_consolidated_lines[phase_col].nunique())
+                selected_line_count = int(selected_consolidated_lines[line_col].nunique())
+                st.markdown(
+                    f"""
+                    <div class="cash-period-task-head" style="--resp-color:#0F766E;">
+                      <div>
+                        <b>Tareas del período seleccionado</b>
+                        <span>{selected_phase_count} fases · {selected_line_count} líneas · {len(selected_detail_scope_df)} tareas seleccionadas</span>
+                      </div>
+                      <div class="cash-period-task-amount">{format_clp(selected_detail_total)}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                render_consolidated_task_table(
+                    selected_detail_scope_df,
+                    f"capex10_consolidated_tasks_{key_suffix}",
+                )
+            else:
+                st.caption("Selecciona una o más filas en Detalle consolidado del período para desplegar sus tareas.")
+            with st.expander(f"Acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}", expanded=False):
+                st.markdown(
+                    f"""
+                    <div class="cash-period-detail-head" style="margin-top:4px;">
+                      <div>
+                        <b>Detalle acumulado consolidado</b>
+                        <span>Todo lo no pagado acumulado hasta el corte seleccionado.</span>
+                      </div>
+                      <div class="cash-period-detail-total">{format_clp(accumulated_detail_total)}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                selected_accumulated_lines = render_consolidated_line_table(
+                    accumulated_line_summary,
+                    accumulated_detail_total,
+                    "Peso_acumulado",
+                    "% acumulado",
+                    f"capex10_consolidated_accumulated_lines_{key_suffix}",
+                )
+                if not selected_accumulated_lines.empty:
+                    selected_accumulated_pair_index = pd.MultiIndex.from_arrays(
+                        [accumulated_detail_scope_df[phase_col].astype(str), accumulated_detail_scope_df[line_col].astype(str)]
+                    )
+                    selected_accumulated_pairs = set(
+                        zip(
+                            selected_accumulated_lines[phase_col].astype(str),
+                            selected_accumulated_lines[line_col].astype(str),
+                        )
+                    )
+                    selected_accumulated_scope_df = accumulated_detail_scope_df[
+                        selected_accumulated_pair_index.isin(selected_accumulated_pairs)
+                    ].copy()
+                    render_consolidated_task_table(
+                        selected_accumulated_scope_df,
+                        f"capex10_consolidated_accumulated_tasks_{key_suffix}",
+                    )
+            if selected_period_pairs:
+                schedule_options = [
+                    "Detalle del período seleccionado",
+                    f"Acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}",
+                ]
+                with st.container(border=True):
+                    schedule_head_col, schedule_scope_col = st.columns([0.58, 0.42], vertical_alignment="top")
+                    with schedule_head_col:
+                        st.markdown(
+                            f"""
+                            <div style="margin:0 0 4px 0;">
+                              <b style="display:block;color:#071427;font-size:15px;font-weight:950;line-height:1.1;">Cronograma consolidado</b>
+                              <span style="display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;">Fase/línea seleccionada · Inicio a Fin real.</span>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    with schedule_scope_col:
+                        schedule_scope = st.radio(
+                            "Vista cronograma",
+                            schedule_options,
+                            horizontal=True,
+                            key=f"capex10_consolidated_schedule_scope_{key_suffix}",
+                        )
+                    timeline_source = (
+                        accumulated_detail_scope_df
+                        if schedule_scope == schedule_options[1]
+                        else detail_scope_df
+                    )
+                    timeline_pairs = (
+                        selected_accumulated_pairs
+                        if schedule_scope == schedule_options[1] and selected_accumulated_pairs
+                        else selected_period_pairs
+                    )
+                    timeline_df = timeline_source.copy()
+                    if timeline_pairs and not timeline_df.empty:
+                        timeline_pair_index = pd.MultiIndex.from_arrays(
+                            [timeline_df[phase_col].astype(str), timeline_df[line_col].astype(str)]
+                        )
+                        timeline_df = timeline_df[timeline_pair_index.isin(timeline_pairs)].copy()
+                    if not timeline_df.empty:
+                        timeline_df[GANTT_DATE_COL_START] = pd.to_datetime(timeline_df.get(GANTT_DATE_COL_START), errors="coerce")
+                        timeline_df[GANTT_DATE_COL_END_PLAN] = pd.to_datetime(timeline_df.get(GANTT_DATE_COL_END_PLAN), errors="coerce")
+                        timeline_df[GANTT_DATE_COL_END_REAL] = pd.to_datetime(timeline_df.get(GANTT_DATE_COL_END_REAL), errors="coerce")
+                        timeline_df[GANTT_DATE_COL_END_REAL] = (
+                            timeline_df[GANTT_DATE_COL_END_REAL]
+                            .fillna(timeline_df[GANTT_DATE_COL_END_PLAN])
+                            .fillna(timeline_df[GANTT_DATE_COL_START])
+                        )
+                        timeline_df = timeline_df[
+                            timeline_df[GANTT_DATE_COL_START].notna()
+                            & timeline_df[GANTT_DATE_COL_END_REAL].notna()
+                        ].copy()
+                    timeline_total = float(timeline_df["Disponible_CLP"].sum() or 0.0) if not timeline_df.empty and "Disponible_CLP" in timeline_df.columns else 0.0
+                    st.markdown(
+                        f'<div class="cash-period-gantt-chip" style="--resp-color:#0F766E;margin:0 0 8px auto;width:max-content;">{len(timeline_df)} tareas · {format_clp(timeline_total)}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if timeline_df.empty:
+                        st.info(f"No hay partidas con fechas suficientes para construir el cronograma consolidado en {schedule_scope.lower()}.")
+                    else:
+                        render_inputs_gantt_custom_chart(
+                            timeline_df,
+                            date_mode="Real",
+                            time_range="Todo",
+                            title=f"Cronograma consolidado · {schedule_scope}",
+                            sequence_tasks=True,
+                        )
+            return
+
         if not show_responsible_detail:
             responsible_summary = responsible_summary.iloc[0:0].copy()
 
@@ -12162,6 +12759,7 @@ def render_capex10_investor_injection_cash_flow(
             responsible_accumulated_width = f"{min(100.0, max(0.0, responsible_accumulated_share)):.1f}%"
             responsible_activity_window = f"{responsible_start} a {responsible_end}" if responsible_start != "-" or responsible_end != "-" else "Sin fechas"
             responsible_selected_pairs_by_scope: dict[str, set[tuple[str, str]]] = {}
+            _, responsible_icon = _capex10_responsible_expander_style(responsible_name)
 
             def render_selectable_phase_line_detail(
                 source_df: pd.DataFrame,
@@ -12321,7 +12919,28 @@ def render_capex10_investor_injection_cash_flow(
                 )
 
             expander_label = f"{responsible_name} | Periodo {responsible_period_label} | Acumulado {responsible_accumulated_label}"
-            with st.expander(expander_label, expanded=False):
+            responsible_expander_class = f"cash-resp-expander-{normalize_key(responsible_name)}"
+            st.markdown(
+                f"""
+                <style>
+                  div:has(.{responsible_expander_class}) + div[data-testid="stExpander"] summary,
+                  div:has(.{responsible_expander_class}) + details[data-testid="stExpander"] summary{{
+                    background:
+                      linear-gradient(90deg,{responsible_color} 0 7px,transparent 7px),
+                      linear-gradient(90deg,color-mix(in srgb,{responsible_color} 18%,#FFFFFF),#FFFFFF 72%) !important;
+                    border:1px solid color-mix(in srgb,{responsible_color} 36%,#CBD5E1) !important;
+                    box-shadow:inset 0 0 0 1px color-mix(in srgb,{responsible_color} 10%,transparent);
+                  }}
+                  div:has(.{responsible_expander_class}) + div[data-testid="stExpander"] summary p,
+                  div:has(.{responsible_expander_class}) + details[data-testid="stExpander"] summary p{{
+                    color:#071427 !important;
+                  }}
+                </style>
+                <div class="{responsible_expander_class}" style="display:none;"></div>
+                """,
+                unsafe_allow_html=True,
+            )
+            with st.expander(expander_label, expanded=False, icon=responsible_icon):
                 st.markdown(
                     f"""
                     <div class="cash-period-resp-card" style="--resp-color:{responsible_color};">
@@ -12509,53 +13128,128 @@ def render_capex10_investor_injection_cash_flow(
                 )
                 concentration_df["Peso_acumulado_fmt"] = concentration_df["Peso_acumulado"].map(lambda value: f"{value:.1f}%")
                 concentration_df = concentration_df.sort_values("Acumulado_CLP", ascending=False).copy()
-                fig_concentration = px.treemap(
-                    concentration_df,
-                    path=[phase_col, line_col],
-                    values="Acumulado_CLP",
-                    color="Periodo_MM",
-                    color_continuous_scale=["#E6FFFA", "#7FA8A4", "#0F766E", "#164E63"],
-                    custom_data=[
-                        "Periodo_fmt",
-                        "Acumulado_fmt",
-                        "Peso_acumulado_fmt",
-                        "Partidas_periodo",
-                        "Partidas_acumulado",
-                        "Responsables_acumulado",
-                    ],
+                phase_concentration_df = (
+                    concentration_df.groupby(phase_col, as_index=False)
+                    .agg(
+                        Acumulado_CLP=("Acumulado_CLP", "sum"),
+                        Periodo_CLP=("Periodo_CLP", "sum"),
+                        Partidas_periodo=("Partidas_periodo", "sum"),
+                        Partidas_acumulado=("Partidas_acumulado", "sum"),
+                        Responsables_acumulado=("Responsables_acumulado", "sum"),
+                    )
+                    .sort_values("Acumulado_CLP", ascending=False)
                 )
-                fig_concentration.update_traces(
-                    textinfo="label+percent parent",
-                    marker=dict(line=dict(color="#FFFFFF", width=2)),
-                    hovertemplate=(
-                        "<b>%{label}</b><br>"
-                        "Período: %{customdata[0]}<br>"
-                        "Acumulado: %{customdata[1]}<br>"
-                        "Peso acumulado: %{customdata[2]}<br>"
-                        "Partidas período: %{customdata[3]}<br>"
-                        "Partidas acumuladas: %{customdata[4]}<br>"
-                        "Responsables: %{customdata[5]}<extra></extra>"
-                    ),
+                phase_concentration_df["Periodo_MM"] = phase_concentration_df["Periodo_CLP"] / 1_000_000
+                phase_concentration_df["Acumulado_fmt"] = phase_concentration_df["Acumulado_CLP"].apply(format_clp)
+                phase_concentration_df["Periodo_fmt"] = phase_concentration_df["Periodo_CLP"].apply(format_clp)
+                phase_concentration_df["Peso_acumulado"] = np.where(
+                    accumulated_detail_total > 0,
+                    phase_concentration_df["Acumulado_CLP"] / accumulated_detail_total * 100.0,
+                    0.0,
                 )
-                fig_concentration.update_layout(
+                phase_concentration_df["Peso_acumulado_fmt"] = phase_concentration_df["Peso_acumulado"].map(lambda value: f"{value:.1f}%")
+                phase_total_by_key = {
+                    normalize_key(row[phase_col]): float(row["Acumulado_CLP"] or 0.0)
+                    for _, row in phase_concentration_df.iterrows()
+                }
+                concentration_df["Peso_fase"] = concentration_df.apply(
+                    lambda row: (
+                        float(row["Acumulado_CLP"] or 0.0)
+                        / phase_total_by_key.get(normalize_key(row[phase_col]), 1.0)
+                        * 100.0
+                    )
+                    if phase_total_by_key.get(normalize_key(row[phase_col]), 0.0) > 0
+                    else 0.0,
+                    axis=1,
+                )
+                concentration_df["Peso_fase_fmt"] = concentration_df["Peso_fase"].map(lambda value: f"{value:.1f}%")
+
+                treemap_labels: list[str] = []
+                treemap_ids: list[str] = []
+                treemap_parents: list[str] = []
+                treemap_values: list[float] = []
+                treemap_colors: list[float] = []
+                treemap_customdata: list[list[object]] = []
+
+                for _, phase_row in phase_concentration_df.iterrows():
+                    phase_name = str(phase_row[phase_col])
+                    phase_id = f"fase::{normalize_key(phase_name)}"
+                    treemap_labels.append(phase_name)
+                    treemap_ids.append(phase_id)
+                    treemap_parents.append("")
+                    treemap_values.append(float(phase_row["Acumulado_CLP"] or 0.0))
+                    treemap_colors.append(float(phase_row["Periodo_MM"] or 0.0))
+                    treemap_customdata.append(
+                        [
+                            "Fase",
+                            phase_row["Acumulado_fmt"],
+                            phase_row["Peso_acumulado_fmt"],
+                            phase_row["Periodo_fmt"],
+                            int(phase_row["Partidas_periodo"] or 0),
+                            int(phase_row["Partidas_acumulado"] or 0),
+                        ]
+                    )
+
+                for _, line_row in concentration_df.iterrows():
+                    phase_name = str(line_row[phase_col])
+                    line_name = str(line_row[line_col])
+                    phase_id = f"fase::{normalize_key(phase_name)}"
+                    treemap_labels.append(line_name)
+                    treemap_ids.append(f"{phase_id}::linea::{normalize_key(line_name)}")
+                    treemap_parents.append(phase_id)
+                    treemap_values.append(float(line_row["Acumulado_CLP"] or 0.0))
+                    treemap_colors.append(float(line_row["Periodo_MM"] or 0.0))
+                    treemap_customdata.append(
+                        [
+                            "Línea",
+                            line_row["Acumulado_fmt"],
+                            line_row["Peso_fase_fmt"],
+                            line_row["Periodo_fmt"],
+                            int(line_row["Partidas_periodo"] or 0),
+                            int(line_row["Partidas_acumulado"] or 0),
+                        ]
+                    )
+
+                fig_phase_concentration = go.Figure(
+                    go.Treemap(
+                        labels=treemap_labels,
+                        ids=treemap_ids,
+                        parents=treemap_parents,
+                        values=treemap_values,
+                        branchvalues="total",
+                        maxdepth=2,
+                        marker=dict(
+                            colors=treemap_colors,
+                            colorscale=["#E6FFFA", "#7FA8A4", "#0F766E", "#164E63"],
+                            colorbar=dict(title="Período<br>MM CLP", thickness=12, len=.72),
+                            line=dict(color="#FFFFFF", width=2),
+                        ),
+                        customdata=treemap_customdata,
+                        texttemplate="<b>%{label}</b><br>%{customdata[1]}<br>%{customdata[2]}",
+                        hovertemplate=(
+                            "<b>%{customdata[0]} · %{label}</b><br>"
+                            "Acumulado: %{customdata[1]}<br>"
+                            "%: %{customdata[2]}<br>"
+                            "Período: %{customdata[3]}<br>"
+                            "Partidas período: %{customdata[4]}<br>"
+                            "Partidas acumuladas: %{customdata[5]}<extra></extra>"
+                        ),
+                    )
+                )
+                fig_phase_concentration.update_layout(
                     height=430,
                     margin=dict(l=4, r=4, t=8, b=4),
-                    coloraxis_colorbar=dict(
-                        title="Período<br>MM CLP",
-                        thickness=12,
-                        len=.72,
-                    ),
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)",
                     font=dict(color="#334155", size=12),
                 )
-                with st.expander("Concentración por fase y línea", expanded=False):
+                with st.expander("Concentración por fase y línea", expanded=True):
                     st.markdown(
                         f"""
                         <div class="cash-period-detail-head" style="margin-top:4px;">
                           <div>
                             <b>Concentración por fase y línea</b>
-                            <span>Área por acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')} · color por gasto del período seleccionado.</span>
+                            <span>Vista inicial por fase: pincha una fase para que el mismo gráfico muestre sus líneas. Click al centro para volver.</span>
                           </div>
                           <div class="cash-period-detail-total">{format_clp(accumulated_detail_total)}</div>
                         </div>
@@ -12563,7 +13257,7 @@ def render_capex10_investor_injection_cash_flow(
                         unsafe_allow_html=True,
                     )
                     st.plotly_chart(
-                        fig_concentration,
+                        fig_phase_concentration,
                         use_container_width=True,
                         config={"displaylogo": False, "displayModeBar": False},
                         key=f"capex10_phase_line_concentration_{key_suffix}",
@@ -12589,7 +13283,7 @@ def render_capex10_investor_injection_cash_flow(
         if not aporte_detail_base.empty and "Responsable" in aporte_detail_base.columns:
             responsible_options.extend(sorted(aporte_detail_base["Responsable"].dropna().astype(str).unique().tolist()))
 
-        with st.expander("Aportes", expanded=False):
+        with st.expander("Aportes de socios", expanded=True):
             selected_aporte_responsible = st.selectbox(
                 "Responsable",
                 responsible_options,
@@ -12687,7 +13381,7 @@ def render_capex10_investor_injection_cash_flow(
                   }}
                 </style>
                 <div class="cash-injection-head" style="margin-top:4px;">
-                  <div><b>Aportes</b><span>Curva de capital acumulado disponible desde el calendario de aportes Plan A.</span></div>
+                  <div><b>Aportes de socios</b><span>Curva de capital acumulado disponible desde el calendario de aportes Plan A.</span></div>
                   <div class="cash-injection-pill">Plan A</div>
                 </div>
                 <div class="cashflow-kpi-strip">
@@ -12823,18 +13517,22 @@ def render_capex10_investor_injection_cash_flow(
         empty_message: str,
         detail_items: pd.DataFrame | None = None,
         accumulated_detail_items: pd.DataFrame | None = None,
+        detail_view_mode: str = "Por proveedor",
     ) -> None:
         table_items = detail_items if detail_items is not None else items
         table_accumulated_items = accumulated_detail_items if accumulated_detail_items is not None else accumulated_items
+        show_by_provider = detail_view_mode == "Por proveedor"
         render_period_phase_line_detail(
             table_items,
             table_accumulated_items,
             plan_label,
             key_suffix,
-            show_responsible_detail=True,
+            show_responsible_detail=show_by_provider,
             show_concentration=False,
+            show_consolidated_detail=not show_by_provider,
         )
-        render_period_responsible_contribution(items, accumulated_items, plan_label, key_suffix)
+        if show_by_provider:
+            render_period_responsible_contribution(items, accumulated_items, plan_label, key_suffix)
 
     st.markdown(
         """
@@ -12979,7 +13677,12 @@ def render_capex10_investor_injection_cash_flow(
             """,
             unsafe_allow_html=True,
         )
-        period_selector_col, _ = st.columns([0.28, 0.72])
+        detail_view_key = "capex10_period_detail_view_mode"
+        detail_view_default_version_key = "capex10_period_detail_view_default_version"
+        if st.session_state.get(detail_view_default_version_key) != 2:
+            st.session_state[detail_view_key] = "Todo el período"
+            st.session_state[detail_view_default_version_key] = 2
+        period_selector_col, detail_view_col, _ = st.columns([0.28, 0.28, 0.44])
         with period_selector_col:
             st.selectbox(
                 "Período para analizar",
@@ -12987,6 +13690,13 @@ def render_capex10_investor_injection_cash_flow(
                 format_func=lambda value: "Todo" if value == analysis_all_option else pd.Timestamp(value).strftime("%b %Y"),
                 key=analysis_month_key,
                 help="Selecciona todo el calendario o un único mes para el análisis del período.",
+            )
+        with detail_view_col:
+            period_detail_view_mode = st.selectbox(
+                "Vista del detalle",
+                ["Todo el período", "Por proveedor"],
+                key=detail_view_key,
+                help="Por proveedor mantiene la apertura actual. Todo el período consolida el detalle en una sola vista.",
             )
         st.markdown(
             f"""
@@ -12996,9 +13706,6 @@ def render_capex10_investor_injection_cash_flow(
               <div class="cash-period-kpi" style="--c:#164E63;"><div class="cash-period-kpi-top"><span>ACUM</span><strong>Requerido al corte</strong></div><b>{format_clp(accumulated_hito_flow)}</b><em>Hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>
               <div class="cash-period-kpi" style="--c:#0F766E;"><div class="cash-period-kpi-top"><span>IN</span><strong>Inyección período</strong></div><b>{format_clp(period_injection)}</b><em>Entrada puntual Plan A</em></div>
               <div class="cash-period-kpi" style="--c:#D7605E;"><div class="cash-period-kpi-top"><span>GAP</span><strong>Saldo plan al mes</strong></div><b>{format_clp(plan_balance_to_period)}</b><em>Inyección - requerido</em></div>
-            </div>
-            <div class="cash-period-kpi-row cash-period-kpi-row-milestones">
-              {hito_kpi_html}
             </div>
           </div>
             """,
@@ -13014,6 +13721,7 @@ def render_capex10_investor_injection_cash_flow(
             "El período seleccionado no tiene partidas de gasto calendarizadas.",
             period_table_items,
             accumulated_period_table_items,
+            period_detail_view_mode,
         )
 
     render_period_aportes_detail(selected_plan_label, "active")
@@ -13030,7 +13738,8 @@ def render_capex10_investor_injection_cash_flow(
     if "Disponible_CLP" in responsible_flow_df.columns:
         responsible_flow_df = responsible_flow_df[responsible_flow_df["Disponible_CLP"] > 0].copy()
     responsable_col = first_matching_column(responsible_flow_df, ["Responsable"])
-    if responsable_col:
+    show_responsible_cashflow = False
+    if show_responsible_cashflow and responsable_col:
         responsible_flow_df["_responsable"] = (
             responsible_flow_df[responsable_col]
             .astype(str)
@@ -13704,8 +14413,12 @@ def render_capex10_available_funds_by_phase_line() -> None:
     premontaje_hito = _capex10_hito_info("Hito Pre -Montaje")
     montaje_hito = _capex10_hito_info("Hito Montaje")
     producto_hito = _capex10_hito_info("Hito Producto")
+    producto_80kw_hito = _capex10_hito_info(
+        "Hito Producto 80 kW",
+        aliases=["Producto 80 kW", "Hito Producto 80KW", "Producto 80KW", "Producto 80"],
+    )
     piloto_80kw_hito = _capex10_hito_info("Hito Piloto 80 kW", aliases=["Piloto 80 kW", "Hito Piloto 80KW", "80 kW", "80KW"])
-    capex10_milestone_dates = [premontaje_hito, montaje_hito, producto_hito, piloto_80kw_hito]
+    capex10_milestone_dates = [premontaje_hito, montaje_hito, producto_hito, producto_80kw_hito, piloto_80kw_hito]
 
     st.markdown(
         f"""
@@ -13731,13 +14444,13 @@ def render_capex10_available_funds_by_phase_line() -> None:
         .capex10-funds-grid{{
             display:grid;
             grid-template-columns:minmax(0, 7fr) minmax(0, 3fr);
-            min-height:213px;
+            min-height:149px;
             width:100%;
             max-width:100%;
             overflow:hidden;
         }}
         .capex10-funds-left{{
-            padding:21px 24px 19px 24px;
+            padding:15px 18px 13px 18px;
             position:relative;
             z-index:2;
             min-width:0;
@@ -13747,7 +14460,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
             display:flex;
             align-items:center;
             gap:12px;
-            margin:0 0 10px 0;
+            margin:0;
         }}
         .capex10-funds-logo{{
             width:46px;
@@ -13920,7 +14633,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
         }}
         .capex10-funds-art{{
             position:relative;
-            min-height:213px;
+            min-height:149px;
             isolation:isolate;
             min-width:0;
             overflow:hidden;
@@ -13958,7 +14671,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
         }}
         @media (max-width: 1180px){{
             .capex10-funds-grid{{grid-template-columns:1fr;}}
-            .capex10-funds-art{{min-height:165px;}}
+            .capex10-funds-art{{min-height:116px;}}
             .capex10-kpi-grid{{grid-template-columns:1fr;}}
             .capex10-kpi-main{{grid-column:auto;}}
             .capex10-kpi-phase{{grid-column:auto;}}
@@ -13987,55 +14700,6 @@ def render_capex10_available_funds_by_phase_line() -> None:
                 </div>
                 <div>
                   <p class="capex10-funds-k">{html.escape(funds_heading)}</p>
-                </div>
-              </div>
-              <div class="capex10-kpi-grid">
-                <div class="capex10-kpi-card capex10-kpi-main">
-                  <div class="capex10-kpi-badge">Capital pendiente</div>
-                  <div class="capex10-kpi-top">
-                    <div class="capex10-kpi-ico" aria-hidden="true">
-                      <svg width="31" height="31" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
-                        <path d="M12 6v12M15.5 9.2c-.8-.8-2.2-1.2-3.4-1.2-1.8 0-3 .8-3 2.1 0 3.2 6.8 1.2 6.8 4.8 0 1.4-1.4 2.1-3.4 2.1-1.5 0-3-.5-4-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <p class="capex10-kpi-value">{total_disponible_fmt}</p>
-                      <p class="capex10-kpi-label">Disponible total</p>
-                      <p class="capex10-kpi-note">Fondos pendientes por ejecutar</p>
-                    </div>
-                  </div>
-                </div>
-                <div class="capex10-kpi-card capex10-kpi-milestone">
-                  <div class="capex10-kpi-top">
-                    <div class="capex10-kpi-ico" aria-hidden="true">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="4" y="5" width="16" height="15" rx="3" stroke="currentColor" stroke-width="2"/>
-                        <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <p class="capex10-kpi-value">{html.escape(str(premontaje_hito["date_fmt"]))}</p>
-                      <p class="capex10-kpi-label">Hito Pre -Montaje</p>
-                      <p class="capex10-kpi-note">Fecha fin real</p>
-                    </div>
-                  </div>
-                </div>
-                <div class="capex10-kpi-card capex10-kpi-milestone">
-                  <div class="capex10-kpi-top">
-                    <div class="capex10-kpi-ico" aria-hidden="true">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M5 20h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M8 20V8l4-4 4 4v12" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                        <path d="M10 11h4M10 15h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <p class="capex10-kpi-value">{html.escape(str(montaje_hito["date_fmt"]))}</p>
-                      <p class="capex10-kpi-label">Hito Montaje</p>
-                      <p class="capex10-kpi-note">Fecha fin real</p>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -14084,6 +14748,19 @@ def render_capex10_available_funds_by_phase_line() -> None:
     )
 
     plan_selector_key = "capex10_investor_injection_cashflow_plan"
+    st.markdown(
+        """
+        <style>
+          .capex10-funds-head{display:none !important;margin:0 !important;padding:0 !important;height:0 !important;}
+          div:has(.capex10-hide-funds-filter-expander) + div[data-testid="stExpander"],
+          div:has(.capex10-hide-funds-filter-expander) + details[data-testid="stExpander"]{
+            display:none !important;
+          }
+        </style>
+        <div class="capex10-hide-funds-filter-expander" style="display:none;"></div>
+        """,
+        unsafe_allow_html=True,
+    )
     if st.session_state.get(plan_selector_key) == CAPEX10_LEGACY_PLAN_B_LABEL:
         st.session_state[plan_selector_key] = CAPEX10_PLAN_B_LABEL
     plan_a_default_migration_key = "capex10_cashflow_plan_a_default_migrated_v1"
@@ -14121,6 +14798,9 @@ def render_capex10_available_funds_by_phase_line() -> None:
                 placeholder="Todos",
                 help="Filtra por la columna V Método. Sin selección muestra todos los métodos.",
             )
+        if selected_cashflow_plan == CAPEX10_PLAN_A_LABEL:
+            selected_metodos = list(metodo_options)
+            st.session_state["capex10_funds_responsable_selector"] = list(responsable_options)
         with filter_col_3:
             selected_responsables = st.multiselect(
                 "Responsable",
@@ -14131,6 +14811,19 @@ def render_capex10_available_funds_by_phase_line() -> None:
             )
 
     selected_etapas = []
+    if selected_cashflow_plan == CAPEX10_PLAN_A_LABEL:
+        selected_metodos = list(metodo_options)
+        selected_responsables = list(responsable_options)
+    funds_all_df = _capex10_filtered_funds_df(
+        df_gantt,
+        selected_etapas,
+        selected_metodos,
+        selected_responsables,
+        metodo_col=metodo_col,
+        responsable_col=responsable_col,
+    )
+    funds_all_df["Fase"] = funds_all_df["Fase"].astype(str).str.strip().replace({"": "Sin fase", "nan": "Sin fase", "None": "Sin fase"})
+    funds_all_df["Línea"] = funds_all_df["Línea"].astype(str).str.strip().replace({"": "Sin línea", "nan": "Sin línea", "None": "Sin línea"})
     responsible_scope_df = _capex10_filtered_funds_df(
         df_gantt,
         selected_etapas,
@@ -14566,12 +15259,12 @@ def render_capex10_available_funds_by_phase_line() -> None:
         st.markdown(
             """
             <style>
-              .capex10-detail-panel{border:1px solid var(--resp-color);border-left:8px solid var(--resp-color);border-radius:14px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:12px;margin:0 0 12px;box-shadow:0 10px 22px rgba(15,23,42,.045);}
-              .capex10-detail-title{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid rgba(226,232,240,.95);border-left:6px solid var(--resp-color);border-radius:12px;background:#FFFFFF;padding:10px 12px;margin:0 0 10px;}
+              .capex10-detail-panel{border:1px solid color-mix(in srgb,var(--resp-color) 42%,#CBD5E1);border-left:8px solid var(--resp-color);border-radius:14px;background:radial-gradient(circle at 100% 0%,color-mix(in srgb,var(--resp-color) 24%,transparent),transparent 34%),linear-gradient(180deg,color-mix(in srgb,var(--resp-color) 18%,#FFFFFF),color-mix(in srgb,var(--resp-color) 8%,#F8FAFC));padding:12px;margin:0 0 12px;box-shadow:0 10px 22px color-mix(in srgb,var(--resp-color) 13%,rgba(15,23,42,.045));}
+              .capex10-detail-title{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid color-mix(in srgb,var(--resp-color) 38%,#CBD5E1);border-left:6px solid var(--resp-color);border-radius:12px;background:linear-gradient(90deg,color-mix(in srgb,var(--resp-color) 24%,#FFFFFF),rgba(255,255,255,.92));padding:10px 12px;margin:0 0 10px;}
               .capex10-detail-title b{color:var(--resp-color);font-size:15px;font-weight:950;line-height:1.1;}
               .capex10-detail-title span{color:#334155;font-size:12px;font-weight:900;white-space:nowrap;}
               .capex10-detail-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0 0 12px;}
-              .capex10-detail-kpi{border:1px solid rgba(226,232,240,.95);border-top:3px solid var(--resp-color);border-radius:10px;background:linear-gradient(180deg,#FFFFFF,#F8FAFC);padding:8px 10px;min-height:58px;}
+              .capex10-detail-kpi{border:1px solid color-mix(in srgb,var(--resp-color) 30%,#DDE6F0);border-top:3px solid var(--resp-color);border-radius:10px;background:linear-gradient(180deg,color-mix(in srgb,var(--resp-color) 12%,#FFFFFF),#FFFFFF);padding:8px 10px;min-height:58px;}
               .capex10-detail-kpi span{display:block;color:#64748B;font-size:10px;font-weight:950;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
               .capex10-detail-kpi b{display:block;color:var(--resp-color);font-size:16px;line-height:1.1;font-weight:950;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
               .capex10-line-analysis{display:grid;grid-template-columns:1.2fr repeat(5,minmax(0,.75fr));gap:8px;margin:0 0 10px;}
@@ -14596,6 +15289,27 @@ def render_capex10_available_funds_by_phase_line() -> None:
                 f"**{responsible_total_label}** · "
                 f"**{int(responsible_row['Lineas'])} líneas** · "
                 f"**{int(responsible_row['Partidas'])} partidas**"
+            )
+            responsible_expander_class = f"capex10-detail-expander-{normalize_key(responsible_name)}"
+            st.markdown(
+                f"""
+                <style>
+                  div:has(.{responsible_expander_class}) + div[data-testid="stExpander"] summary,
+                  div:has(.{responsible_expander_class}) + details[data-testid="stExpander"] summary{{
+                    background:
+                      linear-gradient(90deg,{responsible_color} 0 7px,transparent 7px),
+                      linear-gradient(90deg,color-mix(in srgb,{responsible_color} 18%,#FFFFFF),#FFFFFF 72%) !important;
+                    border:1px solid color-mix(in srgb,{responsible_color} 36%,#CBD5E1) !important;
+                    box-shadow:inset 0 0 0 1px color-mix(in srgb,{responsible_color} 10%,transparent);
+                  }}
+                  div:has(.{responsible_expander_class}) + div[data-testid="stExpander"] summary p,
+                  div:has(.{responsible_expander_class}) + details[data-testid="stExpander"] summary p{{
+                    color:#071427 !important;
+                  }}
+                </style>
+                <div class="{responsible_expander_class}" style="display:none;"></div>
+                """,
+                unsafe_allow_html=True,
             )
             with st.expander(
                 responsible_expander_label,
@@ -25680,6 +26394,8 @@ def render_inputs_capex_10kw_detail():
     )
 
     capex10_subblock_key = "inputs_capex10_subblock_sel"
+    capex10_subblock1_only = os.environ.get("CAPEX10_SUBBLOQUE1_ONLY") == "1"
+    capex10_hide_subblock_nav = capex10_subblock1_only or os.environ.get("CAPEX10_HIDE_SUBBLOCK_NAV") == "1"
 
     def _set_capex10_subblock(value: str):
         st.session_state[capex10_subblock_key] = value
@@ -25689,11 +26405,13 @@ def render_inputs_capex_10kw_detail():
                 "inputs_gantt_linea",
                 "inputs_gantt_estado",
                 "inputs_gantt_metodo",
+                "inputs_gantt_subcategoria",
                 "inputs_gantt_time_range",
                 "inputs_gantt_fase__sticky",
                 "inputs_gantt_linea__sticky",
                 "inputs_gantt_estado__sticky",
                 "inputs_gantt_metodo__sticky",
+                "inputs_gantt_subcategoria__sticky",
             ):
                 st.session_state.pop(gantt_key, None)
 
@@ -25702,19 +26420,21 @@ def render_inputs_capex_10kw_detail():
         st.session_state[capex10_subblock_key] = None
     elif st.session_state[capex10_subblock_key] not in valid_capex10_subblocks:
         st.session_state[capex10_subblock_key] = None
+    if capex10_subblock1_only:
+        st.session_state[capex10_subblock_key] = "control_fondos"
 
     capex10_subblocks = [
         (
             "Sub bloque 1",
             "control_fondos",
-            "Capital y Brecha de Liberación",
-            "Fondos, inyecciones y brecha pendiente para liberar los hitos del piloto 10 kW.",
+            "Levantamiento de Capital y Brecha TRL 9",
+            "Uso de recursos, aportes y brechas para financiar la madurez tecnológica hasta TRL 9.",
         ),
         (
             "Sub bloque 2",
             "vista_integrada",
-            "Cronograma e Hitos",
-            "Gantt, avance y fechas clave para controlar la ejecución del piloto.",
+            "Hitos Técnicos e Industrialización",
+            "Gantt, avance y fechas clave para el piloto 10 kW, el desarrollo 80 kW y el camino a TRL 9.",
         ),
         (
             "Sub bloque 3",
@@ -25723,28 +26443,29 @@ def render_inputs_capex_10kw_detail():
             "Cortes, EVM y desviaciones mensuales para seguimiento financiero.",
         ),
     ]
-    sub_cols = st.columns(len(capex10_subblocks))
-    for idx, (sub_label, sub_value, sub_title, sub_copy) in enumerate(capex10_subblocks):
-        is_active = st.session_state.get(capex10_subblock_key) == sub_value
-        with sub_cols[idx]:
-            st.markdown(
-                f"""
-                <div class="capex10-subcard {'active' if is_active else ''}">
-                  <p class="capex10-sub-k">{html.escape(sub_label)}</p>
-                  <p class="capex10-sub-t">{html.escape(sub_title)}</p>
-                  <p class="capex10-sub-s">{html.escape(sub_copy)}</p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.button(
-                selector_button_label(sub_title, is_active),
-                key=f"inputs_capex10_subblock_{idx}",
-                use_container_width=True,
-                type="primary" if is_active else "secondary",
-                on_click=_set_capex10_subblock,
-                args=(sub_value,),
-            )
+    if not capex10_hide_subblock_nav:
+        sub_cols = st.columns(len(capex10_subblocks))
+        for idx, (sub_label, sub_value, sub_title, sub_copy) in enumerate(capex10_subblocks):
+            is_active = st.session_state.get(capex10_subblock_key) == sub_value
+            with sub_cols[idx]:
+                st.markdown(
+                    f"""
+                    <div class="capex10-subcard {'active' if is_active else ''}">
+                      <p class="capex10-sub-k">{html.escape(sub_label)}</p>
+                      <p class="capex10-sub-t">{html.escape(sub_title)}</p>
+                      <p class="capex10-sub-s">{html.escape(sub_copy)}</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.button(
+                    selector_button_label(sub_title, is_active),
+                    key=f"inputs_capex10_subblock_{idx}",
+                    use_container_width=True,
+                    type="primary" if is_active else "secondary",
+                    on_click=_set_capex10_subblock,
+                    args=(sub_value,),
+                )
 
     selected_capex10_subblock = st.session_state.get(capex10_subblock_key)
     if selected_capex10_subblock is None:
@@ -25783,8 +26504,6 @@ def render_inputs_capex_10kw_detail():
             """,
             unsafe_allow_html=True,
         )
-        with st.expander("Resumen ejecutivo", expanded=False):
-            render_pilotos_ana_embedded_view()
         with st.expander("Cost Architecture · Piloto vs Comercial", expanded=False):
             render_inputs_gantt_cost_analysis(
                 df_gantt_costs,
@@ -25951,8 +26670,6 @@ def render_inputs_capex_10kw_detail():
             """,
             unsafe_allow_html=True,
         )
-        with st.expander("Resumen ejecutivo", expanded=False):
-            render_pilotos_ana_embedded_view()
         with st.expander("Cost Architecture · Piloto vs Comercial", expanded=False):
             render_inputs_gantt_cost_analysis(
                 df_gantt_costs,
@@ -27213,7 +27930,8 @@ st.sidebar.caption(
 if "data_refresh_nonce" not in st.session_state:
     st.session_state["data_refresh_nonce"] = 0
 if st.session_state.get("gantt_project_source_version") != GANTT_PROJECT_SOURCE_VERSION:
-    load_project_gantt_data.clear()
+    if hasattr(load_project_gantt_data, "clear"):
+        load_project_gantt_data.clear()
     st.session_state["gantt_project_source_version"] = GANTT_PROJECT_SOURCE_VERSION
 if st.sidebar.button("🔁 Actualizar datos desde URL"):
     for key in (
@@ -27222,6 +27940,7 @@ if st.sidebar.button("🔁 Actualizar datos desde URL"):
         "inputs_gantt_linea",
         "inputs_gantt_estado",
         "inputs_gantt_metodo",
+        "inputs_gantt_subcategoria",
         "inputs_gantt_time_range",
         "capex10_funds_etapa_selector",
         "capex10_funds_metodo_selector",
@@ -27238,7 +27957,8 @@ if st.sidebar.button("🔁 Actualizar datos desde URL"):
     if "telecom_market_tab_selector" in st.session_state:
         st.session_state["restore_telecom_market_tab_after_refresh"] = True
     fetch_remote_file_bytes.clear()
-    load_project_gantt_data.clear()
+    if hasattr(load_project_gantt_data, "clear"):
+        load_project_gantt_data.clear()
     st.session_state["data_refresh_nonce"] += 1
     st.rerun()
 
@@ -30491,6 +31211,9 @@ input_cards = [
     ("valorizacion", "03 · Valor Financiero"),
     ("mercado", "04 · Mercado y Propuesta Comercial"),
 ]
+BLOQUE3_ONLY_MODE = os.environ.get("BLOQUE3_ONLY") == "1"
+CAPEX10_BLOQUE3_ONLY_MODE = os.environ.get("CAPEX10_BLOQUE3_ONLY") == "1"
+FOCUSED_ACCESS_MODE = BLOQUE3_ONLY_MODE or CAPEX10_BLOQUE3_ONLY_MODE
 
 if st.session_state.get("inputs_nav_empty_default_version") != INPUT_NAV_EMPTY_DEFAULT_VERSION:
     st.session_state["inputs_bloque_sel"] = None
@@ -30500,9 +31223,31 @@ if st.session_state.get("inputs_nav_empty_default_version") != INPUT_NAV_EMPTY_D
     st.session_state["inputs_nav_empty_default_version"] = INPUT_NAV_EMPTY_DEFAULT_VERSION
 if "inputs_bloque_sel" not in st.session_state:
     st.session_state["inputs_bloque_sel"] = None
+if BLOQUE3_ONLY_MODE:
+    st.session_state["inputs_bloque_sel"] = "valorizacion"
+elif CAPEX10_BLOQUE3_ONLY_MODE:
+    st.session_state["inputs_bloque_sel"] = "capex10_bloque3"
+    st.session_state["inputs_capex10_subblock_sel"] = "control_fondos"
+    if "focused_access_section" not in st.session_state:
+        st.session_state["focused_access_section"] = None
 
 def selector_button_label(label: str, is_active: bool, action_label: str = "Abrir bloque") -> str:
     return f"{label} · Seleccionado" if is_active else action_label
+
+def _set_focused_access_section(value: str):
+    st.session_state["focused_access_section"] = value
+    if value == "capital_brecha":
+        st.session_state["inputs_capex10_subblock_sel"] = "control_fondos"
+    elif value == "cronograma_hitos":
+        st.session_state["inputs_capex10_subblock_sel"] = "vista_integrada"
+        st.session_state.pop("inputs_gantt_etapa", None)
+        st.session_state.pop("inputs_gantt_etapa__sticky", None)
+        st.session_state.pop("inputs_gantt_estado", None)
+        st.session_state.pop("inputs_gantt_estado__sticky", None)
+        st.session_state.pop("inputs_gantt_subcategoria", None)
+        st.session_state.pop("inputs_gantt_subcategoria__sticky", None)
+    elif value == "valor_financiero":
+        st.session_state.pop("inputs_val_financial_eval_view", None)
 
 def _set_inputs_bloque(value: str):
     st.session_state["inputs_bloque_sel"] = value
@@ -30691,39 +31436,51 @@ st.markdown(
         unsafe_allow_html=True,
 )
 
-st.markdown(
-    """
-    <div class="inputs-nav-shell">
-      <div class="inputs-nav-head-k">MAPA DE LECTURA</div>
-      <div class="inputs-nav-head-t">Selecciona el bloque estratégico que quieres revisar</div>
-      <div class="inputs-nav-head-s">La pantalla está organizada en cuatro vistas: validación tecnológica, CAPEX y ejecución, valor financiero, y mercado con propuesta comercial.</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+if FOCUSED_ACCESS_MODE:
+    st.markdown(
+        f"""
+        <div class="inputs-nav-shell">
+          <div class="inputs-nav-head-k">ACCESO DIRECTO</div>
+          <div class="inputs-nav-head-t">{'Levantamiento TRL 9 + Proyección Comercial' if CAPEX10_BLOQUE3_ONLY_MODE else 'Proyección Financiera Comercial V9'}</div>
+          <div class="inputs-nav-head-s">{'Vista dedicada al CAPEX 10kW y al análisis financiero, sin navegación hacia otros bloques.' if CAPEX10_BLOQUE3_ONLY_MODE else 'Vista dedicada al análisis financiero, sin navegación hacia los otros bloques.'}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        """
+        <div class="inputs-nav-shell">
+          <div class="inputs-nav-head-k">MAPA DE LECTURA</div>
+          <div class="inputs-nav-head-t">Selecciona el bloque estratégico que quieres revisar</div>
+          <div class="inputs-nav-head-s">La pantalla está organizada en cuatro vistas: validación tecnológica, CAPEX y ejecución, valor financiero, y mercado con propuesta comercial.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-nav_cols = st.columns(len(input_cards))
-for idx, (block_value, block_title) in enumerate(input_cards):
-    is_active = st.session_state.get("inputs_bloque_sel") == block_value
-    with nav_cols[idx]:
-        st.markdown(
-            f"""
-            <div class="inputs-nav-card {'active' if is_active else ''}">
-                <div class="inputs-nav-k">BLOQUE {idx + 1}</div>
-                <div class="inputs-nav-t">{block_title}</div>
-                <div class="inputs-nav-s">{'Vista activa para análisis' if is_active else 'Abrir vista estratégica'}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.button(
-            selector_button_label(block_title, is_active),
-            key=f"inputs_nav_{idx}",
-            use_container_width=True,
-            type="primary" if is_active else "secondary",
-            on_click=_set_inputs_bloque,
-            args=(block_value,),
-        )
+    nav_cols = st.columns(len(input_cards))
+    for idx, (block_value, block_title) in enumerate(input_cards):
+        is_active = st.session_state.get("inputs_bloque_sel") == block_value
+        with nav_cols[idx]:
+            st.markdown(
+                f"""
+                <div class="inputs-nav-card {'active' if is_active else ''}">
+                    <div class="inputs-nav-k">BLOQUE {idx + 1}</div>
+                    <div class="inputs-nav-t">{block_title}</div>
+                    <div class="inputs-nav-s">{'Vista activa para análisis' if is_active else 'Abrir vista estratégica'}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.button(
+                selector_button_label(block_title, is_active),
+                key=f"inputs_nav_{idx}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+                on_click=_set_inputs_bloque,
+                args=(block_value,),
+            )
 selected_input_block = st.session_state.get("inputs_bloque_sel")
 
 if selected_input_block:
@@ -30758,7 +31515,88 @@ input_block_copy = {
         "Aquí se concentra la evaluación eólica de torres telecom, ranking de sitios, inputs comerciales, CAPEX, LCOE y retorno para lectura de mercado.",
     ),
 }
-if selected_input_block == "estado_actual":
+if CAPEX10_BLOQUE3_ONLY_MODE:
+    focused_cards = [
+        (
+            "capital_brecha",
+            "BLOQUE 2 · SUB BLOQUE 1",
+            "Levantamiento de Capital y Brecha TRL 9",
+            "Uso de recursos, aportes y brechas para financiar la madurez tecnológica hasta TRL 9.",
+        ),
+        (
+            "cronograma_hitos",
+            "BLOQUE 2 · SUB BLOQUE 2",
+            "Hitos Técnicos e Industrialización",
+            "Gantt, avance y fechas clave para el piloto 10 kW, el desarrollo 80 kW y el camino a TRL 9.",
+        ),
+        (
+            "valor_financiero",
+            "BLOQUE 3",
+            "Proyección Financiera Comercial V9",
+            "EERR consolidado, flujos operacionales e indicadores de evaluación para el escalamiento comercial.",
+        ),
+    ]
+    focused_cols = st.columns(3)
+    for idx, (section_value, section_label, section_title, section_copy) in enumerate(focused_cards):
+        is_active = st.session_state.get("focused_access_section") == section_value
+        with focused_cols[idx]:
+            st.markdown(
+                f"""
+                <div class="inputs-nav-card {'active' if is_active else ''}">
+                    <div class="inputs-nav-k">{html.escape(section_label)}</div>
+                    <div class="inputs-nav-t">{html.escape(section_title)}</div>
+                    <div class="inputs-nav-s">{html.escape('Vista activa para análisis' if is_active else section_copy)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.button(
+                selector_button_label(section_title, is_active),
+                key=f"focused_access_section_{idx}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+                on_click=_set_focused_access_section,
+                args=(section_value,),
+            )
+
+    selected_focused_section = st.session_state.get("focused_access_section")
+    if selected_focused_section is None:
+        st.markdown(
+            """
+            <div class="inputs-info-box">
+              <div class="inputs-info-k">SIN BLOQUE SELECCIONADO</div>
+              <div class="inputs-info-t">Selecciona una de las tres vistas para comenzar</div>
+              <p class="inputs-info-p">El acceso dedicado solo despliega levantamiento TRL 9, hitos técnicos o proyección comercial cuando se selecciona una tarjeta.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    elif selected_focused_section == "capital_brecha":
+        st.markdown(
+            """
+            <div style="height:1px;background:rgba(226,232,240,.95);margin:18px 0 22px 0;"></div>
+            """,
+            unsafe_allow_html=True,
+        )
+        render_inputs_capex_10kw_detail()
+    elif selected_focused_section == "cronograma_hitos":
+        st.session_state["inputs_capex10_subblock_sel"] = "vista_integrada"
+        st.markdown(
+            """
+            <div style="height:1px;background:rgba(226,232,240,.95);margin:18px 0 22px 0;"></div>
+            """,
+            unsafe_allow_html=True,
+        )
+        render_inputs_capex_10kw_detail()
+    elif selected_focused_section == "valor_financiero":
+        st.markdown(
+            """
+            <div style="height:1px;background:rgba(226,232,240,.95);margin:18px 0 22px 0;"></div>
+            """,
+            unsafe_allow_html=True,
+        )
+        render_valorizacion_module_content(key_prefix="inputs_val_")
+elif selected_input_block == "estado_actual":
     render_inputs_estado_actual_dashboard()
 elif selected_input_block == "escalamiento":
     capex_selector_state_key = "inputs_escalamiento_capex_sel"
