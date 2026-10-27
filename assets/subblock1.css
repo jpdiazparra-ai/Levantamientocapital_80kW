@@ -1,0 +1,117 @@
+/* Visual system for the capital-raising tab. Scoped to its Streamlit container. */
+.st-key-capex10_subblock1 {
+  --sb-ink:#0F2435; --sb-teal:#0F766E; --sb-muted:#64748B;
+  --sb-line:#D8E3EB; --sb-surface:#FAFCFD; --sb-white:#FFFFFF;
+  color:var(--sb-ink);
+}
+.st-key-capex10_subblock1 .sb1-page-head {
+  display:flex;justify-content:space-between;align-items:flex-start;gap:24px;
+  padding:8px 0 24px;margin-bottom:12px;border-bottom:1px solid var(--sb-line);
+}
+.st-key-capex10_subblock1 .sb1-eyebrow {display:block;color:var(--sb-teal);font-size:10px;font-weight:750;letter-spacing:.13em;margin-bottom:10px;}
+.st-key-capex10_subblock1 .sb1-page-head h1 {margin:0;padding:0;color:var(--sb-ink);font-size:clamp(25px,2.6vw,34px);font-weight:750;line-height:1.25;letter-spacing:-.035em;}
+.st-key-capex10_subblock1 .sb1-page-head p {margin:12px 0 0;max-width:800px;color:var(--sb-muted);font-size:13px;line-height:1.8;}
+.st-key-capex10_subblock1 .sb1-route {flex-shrink:0;margin-top:6px;padding:9px 13px;border:1px solid #B9DED4;border-radius:8px;color:var(--sb-teal);background:#F0FDFA;font-size:12px;font-weight:650;}
+.st-key-capex10_subblock1 [data-testid="stWidgetLabel"] p {font-size:12px!important;font-weight:600!important;color:#334155!important;line-height:1.5;}
+.st-key-capex10_subblock1 [data-baseweb="select"]>div,
+.st-key-capex10_subblock1 [data-baseweb="input"] {border-radius:8px!important;border-color:var(--sb-line)!important;background:#FFF!important;}
+.st-key-capex10_subblock1 [data-baseweb="select"]:focus-within>div,
+.st-key-capex10_subblock1 [data-baseweb="input"]:focus-within {border-color:var(--sb-teal)!important;}
+.st-key-capex10_subblock1 [data-baseweb="tag"] {background:#E8F5F1!important;color:#115E59!important;border-radius:5px!important;}
+.st-key-capex10_subblock1 button[kind="secondary"] {border:1px solid var(--sb-line)!important;border-radius:8px!important;background:#FFF!important;color:#334155!important;font-weight:600;}
+.st-key-capex10_subblock1 button[kind="primary"] {border-color:var(--sb-teal)!important;background:var(--sb-teal)!important;color:#FFF!important;border-radius:8px!important;}
+.st-key-capex10_subblock1 [data-testid="stCaptionContainer"] p {font-size:11px;color:var(--sb-muted);line-height:1.7;}
+.st-key-capex10_subblock1 [data-testid="stExpander"] {border:1px solid var(--sb-line)!important;border-radius:12px!important;background:#FFF!important;box-shadow:none!important;margin-top:10px;overflow:hidden;}
+.st-key-capex10_subblock1 [data-testid="stExpander"] summary {min-height:56px!important;background:var(--sb-surface)!important;border-bottom-color:#E2E8F0!important;}
+.st-key-capex10_subblock1 [data-testid="stExpander"] summary p {font-size:13px!important;font-weight:650!important;color:var(--sb-ink)!important;letter-spacing:0!important;}
+.st-key-capex10_subblock1 [data-testid="stDataFrame"] {border:1px solid #E2E8F0;border-radius:10px;overflow:hidden;}
+.st-key-capex10_subblock1 [data-testid="stMetric"] {min-width:0;padding:18px;background:#FFF;border:1px solid #E2E8F0;border-top:3px solid var(--sb-teal);border-radius:12px;}
+.st-key-capex10_subblock1 [data-testid="stMetricLabel"] {color:var(--sb-muted);font-size:11px;}
+.st-key-capex10_subblock1 [data-testid="stMetricValue"] {color:var(--sb-ink);font-size:clamp(20px,2vw,28px);font-weight:750;letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+.st-key-capex10_subblock1 .st-key-capex10_funding_intro_panel,
+.st-key-capex10_subblock1 .st-key-capex10_period_analysis_panel,
+.st-key-capex10_subblock1 .st-key-capex10_epc_panel {padding:24px!important;border:1px solid var(--sb-line)!important;border-radius:20px!important;background:var(--sb-surface)!important;margin:10px 0;}
+.st-key-capex10_subblock1 .st-key-capex10_funding_intro_panel h3 {font-size:22px!important;font-weight:750!important;color:var(--sb-ink)!important;letter-spacing:-.025em;padding-top:0;}
+.st-key-capex10_subblock1 .st-key-capex10_funding_intro_panel [data-testid="stMarkdownContainer"]>p {font-size:13px;color:#475569;line-height:1.8;}
+/* Period analysis and provider details use the same cards as the capital panel. */
+.st-key-capex10_subblock1 .cash-period-head,
+.st-key-capex10_subblock1 .cash-period-detail-head {gap:18px!important;align-items:flex-start!important;margin-bottom:20px!important;background:transparent!important;box-shadow:none!important;}
+.st-key-capex10_subblock1 .cash-period-head b {color:var(--sb-ink)!important;font-size:21px!important;font-weight:750!important;line-height:1.4!important;letter-spacing:-.025em!important;}
+.st-key-capex10_subblock1 .cash-period-detail-head b {color:var(--sb-ink)!important;font-size:17px!important;font-weight:700!important;line-height:1.45!important;}
+.st-key-capex10_subblock1 .cash-period-head span,
+.st-key-capex10_subblock1 .cash-period-detail-head span {color:var(--sb-muted)!important;font-size:12px!important;font-weight:400!important;line-height:1.7!important;}
+.st-key-capex10_subblock1 .cash-period-chip,
+.st-key-capex10_subblock1 .cash-period-gantt-chip {padding:8px 11px!important;border:1px solid #B9DED4!important;border-radius:8px!important;background:#F0FDFA!important;color:var(--sb-teal)!important;font-size:10px!important;font-weight:650!important;letter-spacing:0!important;white-space:normal!important;line-height:1.6!important;}
+.st-key-capex10_subblock1 .cash-period-kpis {gap:14px!important;margin:20px 0!important;}
+.st-key-capex10_subblock1 .cash-period-kpi-row {gap:14px!important;}
+.st-key-capex10_subblock1 .cash-period-kpi {padding:18px!important;border:1px solid #E2E8F0!important;border-top:3px solid var(--c,#0F766E)!important;border-radius:12px!important;background:#FFF!important;box-shadow:none!important;min-height:140px;overflow:visible!important;}
+.st-key-capex10_subblock1 .cash-period-kpi:before,
+.st-key-capex10_subblock1 .cash-period-kpi:after,
+.st-key-capex10_subblock1 .cash-period-resp-card:before,
+.st-key-capex10_subblock1 .cash-period-resp-card:after {display:none!important;}
+.st-key-capex10_subblock1 .cash-period-kpi-top {flex-direction:column;align-items:flex-start!important;gap:9px!important;}
+.st-key-capex10_subblock1 .cash-period-kpi-top span {padding:3px 6px!important;font-size:9px!important;font-weight:650!important;line-height:1.3!important;}
+.st-key-capex10_subblock1 .cash-period-kpi-top strong {color:#475569!important;font-size:11px!important;font-weight:600!important;text-align:left!important;text-transform:none!important;letter-spacing:0!important;white-space:normal!important;overflow:visible!important;line-height:1.5!important;}
+.st-key-capex10_subblock1 .cash-period-kpi b {font-size:clamp(20px,1.9vw,27px)!important;line-height:1.3!important;color:var(--sb-ink)!important;font-weight:750!important;letter-spacing:-.03em;overflow:visible!important;font-variant-numeric:tabular-nums;}
+.st-key-capex10_subblock1 .cash-period-kpi em {margin-top:9px!important;padding:0!important;border:0!important;background:none!important;font-size:10px!important;font-weight:400!important;color:var(--sb-muted)!important;white-space:normal!important;line-height:1.6!important;width:auto!important;}
+.st-key-capex10_subblock1 .cash-period-detail-total {padding:10px 14px!important;border-radius:10px!important;border:1px solid #D8E3EB!important;background:#FFF!important;color:var(--sb-teal)!important;font-size:22px!important;font-weight:750!important;box-shadow:none!important;font-variant-numeric:tabular-nums;}
+.st-key-capex10_subblock1 .cash-period-resp-card {padding:20px!important;border:1px solid #E2E8F0!important;border-top:3px solid var(--resp-color,#0F766E)!important;border-radius:12px!important;background:#FFF!important;box-shadow:none!important;}
+.st-key-capex10_subblock1 .cash-period-resp-title strong,
+.st-key-capex10_subblock1 .cash-period-resp-title b {font-size:17px!important;font-weight:700!important;line-height:1.4!important;}
+.st-key-capex10_subblock1 .cash-period-resp-pill {border-radius:6px!important;font-size:10px!important;font-weight:600!important;}
+.st-key-capex10_subblock1 .cash-period-resp-meta div {padding:12px!important;border-radius:8px!important;background:#F8FAFC!important;border:1px solid #E2E8F0!important;}
+.st-key-capex10_subblock1 .cash-period-resp-meta span {font-size:10px!important;font-weight:600!important;}
+.st-key-capex10_subblock1 .cash-period-resp-meta b {font-size:16px!important;font-weight:700!important;}
+.st-key-capex10_subblock1 .cash-period-task-head,
+.st-key-capex10_subblock1 .cash-period-gantt-head {padding:16px!important;border:1px solid #E2E8F0!important;border-left:3px solid var(--resp-color,#0F766E)!important;border-radius:10px!important;background:#F8FAFC!important;}
+.st-key-capex10_subblock1 .cashflow-kpi-strip {gap:14px!important;margin:18px 0!important;}
+.st-key-capex10_subblock1 .cashflow-kpi-card {padding:18px!important;background:#FFF!important;border:1px solid #E2E8F0!important;border-top:3px solid var(--sb-teal)!important;border-radius:12px!important;box-shadow:none!important;}
+.st-key-capex10_subblock1 .cashflow-kpi-card span {color:var(--sb-muted)!important;font-size:10px!important;font-weight:650!important;letter-spacing:.04em!important;}
+.st-key-capex10_subblock1 .cashflow-kpi-card b {color:var(--sb-ink)!important;font-size:clamp(20px,1.9vw,27px)!important;font-weight:750!important;line-height:1.4!important;font-variant-numeric:tabular-nums;}
+.st-key-capex10_subblock1 .cashflow-kpi-card em {font-size:10px!important;font-weight:400!important;white-space:normal!important;color:var(--sb-muted)!important;line-height:1.6!important;}
+/* Additional cost architecture and full stage breakdown. */
+.st-key-capex10_subblock1 .epc-report,
+.st-key-capex10_subblock1 .costarch-shell,
+.st-key-capex10_subblock1 .capex10-stage-detail {padding:24px!important;background:var(--sb-surface)!important;border:1px solid var(--sb-line)!important;border-radius:16px!important;box-shadow:none!important;}
+.st-key-capex10_subblock1 .epc-title,
+.st-key-capex10_subblock1 .costarch-title,
+.st-key-capex10_subblock1 .capex10-stage-title {font-size:24px!important;line-height:1.35!important;letter-spacing:-.025em!important;font-weight:750!important;color:var(--sb-ink)!important;}
+.st-key-capex10_subblock1 .epc-subtitle,
+.st-key-capex10_subblock1 .capex10-stage-sub {font-size:12px!important;font-weight:400!important;line-height:1.8!important;color:var(--sb-muted)!important;}
+.st-key-capex10_subblock1 .epc-panel,
+.st-key-capex10_subblock1 .epc-kpi,
+.st-key-capex10_subblock1 .epc-strategy-card,
+.st-key-capex10_subblock1 .costarch-kpi,
+.st-key-capex10_subblock1 .costarch-insight {padding:18px!important;background:#FFF!important;border:1px solid #E2E8F0!important;border-radius:12px!important;box-shadow:none!important;}
+.st-key-capex10_subblock1 .epc-panel-title {font-size:14px!important;color:var(--sb-ink)!important;font-weight:700!important;letter-spacing:0!important;line-height:1.5!important;}
+.st-key-capex10_subblock1 .epc-panel-sub,
+.st-key-capex10_subblock1 .epc-kpi-note {font-size:11px!important;color:var(--sb-muted)!important;font-weight:400!important;line-height:1.6!important;}
+.st-key-capex10_subblock1 .epc-kpi-value {font-size:26px!important;font-weight:750!important;color:var(--sb-ink)!important;letter-spacing:-.025em;}
+.st-key-capex10_subblock1 .epc-table,
+.st-key-capex10_subblock1 .capex10-stage-table {font-size:12px!important;}
+.st-key-capex10_subblock1 .epc-table th,
+.st-key-capex10_subblock1 .capex10-stage-table th {background:#F1F5F9!important;font-size:10px!important;font-weight:650!important;letter-spacing:.02em!important;padding:13px 12px!important;color:#475569!important;}
+.st-key-capex10_subblock1 .epc-table td,
+.st-key-capex10_subblock1 .capex10-stage-table td {font-weight:500!important;padding:12px!important;line-height:1.6!important;font-variant-numeric:tabular-nums;}
+.st-key-capex10_subblock1 .capex10-stage-total {background:var(--sb-ink)!important;border-radius:12px!important;box-shadow:none!important;padding:16px!important;}
+.st-key-capex10_subblock1 .capex10-stage-total b {font-weight:750!important;line-height:1.4!important;color:#99F6E4!important;}
+.st-key-capex10_subblock1 .stage-chip {background:#F0FDFA!important;border:1px solid #B9DED4;border-radius:6px!important;font-size:10px!important;font-weight:600!important;}
+@media(max-width:1280px) {
+  .st-key-capex10_subblock1 .cash-period-kpi-row-main,
+  .st-key-capex10_subblock1 .cashflow-kpi-strip {grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+}
+@media(max-width:760px) {
+  .st-key-capex10_subblock1 .sb1-page-head {flex-direction:column;gap:12px;}
+  .st-key-capex10_subblock1 .st-key-capex10_funding_intro_panel,
+  .st-key-capex10_subblock1 .st-key-capex10_period_analysis_panel,
+  .st-key-capex10_subblock1 .st-key-capex10_epc_panel {padding:16px!important;}
+  .st-key-capex10_subblock1 .cash-period-head,
+  .st-key-capex10_subblock1 .cash-period-detail-head {flex-direction:column!important;align-items:stretch!important;}
+  .st-key-capex10_subblock1 .cash-period-detail-total {align-self:flex-start!important;}
+  .st-key-capex10_subblock1 .cash-period-kpi-row-main,
+  .st-key-capex10_subblock1 .cashflow-kpi-strip,
+  .st-key-capex10_subblock1 .cash-period-resp-meta {grid-template-columns:1fr!important;}
+  .st-key-capex10_subblock1 .epc-report,
+  .st-key-capex10_subblock1 .capex10-stage-detail {padding:16px!important;}
+  .st-key-capex10_subblock1 .cash-period-kpi {min-height:0;}
+}
