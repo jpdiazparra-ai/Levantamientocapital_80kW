@@ -16,8 +16,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 from timeline_scroll import timeline_document
 
-SOURCE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTCKAFMcn2GXKmp2gN_M7cSv9uQXT6Ktqxa0mhKw4mny4A43wLXFCKKeQU4ieSQWA/pub'
-SHEETS = {'Resumen': '991104850', 'Plan': '906793481', 'Costos': '685038480', 'Revision': '952280072', 'Desembolsos': '278036897'}
+SOURCE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQOSK1DE0sEuK5Cl-bIahOjtdP6qsBobzqSlekorQCY9gRpwhRDzHYxh9c-Q-mKoQ/pub'
+SHEETS = {'Resumen': '295125200', 'Plan': '1622224524', 'Costos': '1070657893', 'Revision': '735160527', 'Desembolsos': '614082465'}
 MONTHS = {'ene':'01','feb':'02','mar':'03','abr':'04','may':'05','jun':'06','jul':'07','ago':'08','sept':'09','sep':'09','oct':'10','nov':'11','dic':'12'}
 VIEWS = [
     ('capital', 'SUB BLOQUE 1', 'Levantamiento de Capital y Brecha TRL 9', 'Presupuesto de referencia, desembolsos mensuales y fondos pendientes de validación.'),
@@ -65,25 +65,54 @@ def table_from(raw, header, id_column):
     return frame[frame[id_column].astype(str).str.strip().ne('')].reset_index(drop=True)
 
 
+def cash_from_costs(costs, plan):
+    """The current workbook keeps one cash balance and FC date per Costos ID."""
+    fields = ['Fecha FC / desembolso', 'Saldo pendiente caja CLP', 'Estado de pago caja',
+        'Incluir en caja', 'Validación caja', 'Caja programada CLP', 'Caja por validar CLP']
+    missing = [field for field in fields if field not in costs]
+    if missing:
+        raise ValueError('Faltan columnas de caja en Costos: ' + ', '.join(missing))
+    include = costs['Incluir en caja'].str.strip().str.casefold().isin(['sí', 'si'])
+    unpaid = costs['Estado de pago caja'].str.strip().str.casefold().isin(['no pagado', 'parcial'])
+    selected = costs[include & unpaid].merge(plan[['ID', 'Proyecto', 'Actividad / entregable']], on='ID', validate='one_to_one')
+    cash = pd.DataFrame(index=selected.index)
+    cash['ID actividad'] = selected['ID']
+    cash['Proyecto'] = selected['Proyecto']
+    cash['Concepto / cuota'] = selected['Actividad / entregable']
+    cash['Fecha FC / desembolso'] = selected['Fecha FC / desembolso']
+    cash['Saldo pendiente CLP'] = selected['Saldo pendiente caja CLP'].map(number)
+    cash['Validación del saldo'] = selected['Validación caja']
+    cash['Estado de pago'] = selected['Estado de pago caja']
+    cash['Caja programada CLP'] = selected['Caja programada CLP'].map(number)
+    cash['Referencia por validar CLP'] = selected['Caja por validar CLP'].map(number)
+    validated = selected['Validación caja'].str.strip().str.casefold().eq('validado')
+    cash['Pendiente validado CLP'] = cash['Caja programada CLP'].where(validated)
+    cash['Respaldo / observaciones'] = selected['Sustento / observaciones']
+    cash['Alerta caja'] = selected['Alerta caja']
+    cash['Caja sin fecha CLP'] = selected['Caja sin fecha CLP'].map(number)
+    cash['_date'] = dates(cash['Fecha FC / desembolso'])
+    return cash.reset_index(drop=True)
+
+
 @st.cache_data(ttl=60, show_spinner=False)
-def load_workbook(refresh_nonce=0):
+def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items())):
     token = f'{refresh_nonce}_{time.time_ns()}'
     def download(item):
         name, gid = item
-        response = requests.get(SOURCE, params={'output':'csv', 'gid':gid, '_cb':token}, timeout=(10, 40))
+        response = requests.get(source_url, params={'output':'csv', 'gid':gid, '_cb':token}, timeout=(10, 40))
         response.raise_for_status()
         return name, pd.read_csv(BytesIO(response.content), header=None, dtype=str, keep_default_na=False)
     with ThreadPoolExecutor(max_workers=5) as pool:
-        raw = dict(pool.map(download, SHEETS.items()))
+        raw = dict(pool.map(download, sheets))
     plan = table_from(raw['Plan'], 4, 'ID')
     costs = table_from(raw['Costos'], 4, 'ID')
     revision = table_from(raw['Revision'], 4, 'ID')
-    cash = table_from(raw['Desembolsos'], 39, 'ID desembolso')
     for name, frame in [('Plan', plan), ('Costos', costs), ('Revision', revision)]:
         if frame['ID'].duplicated().any():
             raise ValueError(f'{name} contiene IDs duplicados; revisa la planilla antes de agregar montos.')
     if set(plan['ID']) != set(costs['ID']):
         raise ValueError('Plan y Costos deben contener los mismos IDs de actividad.')
+    cash = cash_from_costs(costs, plan)
     shared = [c for c in costs if c in plan and c != 'ID']
     tasks = plan.merge(costs.drop(columns=shared), on='ID', how='left', validate='one_to_one')
     tasks = tasks.merge(revision[['ID', 'Estado / avance actual', 'Control de dependencia']], on='ID', how='left', validate='one_to_one')
@@ -93,9 +122,6 @@ def load_workbook(refresh_nonce=0):
     for col in ['Inicio base', 'Fin base', 'Fin previsto actual', 'Fin real']:
         tasks[col] = dates(tasks[col])
     tasks['_delay'] = (tasks['Fin previsto actual'] - tasks['Fin base']).dt.days
-    for col in ['Saldo pendiente CLP', 'Pendiente validado CLP', 'Referencia por validar CLP']:
-        cash[col] = cash[col].map(number)
-    cash['_date'] = dates(cash['Fecha FC / desembolso'])
     cutoff = dates(pd.Series([raw['Resumen'].iloc[3,1]])).iloc[0]
     if pd.isna(cutoff):
         raise ValueError('La fecha de corte del documento no es válida.')
@@ -150,7 +176,7 @@ def capital_dimension_summary(tasks, cash, dimension):
             'Presupuesto referencia': group['Presupuesto referencia'].sum(min_count=1),
             'Caja por validar': quotas['Referencia por validar CLP'].sum(min_count=1),
             'Caja validada': quotas['Pendiente validado CLP'].sum(min_count=1),
-            'Cuotas': len(quotas),
+            'Actividades de caja': len(quotas),
             'Avance físico %': weighted_progress(group),
         })
     summary = pd.DataFrame(rows).sort_values('Presupuesto referencia', ascending=False, na_position='last')
@@ -231,11 +257,11 @@ def capital_view(tasks, cash, cutoff):
     metrics([
         ('Presupuesto de referencia',money(reference),'Suma de referencias informadas'),
         ('Caja por validar',money(pending),'Referencia pendiente de revisión'),
-        ('Desembolsos validados',money(valid),'Solo cuotas con saldo validado'),
-        ('Cuotas por validar',str(selected['Validación del saldo'].eq('Por validar').sum()),'Según Desembolsos'),
+        ('Desembolsos validados',money(valid),'Solo saldos con validación confirmada'),
+        ('Actividades de caja por validar',str(selected['Validación del saldo'].eq('Por validar').sum()),'Saldos y fechas FC de Costos'),
     ])
     st.caption('Los totales se suman desde las partidas publicadas; pueden diferir algunos pesos del resumen por redondeo.')
-    st.info('Las referencias por validar se muestran aparte. La brecha de financiamiento exige saldos validados, caja disponible e ingresos confirmados; no se estima como cero.')
+    st.info('La caja se toma de Costos: saldos No pagado o Parcial con inclusión activa. La parte por validar está incluida en el programa, no se suma nuevamente. La brecha exige caja disponible e ingresos confirmados.')
     render_capital_dimensions(tasks, selected)
     st.subheader('Calendario de desembolsos')
     selected['_month']=selected['_date'].dt.to_period('M').dt.to_timestamp()
@@ -253,8 +279,8 @@ def capital_view(tasks, cash, cutoff):
     else:
         st.info('La selección no tiene desembolsos calendarizados con montos informados.')
     st.caption('Los vencimientos anteriores al corte se agrupan en el mes de corte, como en la planilla. Los aportes en especie no equivalen a caja.')
-    with st.expander('Detalle de cuotas y validación'):
-        st.dataframe(selected[['ID actividad','Concepto / cuota','Fecha FC / desembolso','Validación del saldo','Pendiente validado CLP','Referencia por validar CLP','Respaldo / observaciones']],hide_index=True,use_container_width=True)
+    with st.expander('Detalle de saldos de caja y validación · Costos'):
+        st.dataframe(selected[['ID actividad','Concepto / cuota','Fecha FC / desembolso','Estado de pago','Saldo pendiente CLP','Validación del saldo','Caja programada CLP','Pendiente validado CLP','Referencia por validar CLP','Alerta caja','Respaldo / observaciones']].rename(columns={'Concepto / cuota':'Actividad / entregable'}),hide_index=True,use_container_width=True)
     with st.expander('Calendario mensual · selección activa'):
         st.dataframe(monthly.rename(columns={'_month':'Mes'}),hide_index=True,use_container_width=True)
 
