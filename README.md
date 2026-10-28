@@ -1,12 +1,16 @@
-# CAPEX 80kW Publico
+# Levantamiento de capital · 10 kW y 80 kW
 
-App Streamlit separada de `PILOTOS_ANA` para compartir solo el dashboard `Capex80kW`.
+Dashboard Streamlit para validación tecnológica, CAPEX y ejecución, valor financiero y análisis alternativo del proyecto eólico.
+
+El **Bloque 4 · Opción de análisis** usa el documento publicado de control del proyecto y contiene capital y desembolsos, hitos técnicos y control PMO. Separa importes de referencia, por validar y validados. El cronograma incluye filtros por hito, sistema, paquete y estado, orden cronológico, fin previsto actual, línea de hoy y desplazamiento continuo con encabezados fijos.
 
 ## Ejecutar local
 
 ```bash
-cd capex80kw_publico
-streamlit run app.py
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+streamlit run app.py --server.address 127.0.0.1
 ```
 
 ## Desplegar aparte
@@ -16,4 +20,8 @@ Usa esta carpeta como servicio independiente en Render.
 - `buildCommand`: `pip install -r requirements.txt`
 - `startCommand`: `streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true`
 
-Asi el link compartido apuntara solo a esta app y no al multipage completo de `PILOTOS_ANA`.
+El botón **Actualizar todo** recarga las fuentes y conserva la vista y los filtros activos.
+
+`analysis_option.py` implementa el Bloque 4 y `timeline_scroll.py` su cronograma. Los estilos se encuentran en `assets/`. La propuesta de análisis y los criterios de validación están en [ANALISIS_BLOQUE4.md](ANALISIS_BLOQUE4.md).
+
+El entorno virtual, las credenciales y el historial PMO local no se publican. La aplicación permite comenzar sin un archivo de historial y lo crea al guardar el primer corte.

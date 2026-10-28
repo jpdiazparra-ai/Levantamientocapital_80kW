@@ -1,0 +1,131 @@
+/* Execution and industrialization: same visual system, isolated from other tabs. */
+.st-key-capex10_subblock2 {--sb-ink:#0F2435;--sb-teal:#0F766E;--sb-muted:#64748B;--sb-line:#D8E3EB;--sb-surface:#FAFCFD;color:var(--sb-ink);}
+.st-key-capex10_subblock2 .sb2-page-head {display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding:8px 0 24px;margin-bottom:14px;border-bottom:1px solid var(--sb-line);}
+.st-key-capex10_subblock2 .sb2-eyebrow {display:block;margin-bottom:10px;color:var(--sb-teal);font-size:10px;font-weight:750;letter-spacing:.13em;}
+.st-key-capex10_subblock2 .sb2-page-head h1 {margin:0;padding:0;font-size:clamp(25px,2.6vw,34px);font-weight:750;line-height:1.25;letter-spacing:-.035em;color:var(--sb-ink);}
+.st-key-capex10_subblock2 .sb2-page-head p {max-width:800px;margin:12px 0 0;color:var(--sb-muted);font-size:13px;line-height:1.8;}
+.st-key-capex10_subblock2 .sb2-route {flex-shrink:0;margin-top:6px;padding:9px 13px;border:1px solid #B9DED4;border-radius:8px;background:#F0FDFA;color:var(--sb-teal);font-size:12px;font-weight:650;}
+.st-key-capex10_subblock2 [data-testid="stWidgetLabel"] p {font-size:12px!important;font-weight:600!important;color:#334155!important;line-height:1.5;}
+.st-key-capex10_subblock2 [data-baseweb="select"]>div,
+.st-key-capex10_subblock2 [data-baseweb="input"] {border-radius:8px!important;border-color:var(--sb-line)!important;background:#FFF!important;min-height:42px;}
+.st-key-capex10_subblock2 [data-baseweb="select"]:focus-within>div {border-color:var(--sb-teal)!important;}
+.st-key-capex10_subblock2 [data-baseweb="tag"] {background:#E8F5F1!important;color:#115E59!important;border-radius:5px!important;}
+.st-key-capex10_subblock2 [role="radiogroup"] {gap:12px!important;flex-wrap:wrap;}
+.st-key-capex10_subblock2 button[kind="secondary"] {border:1px solid var(--sb-line)!important;border-radius:8px!important;background:#FFF!important;color:#334155!important;font-weight:600;}
+.st-key-capex10_subblock2 button[kind="secondary"]:hover {border-color:var(--sb-teal)!important;color:var(--sb-teal)!important;}
+.st-key-capex10_subblock2 [data-testid="stCaptionContainer"] p {font-size:11px;color:var(--sb-muted);line-height:1.7;}
+.st-key-capex10_subblock2 .st-key-capex10_gantt_filters,
+.st-key-capex10_subblock2 .st-key-capex10_gantt_controls {padding:22px!important;border:1px solid var(--sb-line)!important;border-radius:16px!important;background:var(--sb-surface)!important;margin:8px 0 12px!important;box-shadow:none!important;}
+.st-key-capex10_subblock2 .gantt-panel-title {font-size:16px!important;font-weight:700!important;color:var(--sb-ink)!important;line-height:1.5!important;margin-bottom:16px!important;}
+/* Summary and progress, with the same navy highlight used for capital coverage. */
+.st-key-capex10_subblock2 .gantt-shell {padding:24px!important;border:1px solid var(--sb-line)!important;border-radius:20px!important;background:var(--sb-surface)!important;box-shadow:none!important;gap:24px!important;margin-bottom:18px;}
+.st-key-capex10_subblock2 .gantt-title-wrap {gap:14px!important;align-items:flex-start!important;min-width:0;}
+.st-key-capex10_subblock2 .gantt-title-icon {width:46px!important;height:46px!important;border-radius:12px!important;border:1px solid #B9DED4!important;background:#F0FDFA!important;color:var(--sb-teal)!important;}
+.st-key-capex10_subblock2 .gantt-title {font-size:23px!important;font-weight:750!important;line-height:1.35!important;letter-spacing:-.025em!important;color:var(--sb-ink)!important;}
+.st-key-capex10_subblock2 .gantt-subtitle {font-size:12px!important;line-height:1.7!important;color:var(--sb-muted)!important;max-width:650px;}
+.st-key-capex10_subblock2 .gantt-download-btn {padding:9px 13px!important;border-radius:8px!important;background:var(--sb-teal)!important;font-size:11px!important;font-weight:650!important;box-shadow:none!important;letter-spacing:0!important;}
+.st-key-capex10_subblock2 .gantt-progress {padding:18px!important;border-radius:12px!important;background:var(--sb-ink)!important;border-color:var(--sb-ink)!important;grid-template-columns:46px 1fr 1px 1.3fr!important;gap:12px!important;min-width:330px;}
+.st-key-capex10_subblock2 .gantt-donut {background:conic-gradient(#5EEAD4 var(--pct),#334A5C 0)!important;}
+.st-key-capex10_subblock2 .gantt-donut:after {background:var(--sb-ink)!important;}
+.st-key-capex10_subblock2 .gantt-progress-k {color:#CBD5E1!important;font-size:10px!important;line-height:1.6;}
+.st-key-capex10_subblock2 .gantt-progress-v {color:#99F6E4!important;font-size:29px!important;font-weight:750!important;line-height:1.2!important;font-variant-numeric:tabular-nums;}
+.st-key-capex10_subblock2 .gantt-progress-note {margin-top:5px;color:#CBD5E1;font-size:10px;line-height:1.5;font-weight:400;}
+.st-key-capex10_subblock2 .gantt-progress {grid-template-columns:40px minmax(120px,1fr) 1px minmax(110px,1fr)!important;min-width:370px;}
+.st-key-capex10_subblock2 .gantt-divider {background:#334A5C!important;}
+.st-key-capex10_subblock2 .gantt-alert {color:#E2E8F0!important;font-size:11px!important;line-height:1.6!important;}
+/* Compact KPI cards, in one row on wide screens. */
+.st-key-capex10_subblock2 .gantt-kpi-band {display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:14px!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;overflow:visible!important;margin:4px 0 20px!important;}
+.st-key-capex10_subblock2 .gantt-kpi {min-width:0;padding:13px 14px!important;border:1px solid #E2E8F0!important;border-top:3px solid var(--accent)!important;border-radius:12px!important;background:#FFF!important;box-shadow:none!important;}
+.st-key-capex10_subblock2 .gantt-kpi:nth-child(1) {--accent:#0F766E!important;}
+.st-key-capex10_subblock2 .gantt-kpi:nth-child(2) {--accent:#244A6C!important;}
+.st-key-capex10_subblock2 .gantt-kpi:nth-child(3) {--accent:#B7791F!important;}
+.st-key-capex10_subblock2 .gantt-kpi:nth-child(4) {--accent:#0E7490!important;}
+.st-key-capex10_subblock2 .gantt-kpi:nth-child(5) {--accent:#0F766E!important;}
+.st-key-capex10_subblock2 .gantt-kpi:nth-child(6) {--accent:#64748B!important;}
+.st-key-capex10_subblock2 .gantt-kpi-top {gap:9px!important;margin-bottom:6px!important;align-items:center!important;}
+.st-key-capex10_subblock2 .gantt-kpi-ico {width:28px!important;height:28px!important;flex-shrink:0;border-radius:8px!important;font-size:18px!important;}
+.st-key-capex10_subblock2 .gantt-kpi-label {font-size:10px!important;line-height:1.6!important;font-weight:650!important;letter-spacing:.05em!important;color:var(--sb-muted)!important;}
+.st-key-capex10_subblock2 .gantt-kpi-value {font-size:25px!important;line-height:1.25!important;font-weight:750!important;letter-spacing:-.03em!important;color:var(--sb-ink)!important;font-variant-numeric:tabular-nums;}
+.st-key-capex10_subblock2 .gantt-kpi-note {font-size:10px!important;line-height:1.5!important;font-weight:400!important;color:var(--sb-muted)!important;white-space:normal!important;}
+/* State colors and milestone symbols retain their existing meanings. */
+.st-key-capex10_subblock2 .gantt-control-label {font-size:10px!important;font-weight:650!important;letter-spacing:.06em!important;color:var(--sb-muted)!important;}
+.st-key-capex10_subblock2 .gantt-control-chip {padding:6px 9px!important;border:1px solid var(--sb-line)!important;border-radius:6px!important;font-size:10px!important;font-weight:500!important;color:#334155!important;}
+.st-key-capex10_subblock2 .gantt-control-symbols {gap:12px!important;flex-wrap:wrap;}
+.st-key-capex10_subblock2 .gantt-control-symbols span {font-size:10px!important;font-weight:500!important;color:#475569!important;}
+.st-key-capex10_subblock2 .gantt-chart-card {padding:22px!important;margin-top:12px!important;border:1px solid var(--sb-line)!important;border-radius:20px!important;background:var(--sb-surface)!important;box-shadow:none!important;}
+.st-key-capex10_subblock2 .gantt-custom-wrap {border:1px solid #E2E8F0!important;border-radius:12px!important;padding-top:18px!important;background:#FFF!important;}
+.st-key-capex10_subblock2 .gantt-custom-title {font-size:18px!important;font-weight:700!important;line-height:1.5!important;letter-spacing:-.02em!important;color:var(--sb-ink)!important;margin:0 18px 18px!important;}
+.st-key-capex10_subblock2 .gantt-custom-scroll {max-height:min(72vh,820px)!important;scrollbar-color:#BCCBD5 #F1F5F9;scrollbar-width:thin;}
+.st-key-capex10_subblock2 .gantt-grid {min-width:1130px!important;}
+.st-key-capex10_subblock2 .gantt-board-head,
+.st-key-capex10_subblock2 .gantt-line-block {grid-template-columns:160px 360px minmax(610px,1fr)!important;}
+.st-key-capex10_subblock2 .gantt-board-head {box-shadow:0 2px 4px rgba(15,23,42,.035)!important;background:#F1F5F9!important;}
+.st-key-capex10_subblock2 .gantt-left-head,
+.st-key-capex10_subblock2 .gantt-time-head {height:64px!important;background:#F1F5F9!important;color:#475569!important;}
+.st-key-capex10_subblock2 .gantt-left-head {font-size:10px!important;font-weight:650!important;letter-spacing:.045em!important;}
+.st-key-capex10_subblock2 .gantt-month-cell {height:30px!important;font-size:10px!important;font-weight:650!important;color:#475569!important;}
+.st-key-capex10_subblock2 .gantt-week-label {font-size:10px!important;font-weight:500!important;color:var(--sb-muted)!important;bottom:10px!important;}
+.st-key-capex10_subblock2 .gantt-line-block {grid-auto-rows:minmax(56px,auto)!important;}
+.st-key-capex10_subblock2 .gantt-line-block.compact {grid-auto-rows:minmax(76px,auto)!important;}
+.st-key-capex10_subblock2 .gantt-line-panel {padding:15px 10px!important;background:#F8FAFC!important;}
+.st-key-capex10_subblock2 .gantt-line-icon {width:38px!important;height:38px!important;}
+.st-key-capex10_subblock2 .gantt-line-icon svg {width:36px!important;height:36px!important;}
+.st-key-capex10_subblock2 .gantt-line-name {font-size:12px!important;line-height:1.5!important;font-weight:650!important;text-transform:none!important;max-width:138px!important;overflow-wrap:anywhere;}
+.st-key-capex10_subblock2 .gantt-line-count {font-size:10px!important;font-weight:400!important;line-height:1.6!important;color:var(--sb-muted)!important;}
+.st-key-capex10_subblock2 .gantt-line-block.compact .gantt-line-icon,
+.st-key-capex10_subblock2 .gantt-line-block.compact .gantt-line-icon svg {width:24px!important;height:24px!important;}
+.st-key-capex10_subblock2 .gantt-line-block.compact .gantt-line-name {max-width:106px!important;font-size:11px!important;}
+.st-key-capex10_subblock2 .gantt-task-cell {padding:10px 12px!important;gap:8px!important;min-height:56px!important;box-sizing:border-box;}
+.st-key-capex10_subblock2 .gantt-task-label {font-size:12px!important;line-height:1.65!important;font-weight:450!important;color:#334155!important;}
+.st-key-capex10_subblock2 .gantt-bar-cell {min-height:56px!important;}
+.st-key-capex10_subblock2 .gantt-bar {height:12px!important;border-radius:5px!important;background:var(--bar-color,#64748B)!important;box-shadow:none!important;}
+.st-key-capex10_subblock2 .gantt-bar:before {display:none!important;}
+.st-key-capex10_subblock2 .gantt-end-date {font-size:10px!important;font-weight:500!important;color:#64748B!important;}
+.st-key-capex10_subblock2 .gantt-milestone-badge {border-radius:5px!important;background:#ECFDF5!important;color:#115E59!important;font-size:9px!important;font-weight:650!important;letter-spacing:0!important;}
+.st-key-capex10_subblock2 .gantt-today-label {border-radius:5px!important;background:var(--sb-ink)!important;font-weight:650!important;}
+/* Executive delay report, full task names and a horizontally scrollable table. */
+.st-key-capex10_subblock2 .gantt-exec-shell {padding:24px!important;border:1px solid var(--sb-line)!important;border-radius:20px!important;background:var(--sb-surface)!important;box-shadow:none!important;}
+.st-key-capex10_subblock2 .gantt-exec-title {font-size:23px!important;font-weight:750!important;line-height:1.4!important;letter-spacing:-.025em!important;}
+.st-key-capex10_subblock2 .gantt-exec-sub {font-size:12px!important;font-weight:400!important;line-height:1.8!important;}
+.st-key-capex10_subblock2 .gantt-exec-score {border-radius:12px!important;background:var(--sb-ink)!important;box-shadow:none!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+.st-key-capex10_subblock2 .gantt-exec-score-main b {font-size:48px!important;font-weight:750!important;line-height:1.2!important;}
+.st-key-capex10_subblock2 .gantt-exec-metric b {font-size:30px!important;font-weight:750!important;color:#99F6E4!important;line-height:1.3!important;}
+.st-key-capex10_subblock2 .gantt-exec-insight,
+.st-key-capex10_subblock2 .gantt-exec-read {border:1px solid #E2E8F0!important;border-radius:12px!important;box-shadow:none!important;background:#FFF!important;}
+.st-key-capex10_subblock2 .gantt-exec-insight b {font-size:16px!important;font-weight:650!important;line-height:1.5!important;}
+.st-key-capex10_subblock2 .gantt-exec-insight p {font-size:12px!important;font-weight:400!important;line-height:1.7!important;}
+.st-key-capex10_subblock2 .gantt-delay-wrap {margin-top:20px!important;border:1px solid var(--sb-line)!important;border-radius:20px!important;background:var(--sb-surface)!important;box-shadow:none!important;}
+.st-key-capex10_subblock2 .gantt-delay-head {padding:22px!important;gap:20px!important;}
+.st-key-capex10_subblock2 .gantt-delay-head h4 {font-size:20px!important;font-weight:750!important;line-height:1.4!important;color:var(--sb-ink)!important;letter-spacing:-.02em;}
+.st-key-capex10_subblock2 .gantt-delay-head p {font-size:12px!important;font-weight:400!important;line-height:1.7!important;}
+.st-key-capex10_subblock2 .gantt-delay-pill {padding:8px 11px!important;border-radius:8px!important;border-color:#B9DED4!important;background:#F0FDFA!important;font-size:10px!important;font-weight:650!important;white-space:normal!important;line-height:1.6!important;}
+.st-key-capex10_subblock2 .gantt-delay-scroll {background:#FFF;scrollbar-width:thin;scrollbar-color:#BCCBD5 #F1F5F9;}
+.st-key-capex10_subblock2 .gantt-delay-table {min-width:1400px!important;table-layout:fixed!important;}
+.st-key-capex10_subblock2 .gantt-delay-table th {padding:13px 14px!important;background:#F1F5F9!important;font-size:10px!important;font-weight:650!important;letter-spacing:.035em!important;}
+.st-key-capex10_subblock2 .gantt-delay-table td {padding:14px!important;font-size:12px!important;font-weight:500!important;line-height:1.6!important;font-variant-numeric:tabular-nums;}
+.st-key-capex10_subblock2 .gantt-delay-task span {font-size:12px!important;line-height:1.7!important;}
+.st-key-capex10_subblock2 .gantt-delay-task small {font-size:10px!important;font-weight:400!important;line-height:1.7!important;}
+.st-key-capex10_subblock2 .gantt-delay-rank {border-radius:6px!important;background:var(--sb-ink)!important;font-size:11px!important;font-weight:650!important;}
+.st-key-capex10_subblock2 .gantt-delay-status {border-radius:5px!important;background:#F1F5F9!important;font-size:10px!important;font-weight:500!important;white-space:normal!important;max-width:none!important;}
+.st-key-capex10_subblock2 .gantt-delay-days b {font-weight:700!important;}
+.st-key-capex10_subblock2 .gantt-delay-days i {background:#B45309!important;}
+@media(max-width:1500px) {
+  .st-key-capex10_subblock2 .gantt-kpi-band {grid-template-columns:repeat(3,minmax(0,1fr))!important;}
+}
+@media(max-width:1100px) {
+  .st-key-capex10_subblock2 .gantt-kpi-band {grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+  .st-key-capex10_subblock2 .gantt-shell {flex-direction:column!important;align-items:stretch!important;}
+  .st-key-capex10_subblock2 .gantt-progress {min-width:0!important;width:auto!important;}
+}
+@media(max-width:760px) {
+  .st-key-capex10_subblock2 .sb2-page-head {flex-direction:column;gap:12px;}
+  .st-key-capex10_subblock2 .gantt-kpi-band {grid-template-columns:1fr!important;}
+  .st-key-capex10_subblock2 .gantt-shell,
+  .st-key-capex10_subblock2 .gantt-chart-card,
+  .st-key-capex10_subblock2 .st-key-capex10_gantt_filters,
+  .st-key-capex10_subblock2 .st-key-capex10_gantt_controls {padding:16px!important;}
+  .st-key-capex10_subblock2 .gantt-progress {grid-template-columns:40px 1fr!important;}
+  .st-key-capex10_subblock2 .gantt-divider {display:none!important;}
+  .st-key-capex10_subblock2 .gantt-delay-head {flex-direction:column!important;align-items:flex-start!important;padding:18px!important;}
+  .st-key-capex10_subblock2 .gantt-exec-score {grid-template-columns:1fr!important;}
+}

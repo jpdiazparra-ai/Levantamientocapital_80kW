@@ -2206,10 +2206,10 @@ def render_hito_span_gantt(df: pd.DataFrame) -> None:
         )
 
     cut_dates = [
-        ("30 mayo", pd.Timestamp("2026-05-30")),
         ("30 junio", pd.Timestamp("2026-06-30")),
         ("30 julio", pd.Timestamp("2026-07-30")),
-        ("30 septiembre", pd.Timestamp("2026-09-30")),
+        ("30 agosto", pd.Timestamp("2026-08-30")),
+        ("30 octubre", pd.Timestamp("2026-10-30")),
     ]
     cut_marks = "".join(
         f"<div class='cut-mark' style='left:{pct(date):.2f}%;'><span>{html.escape(label)}</span></div>"
@@ -2296,10 +2296,10 @@ def render_board_kpis(df: pd.DataFrame) -> None:
         return
 
     cuts = [
-        ("Liberación 1", None, pd.Timestamp("2026-05-30")),
-        ("Liberación 2", pd.Timestamp("2026-05-30"), pd.Timestamp("2026-06-30")),
-        ("Liberación 3", pd.Timestamp("2026-06-30"), pd.Timestamp("2026-07-30")),
-        ("Liberación 4", pd.Timestamp("2026-07-30"), pd.Timestamp("2026-09-30")),
+        ("Liberación 1", None, pd.Timestamp("2026-06-30")),
+        ("Liberación 2", pd.Timestamp("2026-06-30"), pd.Timestamp("2026-07-30")),
+        ("Liberación 3", pd.Timestamp("2026-07-30"), pd.Timestamp("2026-08-30")),
+        ("Liberación 4", pd.Timestamp("2026-08-30"), pd.Timestamp("2026-10-30")),
     ]
     release_totals: list[tuple[str, float]] = []
     release_windows: dict[str, pd.DataFrame] = {}
@@ -2422,10 +2422,10 @@ def render_release_cutoff_intelligence(df: pd.DataFrame) -> None:
     "H8": "#7F1D1D",   # rojo sobrio financiero
 }
     cuts = [
-        ("Liberación 1", "30-05-2026", None, pd.Timestamp("2026-05-30"), "#0B3A3E", "Activación inicial"),
-        ("Liberación 2", "30-06-2026", pd.Timestamp("2026-05-30"), pd.Timestamp("2026-06-30"), "#243B53", "Continuidad técnica"),
-        ("Liberación 3", "30-07-2026", pd.Timestamp("2026-06-30"), pd.Timestamp("2026-07-30"), "#A16207", "Integración operacional"),
-        ("Liberación 4", "30-09-2026", pd.Timestamp("2026-07-30"), pd.Timestamp("2026-09-30"), "#6B1E1E", "Cierre del horizonte"),
+        ("Liberación 1", "30-06-2026", None, pd.Timestamp("2026-06-30"), "#0B3A3E", "Activación inicial"),
+        ("Liberación 2", "30-07-2026", pd.Timestamp("2026-06-30"), pd.Timestamp("2026-07-30"), "#243B53", "Continuidad técnica"),
+        ("Liberación 3", "30-08-2026", pd.Timestamp("2026-07-30"), pd.Timestamp("2026-08-30"), "#A16207", "Integración operacional"),
+        ("Liberación 4", "30-10-2026", pd.Timestamp("2026-08-30"), pd.Timestamp("2026-10-30"), "#6B1E1E", "Cierre del horizonte"),
     ]
     panels: list[dict[str, object]] = []
     max_amount = 1.0
@@ -2434,6 +2434,7 @@ def render_release_cutoff_intelligence(df: pd.DataFrame) -> None:
         second_stage_mask = scheduled["Etapa Capital"].fillna("").astype(str).map(normalize_text).str.lower().str.contains("segunda")
         scheduled = scheduled[second_stage_mask].copy()
     amount_col = "Monto Ejecutado Num" if "Monto Ejecutado Num" in scheduled.columns else "Monto CLP Num"
+    scheduled = scheduled[pd.to_numeric(scheduled[amount_col], errors="coerce").fillna(0) > 0].copy()
 
     def short_text(value: object, limit: int = 150) -> str:
         text = re.sub(r"\s+", " ", str(value or "").strip())

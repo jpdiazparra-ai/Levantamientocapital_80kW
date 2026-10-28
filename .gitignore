@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+.streamlit/secrets.toml
+.env
+.env.*
+!.env.example
+# Local PMO snapshots; the application creates the history when needed.
+/data/historial_cortes.csv

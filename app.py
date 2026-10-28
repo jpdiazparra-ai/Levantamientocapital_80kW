@@ -2,6 +2,7 @@
 # Dashboard CAPEX Piloto Eólico 80 kW (versión mejorada)
 
 import ast
+from analysis_option import render_analysis_option
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -153,125 +154,92 @@ def _hero_path():
 
 
 def render_inputs_main_hero() -> None:
+    css = (Path(__file__).parent / "assets" / "dashboard.css").read_text(encoding="utf-8")
+    st.html(f"<style>{css}</style>")
     path = _hero_path()
-    hero_bg_css = ""
+    photo_style = ""
     if path:
-        suffix = path.suffix.lower()
-        mime = "image/jpeg"
-        if suffix == ".png":
-            mime = "image/png"
-        elif suffix == ".webp":
-            mime = "image/webp"
+        mime = {".png": "image/png", ".webp": "image/webp"}.get(path.suffix.lower(), "image/jpeg")
         encoded = base64.b64encode(path.read_bytes()).decode()
-        hero_bg_css = f"background-image:url('data:{mime};base64,{encoded}');"
-
-    st.markdown(
-        f"""
-        <style>
-        .inputs-main-hero-shell{{
-            margin:4px 0 24px 0;
-            min-height:210px;
-            border-radius:30px;
-            position:relative;
-            overflow:hidden;
-            padding:24px 30px 22px 30px;
-            border:1px solid rgba(191,219,254,.42);
-            box-shadow:0 22px 42px rgba(15,23,42,.12);
-            background:#eff6ff;
-        }}
-        .inputs-main-hero-shell::before{{
-            content:"";
-            position:absolute;
-            inset:0;
-            background-size:cover;
-            background-position:center 30%;
-            opacity:.96;
-            z-index:0;
-            {hero_bg_css}
-        }}
-        .inputs-main-hero-shell::after{{
-            content:"";
-            position:absolute;
-            inset:0;
-            z-index:1;
-            background:
-                linear-gradient(180deg, rgba(255,255,255,.84) 0%, rgba(255,255,255,.62) 28%, rgba(15,23,42,.20) 100%),
-                linear-gradient(90deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,.02) 34%, rgba(15,23,42,.14) 100%);
-        }}
-        .inputs-main-hero-content{{
-            position:relative;
-            z-index:2;
-            max-width:1200px;
-        }}
-        .inputs-main-hero-top{{
-            display:flex;
-            align-items:flex-start;
-            gap:16px;
-        }}
-        .inputs-main-hero-ico{{
-            width:56px;
-            height:56px;
-            border-radius:18px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            font-size:34px;
-            background:linear-gradient(180deg,#eff6ff 0%,#dbeafe 100%);
-            border:1px solid rgba(96,165,250,.26);
-            box-shadow:0 10px 24px rgba(59,130,246,.12);
-            flex:0 0 auto;
-            margin-top:4px;
-        }}
-        .inputs-main-hero-title{{
-            font-size: clamp(34px, 4.6vw, 58px);
-            line-height:1.02;
-            font-weight:900;
-            letter-spacing:-0.03em;
-            color:#111827;
-            margin:0;
-            text-shadow:0 1px 0 rgba(255,255,255,.30);
-        }}
-        .inputs-main-hero-sub{{
-            font-size:15px;
-            line-height:1.65;
-            color:#4b5563;
-            max-width:1080px;
-            margin:14px 0 0 0;
-        }}
-        @media (max-width: 900px){{
-            .inputs-main-hero-shell{{
-                min-height:160px;
-                border-radius:24px;
-                padding:18px 18px 16px 18px;
-            }}
-            .inputs-main-hero-top{{
-                gap:12px;
-            }}
-            .inputs-main-hero-ico{{
-                width:46px;
-                height:46px;
-                font-size:28px;
-                border-radius:14px;
-            }}
-        }}
-        </style>
-        <div class="inputs-main-hero-shell">
-          <div class="inputs-main-hero-content">
-            <div class="inputs-main-hero-top">
-              <div class="inputs-main-hero-ico">📊</div>
-              <div>
-                <h1 class="inputs-main-hero-title">Arquitectura de Inversión y Creación de Valor</h1>
-                <p class="inputs-main-hero-sub">
-                  Panel interactivo para analizar la estructura de inversión del piloto de turbina eólica vertical híbrida.
-                  Diseñado para uso en directorio, comité técnico y seguimiento de proyecto.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+        photo_style = f"background-image:url('data:{mime};base64,{encoded}');"
+    st.html(
+        '<div class="home-brandbar"><div class="home-wordmark"><span class="home-brand-symbol" aria-hidden="true">'
+        '<svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M16 14v15M16 13 8 5M16 13l12-3M16 13l-3 12"/><circle cx="16" cy="13" r="2.5" fill="currentColor" stroke="none"/></svg>'
+        '</span><div><strong>FLUXIAL WIND</strong><small>TECNOLOGÍA EÓLICA</small></div></div>'
+        '<div class="home-brandbar-note">PLATAFORMA DE ANÁLISIS<br>TECNOLOGÍA · CAPITAL · VALOR</div></div>'
+        '<section class="home-hero" aria-label="Arquitectura de inversión y creación de valor">'
+        f'<div class="home-hero-photo" style="{photo_style}" aria-hidden="true"></div>'
+        '<div class="home-hero-content"><div class="home-eyebrow">VISIÓN ESTRATÉGICA DEL PROYECTO</div>'
+        '<h1>Arquitectura de inversión<br>y creación de valor</h1>'
+        '<p>De la validación tecnológica a la ejecución industrial. Una visión integrada del capital, los hitos y el potencial financiero del proyecto eólico.</p>'
+        '<div class="home-hero-topics"><span>Desarrollo de 10 kW y 80 kW</span><span>Planificación de capital</span><span>Evaluación financiera</span></div>'
+        '</div></section>'
     )
+
+
+def render_dashboard_primary_navigation(
+    cards: list[tuple[str, str, str, str]], selected: str | None,
+    on_select, key_prefix: str,
+    heading: str = "Selecciona un área de análisis",
+    description: str = "Explora las dimensiones técnicas, de ejecución y financieras del proyecto.",
+    variant: str = "primary", card_values: dict[str, str] | None = None,
+    card_tags: dict[str, list[str]] | None = None,
+) -> None:
+    icon_paths = [
+        '<path d="M9 3v6l-4 8a3 3 0 0 0 2.7 4h8.6a3 3 0 0 0 2.7-4l-4-8V3M8 3h8M8 14h8"/>',
+        '<path d="M4 20h16M6 16v-5M12 16V7M18 16V3"/><path d="m4 8 6-4 5 2 5-5"/>',
+        '<path d="M4 19h16M5 15l5-5 4 2 6-8M15 4h5v5"/>',
+    ]
+    tags_by_value = {
+        "estado_actual": ["Desarrollo técnico", "Validación"],
+        "escalamiento": ["Financiamiento", "Ejecución"],
+        "valorizacion": ["Proyecciones", "Valorización"],
+        "capital_brecha": ["Necesidades de capital", "Brecha TRL 9"],
+        "cronograma_hitos": ["Cronograma", "Industrialización"],
+        "valor_financiero": ["Flujos de caja", "Evaluación financiera"],
+        "contexto": ["Tecnología", "Desarrollo técnico"],
+        "financiero": ["Inversión ejecutada", "Piloto 10 kW"],
+        "control_fondos": ["Necesidades de capital", "Brecha TRL 9"],
+        "vista_integrada": ["Cronograma", "Industrialización"],
+        "control_cost": ["Seguimiento PMO", "Control de costos"],
+        "opcion_analisis": ["Fuente alternativa", "Capital · Hitos · PMO"],
+        "costo_ejecutado": ["Inversión ejecutada"],
+        "capacidades_externas": ["Capacidades complementarias"],
+        "know_how_fw": ["Conocimiento técnico"],
+        "evaluación financiera 10kW": ["Modelo 10 kW", "Flujos de caja"],
+        "evaluación financiera 80kW": ["Modelo 80 kW", "Flujos de caja"],
+        "Evaluación financiera 10kw+80kw": ["Modelo consolidado", "10 kW + 80 kW"],
+    }
+    navigation_key = "dashboard_primary_navigation" if variant == "primary" else f"dashboard_subnavigation_{key_prefix}"
+    with st.container(key=navigation_key):
+        st.html(
+            f'<div class="home-nav-heading"><div><h2>{html.escape(heading)}</h2>'
+            f'<p>{html.escape(description)}</p></div>'
+            f'<span class="home-nav-count">{len(cards):02d} {"ÁREAS" if variant == "primary" else "VISTAS"}</span></div>'
+        )
+        columns = st.columns(len(cards), gap="medium")
+        for index, (value, label, title, description) in enumerate(cards):
+            active = selected == value
+            with columns[index]:
+                with st.container(border=True, key=f"dashboard_entry_{key_prefix}_{index}"):
+                    icon = icon_paths[index % len(icon_paths)]
+                    tags = "".join(f"<span>{html.escape(tag)}</span>" for tag in (card_tags or {}).get(value, tags_by_value.get(value, [])))
+                    amount_html = f'<div class="home-nav-financial-value">{html.escape(card_values[value])}</div>' if card_values and value in card_values else ""
+                    st.html(
+                        f'<article class="home-nav-entry{" is-active" if active else ""}" aria-current="{"page" if active else "false"}">'
+                        '<div class="home-nav-top"><span class="home-nav-icon" aria-hidden="true">'
+                        f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">{icon}</svg>'
+                        f'</span><span class="home-nav-sequence">{index + 1:02d}</span></div>'
+                        f'<div class="home-nav-label">{html.escape(label)}</div><h3>{html.escape(title)}</h3>'
+                        f'{amount_html}<p class="home-nav-description">{html.escape(description)}</p><div class="home-nav-tags">{tags}</div></article>'
+                    )
+                    st.button(
+                        "Vista seleccionada" if active else ("Explorar bloque →" if variant == "primary" else "Explorar vista →"),
+                        key=f"{key_prefix}_{index}", use_container_width=True,
+                        type="primary" if active else "secondary", on_click=on_select, args=(value,),
+                    )
+
+
 DASHBOARD_FINANCIERO_CSV_URL_DEFAULT = (
     "https://docs.google.com/spreadsheets/d/e/"
     "2PACX-1vQmVzOg9X7VfxAmOImXHuMvyH4dQmxbFL3DIBqOubi32jKLncgqBEBwnl6j0dXWsm5FkRAcrY4y8BD2/"
@@ -414,7 +382,7 @@ GANTT_DATE_COL_START = "Inicio (AAAA-MM-DD)"
 GANTT_DATE_COL_END_PLAN = "Fin plan (AAAA-MM-DD)"
 GANTT_DATE_COL_END_REAL = "Fin real"
 ASPAS_FRP_GANTT_PHASE_OPTION = "Fabricación ASPAS frp"
-GANTT_PROJECT_SOURCE_VERSION = 8
+GANTT_PROJECT_SOURCE_VERSION = 9
 GANTT_COLUMN_ALIASES = {
     "LÃ\xadnea": "Línea",
     "MÃ©todo": "Método",
@@ -499,8 +467,7 @@ CONTROL_CUT_REQUIRED_FIELDS = [
 # =========================
 # FUNCIONES
 # =========================
-@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
-def fetch_remote_file_bytes(url: str, refresh_nonce: int = 0) -> bytes:
+def _download_remote_file_bytes(url: str) -> bytes:
     last_error: Exception | None = None
     for attempt in range(REMOTE_FETCH_RETRIES + 1):
         try:
@@ -519,6 +486,11 @@ def fetch_remote_file_bytes(url: str, refresh_nonce: int = 0) -> bytes:
     if last_error is not None:
         raise last_error
     raise RuntimeError("No se pudo descargar el archivo remoto.")
+
+
+@st.cache_data(show_spinner=False, ttl=REMOTE_FETCH_TTL_SECONDS, persist="disk")
+def fetch_remote_file_bytes(url: str, refresh_nonce: int = 0) -> bytes:
+    return _download_remote_file_bytes(url)
 
 
 def read_remote_csv(url: str, *, refresh_nonce: int = 0, **kwargs) -> pd.DataFrame:
@@ -1432,7 +1404,7 @@ def load_capex10_plan_a_injection_schedule(refresh_nonce: int = 0) -> pd.DataFra
         return pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Responsable", "Etiqueta"])
     schedule = pd.DataFrame(
         {
-            "Fecha": pd.to_datetime(df[date_col], errors="coerce", dayfirst=True),
+            "Fecha": pd.to_datetime(df[date_col], errors="coerce", format="mixed", dayfirst=True),
             "Inyeccion_CLP": df[amount_col].apply(parse_money_clp_robusto),
             "Responsable": (
                 df[responsible_col].astype(str).str.strip()
@@ -4198,133 +4170,20 @@ def render_inputs_financial_main_kpis(df_in: pd.DataFrame):
     if fin_nav_key not in st.session_state:
         st.session_state[fin_nav_key] = None
 
-    summary_grid_template = "1.45fr 0.85fr 0.85fr" if capacidades_externo > 0 else "1fr 1fr"
-    selector_widths = [1.45, 0.85, 0.85] if capacidades_externo > 0 else [1, 1]
-
-    st.markdown(
-        f"""
-        <style>
-        .inputs-fin-summary{{display:grid;grid-template-columns:{summary_grid_template};gap:16px;margin:10px 0 18px}}
-        @media (max-width:1400px){{.inputs-fin-summary{{grid-template-columns:1fr;}}}}
-        .inputs-fin-hero,
-        .inputs-fin-side{{
-            border-radius:20px;
-            padding:18px 18px 16px 18px;
-            background:linear-gradient(180deg,#f8fafc 0%,#ffffff 68%);
-            border:1px solid rgba(148,163,184,.30);
-            box-shadow:0 8px 18px rgba(15,23,42,.06);
-        }}
-        .inputs-fin-hero.active,
-        .inputs-fin-side.active{{
-            border:1px solid rgba(239,68,68,.32) !important;
-            background:linear-gradient(180deg,#fff7f7 0%,#ffecec 100%) !important;
-            box-shadow:0 10px 24px rgba(239,68,68,.08) !important;
-        }}
-        .inputs-fin-hero{{
-            background:linear-gradient(90deg,#f4f1ed 0%,#ebe5de 42%,#ddd7cf 100%);
-        }}
-        .inputs-fin-blank{{
-            background:linear-gradient(180deg,#f6f4f1 0%,#ffffff 68%) !important;
-        }}
-        .inputs-fin-row{{display:flex;align-items:center;gap:10px;margin-bottom:10px}}
-        .inputs-fin-ico{{
-            width:36px;height:36px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;
-            background:#e7ece8;border:1px solid rgba(79,109,90,.24);font-size:22px
-        }}
-        .inputs-fin-h{{font-size:13px;font-weight:800;color:#0f172a;letter-spacing:.02em}}
-        .inputs-fin-v{{font-size:28px;font-weight:900;color:#0f172a;line-height:1.05;margin-bottom:8px}}
-        .inputs-fin-hero .inputs-fin-v{{font-size:36px}}
-        .inputs-fin-sub{{display:flex;gap:8px;flex-wrap:wrap}}
-        .inputs-fin-chip{{
-            display:inline-block;font-size:12px;padding:5px 10px;border-radius:999px;
-            border:1px solid rgba(107,114,128,.25);background:#ece9e4;color:#4b5563
-        }}
-        .inputs-fin-note{{font-size:13px;line-height:1.5;color:#475569;margin-top:6px}}
-        .inputs-fin-hero.active .inputs-fin-h,
-        .inputs-fin-side.active .inputs-fin-h,
-        .inputs-fin-hero.active .inputs-fin-v,
-        .inputs-fin-side.active .inputs-fin-v{{
-            color:#b91c1c !important;
-        }}
-        .inputs-fin-hero.active .inputs-fin-note,
-        .inputs-fin-side.active .inputs-fin-note{{
-            color:#991b1b !important;
-        }}
-        .inputs-fin-hero.active .inputs-fin-chip,
-        .inputs-fin-side.active .inputs-fin-chip{{
-            border:1px solid rgba(239,68,68,.24) !important;
-            background:#fff4f4 !important;
-            color:#991b1b !important;
-        }}
-        .inputs-fin-hero.active .inputs-fin-ico,
-        .inputs-fin-side.active .inputs-fin-ico{{
-            border:1px solid rgba(239,68,68,.22) !important;
-            background:#fff1f1 !important;
-        }}
-        .inputs-fin-selector-row{{
-            display:grid;
-            grid-template-columns:{summary_grid_template};
-            gap:16px;
-            margin:0 0 18px 0;
-        }}
-        @media (max-width:1400px){{.inputs-fin-selector-row{{grid-template-columns:1fr;}}}}
-        </style>
-        """,
-        unsafe_allow_html=True,
+    selector_cards = [
+        ("costo_ejecutado", "INVERSIÓN", "Costo Ejecutado", "Inversión efectivamente ejecutada para construir y poner en operación el activo tecnológico."),
+    ]
+    if capacidades_externo > 0:
+        selector_cards.append(("capacidades_externas", "CAPACIDADES", "Capacidades externas", "Capacidades complementarias valorizadas fuera del gasto ejecutado directo."))
+    selector_cards.append(("know_how_fw", "CONOCIMIENTO", "Know-how FW", "Valor del conocimiento técnico incorporado en la arquitectura y desarrollo del activo."))
+    render_dashboard_primary_navigation(
+        selector_cards, st.session_state.get(fin_nav_key),
+        lambda value: st.session_state.__setitem__(fin_nav_key, value), "inputs_fin_asset_selector",
+        heading="Composición del activo tecnológico", description="Selecciona un componente para explorar su detalle y valorización.",
+        variant="secondary",
+        card_values={"costo_ejecutado": format_clp(monto_total), "capacidades_externas": format_clp(capacidades_externo), "know_how_fw": format_clp(know_how_fw)},
+        card_tags={"costo_ejecutado": [f"Base: {n_items:,} ítems", f"Proveedores: {n_prov:,}"]},
     )
-
-    costo_active = st.session_state.get(fin_nav_key) == "costo_ejecutado"
-    capacidades_active = st.session_state.get(fin_nav_key) == "capacidades_externas"
-    knowhow_active = st.session_state.get(fin_nav_key) == "know_how_fw"
-
-    capacidades_card_html = ""
-    if capacidades_externo > 0:
-        capacidades_card_html = f"""
-      <div class="inputs-fin-side {'active' if capacidades_active else ''}">
-        <div class="inputs-fin-row"><div class="inputs-fin-ico">🧠</div><div class="inputs-fin-h">Capacidades externo</div></div>
-        <div class="inputs-fin-v">{html.escape(format_clp(capacidades_externo))}</div>
-        <div class="inputs-fin-sub"><span class="inputs-fin-chip">Valorización FW · G6</span></div>
-        <div class="inputs-fin-note">Capacidades complementarias valorizadas fuera del gasto ejecutado directo.</div>
-      </div>
-        """
-
-    cards = f"""
-    <div class="inputs-fin-summary">
-      <div class="inputs-fin-hero inputs-fin-blank {'active' if costo_active else ''}">
-        <div class="inputs-fin-row"><div class="inputs-fin-ico">💰</div><div class="inputs-fin-h">Costo Ejecutado</div></div>
-        <div class="inputs-fin-v">{html.escape(format_clp(monto_total))}</div>
-        <div class="inputs-fin-sub">
-          <span class="inputs-fin-chip">Base: {n_items:,} ítems</span>
-          <span class="inputs-fin-chip">Proveedores: {n_prov:,}</span>
-        </div>
-        <div class="inputs-fin-note">Inversión efectivamente ejecutada para construir y poner en forma operativa el activo tecnológico.</div>
-      </div>
-      {capacidades_card_html}
-      <div class="inputs-fin-side inputs-fin-blank {'active' if knowhow_active else ''}">
-        <div class="inputs-fin-row"><div class="inputs-fin-ico">⚙️</div><div class="inputs-fin-h">Know-how FW</div></div>
-        <div class="inputs-fin-v">{html.escape(format_clp(know_how_fw))}</div>
-        <div class="inputs-fin-sub"><span class="inputs-fin-chip">Valorización FW · G7</span></div>
-        <div class="inputs-fin-note">Valor del conocimiento técnico incorporado en la arquitectura y desarrollo del activo.</div>
-      </div>
-    </div>
-    """
-    st.markdown(cards, unsafe_allow_html=True)
-
-    selector_cards = [("costo_ejecutado", "Costo Ejecutado")]
-    if capacidades_externo > 0:
-        selector_cards.append(("capacidades_externas", "Capacidades externo"))
-    selector_cards.append(("know_how_fw", "Know-how FW"))
-    selector_cols = st.columns(selector_widths)
-    for idx, (value, _label) in enumerate(selector_cards):
-        is_active = st.session_state.get(fin_nav_key) == value
-        with selector_cols[idx]:
-            st.button(
-                selector_button_label(_label, is_active),
-                key=f"inputs_fin_asset_selector_{idx}",
-                use_container_width=True,
-                type="primary" if is_active else "secondary",
-                on_click=lambda selected=value: st.session_state.__setitem__(fin_nav_key, selected),
-            )
     return {
         "monto_total": monto_total,
         "capacidades_externo": capacidades_externo,
@@ -5571,6 +5430,41 @@ def gantt_normalize_linea(row: pd.Series) -> str:
     return "Acople Central"
 
 
+def _parse_gantt_progress(value: object) -> float:
+    if pd.isna(value):
+        return np.nan
+    text = str(value).strip().replace("\u00a0", "").replace(" ", "")
+    if not text:
+        return np.nan
+    explicit_percent = "%" in text
+    try:
+        number = float(text.replace("%", "").replace(",", "."))
+    except (TypeError, ValueError):
+        return np.nan
+    if not np.isfinite(number):
+        return np.nan
+    if not explicit_percent and 0 < number <= 1:
+        number *= 100
+    return float(np.clip(number, 0, 100))
+
+
+def _gantt_progress_values(df: pd.DataFrame) -> pd.Series:
+    if "_progress_pct" in df.columns:
+        return pd.to_numeric(df["_progress_pct"], errors="coerce").clip(0, 100)
+    progress = pd.Series(np.nan, index=df.index, dtype=float)
+    columns_by_key = {normalize_key(col): col for col in df.columns}
+    # Exact names prevent selecting planned progress or budget deviation.
+    for name in ("Avance Real %", "%", "Avance Real", "Avance"):
+        col = columns_by_key.get(normalize_key(name))
+        if col is not None:
+            progress = progress.fillna(df[col].map(_parse_gantt_progress))
+    if "Estado" in df.columns:
+        states = df["Estado"].fillna("").astype(str).map(normalize_key)
+        progress = progress.mask(progress.isna() & states.str.contains("complet", na=False), 100.0)
+        progress = progress.mask(progress.isna() & states.eq("pendiente"), 0.0)
+    return progress
+
+
 def gantt_process_df(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     if "ID" in df.columns:
@@ -5583,45 +5477,25 @@ def gantt_process_df(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = pd.to_datetime(df[col], errors="coerce")
         else:
             df[col] = pd.NaT
-    if "%" in df.columns:
-        def _parse_gantt_progress(value: object) -> float:
-            if pd.isna(value):
-                return np.nan
-            if isinstance(value, (int, float, np.integer, np.floating)):
-                number = float(value)
-            else:
-                text = str(value).strip()
-                if not text or text.lower() in {"nan", "none", "-", "—"}:
-                    return np.nan
-                has_pct = "%" in text
-                number = parse_model_number(text)
-                if has_pct and number <= 1:
-                    number *= 100
-            if number <= 1:
-                number *= 100
-            return max(0.0, min(100.0, number))
-
-        df["%"] = df["%"].apply(_parse_gantt_progress)
-        try:
-            max_val = df["%"].max()
-            if pd.notna(max_val) and max_val <= 1:
-                df["%"] = df["%"] * 100
-        except Exception:
-            pass
-        if "Estado" in df.columns:
-            mask_done = df["Estado"].astype(str).str.contains("complet", case=False, na=False) & df["%"].isna()
-            df.loc[mask_done, "%"] = 100
+    df["_progress_pct"] = _gantt_progress_values(df)
+    df["%"] = df["_progress_pct"]
     df["Piloto"] = df.apply(gantt_infer_piloto, axis=1)
     return df
 
 
+@st.cache_data(show_spinner=False, ttl=60)
 def load_project_gantt_data(url: str, refresh_nonce: int = 0) -> pd.DataFrame:
-    fresh_token = refresh_nonce + GANTT_PROJECT_SOURCE_VERSION + int(time.time() // 60)
+    # Keep this live sheet out of the persistent download cache. Every new
+    # snapshot gets a unique URL, including explicit refreshes within a minute.
+    fresh_token = f"{GANTT_PROJECT_SOURCE_VERSION}_{refresh_nonce}_{time.time_ns()}"
     separator = "&" if "?" in url else "?"
     fresh_url = f"{url}{separator}_cb={fresh_token}"
-    df = read_remote_csv(fresh_url, refresh_nonce=fresh_token, encoding="utf-8-sig")
+    content = _download_remote_file_bytes(fresh_url)
+    df = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
     df.columns = [GANTT_COLUMN_ALIASES.get(str(c).strip(), str(c).strip()) for c in df.columns]
-    return gantt_process_df(df)
+    result = gantt_process_df(df)
+    result.attrs["fetched_at"] = pd.Timestamp.now(tz="America/Santiago").strftime("%d-%m-%Y %H:%M:%S")
+    return result
 
 
 def _control_find_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
@@ -6238,7 +6112,7 @@ def render_control_cost_detail_filters(df_actual: pd.DataFrame) -> pd.DataFrame:
         """
         <style>
         .control-filter-marker{display:none;}
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.control-filter-marker){
+        .st-key-pmo_filters{
             border:1px solid rgba(226,232,240,.96)!important;
             border-radius:18px!important;
             background:linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%)!important;
@@ -6254,17 +6128,17 @@ def render_control_cost_detail_filters(df_actual: pd.DataFrame) -> pd.DataFrame:
         .control-active-filters{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0;}
         .control-active-filter{display:inline-flex;align-items:center;border-radius:999px;background:#F8FAFC;border:1px solid #D8E2EC;color:#334155;padding:7px 10px;font-size:11px;font-weight:900;}
         .control-active-filter b{color:#C91F1F;margin-right:4px;}
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.control-filter-marker) label p{
+        .st-key-pmo_filters label p{
             font-size:10.5px!important;font-weight:950!important;letter-spacing:.06em!important;text-transform:uppercase!important;color:#334155!important;
         }
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.control-filter-marker) div[data-baseweb="select"] > div{
+        .st-key-pmo_filters div[data-baseweb="select"] > div{
             border-radius:10px!important;border-color:#D8E2EC!important;background:#FFFFFF!important;min-height:42px!important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
-    with st.container(border=True):
+    with st.container(border=True, key="pmo_filters"):
         st.markdown('<span class="control-filter-marker"></span>', unsafe_allow_html=True)
         st.markdown(
             """
@@ -6383,98 +6257,19 @@ def render_control_cost_block(df_actual: pd.DataFrame) -> None:
         ),
     ]
 
-    st.markdown(
-        """
-        <style>
-        .controlcost-inner-card{
-            border:1px solid #DCE6EF;
-            border-radius:16px;
-            background:linear-gradient(180deg,#FFFFFF 0%,#F8FBFF 100%);
-            padding:18px 20px;
-            min-height:132px;
-            box-shadow:0 10px 24px rgba(15,23,42,.045);
-            overflow:hidden;
-            box-sizing:border-box;
-            position:relative;
-        }
-        .controlcost-inner-card:before{
-            content:"";
-            position:absolute;
-            left:0;
-            top:0;
-            bottom:0;
-            width:5px;
-            background:#CBD5E1;
-        }
-        .controlcost-inner-card.active{
-            border-color:#FF4B4B;
-            box-shadow:0 0 0 2px rgba(239,68,68,.10),0 14px 30px rgba(239,68,68,.10);
-            background:linear-gradient(135deg,#FFF7F7 0%,#FFFFFF 52%,#FFE8E8 100%);
-        }
-        .controlcost-inner-card.active:before{
-            background:linear-gradient(180deg,#EF4444,#FF6B6B);
-        }
-        .controlcost-inner-k{
-            margin:0 0 7px 0;
-            color:#64748B;
-            font-size:12px;
-            font-weight:950;
-            letter-spacing:.14em;
-            text-transform:uppercase;
-        }
-        .controlcost-inner-card.active .controlcost-inner-k,
-        .controlcost-inner-card.active .controlcost-inner-t{
-            color:#C91F1F;
-        }
-        .controlcost-inner-card.active .controlcost-inner-s{
-            color:#991B1B;
-        }
-        .controlcost-inner-t{
-            margin:0 0 8px 0;
-            color:#071427;
-            font-size:19px;
-            line-height:1.1;
-            font-weight:950;
-            overflow-wrap:anywhere;
-        }
-        .controlcost-inner-s{
-            margin:0;
-            color:#475569;
-            font-size:13.5px;
-            line-height:1.42;
-            font-weight:800;
-            overflow-wrap:anywhere;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    def select_control_view(value: str) -> None:
+        st.session_state[inner_key] = value
 
-    inner_cols = st.columns(2)
-    for idx, (value, title, copy) in enumerate(inner_blocks):
-        is_active = st.session_state.get(inner_key) == value
-        with inner_cols[idx]:
-            st.markdown(
-                f"""
-                <div class="controlcost-inner-card {'active' if is_active else ''}">
-                  <p class="controlcost-inner-k">BLOQUE {idx + 1}</p>
-                  <p class="controlcost-inner-t">{html.escape(title)}</p>
-                  <p class="controlcost-inner-s">{html.escape(copy)}</p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.button(
-                selector_button_label(title, is_active),
-                key=f"controlcost_inner_button_{idx}",
-                use_container_width=True,
-                type="primary" if is_active else "secondary",
-                on_click=lambda selected=value: st.session_state.__setitem__(inner_key, selected),
-            )
-
-    st.markdown(
-        '<div style="height:1px;background:rgba(226,232,240,.9);margin:16px 0 18px 0;"></div>',
-        unsafe_allow_html=True,
+    render_dashboard_primary_navigation(
+        [(value, f"VISTA {idx + 1:02d}", title, copy) for idx, (value, title, copy) in enumerate(inner_blocks)],
+        st.session_state.get(inner_key), select_control_view, "controlcost_inner_button",
+        heading="Seguimiento y trazabilidad",
+        description="Revisa el desempeño actual o compara los cortes históricos del proyecto.",
+        variant="secondary",
+        card_tags={
+            "detalle_control_costo": ["Valor ganado", "Desviaciones"],
+            "gestion_corte": ["Historial", "Comparación de cortes"],
+        },
     )
 
     if st.session_state.get(inner_key) == "gestion_corte":
@@ -6570,6 +6365,31 @@ def _gantt_due_soon_mask(df: pd.DataFrame, date_mode: str = "Real", days: int = 
     return (dfk["_end"] >= today_ts) & (dfk["_end"] < today_ts + pd.Timedelta(days=days)) & ~completed_mask
 
 
+def _gantt_visible_tasks(df: pd.DataFrame, date_mode: str = "Real", time_range: str = "Todo") -> pd.DataFrame:
+    dfc = df.copy()
+    dfc["_start"] = pd.to_datetime(dfc.get(GANTT_DATE_COL_START), errors="coerce")
+    dfc["_end_plan"] = pd.to_datetime(dfc.get(GANTT_DATE_COL_END_PLAN), errors="coerce")
+    dfc["_end_real"] = pd.to_datetime(dfc.get(GANTT_DATE_COL_END_REAL), errors="coerce")
+    dfc["_start"] = dfc["_start"].fillna(dfc["_end_real"]).fillna(dfc["_end_plan"])
+    dfc["_end"] = dfc["_end_real"] if date_mode == "Real" else dfc["_end_plan"]
+    if date_mode == "Real":
+        dfc["_end"] = dfc["_end"].fillna(dfc["_start"])
+    else:
+        dfc["_end"] = dfc["_end"].fillna(dfc["_end_real"]).fillna(dfc["_start"])
+    bad = dfc["_end"] <= dfc["_start"]
+    dfc.loc[bad, "_end"] = dfc.loc[bad, "_start"] + pd.Timedelta(days=1)
+    dfc = dfc[dfc["_start"].notna() & dfc["_end"].notna()].copy()
+    if dfc.empty:
+        return dfc
+
+    range_months = {"1M": 1, "3M": 3, "6M": 6}.get(time_range)
+    if range_months:
+        start = dfc["_start"].min().normalize()
+        end = min(dfc["_end"].max().normalize(), start + pd.DateOffset(months=range_months))
+        dfc = dfc[(dfc["_end"] >= start) & (dfc["_start"] <= end)].copy()
+    return dfc
+
+
 def _gantt_summary(df: pd.DataFrame, date_mode: str = "Real") -> dict[str, object]:
     dfk = df.copy()
     dfk["_start"] = pd.to_datetime(dfk.get(GANTT_DATE_COL_START), errors="coerce")
@@ -6594,7 +6414,8 @@ def _gantt_summary(df: pd.DataFrame, date_mode: str = "Real") -> dict[str, objec
             "due_soon_tasks": 0,
             "active_lines": 0,
             "avg_duration": 0,
-            "progress_pct": 0,
+            "progress_pct": None,
+            "progress_count": 0,
             "delay_value": "0 d",
             "delay_note": "Sin brecha positiva entre fin plan y fin real",
             "milestones": 0,
@@ -6617,15 +6438,8 @@ def _gantt_summary(df: pd.DataFrame, date_mode: str = "Real") -> dict[str, objec
     ) if "Línea" in dfk.columns else 0
     avg_duration = int(round(((dfk["_end"] - dfk["_start"]).dt.days.clip(lower=1)).mean()))
     total_tasks = int(len(dfk))
-    progress_col = first_matching_column(dfk, ["%", "Avance", "Avance Real %"])
-    if progress_col and progress_col in dfk.columns:
-        progress_values = pd.to_numeric(dfk[progress_col], errors="coerce").dropna()
-    else:
-        progress_values = pd.Series(dtype=float)
-    if not progress_values.empty:
-        progress_pct = int(round(float(progress_values.clip(lower=0, upper=100).mean())))
-    else:
-        progress_pct = int(round(100 * completed_tasks / total_tasks)) if total_tasks else 0
+    progress_values = _gantt_progress_values(dfk).dropna()
+    progress_pct = round(float(progress_values.mean()), 1) if not progress_values.empty else None
     dfk["_delay_days"] = (dfk["_end_real"] - dfk["_end_plan"]).dt.days
     delay_value = "0 d"
     delay_note = "Sin brecha positiva entre fin plan y fin real"
@@ -6675,6 +6489,7 @@ def _gantt_summary(df: pd.DataFrame, date_mode: str = "Real") -> dict[str, objec
         "active_lines": active_lines,
         "avg_duration": avg_duration,
         "progress_pct": progress_pct,
+        "progress_count": len(progress_values),
         "delay_value": delay_value,
         "delay_note": delay_note,
         "milestones": milestones,
@@ -6975,7 +6790,7 @@ def _gantt_filtered_summary_rows(df: pd.DataFrame, date_mode: str = "Real") -> l
     summary = _gantt_summary(df, date_mode=date_mode)
     selected_funds = gantt_selected_funds_series(df)
     return [
-        ("Avance del bloque", f"{int(summary['progress_pct'])}%"),
+        ("Avance del bloque", f"{summary['progress_pct']:g}%" if summary["progress_pct"] is not None else "Sin avance informado"),
         ("Tareas atrasadas", str(int(summary["overdue_tasks"]))),
         ("Vence pronto", str(int(summary["due_soon_tasks"]))),
         ("Actividades visibles", str(int(summary["total_tasks"]))),
@@ -7081,7 +6896,12 @@ def build_gantt_filtered_export_pdf(df: pd.DataFrame, date_mode: str = "Real") -
 
 def render_inputs_gantt_header(df: pd.DataFrame, date_mode: str = "Real") -> None:
     summary = _gantt_summary(df, date_mode=date_mode)
-    progress = int(summary["progress_pct"])
+    progress = summary["progress_pct"]
+    progress_label = f"{progress:g}%".replace(".", ",") if progress is not None else "—"
+    progress_note = (
+        f'Promedio · {summary["progress_count"]}/{summary["total_tasks"]} tareas con avance'
+        if progress is not None else "Sin avance informado"
+    )
     try:
         export_bytes = build_gantt_filtered_export_pdf(df, date_mode=date_mode)
         export_b64 = base64.b64encode(export_bytes).decode()
@@ -7108,10 +6928,11 @@ def render_inputs_gantt_header(df: pd.DataFrame, date_mode: str = "Real") -> Non
             </div>
           </div>
           <div class="gantt-progress">
-            <div class="gantt-donut" style="--pct:{progress}%;"></div>
+            <div class="gantt-donut" style="--pct:{progress if progress is not None else 0}%;" role="img" aria-label="Avance de la selección: {html.escape(progress_label)}"></div>
             <div>
               <div class="gantt-progress-k">Avance del bloque</div>
-              <div class="gantt-progress-v">{progress}%</div>
+              <div class="gantt-progress-v">{html.escape(progress_label)}</div>
+              <div class="gantt-progress-note">{html.escape(progress_note)}</div>
             </div>
             <div class="gantt-divider"></div>
             <div>
@@ -7148,7 +6969,7 @@ def render_inputs_gantt_kpis(df: pd.DataFrame, date_mode: str = "Real") -> None:
         f'<div class="gantt-kpi-note">{html.escape(note)}</div></div>'
         )
         cards_html += card_html
-    st.markdown(f'<div class="gantt-kpi-band">{cards_html}</div>', unsafe_allow_html=True)
+    st.html(f'<div class="gantt-kpi-band">{cards_html}</div>')
 
 
 def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real") -> tuple[str, str, str]:
@@ -7202,21 +7023,15 @@ def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real"
     )
     if default_subcategoria not in subcategoria_options:
         default_subcategoria = "Todas"
-    if (
-        st.session_state.get("inputs_gantt_subcategoria") not in subcategoria_options
-        or st.session_state.get("inputs_gantt_subcategoria") == "Todas"
-    ):
+    if st.session_state.get("inputs_gantt_subcategoria") not in subcategoria_options:
         st.session_state["inputs_gantt_subcategoria"] = default_subcategoria
 
-    with st.container(border=True):
-        st.markdown('<span class="gantt-controls-marker"></span>', unsafe_allow_html=True)
+    with st.container(border=True, key="capex10_gantt_controls"):
+        st.html('<span class="gantt-controls-marker"></span>')
         legend_col, horizon_col, subcategoria_col_ui, view_col, symbol_col = st.columns([2.55, 1.55, 2.25, 2.05, 1.75])
         with legend_col:
-            st.markdown(
-                f'<div class="gantt-control-label">Barras por {html.escape(color_field)}</div>'
-                f'<div class="gantt-control-inline">{chips}</div>',
-                unsafe_allow_html=True,
-            )
+            st.html(f'<div class="gantt-control-label">Barras por {html.escape(color_field)}</div>'
+                f'<div class="gantt-control-inline">{chips}</div>')
             button_label = (
                 "Mostrar todas las actividades"
                 if due_soon_active
@@ -7256,14 +7071,11 @@ def render_inputs_gantt_chart_controls(df: pd.DataFrame, date_mode: str = "Real"
                 help="Secuencia tareas muestra solo las tareas visibles, ordenadas por inicio, fin e ID.",
             )
         with symbol_col:
-            st.markdown(
-                '<div class="gantt-control-symbols">'
+            st.html('<div class="gantt-control-symbols">'
                 '<span><i class="gantt-diamond filled"></i> Hito</span>'
                 '<span><i class="gantt-diamond"></i> Fin programado</span>'
                 '<span><i class="gantt-today-key"></i> Hoy</span>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
+                '</div>')
     return time_range, gantt_view_mode, subcategoria_sel
 
 
@@ -7442,6 +7254,10 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
         ts = pd.to_datetime(value, errors="coerce")
         return ts.strftime("%d-%m-%Y") if pd.notna(ts) else "-"
 
+    task_amount_col = next(
+        (col for col in ("Presupuesto Base (CLP)", "Presupuesto Base", "Monto_CLP", "Monto") if col in top_delay_df.columns),
+        None,
+    )
     delay_rows = []
     for rank, (_, row) in enumerate(top_delay_df.iterrows(), start=1):
         delay_days = int(row.get("_observed_delay", 0) or 0)
@@ -7452,6 +7268,8 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
         fase = str(row.get("Fase", "")).strip() or "Sin fase"
         linea = str(row.get("Línea", "")).strip() or "Sin línea"
         estado_val = str(row.get("Estado", "")).strip() or "Sin estado"
+        amount_value = row.get(task_amount_col) if task_amount_col else None
+        task_amount = format_clp(parse_money_clp_robusto(amount_value)) if pd.notna(amount_value) and str(amount_value).strip() else "—"
         delay_rows.append(
             f'<tr>'
             f'<td><span class="gantt-delay-rank">#{rank}</span></td>'
@@ -7459,8 +7277,9 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
             f'<td class="gantt-delay-fase">{html.escape(fase)}</td>'
             f'<td class="gantt-delay-linea">{html.escape(linea)}</td>'
             f'<td><span class="gantt-delay-status">{html.escape(estado_val)}</span></td>'
-            f'<td>{html.escape(_fmt_delay_date(row.get("_end_plan")))}</td>'
-            f'<td>{html.escape(_fmt_delay_date(row.get("_end_real")))}</td>'
+            f'<td class="gantt-delay-amount">{html.escape(task_amount)}</td>'
+            f'<td class="gantt-delay-date">{html.escape(_fmt_delay_date(row.get("_end_plan")))}</td>'
+            f'<td class="gantt-delay-date">{html.escape(_fmt_delay_date(row.get("_end_real")))}</td>'
             f'<td><div class="gantt-delay-days"><b>{delay_days}</b><span><i style="width:{bar_width:.2f}%;"></i></span></div></td>'
             f'</tr>'
         )
@@ -7473,7 +7292,7 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
         ".gantt-delay-head p{margin:5px 0 0;color:#64748B;font-size:12px;line-height:1.35;font-weight:750;}"
         ".gantt-delay-pill{flex:0 0 auto;border-radius:999px;background:#EEFDF9;border:1px solid rgba(15,118,110,.18);color:#0F766E;padding:8px 12px;font-size:11px;font-weight:950;white-space:nowrap;}"
         ".gantt-delay-scroll{overflow:auto;max-width:100%;}"
-        ".gantt-delay-table{width:100%;border-collapse:separate;border-spacing:0;min-width:1080px;color:#071427;}"
+        ".gantt-delay-table{width:100%;border-collapse:separate;border-spacing:0;min-width:1400px;table-layout:fixed;color:#071427;}"
         ".gantt-delay-table th{position:sticky;top:0;background:#F8FAFC;color:#64748B;font-size:10px;letter-spacing:.075em;text-transform:uppercase;font-weight:950;text-align:left;padding:11px 12px;border-bottom:1px solid rgba(226,232,240,.96);}"
         ".gantt-delay-table td{padding:12px;border-bottom:1px solid rgba(226,232,240,.78);vertical-align:middle;font-size:12px;font-weight:800;}"
         ".gantt-delay-table td.gantt-delay-task-cell,.gantt-delay-table td.gantt-delay-linea{font-weight:400;color:#334155;}"
@@ -7482,6 +7301,9 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
         ".gantt-delay-table tr:hover td{background:#FBFDFC;}"
         ".gantt-delay-rank{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;border-radius:999px;background:#071427;color:#FFFFFF;font-size:12px;font-weight:950;}"
         ".gantt-delay-task{display:grid;gap:3px;min-width:0;}"
+        ".gantt-delay-table .gantt-delay-date{white-space:nowrap;}"
+        ".gantt-delay-table .gantt-delay-amount{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}"
+        ".gantt-delay-fase,.gantt-delay-linea{overflow-wrap:anywhere;}"
         ".gantt-delay-task span{display:block;font-size:13px;line-height:1.16;color:#334155;font-weight:400;overflow-wrap:anywhere;}"
         ".gantt-delay-task small{display:block;color:#64748B;font-size:11px;line-height:1.2;font-weight:850;overflow-wrap:anywhere;}"
         ".gantt-delay-status{display:inline-flex;align-items:center;max-width:170px;border-radius:999px;background:#F1F5F9;color:#334155;padding:5px 9px;font-size:10.5px;font-weight:950;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}"
@@ -7489,7 +7311,7 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
         ".gantt-delay-days b{color:#991B1B;font-size:17px;font-weight:950;line-height:1;}"
         ".gantt-delay-days span{display:block;height:7px;border-radius:999px;background:#E7EDF3;overflow:hidden;}"
         ".gantt-delay-days i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#C2410C,#991B1B);}"
-        "@media(max-width:900px){.gantt-delay-head{display:block}.gantt-delay-pill{display:inline-flex;margin-top:10px}.gantt-delay-table{min-width:960px;}}"
+        "@media(max-width:900px){.gantt-delay-head{display:block}.gantt-delay-pill{display:inline-flex;margin-top:10px}.gantt-delay-table{min-width:1400px;}}"
         "</style>"
         '<div class="gantt-delay-wrap">'
         '<div class="gantt-delay-head">'
@@ -7498,13 +7320,15 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
         '</div>'
         '<div class="gantt-delay-scroll">'
         '<table class="gantt-delay-table">'
-        '<thead><tr><th>Rank</th><th>Tarea</th><th>Fase</th><th>Línea</th><th>Estado</th><th>Fin plan</th><th>Fin real</th><th>Días atraso</th></tr></thead>'
+        '<colgroup><col style="width:66px"><col><col style="width:170px"><col style="width:145px">'
+        '<col style="width:105px"><col style="width:150px"><col style="width:118px"><col style="width:118px"><col style="width:200px"></colgroup>'
+        '<thead><tr><th>Rank</th><th>Tarea</th><th>Fase</th><th>Línea</th><th>Estado</th><th class="gantt-delay-amount" title="Presupuesto base de la tarea en pesos chilenos">Monto tarea (CLP)</th><th class="gantt-delay-date">Fin plan</th><th class="gantt-delay-date">Fin real</th><th>Días atraso</th></tr></thead>'
         f'<tbody>{"".join(delay_rows)}</tbody>'
         '</table>'
         '</div>'
         '</div>'
     )
-    st.markdown(delay_table_html, unsafe_allow_html=True)
+    st.html(delay_table_html)
 
 
 def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
@@ -8319,17 +8143,17 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         .evm-insight span{{display:block;color:#475569;font-size:12px;line-height:1.32;font-weight:780;overflow-wrap:anywhere;}}
         .evm-notes{{padding:10px 16px 14px;color:#0B1F3A;font-size:11px;font-weight:750;line-height:1.4;background:#FFFFFF;border-top:1px solid #D8E2EC;}}
         .evm-chart-marker,.evm-panel-marker{{display:none;}}
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.evm-chart-marker){{
+        .st-key-pmo_curve{{
             border:1px solid rgba(226,232,240,.96)!important;border-radius:18px!important;background:#FFFFFF!important;
             box-shadow:0 12px 30px rgba(15,23,42,.07)!important;padding:16px 18px 8px!important;margin:14px 0 16px!important;
             overflow:hidden!important;max-width:100%!important;
         }}
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.evm-panel-marker){{
+        :is(.st-key-pmo_summary,.st-key-pmo_performance,.st-key-pmo_variations){{
             border:1px solid rgba(226,232,240,.96)!important;border-radius:14px!important;background:linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%)!important;
             box-shadow:0 10px 24px rgba(15,23,42,.052)!important;padding:16px!important;overflow:hidden!important;max-width:100%!important;
             min-height:288px!important;height:100%!important;
         }}
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.evm-panel-marker) div[data-testid="stVerticalBlock"]{{gap:.55rem!important;min-height:254px!important;}}
+        :is(.st-key-pmo_summary,.st-key-pmo_performance,.st-key-pmo_variations) div[data-testid="stVerticalBlock"]{{gap:.55rem!important;min-height:254px!important;}}
         @media(max-width:1450px){{.evm-kpi-grid{{grid-template-columns:repeat(3,minmax(0,1fr));}}.evm-main{{grid-template-columns:1fr;}}.evm-side{{grid-template-columns:repeat(2,minmax(0,1fr));}}.evm-side-title{{grid-column:1/-1;}}}}
         @media(max-width:1180px){{.evm-head{{display:grid;grid-template-columns:64px minmax(0,1fr);}}.evm-update{{grid-column:1/-1;justify-items:stretch;}}}}
         @media(max-width:950px){{.evm-row,.evm-gauge-grid,.evm-type-shell{{grid-template-columns:1fr;}}.evm-dashboard{{padding:18px;}}.evm-kpi-grid,.evm-side,.evm-scale-kpis{{grid-template-columns:1fr;}}.evm-flow{{grid-template-columns:1fr;}}.evm-flow-arrow{{transform:rotate(90deg);}}}}
@@ -8354,13 +8178,13 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         unsafe_allow_html=True,
     )
 
-    with st.container(border=True):
+    with st.container(border=True, key="pmo_curve"):
         st.markdown('<span class="evm-chart-marker"></span>', unsafe_allow_html=True)
-        st.plotly_chart(curve_fig, use_container_width=True, key=f"evm_curve_s_{evm_chart_sig}")
+        st.plotly_chart(_capex10_style_figure(curve_fig), config={"displaylogo": False}, use_container_width=True, key=f"evm_curve_s_{evm_chart_sig}")
 
     summary_col, gauge_col, variation_col = st.columns([1.08, 1.0, 0.92], gap="medium")
     with summary_col:
-        with st.container(border=True):
+        with st.container(border=True, key="pmo_summary"):
             st.markdown('<span class="evm-panel-marker"></span>', unsafe_allow_html=True)
             st.markdown(
                 f"""
@@ -8370,16 +8194,16 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
                 unsafe_allow_html=True,
             )
     with gauge_col:
-        with st.container(border=True):
+        with st.container(border=True, key="pmo_performance"):
             st.markdown('<span class="evm-panel-marker"></span>', unsafe_allow_html=True)
             st.markdown('<div class="evm-panel-title">DESEMPEÑO DEL PROYECTO</div>', unsafe_allow_html=True)
             g1, g2 = st.columns(2, gap="small")
             with g1:
-                st.plotly_chart(gauge_fig("CPI", cpi, cpi_status, cpi_color), use_container_width=True, key=f"evm_gauge_cpi_{evm_chart_sig}")
+                st.plotly_chart(_capex10_style_figure(gauge_fig("CPI", cpi, cpi_status, cpi_color)), config={"displaylogo": False}, use_container_width=True, key=f"evm_gauge_cpi_{evm_chart_sig}")
             with g2:
-                st.plotly_chart(gauge_fig("SPI", spi, spi_status, spi_color), use_container_width=True, key=f"evm_gauge_spi_{evm_chart_sig}")
+                st.plotly_chart(_capex10_style_figure(gauge_fig("SPI", spi, spi_status, spi_color)), config={"displaylogo": False}, use_container_width=True, key=f"evm_gauge_spi_{evm_chart_sig}")
     with variation_col:
-        with st.container(border=True):
+        with st.container(border=True, key="pmo_variations"):
             st.markdown('<span class="evm-panel-marker"></span>', unsafe_allow_html=True)
             st.markdown(
                 f"""
@@ -8762,16 +8586,16 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         def _row_style(row: pd.Series) -> list[str]:
             state = str(row.get("Estado", "")).casefold()
             if any(token in state for token in ["bajo", "desfavorable", "presión"]):
-                return ["background-color:#FFF1F2;color:#7F1D1D;font-weight:800"] * len(row)
+                return ["background-color:#FFF1F2;color:#7F1D1D;font-weight:500"] * len(row)
             if any(token in state for token in ["favorable", "control"]):
-                return ["background-color:#F0FDF4;color:#14532D;font-weight:800"] * len(row)
-            return ["background-color:#FFFFFF;color:#0F172A;font-weight:750"] * len(row)
+                return ["background-color:#F0FDF4;color:#14532D;font-weight:500"] * len(row)
+            return ["background-color:#FFFFFF;color:#0F172A;font-weight:500"] * len(row)
 
         return (
             table.style.apply(_row_style, axis=1)
             .set_properties(
                 subset=["KPI", "Resultado", "Estado"],
-                **{"font-weight": "950", "color": "#071427"},
+                **{"font-weight": "650", "color": "#071427"},
             )
             .set_properties(
                 subset=["Fórmula", "Numerador", "Denominador", "Umbral PMO"],
@@ -8779,12 +8603,13 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
             )
             .set_table_styles(
                 [
-                    {"selector": "th", "props": [("background-color", "#071427"), ("color", "#FFFFFF"), ("font-weight", "950"), ("font-size", "11px")]},
+                    {"selector": "th", "props": [("background-color", "#F1F5F9"), ("color", "#475569"), ("font-weight", "650"), ("font-size", "11px")]},
                     {"selector": "td", "props": [("border-bottom", "1px solid #E2E8F0"), ("font-size", "12px")]},
                 ]
             )
         )
 
+    st.html('<div class="pmo-table-heading"><h3>Desarrollo de los indicadores</h3><p>Fórmulas, resultados y umbrales de la selección activa.</p></div>')
     st.dataframe(
         _style_kpi_development(kpi_development_df),
         use_container_width=True,
@@ -8880,29 +8705,30 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
             except Exception:
                 score = 0.0
             if score >= 65:
-                return "background-color:#FEE2E2;color:#991B1B;font-weight:950"
+                return "background-color:#FEE2E2;color:#991B1B;font-weight:650"
             if score >= 35:
-                return "background-color:#FEF3C7;color:#92400E;font-weight:950"
-            return "background-color:#DCFCE7;color:#166534;font-weight:950"
+                return "background-color:#FEF3C7;color:#92400E;font-weight:650"
+            return "background-color:#DCFCE7;color:#166534;font-weight:650"
 
         def _money_variance(value: object) -> str:
             text = str(value)
-            return "color:#991B1B;font-weight:950" if text.startswith("$-") or text.startswith("-$") else "color:#166534;font-weight:950"
+            return "color:#991B1B;font-weight:650" if text.startswith("$-") or text.startswith("-$") else "color:#166534;font-weight:650"
 
         return (
             table.style
             .map(_risk_cell, subset=["Riesgo PMO"])
             .map(_money_variance, subset=["CV", "SV", "VAC"])
-            .set_properties(subset=["ID", "CPI", "SPI"], **{"font-weight": "950", "color": "#071427"})
-            .set_properties(subset=["Partida"], **{"font-weight": "850", "color": "#0F172A"})
+            .set_properties(subset=["ID", "CPI", "SPI"], **{"font-weight": "650", "color": "#071427"})
+            .set_properties(subset=["Partida"], **{"font-weight": "500", "color": "#0F172A"})
             .set_table_styles(
                 [
-                    {"selector": "th", "props": [("background-color", "#0B1633"), ("color", "#FFFFFF"), ("font-weight", "950"), ("font-size", "11px")]},
+                    {"selector": "th", "props": [("background-color", "#F1F5F9"), ("color", "#475569"), ("font-weight", "650"), ("font-size", "11px")]},
                     {"selector": "td", "props": [("border-bottom", "1px solid #E2E8F0"), ("font-size", "12px")]},
                 ]
             )
         )
 
+    st.html('<div class="pmo-table-heading"><h3>Partidas prioritarias para seguimiento</h3><p>Revisa las desviaciones y las acciones requeridas según el criterio de priorización.</p></div>')
     st.dataframe(
         _style_watch_table(watch_table),
         use_container_width=True,
@@ -8932,6 +8758,7 @@ def render_inputs_gantt_cost_analysis(
     df: pd.DataFrame,
     scope_label: str = "etapa seleccionada",
     pilot_total_reference_clp: float | None = None,
+    capital_design: bool = False,
 ) -> None:
     required_cols = {"Costo piloto", "Costo comercial"}
     if df.empty or not required_cols.issubset(df.columns):
@@ -9410,9 +9237,9 @@ def render_inputs_gantt_cost_analysis(
 
     chart_col, donut_col = st.columns([0.64, 0.36])
     with chart_col:
-        st.plotly_chart(fig_cost, use_container_width=True, config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"]})
+        st.plotly_chart(_capex10_style_figure(fig_cost) if capital_design else fig_cost, use_container_width=True, config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"]})
     with donut_col:
-        st.plotly_chart(fig_donut, use_container_width=True, config={"displaylogo": False})
+        st.plotly_chart(_capex10_style_figure(fig_donut) if capital_design else fig_donut, use_container_width=True, config={"displaylogo": False})
 
     st.markdown(
         f"""
@@ -10100,19 +9927,7 @@ def render_inputs_gantt_custom_chart(
     if df.empty:
         return
 
-    dfc = df.copy()
-    dfc["_start"] = pd.to_datetime(dfc.get(GANTT_DATE_COL_START), errors="coerce")
-    dfc["_end_plan"] = pd.to_datetime(dfc.get(GANTT_DATE_COL_END_PLAN), errors="coerce")
-    dfc["_end_real"] = pd.to_datetime(dfc.get(GANTT_DATE_COL_END_REAL), errors="coerce")
-    dfc["_start"] = dfc["_start"].fillna(dfc["_end_real"]).fillna(dfc["_end_plan"])
-    dfc["_end"] = dfc["_end_real"] if date_mode == "Real" else dfc["_end_plan"]
-    if date_mode == "Real":
-        dfc["_end"] = dfc["_end"].fillna(dfc["_start"])
-    else:
-        dfc["_end"] = dfc["_end"].fillna(dfc["_end_real"]).fillna(dfc["_start"])
-    bad = dfc["_end"] <= dfc["_start"]
-    dfc.loc[bad, "_end"] = dfc.loc[bad, "_start"] + pd.Timedelta(days=1)
-    dfc = dfc[dfc["_start"].notna() & dfc["_end"].notna()].copy()
+    dfc = _gantt_visible_tasks(df, date_mode=date_mode, time_range=time_range)
     if dfc.empty:
         return
 
@@ -10296,7 +10111,7 @@ def render_inputs_gantt_custom_chart(
         </div>
         """
     ).strip()
-    st.markdown(chart_html, unsafe_allow_html=True)
+    st.html(chart_html)
 
 
 def render_inputs_aspas_frp_schedule_chart() -> None:
@@ -10597,9 +10412,9 @@ def render_inputs_project_gantt():
 
     has_linea = "Línea" in df_gantt.columns
     metodo_col = first_matching_column(df_gantt, ["Método", "Metodo"])
-    with st.container(border=True):
-        st.markdown('<span class="gantt-filter-marker"></span>', unsafe_allow_html=True)
-        st.markdown('<div class="gantt-panel-title">Filtros de análisis</div>', unsafe_allow_html=True)
+    with st.container(border=True, key="capex10_gantt_filters"):
+        st.html('<span class="gantt-filter-marker"></span>')
+        st.html('<div class="gantt-panel-title">Filtros de análisis</div>')
         has_etapa = "ETAPA" in df_gantt.columns
         if has_linea:
             c0, c1, c2, c3, c4 = st.columns([2.0, 2.6, 2.4, 2.0, 2.2]) if has_etapa else st.columns([3.0, 2.7, 2.2, 2.1])
@@ -10810,6 +10625,7 @@ def render_inputs_project_gantt():
                 render_inputs_gantt_header(plot_df, date_mode=date_mode)
             st.info("No hay tareas para la sub-categoria seleccionada.")
             return
+    plot_df = _gantt_visible_tasks(plot_df, date_mode=date_mode, time_range=time_range)
     with gantt_header_slot.container():
         render_inputs_gantt_header(plot_df, date_mode=date_mode)
     with gantt_kpi_slot.container():
@@ -10817,7 +10633,7 @@ def render_inputs_project_gantt():
     sequence_tasks = gantt_view_mode == "Secuencia tareas"
     if sequence_tasks:
         gantt_title = f"{gantt_title} · Secuencia de tareas"
-    st.markdown('<span id="inputs-gantt-chart"></span>', unsafe_allow_html=True)
+    st.html('<span id="inputs-gantt-chart"></span>')
     render_inputs_gantt_custom_chart(
         plot_df,
         date_mode=date_mode,
@@ -11008,6 +10824,29 @@ def _capex10_funds_heading(selected_metodos: list[str]) -> str:
     return "Fondos faltantes para cumplir hitos, desglosados por fase y línea"
 
 
+def _capex10_hito_info(
+    source_df: pd.DataFrame, line_name: str, aliases: list[str] | None = None,
+) -> dict[str, object]:
+    missing = {"label": line_name, "date": pd.NaT, "date_fmt": "-"}
+    if "Línea" not in source_df.columns or GANTT_DATE_COL_END_REAL not in source_df.columns:
+        return missing
+    wanted_keys = {normalize_key(name) for name in [line_name, *(aliases or [])] if name}
+    # Legacy labels without power refer to the 10 kW milestones. Match complete
+    # line names so Producto 10 kW cannot borrow the date of Producto 80 kW.
+    wanted_keys.update(key + "10kw" for key in list(wanted_keys) if not re.search(r"\d", key))
+    wanted_keys.update(key.removesuffix("10kw") for key in list(wanted_keys) if key.endswith("10kw"))
+    line_keys = source_df["Línea"].fillna("").astype(str).map(normalize_key)
+    dates = pd.to_datetime(
+        source_df.loc[line_keys.isin(wanted_keys), GANTT_DATE_COL_END_REAL],
+        errors="coerce",
+    ).dropna()
+    if dates.empty:
+        return missing
+    # Repeated milestone rows complete at the latest date, independent of CSV order.
+    milestone_date = pd.Timestamp(dates.max())
+    return {"label": line_name, "date": milestone_date, "date_fmt": milestone_date.strftime("%d-%m-%Y")}
+
+
 def _capex10_selected_hito_specs(selected_metodos: list[str]) -> list[dict[str, object]]:
     specs: list[dict[str, object]] = []
     seen: set[str] = set()
@@ -11021,7 +10860,7 @@ def _capex10_selected_hito_specs(selected_metodos: list[str]) -> list[dict[str, 
             }
         elif "hitoproducto" in key or "hito3" in key or key == "producto":
             spec = {
-                "label": "Hito Producto",
+                "label": "Hito Producto 10 kW",
                 "aliases": ["hitoproducto", "hito3", "producto"],
             }
         elif "hitopiloto80kw" in key or "piloto80kw" in key or "80kw" in key:
@@ -11031,12 +10870,12 @@ def _capex10_selected_hito_specs(selected_metodos: list[str]) -> list[dict[str, 
             }
         elif "hitopremontaje" in key or "hito1" in key or "premontaje" in key:
             spec = {
-                "label": "Hito Pre -Montaje",
+                "label": "Hito Pre-Montaje 10 kW",
                 "aliases": ["hitopremontaje", "hito1", "premontaje"],
             }
         elif "hitomontaje" in key or "hito2" in key or key == "montaje":
             spec = {
-                "label": "Hito Montaje",
+                "label": "Hito Montaje 10 kW",
                 "aliases": ["hitomontaje", "hito2", "montaje"],
             }
         if spec and str(spec["label"]) not in seen:
@@ -11110,6 +10949,228 @@ CAPEX10_PLAN_B_LABEL = "Plan B - Flujo de caja libre"
 CAPEX10_LEGACY_PLAN_B_LABEL = "Plan B - Sin Flexibilidad Proveedores"
 
 
+def render_capex10_subblock3_theme() -> None:
+    css = (Path(__file__).parent / "assets" / "subblock3.css").read_text(encoding="utf-8")
+    st.html(f"<style>{css}</style>")
+    st.html(
+        '<header class="sb3-page-head"><div><span class="sb3-eyebrow">SUB BLOQUE 3 · CONTROL Y SEGUIMIENTO</span>'
+        '<h1>Control PMO de Costos</h1>'
+        '<p>Compara el presupuesto, los costos reales y el valor ganado para anticipar desviaciones. '
+        'Revisa el desempeño del proyecto, prioriza partidas y consulta la trazabilidad de los cortes.</p></div>'
+        '<span class="sb3-route">Presupuesto · Ejecución · Control</span></header>'
+    )
+
+
+def render_capex10_subblock2_theme() -> None:
+    css = (Path(__file__).parent / "assets" / "subblock2.css").read_text(encoding="utf-8")
+    st.html(f"<style>{css}</style>")
+    st.html(
+        '<header class="sb2-page-head"><div><span class="sb2-eyebrow">SUB BLOQUE 2 · EJECUCIÓN E INDUSTRIALIZACIÓN</span>'
+        '<h1>Hitos Técnicos e Industrialización</h1>'
+        '<p>Explora la secuencia de actividades, las fechas clave y el avance de los desarrollos de 10 kW y 80 kW. '
+        'Usa los filtros para revisar cada frente técnico, sus hitos y las desviaciones del cronograma.</p></div>'
+        '<span class="sb2-route">10 kW → 80 kW</span></header>'
+    )
+
+
+def render_capex10_capital_summary() -> None:
+    try:
+        schedule = load_capex10_plan_a_injection_schedule(refresh_nonce=data_refresh_nonce)
+        total = float(schedule["Inyeccion_CLP"].sum() or 0.0)
+        amount_label = format_clp(total)
+        amount_note = "CLP · Calendario completo"
+    except Exception:
+        schedule = pd.DataFrame()
+        amount_label = "No disponible"
+        amount_note = "Actualiza los datos desde el panel para consultar Plan A."
+
+    calendar_html = ""
+    if not schedule.empty:
+        months = pd.to_datetime(schedule["_month"], errors="coerce").dropna()
+        if not months.empty:
+            calendar_html = (
+                f'<span class="capital-summary-calendar">{months.nunique()} meses con aportes'
+                f' · {months.min().strftime("%m/%Y")} – {months.max().strftime("%m/%Y")}</span>'
+            )
+    st.html(
+        '<section class="capital-summary" aria-label="Resumen de capital">'
+        '<div class="capital-summary-copy"><span class="capital-summary-eyebrow">RESUMEN DE CAPITAL</span>'
+        '<h1>Capex de escalamiento</h1>'
+        '<p>Explora los recursos necesarios para ejecutar los hitos técnicos, el calendario de aportes '
+        'y las brechas de financiamiento. Avanza desde la planificación del capital hasta el detalle de cada partida.</p>'
+        '<div class="capital-summary-meta"><span class="capital-summary-plan">Plan A · Flujo de caja integrado</span>'
+        f'{calendar_html}</div></div>'
+        '<div class="capital-summary-total"><span>Total de inyecciones previstas</span>'
+        f'<strong>{html.escape(amount_label)}</strong><small>{html.escape(amount_note)}</small></div>'
+        '</section>'
+    )
+
+
+def render_capex10_subblock1_theme() -> None:
+    css = (Path(__file__).parent / "assets" / "subblock1.css").read_text(encoding="utf-8")
+    st.html(f"<style>{css}</style>")
+
+
+def _capex10_style_figure(fig: go.Figure) -> go.Figure:
+    """Apply the capital tab typography without changing chart data or axes."""
+    fig.update_layout(
+        font=dict(family="Arial, sans-serif", size=12, color="#475569"),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#FFFFFF",
+        hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#D8E3EB", font=dict(size=12, color="#0F2435")),
+    )
+    for axis in fig.select_xaxes():
+        axis.update(tickfont=dict(size=11, color="#64748B"), automargin=True)
+    for axis in fig.select_yaxes():
+        axis.update(tickfont=dict(size=11, color="#64748B"), gridcolor="#EDF2F6", automargin=True)
+    return fig
+
+
+def _capex10_funding_intro_data(
+    flow_df: pd.DataFrame, milestone_dates: list[dict[str, object]],
+    injection_entries: list[dict[str, object]], start_month: pd.Timestamp,
+    is_plan_a: bool, horizon_months: int = 3,
+) -> dict[str, object]:
+    start = pd.Timestamp(start_month).to_period("M").to_timestamp()
+    end = start + pd.DateOffset(months=horizon_months)
+    months = pd.date_range(start, periods=horizon_months, freq="MS")
+    date_col = "_chart_date" if is_plan_a else "_cash_date"
+    dates = pd.to_datetime(flow_df[date_col], errors="coerce", format="mixed", dayfirst=True)
+    monthly = flow_df.assign(_intro_month=dates.dt.to_period("M").dt.to_timestamp()).groupby("_intro_month")["Disponible_CLP"].sum()
+    requirements = monthly.reindex(months, fill_value=0.0)
+    milestones = []
+    for milestone in milestone_dates or []:
+        date = pd.to_datetime(milestone.get("date"), errors="coerce", format="mixed", dayfirst=True)
+        if pd.isna(date):
+            continue
+        days = (date.normalize() - start).days
+        milestones.append({
+            "Hito": str(milestone.get("label", "Hito")),
+            "Fecha prevista": date,
+            "Plazo desde inicio del período": f"{days} días" if days >= 0 else "Fecha anterior al período",
+        })
+    milestones.sort(key=lambda row: row["Fecha prevista"])
+    contributions = []
+    for entry in injection_entries or []:
+        amount = float(entry.get("Inyeccion_CLP", 0) or 0)
+        date = pd.to_datetime(entry.get("Fecha", entry.get("_month")), errors="coerce", format="mixed", dayfirst=True)
+        if amount <= 0 or pd.isna(date):
+            continue
+        contributions.append({
+            "Fecha prevista": date,
+            "Monto_CLP": amount,
+            "Origen": "Plan A publicado" if entry.get("Fuente") == "Plan A" else "Escenario adicional",
+        })
+    contributions.sort(key=lambda row: row["Fecha prevista"])
+    period_contributions = [row for row in contributions if start <= row["Fecha prevista"] < end]
+    return {
+        "start": start, "end": end, "requirements": requirements,
+        "required": float(requirements.sum()), "milestones": milestones,
+        "next_milestone": next((row for row in milestones if row["Fecha prevista"] >= start), None),
+        "contributions": contributions, "period_contributions": period_contributions,
+        "next_contribution": next((row for row in contributions if row["Fecha prevista"] >= start), None),
+        "planned": sum(row["Monto_CLP"] for row in period_contributions),
+    }
+
+
+def render_capex10_funding_intro(
+    flow_df: pd.DataFrame, milestone_dates: list[dict[str, object]],
+    injection_entries: list[dict[str, object]], is_plan_a: bool,
+) -> None:
+    month_names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+
+    def month_label(value) -> str:
+        date = pd.Timestamp(value)
+        return f"{month_names[date.month - 1]} {date.year}"
+
+    date_col = "_chart_date" if is_plan_a else "_cash_date"
+    dates = pd.to_datetime(flow_df[date_col], errors="coerce", format="mixed", dayfirst=True).dropna()
+    today_month = pd.Timestamp.now(tz="America/Santiago").tz_localize(None).to_period("M").to_timestamp()
+    first_month = min(today_month, dates.min().to_period("M").to_timestamp()) if not dates.empty else today_month
+    last_month = max(today_month, dates.max().to_period("M").to_timestamp()) if not dates.empty else today_month
+    options = list(pd.date_range(first_month, last_month, freq="MS"))
+    key = "capex10_investor_injection_intro_start_month"
+    sticky = st.session_state.pop(f"{key}__sticky", None)
+    saved = sticky if sticky is not None else st.session_state.get(key)
+    st.session_state[key] = pd.Timestamp(saved) if saved is not None and pd.Timestamp(saved) in options else today_month
+
+    with st.container(border=True, key="capex10_funding_intro_panel"):
+        st.markdown("### Ruta de financiamiento y próximos hitos")
+        st.markdown(
+            "El capital permite ejecutar las actividades pendientes y avanzar por los hitos técnicos del proyecto. "
+            "Este resumen conecta **cuánto se necesita**, **cuándo se prevé alcanzar cada hito** y "
+            "**cuándo se planifica recibir recursos**. El cierre de la brecha hacia TRL 9 debe respaldarse "
+            "con evidencia de operación en condiciones reales."
+        )
+        selector_col, duration_col, _ = st.columns([1, 1, 1])
+        with selector_col:
+            start = st.selectbox(
+                "Inicio del período", options, format_func=month_label, key=key,
+                help="El período comienza en el mes elegido. Por defecto parte del mes actual en Santiago.",
+            )
+        duration_key = "capex10_investor_injection_intro_duration_months"
+        duration_options = [3, 4, 5, 6]
+        duration_sticky = st.session_state.pop(f"{duration_key}__sticky", None)
+        saved_duration = duration_sticky if duration_sticky is not None else st.session_state.get(duration_key, 3)
+        st.session_state[duration_key] = saved_duration if saved_duration in duration_options else 3
+        with duration_col:
+            horizon_months = st.selectbox(
+                "Meses para analizar", duration_options, key=duration_key,
+                format_func=lambda value: f"{value} meses",
+                help="Incluye el mes de inicio y los siguientes hasta completar la duración elegida.",
+            )
+        duration_label = {3: "tres", 4: "cuatro", 5: "cinco", 6: "seis"}[horizon_months]
+        data = _capex10_funding_intro_data(
+            flow_df, milestone_dates, injection_entries, start, is_plan_a, horizon_months,
+        )
+        period_label = f"{month_label(data['start'])} a {month_label(data['end'] - pd.Timedelta(days=1))}"
+        required_col, milestone_col, contribution_col = st.columns(3, gap="large")
+        with required_col:
+            st.markdown(f"**¿Cuánto necesitamos para estos {duration_label} meses?**")
+            st.metric("Gasto pendiente programado", format_clp(data["required"]))
+            st.caption(period_label)
+            for month, amount in data["requirements"].items():
+                st.write(f"{month_label(month)}: **{format_clp(amount)}**")
+        with milestone_col:
+            st.markdown("**¿Cuándo se prevé cumplir el próximo hito?**")
+            next_hito = data["next_milestone"]
+            if next_hito:
+                st.metric(next_hito["Hito"], next_hito["Fecha prevista"].strftime("%d-%m-%Y"))
+                st.caption(f"{next_hito['Plazo desde inicio del período']} desde el {data['start'].strftime('%d-%m-%Y')}.")
+            else:
+                st.info("No hay hitos con fecha prevista posterior al inicio elegido.")
+        with contribution_col:
+            st.markdown("**¿Cuáles son las fechas clave de aportes?**")
+            next_contribution = data["next_contribution"]
+            if next_contribution:
+                st.metric("Próximo aporte previsto", next_contribution["Fecha prevista"].strftime("%d-%m-%Y"))
+                same_date_amount = sum(row["Monto_CLP"] for row in data["contributions"] if row["Fecha prevista"] == next_contribution["Fecha prevista"])
+                st.caption(f"{format_clp(same_date_amount)} programados para esa fecha.")
+            else:
+                st.info("No hay aportes previstos posteriores al inicio elegido.")
+            st.write(f"Aportes previstos en los {duration_label} meses: **{format_clp(data['planned'])}**")
+        st.caption(
+            "Los montos responden a la selección activa del plan. Los aportes provienen del calendario publicado "
+            "y no representan por sí solos financiamiento confirmado."
+        )
+        with st.expander("Ver fechas de cada hito y calendario de aportes"):
+            st.markdown("**Fechas previstas de los hitos**")
+            st.caption("Los plazos se cuentan desde el inicio elegido; no corresponden a la duración total de ejecución ni acreditan el cumplimiento del hito.")
+            if data["milestones"]:
+                table = pd.DataFrame(data["milestones"])
+                table["Fecha prevista"] = table["Fecha prevista"].dt.strftime("%d-%m-%Y")
+                st.dataframe(table, hide_index=True, use_container_width=True)
+            else:
+                st.info("No hay fechas de hitos disponibles para la selección activa.")
+            st.markdown(f"**Aportes previstos · {period_label}**")
+            if data["period_contributions"]:
+                table = pd.DataFrame(data["period_contributions"])
+                table["Fecha prevista"] = table["Fecha prevista"].dt.strftime("%d-%m-%Y")
+                table["Monto"] = table.pop("Monto_CLP").apply(format_clp)
+                st.dataframe(table, hide_index=True, use_container_width=True)
+            else:
+                st.info("No hay aportes programados dentro del período elegido.")
+
+
 def render_capex10_investor_injection_cash_flow(
     funds_df: pd.DataFrame,
     responsible_scope_df: pd.DataFrame | None = None,
@@ -11126,29 +11187,29 @@ def render_capex10_investor_injection_cash_flow(
     date_col = GANTT_DATE_COL_START if GANTT_DATE_COL_START in flow_df.columns else None
     fallback_col = GANTT_DATE_COL_END_PLAN if GANTT_DATE_COL_END_PLAN in flow_df.columns else None
     if date_col:
-        flow_df["_cash_date"] = pd.to_datetime(flow_df[date_col], errors="coerce", dayfirst=True)
+        flow_df["_cash_date"] = pd.to_datetime(flow_df[date_col], errors="coerce", format="mixed", dayfirst=True)
     else:
         flow_df["_cash_date"] = pd.NaT
     if fallback_col:
-        flow_df["_cash_date"] = flow_df["_cash_date"].fillna(pd.to_datetime(flow_df[fallback_col], errors="coerce", dayfirst=True))
+        flow_df["_cash_date"] = flow_df["_cash_date"].fillna(pd.to_datetime(flow_df[fallback_col], errors="coerce", format="mixed", dayfirst=True))
     flow_df["_cash_date"] = flow_df["_cash_date"].fillna(pd.Timestamp.today().normalize())
     flow_df["_analysis_month"] = flow_df["_cash_date"].dt.to_period("M").dt.to_timestamp()
     chart_date_col = first_matching_column(flow_df, ["Fecha FC", "Fecha_FC", "Fecha flujo caja", "Fecha flujo de caja"])
     if chart_date_col and chart_date_col in flow_df.columns:
-        flow_df["_chart_date"] = pd.to_datetime(flow_df[chart_date_col], errors="coerce", dayfirst=True)
+        flow_df["_chart_date"] = pd.to_datetime(flow_df[chart_date_col], errors="coerce", format="mixed", dayfirst=True)
     else:
         flow_df["_chart_date"] = pd.NaT
     flow_df["_chart_date"] = flow_df["_chart_date"].fillna(flow_df["_cash_date"])
     if date_col:
-        detail_flow_df["_cash_date"] = pd.to_datetime(detail_flow_df[date_col], errors="coerce", dayfirst=True)
+        detail_flow_df["_cash_date"] = pd.to_datetime(detail_flow_df[date_col], errors="coerce", format="mixed", dayfirst=True)
     else:
         detail_flow_df["_cash_date"] = pd.NaT
     if fallback_col:
-        detail_flow_df["_cash_date"] = detail_flow_df["_cash_date"].fillna(pd.to_datetime(detail_flow_df[fallback_col], errors="coerce", dayfirst=True))
+        detail_flow_df["_cash_date"] = detail_flow_df["_cash_date"].fillna(pd.to_datetime(detail_flow_df[fallback_col], errors="coerce", format="mixed", dayfirst=True))
     detail_flow_df["_cash_date"] = detail_flow_df["_cash_date"].fillna(pd.Timestamp.today().normalize())
     detail_flow_df["_analysis_month"] = detail_flow_df["_cash_date"].dt.to_period("M").dt.to_timestamp()
     if chart_date_col and chart_date_col in detail_flow_df.columns:
-        detail_flow_df["_chart_date"] = pd.to_datetime(detail_flow_df[chart_date_col], errors="coerce", dayfirst=True)
+        detail_flow_df["_chart_date"] = pd.to_datetime(detail_flow_df[chart_date_col], errors="coerce", format="mixed", dayfirst=True)
     else:
         detail_flow_df["_chart_date"] = pd.NaT
     detail_flow_df["_chart_date"] = detail_flow_df["_chart_date"].fillna(detail_flow_df["_cash_date"])
@@ -11166,267 +11227,33 @@ def render_capex10_investor_injection_cash_flow(
     else:
         plan_a_schedule_df = pd.DataFrame(columns=["Fecha", "_month", "Inyeccion_CLP", "Etiqueta"])
 
-    st.markdown(
-        """
-        <style>
-        .cash-injection-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 10px;}
-        .cash-injection-head b{display:block;color:#071427;font-size:18px;line-height:1.1;font-weight:950;}
-        .cash-injection-head span{display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;}
-        .cash-injection-pill{border-radius:999px;background:#E6FFFA;color:#0F766E;padding:7px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}
-        .cash-injection-summary{
-            box-sizing:border-box;
-            width:max-content;
-            min-width:238px;
-            max-width:100%;
-            border:1px solid rgba(203,213,225,.9);
-            border-top:4px solid #0F766E;
-            border-radius:14px;
-            background:
-                linear-gradient(135deg,rgba(236,253,245,.95),rgba(255,255,255,.98) 46%),
-                #FFFFFF;
-            padding:7px 10px;
-            min-height:64px;
-            margin:0 0 0 auto;
-            box-shadow:0 6px 14px rgba(15,23,42,.04);
-        }
-        .cash-injection-summary span{
-            display:block;
-            color:#64748B;
-            font-size:8px;
-            font-weight:950;
-            letter-spacing:.055em;
-            text-transform:uppercase;
-            margin-bottom:4px;
-        }
-        .cash-injection-summary b{
-            display:block;
-            color:#071427;
-            font-size:21px;
-            line-height:1;
-            font-weight:950;
-            margin-bottom:4px;
-            white-space:nowrap;
-        }
-        .cash-injection-summary em{
-            display:inline-flex;
-            border-radius:999px;
-            background:#DCFCE7;
-            color:#15803D;
-            padding:3px 7px;
-            font-style:normal;
-            font-size:10px;
-            font-weight:900;
-            max-width:100%;
-            line-height:1.25;
-            white-space:normal;
-            overflow-wrap:anywhere;
-        }
-        .cash-injection-plan-summary{
-            width:100%;
-            min-width:0;
-            margin:0;
-            overflow:hidden;
-        }
-        .cash-injection-plan-summary em{
-            display:block;
-            width:100%;
-            box-sizing:border-box;
-        }
-        .cash-injection-row-label{
-            color:#0F766E;
-            font-size:10px;
-            font-weight:950;
-            letter-spacing:.08em;
-            text-transform:uppercase;
-            padding-top:31px;
-            white-space:nowrap;
-        }
-        .cash-injection-input-stack{
-            border:1px solid rgba(203,213,225,.72);
-            border-radius:16px;
-            padding:10px 12px 8px;
-            background:linear-gradient(180deg,#FFFFFF,#F8FAFC);
-        }
-        .cash-injection-input-stack [data-testid="stWidgetLabel"] p{
-            font-size:12px;
-            line-height:1.25;
-            font-weight:850;
-            color:#334155;
-        }
-        @media(max-width:900px){
-            .cash-injection-head{display:block;}
-            .cash-injection-pill{display:inline-flex;margin-top:10px;}
-            .cash-injection-summary{width:100%;max-width:100%;margin:10px 0 0 0;}
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
+    st.html(
+        """<style>
+        .cash-injection-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;}
+        .cash-injection-head b{display:block;color:#0F172A;font-size:18px;font-weight:750;line-height:1.4;}
+        .cash-injection-head span{display:block;color:#64748B;font-size:12px;line-height:1.6;margin-top:5px;}
+        .cash-injection-pill{padding:6px 10px;border-radius:6px;background:#ECFDF5;color:#0F766E;font-size:10px;font-weight:700;white-space:nowrap;}
+        .capital-eyebrow{display:block;color:#0F766E;font-size:10px;font-weight:750;letter-spacing:.12em;margin-bottom:8px;}
+        .capital-plan-tag{flex-shrink:0;display:flex;align-items:center;gap:7px;border:1px solid #B9DED4;background:#F0FDFA;padding:8px 12px;border-radius:8px;color:#0F766E;font-size:11px;font-weight:650;}
+        .capital-plan-tag:before{content:"";width:6px;height:6px;border-radius:50%;background:#0F766E;}
+        </style>"""
     )
-    injection_entries: list[dict[str, object]] = []
-    with st.container(border=True):
-        st.markdown(
-            """
-            <div class="cash-injection-head">
-              <div><b>Inyección cliente o inversionista</b><span>Entradas puntuales de caja contra los gastos pendientes calendarizados.</span></div>
-              <div class="cash-injection-pill">Capital externo</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        inputs_col, coverage_col = st.columns([1.55, .95], gap="large")
-        injection_defaults = [
-            (54_000_000, pd.Timestamp("2026-08-30").date()),
-            (0, pd.Timestamp("2026-09-30").date()),
-            (0, pd.Timestamp("2026-10-30").date()),
-            (0, pd.Timestamp("2026-11-30").date()),
-        ]
+    injection_entries: list[dict[str, object]] = [
+        {
+            "Fecha": pd.Timestamp(row["Fecha"]),
+            "_month": pd.Timestamp(row["_month"]),
+            "Inyeccion_CLP": float(row["Inyeccion_CLP"] or 0.0),
+            "Etiqueta": str(row["Etiqueta"]),
+            "Fuente": "Plan A",
+        }
+        for _, row in plan_a_schedule_df.iterrows()
+    ]
+    if plan_a_schedule_error:
+        st.warning(f"No se pudo cargar el calendario de aportes Plan A: {plan_a_schedule_error}")
+    elif is_plan_a_cashflow and plan_a_schedule_df.empty:
+        st.info("El calendario Plan A aún no contiene aportes válidos.")
+    render_capex10_funding_intro(flow_df, milestone_dates or [], injection_entries, is_plan_a_cashflow)
 
-        def render_manual_injection_controls(key_suffix: str, title: str = "") -> list[dict[str, object]]:
-            manual_entries: list[dict[str, object]] = []
-            if title:
-                st.markdown(
-                    f'<div class="cash-injection-row-label" style="padding-top:0;margin-bottom:6px;">{html.escape(title)}</div>',
-                    unsafe_allow_html=True,
-                )
-            count_key = f"capex10_investor_injection_count_{key_suffix}"
-            count_sticky_key = f"{count_key}__sticky"
-            if count_sticky_key in st.session_state:
-                st.session_state[count_key] = st.session_state.pop(count_sticky_key)
-            count_col, first_amount_col, first_date_col = st.columns([.72, 1, 1], gap="small")
-            with count_col:
-                count_widget_kwargs = {
-                    "label": "Cantidad",
-                    "options": [1, 2, 3, 4],
-                    "key": count_key,
-                    "help": "Define cuántas entradas puntuales de capital quieres modelar.",
-                }
-                if count_key not in st.session_state:
-                    count_widget_kwargs["index"] = 0
-                injection_count = st.selectbox(**count_widget_kwargs)
-            injection_count_int = max(1, min(int(injection_count or 1), len(injection_defaults)))
-            for injection_idx, (amount_default, date_default) in enumerate(injection_defaults):
-                amount_key = f"capex10_investor_injection_{key_suffix}_{injection_idx + 1}_clp"
-                date_key = f"capex10_investor_injection_{key_suffix}_{injection_idx + 1}_date"
-                amount_sticky_key = f"{amount_key}__sticky"
-                date_sticky_key = f"{date_key}__sticky"
-                if amount_sticky_key in st.session_state:
-                    st.session_state[amount_key] = st.session_state.pop(amount_sticky_key)
-                if date_sticky_key in st.session_state:
-                    st.session_state[date_key] = st.session_state.pop(date_sticky_key)
-                if key_suffix == "plan_a_extra" and injection_idx == 0:
-                    amount_default = 0
-                    migration_key = "capex10_plan_a_extra_default_zero_v1"
-                    if not st.session_state.get(migration_key) and st.session_state.get(amount_key, 54_000_000) == 54_000_000:
-                        st.session_state[amount_key] = 0
-                        st.session_state[migration_key] = True
-                    date_default = pd.Timestamp("2026-09-30").date()
-                    st.session_state[date_key] = date_default
-                if injection_idx >= injection_count_int:
-                    continue
-                if injection_idx == 0:
-                    amount_col, date_col_input = first_amount_col, first_date_col
-                else:
-                    label_col, amount_col, date_col_input = st.columns([.72, 1, 1], gap="small")
-                    with label_col:
-                        st.markdown(
-                            f'<div class="cash-injection-row-label">Inyección {injection_idx + 1}</div>',
-                            unsafe_allow_html=True,
-                        )
-                with amount_col:
-                    amount_widget_kwargs = {
-                        "label": f"Monto {injection_idx + 1} (CLP)",
-                        "min_value": 0,
-                        "step": 1_000_000,
-                        "format": "%d",
-                        "key": amount_key,
-                        "help": "Capital adicional para contrastarlo contra los fondos por ejecutar.",
-                    }
-                    if amount_key not in st.session_state:
-                        amount_widget_kwargs["value"] = amount_default
-                    injection_amount = st.number_input(**amount_widget_kwargs)
-                with date_col_input:
-                    date_widget_kwargs = {
-                        "label": f"Fecha {injection_idx + 1}",
-                        "key": date_key,
-                        "help": "Fecha estimada en que entra la inyección de capital.",
-                    }
-                    if date_key not in st.session_state:
-                        date_widget_kwargs["value"] = date_default
-                    injection_date = st.date_input(**date_widget_kwargs)
-                manual_entries.append(
-                    {
-                        "_month": pd.Timestamp(injection_date).to_period("M").to_timestamp(),
-                        "Inyeccion_CLP": float(injection_amount or 0.0),
-                        "Etiqueta": f"Inyección adicional {injection_idx + 1}",
-                        "Fuente": "Manual",
-                    }
-                )
-            return manual_entries
-
-        with inputs_col:
-            if is_plan_a_cashflow:
-                plan_a_col, manual_col = st.columns([.95, 1.35], gap="large")
-                with plan_a_col:
-                    if plan_a_schedule_df.empty:
-                        if plan_a_schedule_error:
-                            st.warning(f"No se pudo cargar la inyección mensual Plan A: {plan_a_schedule_error}")
-                        else:
-                            st.warning("La planilla Plan A no contiene inyecciones mensuales válidas.")
-                    else:
-                        injection_entries = [
-                            {
-                                "_month": pd.Timestamp(row["_month"]),
-                                "Inyeccion_CLP": float(row["Inyeccion_CLP"] or 0.0),
-                                "Etiqueta": str(row["Etiqueta"]),
-                                "Fuente": "Plan A",
-                            }
-                            for _, row in plan_a_schedule_df.iterrows()
-                        ]
-                        plan_a_first_date = pd.to_datetime(plan_a_schedule_df["Fecha"], errors="coerce").min()
-                        plan_a_last_date = pd.to_datetime(plan_a_schedule_df["Fecha"], errors="coerce").max()
-                        plan_a_amounts = plan_a_schedule_df["Inyeccion_CLP"].astype(float).tolist()
-                        plan_a_initial_amount = plan_a_amounts[0] if plan_a_amounts else 0.0
-                        plan_a_max_month_amount = max(plan_a_amounts) if plan_a_amounts else 0.0
-                        plan_a_detail_html = (
-                            "Columna Monto<br>"
-                            f"inicial {format_clp(plan_a_initial_amount)} · mayor mes {format_clp(plan_a_max_month_amount)}<br>"
-                            f"{plan_a_first_date.strftime('%d-%m-%Y')} a {plan_a_last_date.strftime('%d-%m-%Y')}"
-                        )
-                        st.markdown(
-                            f"""
-                            <div class="cash-injection-summary cash-injection-plan-summary">
-                              <span>Plan A conectado a planilla mensual</span>
-                              <b>{format_clp(float(plan_a_schedule_df["Inyeccion_CLP"].sum() or 0.0))}</b>
-                              <em>{plan_a_detail_html}</em>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-                with manual_col:
-                    injection_entries.extend(
-                        render_manual_injection_controls(
-                            "plan_a_extra",
-                            "Inyección adicional sobre Plan A",
-                        )
-                    )
-            else:
-                injection_entries.extend(render_manual_injection_controls("plan_b"))
-        total_committed_clp = sum(float(entry["Inyeccion_CLP"] or 0.0) for entry in injection_entries)
-        with coverage_col:
-            committed_pct = (total_committed_clp / total_clp * 100.0) if total_clp > 0 else 0.0
-            coverage_delta = total_committed_clp - total_clp
-            coverage_delta_color = "#15803D" if coverage_delta >= 0 else "#C2410C"
-            coverage_delta_bg = "#DCFCE7" if coverage_delta >= 0 else "#FFEDD5"
-            st.markdown(
-                f"""
-                <div class="cash-injection-summary">
-                  <span>Cobertura sobre flujo seleccionado</span>
-                  <b>{committed_pct:.1f}%</b>
-                  <em style="color:{coverage_delta_color};background:{coverage_delta_bg};">{format_clp(coverage_delta)}</em>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
     if cashflow_plan.startswith("Plan A"):
         flow_df["_month"] = flow_df["_chart_date"].dt.to_period("M").dt.to_timestamp()
         detail_flow_df["_month"] = detail_flow_df["_chart_date"].dt.to_period("M").dt.to_timestamp()
@@ -11446,13 +11273,16 @@ def render_capex10_investor_injection_cash_flow(
         injection_df = pd.DataFrame(columns=["_month", "Inyeccion_CLP", "Etiqueta"])
     positive_injections = injection_df[injection_df["Inyeccion_CLP"] > 0].copy()
     def parse_cashflow_date(value) -> pd.Timestamp:
-        return pd.to_datetime(value, errors="coerce", dayfirst=True)
+        return pd.to_datetime(value, errors="coerce", format="mixed", dayfirst=True)
 
-    valid_milestones = [
-        milestone
-        for milestone in (milestone_dates or [])
-        if pd.notna(parse_cashflow_date(milestone.get("date")))
-    ]
+    valid_milestones = sorted(
+        [
+            milestone
+            for milestone in (milestone_dates or [])
+            if pd.notna(parse_cashflow_date(milestone.get("date")))
+        ],
+        key=lambda milestone: parse_cashflow_date(milestone["date"]),
+    )
     milestone_months = [
         parse_cashflow_date(milestone["date"]).to_period("M").to_timestamp()
         for milestone in valid_milestones
@@ -11502,17 +11332,17 @@ def render_capex10_investor_injection_cash_flow(
     hito_strip_scope_df.loc[
         hito_key_series.str.contains("hitopremontaje|premontaje", regex=True, na=False),
         "_hito_label",
-    ] = "Hito Pre-Montaje"
+    ] = "Hito Pre-Montaje 10 kW"
     hito_strip_scope_df.loc[
         hito_key_series.str.contains("hitomontaje", regex=False, na=False)
         & ~hito_key_series.str.contains("premontaje", regex=False, na=False),
         "_hito_label",
-    ] = "Hito Montaje"
+    ] = "Hito Montaje 10 kW"
     hito_strip_scope_df.loc[
         hito_key_series.str.contains("hitoproducto", regex=False, na=False)
         & ~hito_key_series.str.contains("hitoproducto80kw|producto80kw", regex=True, na=False),
         "_hito_label",
-    ] = "Hito Producto"
+    ] = "Hito Producto 10 kW"
     hito_strip_scope_df.loc[
         hito_key_series.str.contains("hitopiloto80kw|piloto80kw", regex=True, na=False),
         "_hito_label",
@@ -11523,9 +11353,9 @@ def render_capex10_investor_injection_cash_flow(
     ] = "Hito Producto 80 kW"
     hito_strip_amounts = hito_strip_scope_df.groupby("_hito_label")["Disponible_CLP"].sum().to_dict()
     hito_strip_specs = [
-        ("Hito Pre-Montaje", float(hito_strip_amounts.get("Hito Pre-Montaje", 0.0)), "#164E63"),
-        ("Hito Montaje", float(hito_strip_amounts.get("Hito Montaje", 0.0)), "#1E3A8A"),
-        ("Hito Producto", float(hito_strip_amounts.get("Hito Producto", 0.0)), "#B7791F"),
+        ("Hito Pre-Montaje 10 kW", float(hito_strip_amounts.get("Hito Pre-Montaje 10 kW", 0.0)), "#164E63"),
+        ("Hito Montaje 10 kW", float(hito_strip_amounts.get("Hito Montaje 10 kW", 0.0)), "#1E3A8A"),
+        ("Hito Producto 10 kW", float(hito_strip_amounts.get("Hito Producto 10 kW", 0.0)), "#B7791F"),
         ("Hito Piloto 80 kW", float(hito_strip_amounts.get("Hito Piloto 80 kW", 0.0)), "#0E7490"),
         ("Hito Producto 80 kW", float(hito_strip_amounts.get("Hito Producto 80 kW", 0.0)), "#C27A16"),
     ]
@@ -11537,23 +11367,26 @@ def render_capex10_investor_injection_cash_flow(
     hito_strip_delta_clp = hito_strip_sum_clp - hito_strip_required_clp
     hito_strip_html = "".join(
         f"""
-        <div class="cash-hito-kpi" style="--c:{color};">
-          <div class="cash-hito-top">HITO</div>
-          <div class="cash-hito-name">{html.escape(label.upper())}</div>
+        <article class="cash-hito-kpi" style="--c:{color};">
+          <div class="cash-hito-top"><span>HITO {index:02d}</span><span class="cash-hito-share">{amount / hito_strip_sum_clp * 100 if hito_strip_sum_clp > 0 else 0:.1f}% del total</span></div>
+          <h3 class="cash-hito-name">{html.escape(label)}</h3>
           <div class="cash-hito-value">{format_clp(amount)}</div>
-          <div class="cash-hito-sub">Acumulado hasta {hito_strip_cutoff_month.strftime('%b %Y')}</div>
-        </div>
+          <div class="cash-hito-sub">Fondos pendientes · CLP</div>
+          <div class="cash-hito-track" aria-hidden="true"><div style="width:{min(100, max(0, amount / hito_strip_sum_clp * 100)) if hito_strip_sum_clp > 0 else 0:.2f}%;"></div></div>
+        </article>
         """
-        for label, amount, color in hito_strip_specs
+        for index, (label, amount, color) in enumerate(hito_strip_specs, start=1)
     )
     hito_strip_delta_color = "#15803D" if abs(hito_strip_delta_clp) < 1 else "#C2410C"
+    hito_strip_control_label = "Montos conciliados" if abs(hito_strip_delta_clp) < 1 else "Revisar diferencia"
     hito_strip_html += f"""
-        <div class="cash-hito-kpi cash-hito-total" style="--c:#071427;">
-          <div class="cash-hito-top">CONTROL</div>
-          <div class="cash-hito-name">SUMA HITOS = ACUMULADO REQUERIDO</div>
+        <article class="cash-hito-kpi cash-hito-total" style="--c:#0F766E;">
+          <div class="cash-hito-top"><span>CAPITAL REQUERIDO</span><span class="cash-hito-status" style="color:{hito_strip_delta_color};">{hito_strip_control_label}</span></div>
+          <h3 class="cash-hito-name">Total de los hitos</h3>
           <div class="cash-hito-value">{format_clp(hito_strip_sum_clp)}</div>
-          <div class="cash-hito-sub" style="color:{hito_strip_delta_color};">Diferencia {format_clp(hito_strip_delta_clp)}</div>
-        </div>
+          <div class="cash-hito-sub">Fondos pendientes · CLP</div>
+          <div class="cash-hito-reconciliation">Diferencia con el plan <strong>{format_clp(hito_strip_delta_clp)}</strong></div>
+        </article>
     """
     commitment_x = commitment_monthly["_month"]
     fig_commitment = go.Figure()
@@ -11561,16 +11394,19 @@ def render_capex10_investor_injection_cash_flow(
         go.Bar(
             x=commitment_x,
             y=commitment_monthly["Flujo_CLP"] / 1_000_000,
-            name="Flujo mensual pendiente por Fecha FC" if is_plan_a_cashflow else "Flujo mensual pendiente",
-            marker_color="#6B86A3",
+            name="Gasto mensual",
+            marker_color="#94A9BC",
             marker_line=dict(color="rgba(255,255,255,.86)", width=1.2),
-            opacity=.92,
-            text=[format_clp(value) if value > 0 else "" for value in commitment_monthly["Flujo_CLP"]],
+            opacity=.78,
+            text=[f"{value / 1_000_000:.1f}" if value > 0 else "" for value in commitment_monthly["Flujo_CLP"]],
+            customdata=[format_clp(value) for value in commitment_monthly["Flujo_CLP"]],
+            textfont=dict(size=10, color="#64748B"),
+            cliponaxis=False,
             textposition="outside",
             hovertemplate=(
-                "<b>%{x}</b><br>Flujo pendiente según Fecha FC: %{text}<extra></extra>"
+                "<b>%{x}</b><br>Gasto según Fecha FC: %{customdata}<extra></extra>"
                 if is_plan_a_cashflow
-                else "<b>%{x}</b><br>Flujo pendiente: %{text}<extra></extra>"
+                else "<b>%{x}</b><br>Gasto pendiente: %{customdata}<extra></extra>"
             ),
         )
     )
@@ -11579,7 +11415,7 @@ def render_capex10_investor_injection_cash_flow(
             go.Bar(
                 x=commitment_x,
                 y=commitment_monthly["Inyeccion_CLP"] / 1_000_000,
-                name="Inyección mensual",
+                name="Aporte mensual",
                 marker_color="#0F766E",
                 text=[format_clp(value) if value > 0 else "" for value in commitment_monthly["Inyeccion_CLP"]],
                 textposition="outside",
@@ -11590,10 +11426,10 @@ def render_capex10_investor_injection_cash_flow(
         go.Scatter(
             x=commitment_x,
             y=commitment_monthly["Acumulado_CLP"] / 1_000_000,
-            name="Acumulado requerido",
+            name="Capital requerido",
             mode="lines+markers",
-            line=dict(color="#1E3A8A", width=3),
-            marker=dict(size=8, color="#FFFFFF", line=dict(color="#1E3A8A", width=2)),
+            line=dict(color="#244A6C", width=3),
+            marker=dict(size=6, color="#FFFFFF", line=dict(color="#244A6C", width=2)),
             hovertemplate="<b>%{x}</b><br>Acumulado requerido: $%{y:.1f} MM<extra></extra>",
         )
     )
@@ -11601,10 +11437,10 @@ def render_capex10_investor_injection_cash_flow(
         go.Scatter(
             x=commitment_x,
             y=commitment_monthly["Inyeccion_acumulada_CLP"] / 1_000_000,
-            name="Capital acumulado disponible",
+            name="Capital previsto",
             mode="lines+markers",
-            line=dict(color="#0F766E", width=3, dash="dot" if is_plan_a_cashflow else "solid"),
-            marker=dict(size=8, color="#FFFFFF", line=dict(color="#0F766E", width=2)),
+            line=dict(color="#0F766E", width=3.5, dash="dot" if is_plan_a_cashflow else "solid"),
+            marker=dict(size=6, color="#FFFFFF", line=dict(color="#0F766E", width=2)),
             hovertemplate="<b>%{x}</b><br>Capital acumulado: $%{y:.1f} MM<extra></extra>",
         )
     )
@@ -11612,10 +11448,10 @@ def render_capex10_investor_injection_cash_flow(
         go.Scatter(
             x=commitment_x,
             y=commitment_monthly["Saldo_caja_CLP"] / 1_000_000,
-            name="Saldo caja acumulado",
+            name="Saldo proyectado",
             mode="lines+markers",
-            line=dict(color="#D7605E", width=3),
-            marker=dict(size=8, color="#FFFFFF", line=dict(color="#D7605E", width=2)),
+            line=dict(color="#D97706", width=3),
+            marker=dict(size=6, color="#FFFFFF", line=dict(color="#D97706", width=2)),
             hovertemplate="<b>%{x}</b><br>Saldo caja: $%{y:.1f} MM<extra></extra>",
         )
     )
@@ -11629,13 +11465,13 @@ def render_capex10_investor_injection_cash_flow(
         event_idx = event_month_index.get(pd.Timestamp(event_month).to_period("M").to_timestamp())
         if event_idx is None:
             return 1.025
-        for level in (0, 1):
-            if all(level != used_level or abs(event_idx - used_idx) > 1 for used_idx, used_level in event_annotation_slots):
+        for level in (0, 1, 2):
+            if all(level != used_level or abs(event_idx - used_idx) > 2 for used_idx, used_level in event_annotation_slots):
                 event_annotation_slots.append((event_idx, level))
-                return 1.025 + (level * 0.095)
-        fallback_level = len(event_annotation_slots) % 2
+                return 1.025 + (level * 0.11)
+        fallback_level = len(event_annotation_slots) % 3
         event_annotation_slots.append((event_idx, fallback_level))
-        return 1.025 + (fallback_level * 0.095)
+        return 1.025 + (fallback_level * 0.11)
 
     for _, injection in positive_injections.iterrows():
         injection_month = pd.Timestamp(injection["_month"]).to_period("M").to_timestamp()
@@ -11655,7 +11491,7 @@ def render_capex10_investor_injection_cash_flow(
             yref="paper",
             line=dict(
                 color=injection_line_color,
-                width=3 if is_manual_injection else 1.8,
+                width=1.6 if is_manual_injection else 1.2,
                 dash="solid" if is_manual_injection else "dot",
             ),
         )
@@ -11676,18 +11512,18 @@ def render_capex10_investor_injection_cash_flow(
                 xanchor="center",
                 yanchor="bottom",
                 align="center",
-                font=dict(size=8, color=injection_line_color),
+                font=dict(size=10, color=injection_line_color),
                 bgcolor="rgba(236,253,245,.96)",
                 bordercolor=injection_line_color,
                 borderwidth=1,
-                borderpad=2,
+                borderpad=6,
             )
     milestone_colors = ["#B7791F", "#7C2D12", "#0E7490", "#C27A16"]
     for milestone_idx, milestone in enumerate(valid_milestones):
         milestone_date = parse_cashflow_date(milestone["date"])
         milestone_month = milestone_date.to_period("M").to_timestamp()
         milestone_name = str(milestone.get("label", "Hito"))
-        milestone_color = milestone_colors[milestone_idx % len(milestone_colors)]
+        milestone_color = next((color for label, _, color in hito_strip_specs if normalize_key(label) == normalize_key(milestone_name)), milestone_colors[milestone_idx % len(milestone_colors)])
         fig_commitment.add_shape(
             type="line",
             x0=milestone_date,
@@ -11696,7 +11532,7 @@ def render_capex10_investor_injection_cash_flow(
             y1=1,
             xref="x",
             yref="paper",
-            line=dict(color=milestone_color, width=2, dash="dash"),
+            line=dict(color=milestone_color, width=1.2, dash="dot"),
         )
         fig_commitment.add_annotation(
             x=milestone_date,
@@ -11706,151 +11542,129 @@ def render_capex10_investor_injection_cash_flow(
             text=(
                 f"<b>{milestone_name}</b>"
                 f"<br>{milestone_date.strftime('%d-%m-%Y')}"
-                f"<br>Hito seleccionado"
             ),
             showarrow=False,
             xanchor="center",
             yanchor="bottom",
             align="center",
-            font=dict(size=8, color=milestone_color),
+            font=dict(size=10, color=milestone_color),
             bgcolor="rgba(255,255,255,.92)",
             bordercolor=milestone_color,
             borderwidth=1,
-            borderpad=2,
-        )
-    final_commitment = commitment_monthly.iloc[-1]
-    final_commitment_label = pd.Timestamp(final_commitment["_month"])
-    final_label_positions: list[float] = []
-    for value_col, label_color, bg_color, yshift in [
-        ("Acumulado_CLP", "#1E3A8A", "rgba(239,246,255,.96)", 24),
-        ("Inyeccion_acumulada_CLP", "#0F766E", "rgba(236,253,245,.96)", 0),
-        ("Saldo_caja_CLP", "#D7605E", "rgba(255,247,237,.96)", -24),
-    ]:
-        final_y = float(final_commitment[value_col]) / 1_000_000
-        while any(abs(final_y - used_y) < 18 for used_y in final_label_positions):
-            final_y += 18
-        final_label_positions.append(final_y)
-        fig_commitment.add_annotation(
-            x=final_commitment_label,
-            y=final_y,
-            text=format_clp(float(final_commitment[value_col])),
-            showarrow=False,
-            xanchor="left",
-            xshift=12,
-            yshift=yshift,
-            align="left",
-            font=dict(size=13, color=label_color),
-            bgcolor=bg_color,
-            bordercolor=label_color,
-            borderwidth=1,
             borderpad=6,
         )
+    final_commitment = commitment_monthly.iloc[-1]
     fig_commitment.update_layout(
-        height=702,
-        barmode="group",
-        margin=dict(l=12, r=112, t=126, b=40),
-        legend=dict(orientation="h", y=1.24, x=0, title=None),
-        yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False),
-        xaxis=dict(title=None, tickformat="%b %Y", dtick="M1"),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        height=650,
+        barmode="group", bargap=.42,
+        margin=dict(l=16, r=28, t=145, b=94),
+        font=dict(family="Arial, sans-serif", size=12, color="#475569"),
+        legend=dict(
+            orientation="h", y=-.19, x=0, title=None,
+            font=dict(size=11, color="#475569"), bgcolor="rgba(0,0,0,0)",
+            traceorder="normal", itemsizing="constant",
+        ),
+        yaxis=dict(
+            title=dict(text="Millones de pesos · CLP", font=dict(size=11, color="#64748B")),
+            gridcolor="#EDF2F6", zeroline=True, zerolinecolor="#CBD5E1", zerolinewidth=1,
+            tickfont=dict(size=11, color="#64748B"), ticksuffix=" MM", fixedrange=False,
+        ),
+        xaxis=dict(
+            title=None, tickformat="%b %Y", dtick="M2" if len(commitment_monthly) > 14 else "M1",
+            tickfont=dict(size=11, color="#64748B"), showgrid=False, showline=True,
+            linecolor="#E2E8F0", ticks="outside", tickcolor="#E2E8F0", ticklen=5,
+        ),
+        hovermode="x unified",
+        hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#D8E3EB", font=dict(size=12, color="#0F2435")),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#FFFFFF",
     )
-    st.plotly_chart(fig_commitment, use_container_width=True, config={"displaylogo": False})
-    components.html(
+    with st.container(border=True, key="capex10_capital_chart_panel"):
+        st.html(
+            """<style>
+            .st-key-capex10_capital_chart_panel{border:1px solid #D8E3EB!important;border-radius:20px!important;padding:26px!important;background:#FAFCFD;}
+            .capital-chart-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;}
+            .capital-chart-header h2{margin:0;padding:0;color:#0F2435;font-size:23px;font-weight:750;line-height:1.35;letter-spacing:-.03em;}
+            .capital-chart-header p{margin:8px 0 0;color:#64748B;font-size:12px;line-height:1.7;max-width:700px;}
+            .capital-chart-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:18px;}
+            .capital-chart-total{min-width:0;background:#FFF;border:1px solid #E2E8F0;border-top:3px solid var(--series);border-radius:10px;padding:15px 18px;}
+            .capital-chart-total span{display:block;color:#64748B;font-size:10px;font-weight:700;letter-spacing:.055em;line-height:1.5;}
+            .capital-chart-total strong{display:block;margin-top:7px;color:var(--series);font-size:clamp(20px,2vw,27px);font-weight:750;letter-spacing:-.03em;line-height:1.3;font-variant-numeric:tabular-nums;}
+            .capital-chart-total small{display:block;margin-top:5px;color:#64748B;font-size:10px;}
+            @media(max-width:760px){.st-key-capex10_capital_chart_panel{padding:16px!important;}.capital-chart-header{flex-direction:column;}.capital-chart-totals{grid-template-columns:1fr;gap:10px;}.capital-chart-total strong{font-size:25px;}}
+            </style>"""
+            f'<header class="capital-chart-header"><div><span class="capital-eyebrow">EVOLUCIÓN DEL FINANCIAMIENTO</span><h2>Capital, hitos y flujo de caja</h2>'
+            '<p>Compara el gasto mensual con el capital requerido, los aportes previstos y el saldo proyectado. Las líneas verticales indican las fechas de los hitos.</p></div>'
+            f'<span class="capital-plan-tag">{"Plan A" if is_plan_a_cashflow else "Plan B"} · Montos en CLP</span></header>'
+            '<div class="capital-chart-totals">'
+            + "".join(
+                f'<article class="capital-chart-total" style="--series:{color};"><span>{label}</span><strong>{format_clp(float(final_commitment[column]))}</strong><small>Al cierre · {pd.Timestamp(final_commitment["_month"]).strftime("%m / %Y")}</small></article>'
+                for label, column, color in [
+                    ("CAPITAL REQUERIDO", "Acumulado_CLP", "#244A6C"),
+                    ("CAPITAL PREVISTO", "Inyeccion_acumulada_CLP", "#0F766E"),
+                    ("SALDO FINAL PROYECTADO", "Saldo_caja_CLP", "#D97706"),
+                ]
+            )
+            + '</div>'
+        )
+        st.plotly_chart(
+            fig_commitment, use_container_width=True,
+            config={"displaylogo": False, "displayModeBar": "hover", "scrollZoom": False},
+        )
+        st.caption("Barras: gasto de cada mes en millones de CLP. Líneas: valores acumulados. Pasa el cursor para consultar los montos; selecciona una serie en la leyenda para ocultarla o mostrarla.")
+    st.html(
         f"""
         <style>
-          html,body{{
-            margin:0;
-            padding:0;
-            background:transparent;
-            font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+          .cash-hito-panel{{
+            margin:20px 0 24px;
+            padding:24px;
+            border:1px solid #E2E8F0;
+            border-radius:20px;
+            background:#F8FAFC;
           }}
-          .cash-hito-head{{
-            margin:16px 0 7px 0;
-            padding:0 2px;
-          }}
-          .cash-hito-head b{{
-            display:block;
-            color:#071427;
-            font-size:15px;
-            line-height:1.08;
-            font-weight:950;
-          }}
-          .cash-hito-head span{{
-            display:block;
-            color:#64748B;
-            font-size:10px;
-            line-height:1.2;
-            font-weight:850;
-            margin-top:3px;
-          }}
-          .cash-hito-strip{{
-            display:grid;
-            grid-template-columns:repeat(3,minmax(0,1fr));
-            gap:7px;
-            margin:0 0 28px 0;
-          }}
+          .cash-hito-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;}}
+          .cash-hito-head h2{{margin:0!important;padding:0!important;color:#0F172A;font-size:20px!important;font-weight:750!important;line-height:1.3!important;letter-spacing:-.025em;}}
+          .cash-hito-head p{{margin:6px 0 0!important;color:#64748B;font-size:12px;line-height:1.6;}}
+          .cash-hito-cutoff{{flex-shrink:0;border:1px solid #CBD5E1;border-radius:8px;padding:8px 12px;color:#475569;background:#FFF;font-size:11px;line-height:1.5;}}
+          .cash-hito-cutoff strong{{display:block;color:#0F172A;font-size:13px;font-weight:700;}}
+          .cash-hito-strip{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;}}
           .cash-hito-kpi{{
-            border:1px solid color-mix(in srgb,var(--c) 32%,#CBD5E1);
-            border-left:5px solid var(--c);
-            border-radius:8px;
-            background:
-              linear-gradient(90deg,rgba(15,23,42,.035) 1px,transparent 1px),
-              linear-gradient(180deg,#FFFFFF 0%,color-mix(in srgb,var(--c) 7%,#FFFFFF) 100%);
-            background-size:18px 100%,100% 100%;
-            padding:5px 8px;
-            min-height:52px;
-            box-shadow:0 7px 16px rgba(15,23,42,.04);
+            min-width:0;box-sizing:border-box;padding:20px;
+            border:1px solid #E2E8F0;border-top:3px solid var(--c);border-radius:12px;
+            background:#FFF;box-shadow:0 2px 5px rgba(15,23,42,.025);
           }}
-          .cash-hito-top{{
-            width:max-content;
-            border-radius:999px;
-            background:color-mix(in srgb,var(--c) 12%,#FFFFFF);
-            color:var(--c);
-            border:1px solid color-mix(in srgb,var(--c) 24%,#CBD5E1);
-            padding:1px 5px;
-            font-size:7px;
-            font-weight:950;
-            letter-spacing:.08em;
-          }}
-          .cash-hito-name{{
-            color:#334155;
-            font-size:8.5px;
-            font-weight:950;
-            margin-top:3px;
-            white-space:nowrap;
-            overflow:hidden;
-            text-overflow:ellipsis;
-          }}
-          .cash-hito-value{{
-            color:#071427;
-            font-size:14px;
-            line-height:1;
-            font-weight:950;
-            margin-top:3px;
-            white-space:nowrap;
-          }}
-          .cash-hito-sub{{
-            color:#64748B;
-            font-size:7.5px;
-            font-weight:850;
-            margin-top:2px;
-          }}
-          .cash-hito-total{{
-            background:linear-gradient(180deg,#F8FAFC,#FFFFFF);
-            border-style:double;
-          }}
+          .cash-hito-top{{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--c);font-size:10px;font-weight:750;letter-spacing:.07em;line-height:1.5;}}
+          .cash-hito-share{{color:#64748B;font-size:10px;font-weight:500;letter-spacing:0;white-space:nowrap;}}
+          .cash-hito-name{{margin:12px 0 0!important;padding:0!important;min-height:40px;color:#334155;font-size:14px!important;font-weight:650!important;line-height:1.45!important;overflow-wrap:anywhere;}}
+          .cash-hito-value{{margin-top:8px;color:#0F172A;font-size:clamp(20px,2.15vw,30px);font-weight:750;letter-spacing:-.035em;line-height:1.25;font-variant-numeric:tabular-nums;white-space:nowrap;}}
+          .cash-hito-sub{{margin-top:5px;color:#64748B;font-size:11px;line-height:1.5;}}
+          .cash-hito-track{{margin-top:18px;height:4px;border-radius:4px;background:#F1F5F9;overflow:hidden;}}
+          .cash-hito-track>div{{height:100%;background:var(--c);border-radius:4px;}}
+          .cash-hito-total{{background:#0F2435;border-color:#0F2435;border-top-color:#2DD4BF;box-shadow:none;}}
+          .cash-hito-total .cash-hito-top{{color:#99F6E4;}}
+          .cash-hito-total .cash-hito-name{{color:#E2E8F0;}}
+          .cash-hito-total .cash-hito-value{{color:#FFF;}}
+          .cash-hito-total .cash-hito-sub{{color:#CBD5E1;}}
+          .cash-hito-status{{padding:3px 7px;background:#F0FDFA;border-radius:5px;font-size:9px;font-weight:650;letter-spacing:0;}}
+          .cash-hito-reconciliation{{display:flex;justify-content:space-between;gap:12px;margin-top:15px;padding-top:10px;border-top:1px solid #334A5C;color:#CBD5E1;font-size:10px;line-height:1.5;}}
+          .cash-hito-reconciliation strong{{color:#FFF;font-weight:650;}}
           @media(max-width:1100px){{.cash-hito-strip{{grid-template-columns:repeat(2,minmax(0,1fr));}}}}
-          @media(max-width:720px){{.cash-hito-strip{{grid-template-columns:1fr;}}}}
+          @media(max-width:640px){{
+            .cash-hito-panel{{padding:16px;}}
+            .cash-hito-head{{flex-direction:column;gap:12px;}}
+            .cash-hito-cutoff{{width:100%;box-sizing:border-box;}}
+            .cash-hito-strip{{grid-template-columns:1fr;gap:12px;}}
+            .cash-hito-name{{min-height:0;}}
+            .cash-hito-value{{font-size:clamp(20px,6vw,28px);}}
+          }}
         </style>
-        <div class="cash-hito-head">
-          <b>Lectura funcional por hito</b>
-          <span>Montos no pagados acumulados hasta el corte del plan</span>
-        </div>
-        <div class="cash-hito-strip">{hito_strip_html}</div>
+        <section class="cash-hito-panel" aria-label="Lectura funcional por hito">
+          <header class="cash-hito-head">
+            <div><h2>Lectura funcional por hito</h2><p>Distribución del capital pendiente entre los hitos técnicos del proyecto.</p></div>
+            <div class="cash-hito-cutoff">Acumulado hasta<strong>{hito_strip_cutoff_month.strftime('%m / %Y')}</strong></div>
+          </header>
+          <div class="cash-hito-strip">{hito_strip_html}</div>
+        </section>
         """,
-        height=201,
-        scrolling=False,
     )
 
     analysis_month_options = [pd.Timestamp(value).to_period("M").to_timestamp() for value in commitment_monthly["_month"].tolist()]
@@ -11996,14 +11810,14 @@ def render_capex10_investor_injection_cash_flow(
                 method_match |= method_keys.eq(hito_key) | method_keys.str.contains(hito_key, na=False, regex=False)
         return float(hito_df[line_match | method_match]["Disponible_CLP"].sum() or 0.0)
 
-    hito_premontaje_accumulated = hito_accumulated_amount("Hito Pre -Montaje", ["hitopremontaje", "hito1", "premontaje", "pre montaje"])
-    hito_montaje_accumulated = hito_accumulated_amount("Hito Montaje", ["hitomontaje", "hito2"])
-    hito_producto_accumulated = hito_accumulated_amount("Hito Producto", ["hitoproducto", "hito3", "producto"])
+    hito_premontaje_accumulated = hito_accumulated_amount("Hito Pre-Montaje 10 kW", ["hitopremontaje", "hito1", "premontaje", "pre montaje"])
+    hito_montaje_accumulated = hito_accumulated_amount("Hito Montaje 10 kW", ["hitomontaje", "hito2"])
+    hito_producto_accumulated = hito_accumulated_amount("Hito Producto 10 kW", ["hitoproducto", "hito3", "producto"])
     hito_piloto_80kw_accumulated = hito_accumulated_amount("Hito Piloto 80 kW", ["hitopiloto80kw", "piloto80kw", "piloto 80 kw", "80kw", "80k"])
     hito_kpi_specs = [
-        ("Hito Pre-Montaje", "Hito Pre -Montaje", hito_premontaje_accumulated, "#164E63"),
-        ("Hito Montaje", "Hito Montaje", hito_montaje_accumulated, "#1E3A8A"),
-        ("Hito Producto", "Hito Producto", hito_producto_accumulated, "#B7791F"),
+        ("Hito Pre-Montaje 10 kW", "Hito Pre-Montaje 10 kW", hito_premontaje_accumulated, "#164E63"),
+        ("Hito Montaje 10 kW", "Hito Montaje 10 kW", hito_montaje_accumulated, "#1E3A8A"),
+        ("Hito Producto 10 kW", "Hito Producto 10 kW", hito_producto_accumulated, "#B7791F"),
         ("Hito Piloto 80 kW", "Hito Piloto 80 kW", hito_piloto_80kw_accumulated, "#0E7490"),
     ]
     hito_kpi_html = "".join(
@@ -12220,8 +12034,7 @@ def render_capex10_investor_injection_cash_flow(
         responsible_summary = responsible_summary.sort_values(["Disponible_CLP", "Acumulado_CLP"], ascending=False)
 
         render_inputs_gantt_design_css()
-        st.markdown(
-            f"""
+        st.html(f"""
             <style>
               .cash-period-detail-head{{
                 display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
@@ -12440,9 +12253,7 @@ def render_capex10_investor_injection_cash_flow(
               @media(max-width:780px){{.cash-period-resp-title,.cash-period-resp-bars{{grid-template-columns:1fr;}}}}
               @media(max-width:620px){{.cash-period-detail-head{{display:block;}}.cash-period-detail-total{{margin-top:8px;}}.cash-period-resp-kpis,.cash-period-resp-meta{{grid-template-columns:1fr;}}}}
             </style>
-            """,
-            unsafe_allow_html=True,
-        )
+            """)
 
         def build_consolidated_line_summary(summary_df: pd.DataFrame, total_amount: float, weight_col: str) -> pd.DataFrame:
             if summary_df.empty:
@@ -12528,9 +12339,18 @@ def render_capex10_investor_injection_cash_flow(
                 st.info("No hay tareas para el período seleccionado.")
                 return
             task_rows = source_df.copy()
-            sort_cols = [col for col in [phase_col, line_col, "_responsable_detalle_periodo", task_col, "Disponible_CLP"] if col and col in task_rows.columns]
-            if sort_cols:
-                task_rows = task_rows.sort_values(sort_cols, ascending=[True] * (len(sort_cols) - 1) + [False], na_position="last")
+            if GANTT_DATE_COL_START in task_rows.columns:
+                task_rows["_sort_inicio"] = pd.to_datetime(task_rows[GANTT_DATE_COL_START], errors="coerce")
+                tie_sort_cols = [col for col in [phase_col, line_col, "_responsable_detalle_periodo", task_col] if col and col in task_rows.columns]
+                task_rows = task_rows.sort_values(
+                    ["_sort_inicio", *tie_sort_cols],
+                    ascending=[False, *([True] * len(tie_sort_cols))],
+                    na_position="last",
+                )
+            else:
+                sort_cols = [col for col in [phase_col, line_col, "_responsable_detalle_periodo", task_col, "Disponible_CLP"] if col and col in task_rows.columns]
+                if sort_cols:
+                    task_rows = task_rows.sort_values(sort_cols, ascending=[True] * (len(sort_cols) - 1) + [False], na_position="last")
             task_display = pd.DataFrame()
             task_display["Responsable"] = task_rows["_responsable_detalle_periodo"].astype(str).replace({"nan": "-", "None": "-"})
             task_display["Fase"] = task_rows[phase_col].astype(str).replace({"nan": "-", "None": "-"})
@@ -12545,10 +12365,10 @@ def render_capex10_investor_injection_cash_flow(
             if status_col:
                 task_display["Estado"] = task_rows[status_col].astype(str).replace({"nan": "-", "None": "-"})
             for source_col, display_col in [
-                (chart_date_col, "Fecha FC") if chart_date_col else (None, "Fecha FC"),
                 (GANTT_DATE_COL_START, "Inicio"),
                 (GANTT_DATE_COL_END_PLAN, "Fin plan"),
                 (GANTT_DATE_COL_END_REAL, "Fin real"),
+                (chart_date_col, "Fecha FC") if chart_date_col else (None, "Fecha FC"),
             ]:
                 if source_col and source_col in task_rows.columns:
                     task_display[display_col] = pd.to_datetime(task_rows[source_col], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
@@ -12572,17 +12392,16 @@ def render_capex10_investor_injection_cash_flow(
                     "Tarea / Entregable": st.column_config.TextColumn("Tarea / Entregable", width=460),
                     "Disponible": st.column_config.TextColumn("Disponible", width=110),
                     "Estado": st.column_config.TextColumn("Estado", width=88),
-                    "Fecha FC": st.column_config.TextColumn("Fecha FC", width=92),
                     "Inicio": st.column_config.TextColumn("Inicio", width=92),
                     "Fin plan": st.column_config.TextColumn("Fin plan", width=92),
                     "Fin real": st.column_config.TextColumn("Fin real", width=92),
+                    "Fecha FC": st.column_config.TextColumn("Fecha FC", width=92),
                 },
                 key=f"{table_key}_dataframe",
             )
 
         if show_consolidated_detail:
-            st.markdown(
-                f"""
+            st.html(f"""
                 <div class="cash-period-detail-head">
                   <div>
                     <b>Detalle consolidado del período</b>
@@ -12590,9 +12409,7 @@ def render_capex10_investor_injection_cash_flow(
                   </div>
                   <div class="cash-period-detail-total">{format_clp(period_detail_total)}</div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                """)
             selected_consolidated_lines = render_consolidated_line_table(
                 line_summary,
                 period_detail_total,
@@ -12616,8 +12433,7 @@ def render_capex10_investor_injection_cash_flow(
                 selected_detail_total = float(selected_detail_scope_df["Disponible_CLP"].sum() or 0.0)
                 selected_phase_count = int(selected_consolidated_lines[phase_col].nunique())
                 selected_line_count = int(selected_consolidated_lines[line_col].nunique())
-                st.markdown(
-                    f"""
+                st.html(f"""
                     <div class="cash-period-task-head" style="--resp-color:#0F766E;">
                       <div>
                         <b>Tareas del período seleccionado</b>
@@ -12625,9 +12441,7 @@ def render_capex10_investor_injection_cash_flow(
                       </div>
                       <div class="cash-period-task-amount">{format_clp(selected_detail_total)}</div>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                    """)
                 render_consolidated_task_table(
                     selected_detail_scope_df,
                     f"capex10_consolidated_tasks_{key_suffix}",
@@ -12635,8 +12449,7 @@ def render_capex10_investor_injection_cash_flow(
             else:
                 st.caption("Selecciona una o más filas en Detalle consolidado del período para desplegar sus tareas.")
             with st.expander(f"Acumulado hasta {selected_analysis_cutoff_month.strftime('%b %Y')}", expanded=False):
-                st.markdown(
-                    f"""
+                st.html(f"""
                     <div class="cash-period-detail-head" style="margin-top:4px;">
                       <div>
                         <b>Detalle acumulado consolidado</b>
@@ -12644,9 +12457,7 @@ def render_capex10_investor_injection_cash_flow(
                       </div>
                       <div class="cash-period-detail-total">{format_clp(accumulated_detail_total)}</div>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                    """)
                 selected_accumulated_lines = render_consolidated_line_table(
                     accumulated_line_summary,
                     accumulated_detail_total,
@@ -12679,15 +12490,12 @@ def render_capex10_investor_injection_cash_flow(
                 with st.container(border=True):
                     schedule_head_col, schedule_scope_col = st.columns([0.58, 0.42], vertical_alignment="top")
                     with schedule_head_col:
-                        st.markdown(
-                            f"""
+                        st.html(f"""
                             <div style="margin:0 0 4px 0;">
                               <b style="display:block;color:#071427;font-size:15px;font-weight:950;line-height:1.1;">Cronograma consolidado</b>
                               <span style="display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;">Fase/línea seleccionada · Inicio a Fin real.</span>
                             </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
+                            """)
                     with schedule_scope_col:
                         schedule_scope = st.radio(
                             "Vista cronograma",
@@ -12725,10 +12533,7 @@ def render_capex10_investor_injection_cash_flow(
                             & timeline_df[GANTT_DATE_COL_END_REAL].notna()
                         ].copy()
                     timeline_total = float(timeline_df["Disponible_CLP"].sum() or 0.0) if not timeline_df.empty and "Disponible_CLP" in timeline_df.columns else 0.0
-                    st.markdown(
-                        f'<div class="cash-period-gantt-chip" style="--resp-color:#0F766E;margin:0 0 8px auto;width:max-content;">{len(timeline_df)} tareas · {format_clp(timeline_total)}</div>',
-                        unsafe_allow_html=True,
-                    )
+                    st.html(f'<div class="cash-period-gantt-chip" style="--resp-color:#0F766E;margin:0 0 8px auto;width:max-content;">{len(timeline_df)} tareas · {format_clp(timeline_total)}</div>')
                     if timeline_df.empty:
                         st.info(f"No hay partidas con fechas suficientes para construir el cronograma consolidado en {schedule_scope.lower()}.")
                     else:
@@ -12769,10 +12574,7 @@ def render_capex10_investor_injection_cash_flow(
                 weight_label: str,
                 key_prefix: str,
             ) -> None:
-                st.markdown(
-                    f"<div class='cash-injection-head' style='margin:8px 0 4px;'><div><b>{html.escape(section_label)}</b><span>Selecciona una fase/línea para ver las tareas que componen el monto.</span></div></div>",
-                    unsafe_allow_html=True,
-                )
+                st.html(f"<div class='cash-injection-head' style='margin:8px 0 4px;'><div><b>{html.escape(section_label)}</b><span>Selecciona una fase/línea para ver las tareas que componen el monto.</span></div></div>")
                 if summary_df.empty:
                     st.info(f"Este responsable no tiene partidas en {section_label.lower()}.")
                     return
@@ -12785,9 +12587,9 @@ def render_capex10_investor_injection_cash_flow(
                     "Sin monto",
                 )
                 selectable_rows[weight_label] = selectable_rows[weight_col].map(lambda value: f"{value:.1f}%")
-                selectable_rows["Inicio"] = pd.to_datetime(selectable_rows["Inicio"], errors="coerce", dayfirst=True).dt.strftime("%d-%m-%Y").fillna("-")
-                selectable_rows["Fin plan"] = pd.to_datetime(selectable_rows["Fin_plan"], errors="coerce", dayfirst=True).dt.strftime("%d-%m-%Y").fillna("-")
-                selectable_rows["Fin real"] = pd.to_datetime(selectable_rows["Fin_real"], errors="coerce", dayfirst=True).dt.strftime("%d-%m-%Y").fillna("-")
+                selectable_rows["Inicio"] = pd.to_datetime(selectable_rows["Inicio"], errors="coerce", format="mixed", dayfirst=True).dt.strftime("%d-%m-%Y").fillna("-")
+                selectable_rows["Fin plan"] = pd.to_datetime(selectable_rows["Fin_plan"], errors="coerce", format="mixed", dayfirst=True).dt.strftime("%d-%m-%Y").fillna("-")
+                selectable_rows["Fin real"] = pd.to_datetime(selectable_rows["Fin_real"], errors="coerce", format="mixed", dayfirst=True).dt.strftime("%d-%m-%Y").fillna("-")
                 selectable_rows = selectable_rows.rename(columns={phase_col: "Fase", line_col: "Línea"})
                 display_rows = selectable_rows[["Fase", "Línea", "Partidas", "Disponible", "Tipo", weight_label, "Inicio", "Fin plan", "Fin real"]]
                 selected_state = st.dataframe(
@@ -12837,9 +12639,18 @@ def render_capex10_investor_injection_cash_flow(
                 if selected_items.empty:
                     st.info("No hay tareas para las fases/líneas seleccionadas.")
                     return
-                sort_cols = [col for col in [phase_col, line_col, task_col, "Disponible_CLP"] if col and col in selected_items.columns]
-                if sort_cols:
-                    selected_items = selected_items.sort_values(sort_cols, ascending=[True] * (len(sort_cols) - 1) + [False], na_position="last")
+                if GANTT_DATE_COL_START in selected_items.columns:
+                    selected_items["_sort_inicio"] = pd.to_datetime(selected_items[GANTT_DATE_COL_START], errors="coerce")
+                    tie_sort_cols = [col for col in [phase_col, line_col, task_col] if col and col in selected_items.columns]
+                    selected_items = selected_items.sort_values(
+                        ["_sort_inicio", *tie_sort_cols],
+                        ascending=[False, *([True] * len(tie_sort_cols))],
+                        na_position="last",
+                    )
+                else:
+                    sort_cols = [col for col in [phase_col, line_col, task_col, "Disponible_CLP"] if col and col in selected_items.columns]
+                    if sort_cols:
+                        selected_items = selected_items.sort_values(sort_cols, ascending=[True] * (len(sort_cols) - 1) + [False], na_position="last")
                 task_display = pd.DataFrame()
                 task_display["Tarea / Entregable"] = (
                     selected_items[task_col].astype(str).replace({"nan": "-", "None": "-"})
@@ -12856,10 +12667,10 @@ def render_capex10_investor_injection_cash_flow(
                 if status_col:
                     task_display["Estado"] = selected_items[status_col].astype(str).replace({"nan": "-", "None": "-"})
                 for source_col, display_col in [
-                    (chart_date_col, "Fecha FC") if chart_date_col else (None, "Fecha FC"),
                     (GANTT_DATE_COL_START, "Inicio"),
                     (GANTT_DATE_COL_END_PLAN, "Fin plan"),
                     (GANTT_DATE_COL_END_REAL, "Fin real"),
+                    (chart_date_col, "Fecha FC") if chart_date_col else (None, "Fecha FC"),
                 ]:
                     if source_col and source_col in selected_items.columns:
                         task_display[display_col] = pd.to_datetime(selected_items[source_col], errors="coerce").dt.strftime("%d-%m-%Y").fillna("-")
@@ -12877,8 +12688,7 @@ def render_capex10_investor_injection_cash_flow(
                     else f"{selected_line_count} líneas {'seleccionadas' if has_manual_selection else 'visibles'}"
                 )
                 task_scope_note = "seleccionadas" if has_manual_selection else "visibles"
-                st.markdown(
-                    f"""
+                st.html(f"""
                     <div class="cash-period-task-head" style="--resp-color:{responsible_color};">
                       <div>
                         <b>{html.escape(selected_title)}</b>
@@ -12886,9 +12696,7 @@ def render_capex10_investor_injection_cash_flow(
                       </div>
                       <div class="cash-period-task-amount">{format_clp(selected_total)}</div>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                    """)
                 task_text_max_len = (
                     int(task_display["Tarea / Entregable"].astype(str).str.len().max())
                     if "Tarea / Entregable" in task_display.columns and not task_display.empty
@@ -12910,18 +12718,17 @@ def render_capex10_investor_injection_cash_flow(
                         "Disponible": st.column_config.TextColumn("Disponible", width="small"),
                         "Tipo": st.column_config.TextColumn("Tipo", width="small"),
                         "Estado": st.column_config.TextColumn("Estado", width="small"),
-                        "Fecha FC": st.column_config.TextColumn("Fecha FC", width="small"),
                         "Inicio": st.column_config.TextColumn("Inicio", width="small"),
                         "Fin plan": st.column_config.TextColumn("Fin plan", width="small"),
                         "Fin real": st.column_config.TextColumn("Fin real", width="small"),
+                        "Fecha FC": st.column_config.TextColumn("Fecha FC", width="small"),
                     },
                     key=f"{key_prefix}_task_detail_{key_suffix}_{normalize_key(responsible_name)}",
                 )
 
             expander_label = f"{responsible_name} | Periodo {responsible_period_label} | Acumulado {responsible_accumulated_label}"
             responsible_expander_class = f"cash-resp-expander-{normalize_key(responsible_name)}"
-            st.markdown(
-                f"""
+            st.html(f"""
                 <style>
                   div:has(.{responsible_expander_class}) + div[data-testid="stExpander"] summary,
                   div:has(.{responsible_expander_class}) + details[data-testid="stExpander"] summary{{
@@ -12937,12 +12744,9 @@ def render_capex10_investor_injection_cash_flow(
                   }}
                 </style>
                 <div class="{responsible_expander_class}" style="display:none;"></div>
-                """,
-                unsafe_allow_html=True,
-            )
+                """)
             with st.expander(expander_label, expanded=False, icon=responsible_icon):
-                st.markdown(
-                    f"""
+                st.html(f"""
                     <div class="cash-period-resp-card" style="--resp-color:{responsible_color};">
                       <div class="cash-period-resp-title">
                         <div>
@@ -12974,9 +12778,7 @@ def render_capex10_investor_injection_cash_flow(
                         <div><span>Rango base</span><b>{html.escape(responsible_start)} / {html.escape(responsible_end)}</b></div>
                       </div>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                    """)
                 responsible_lines = line_summary[
                     line_summary["_responsable_detalle_periodo"].eq(responsible_name)
                 ].copy()
@@ -13009,15 +12811,12 @@ def render_capex10_investor_injection_cash_flow(
                     with st.container(border=True):
                         header_left, header_right = st.columns([0.58, 0.42], vertical_alignment="top")
                         with header_left:
-                            st.markdown(
-                                f"""
+                            st.html(f"""
                                 <div style="--resp-color:{responsible_color};margin:0 0 4px 0;">
                                   <b style="display:block;color:#071427;font-size:15px;font-weight:950;line-height:1.1;">Cronograma por responsable</b>
                                   <span style="display:block;color:#64748B;font-size:11px;font-weight:850;margin-top:4px;">{html.escape(responsible_name)} · Inicio a Fin real.</span>
                                 </div>
-                                """,
-                                unsafe_allow_html=True,
-                            )
+                                """)
                             schedule_scope = st.radio(
                                 "Vista cronograma",
                                 schedule_options,
@@ -13046,14 +12845,11 @@ def render_capex10_investor_injection_cash_flow(
                             ].copy()
                         amount_total = float(timeline_df["Disponible_CLP"].sum() or 0.0) if not timeline_df.empty and "Disponible_CLP" in timeline_df.columns else 0.0
                         with header_right:
-                            st.markdown(
-                                f"""
+                            st.html(f"""
                                 <div style="display:flex;justify-content:flex-end;align-items:flex-start;padding-top:2px;">
                                   <div class="cash-period-gantt-chip" style="--resp-color:{responsible_color};">{len(timeline_df)} tareas · {format_clp(amount_total)}</div>
                                 </div>
-                                """,
-                                unsafe_allow_html=True,
-                            )
+                                """)
                         if timeline_df.empty:
                             st.info(f"No hay partidas con fechas suficientes para construir el cronograma de {responsible_name} en {schedule_scope.lower()}.")
                             return
@@ -13244,8 +13040,7 @@ def render_capex10_investor_injection_cash_flow(
                     font=dict(color="#334155", size=12),
                 )
                 with st.expander("Concentración por fase y línea", expanded=True):
-                    st.markdown(
-                        f"""
+                    st.html(f"""
                         <div class="cash-period-detail-head" style="margin-top:4px;">
                           <div>
                             <b>Concentración por fase y línea</b>
@@ -13253,11 +13048,9 @@ def render_capex10_investor_injection_cash_flow(
                           </div>
                           <div class="cash-period-detail-total">{format_clp(accumulated_detail_total)}</div>
                         </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+                        """)
                     st.plotly_chart(
-                        fig_phase_concentration,
+                        _capex10_style_figure(fig_phase_concentration),
                         use_container_width=True,
                         config={"displaylogo": False, "displayModeBar": False},
                         key=f"capex10_phase_line_concentration_{key_suffix}",
@@ -13324,8 +13117,7 @@ def render_capex10_investor_injection_cash_flow(
                 else "-"
             )
             aporte_peak_value = format_clp(float(aporte_peak_row["Inyeccion_CLP"]))
-            st.markdown(
-                f"""
+            st.html(f"""
                 <style>
                   .cashflow-kpi-strip {{
                     display:grid;
@@ -13390,9 +13182,7 @@ def render_capex10_investor_injection_cash_flow(
                   <div class="cashflow-kpi-card"><span>Aporte período</span><b>{format_clp(aporte_period_clp)}</b><em>{selected_period_label}</em></div>
                   <div class="cashflow-kpi-card"><span>Mayor aporte</span><b>{aporte_peak_value}</b><em>{html.escape(aporte_peak_label)}</em></div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                """)
             fig_aportes = go.Figure()
             fig_aportes.add_trace(
                 go.Bar(
@@ -13450,8 +13240,8 @@ def render_capex10_investor_injection_cash_flow(
             )
             fig_aportes.update_layout(
                 height=430,
-                margin=dict(l=12, r=34, t=42, b=42),
-                legend=dict(orientation="h", y=1.12, x=0, title=None),
+                margin=dict(l=16, r=34, t=52, b=90),
+                legend=dict(orientation="h", y=-.20, x=0, title=None, font=dict(size=11)),
                 yaxis=dict(title="MM CLP", gridcolor="rgba(148,163,184,.18)", zeroline=False),
                 xaxis=dict(title=None, tickformat="%b %Y", dtick="M1"),
                 paper_bgcolor="rgba(0,0,0,0)",
@@ -13460,7 +13250,7 @@ def render_capex10_investor_injection_cash_flow(
                 hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#CBD5E1", font=dict(color="#071427")),
             )
             st.plotly_chart(
-                fig_aportes,
+                _capex10_style_figure(fig_aportes),
                 use_container_width=True,
                 config={"displaylogo": False},
                 key=f"capex10_aportes_period_{key_suffix}",
@@ -13534,8 +13324,7 @@ def render_capex10_investor_injection_cash_flow(
         if show_by_provider:
             render_period_responsible_contribution(items, accumulated_items, plan_label, key_suffix)
 
-    st.markdown(
-        """
+    st.html("""
         <style>
           .cash-period-panel{
             border:1px solid rgba(203,213,225,.82);
@@ -13561,7 +13350,7 @@ def render_capex10_investor_injection_cash_flow(
             gap:10px;
           }
           .cash-period-kpi-row-main{
-            grid-template-columns:repeat(4,minmax(0,1fr));
+            grid-template-columns:repeat(5,minmax(0,1fr));
           }
           .cash-period-kpi-row-milestones{
             grid-template-columns:repeat(auto-fit,minmax(188px,1fr));
@@ -13664,9 +13453,7 @@ def render_capex10_investor_injection_cash_flow(
           @media(max-width:1100px){.cash-period-kpi-row-main{grid-template-columns:repeat(2,minmax(0,1fr));}}
           @media(max-width:720px){.cash-period-head{display:block;}.cash-period-chip{display:inline-flex;margin-top:10px;}.cash-period-kpi-row,.cash-period-kpi-row-main,.cash-period-kpi-row-milestones{grid-template-columns:1fr;}.cash-period-kpi b{font-size:17px;}}
         </style>
-        """,
-        unsafe_allow_html=True,
-    )
+        """)
 
     def render_tipo_epc_first_level_chart(source_df: pd.DataFrame) -> None:
         if source_df.empty or "Disponible_CLP" not in source_df.columns:
@@ -13703,17 +13490,15 @@ def render_capex10_investor_injection_cash_flow(
         epc_summary["Peso_fmt"] = epc_summary["Peso_fmt"].map(lambda value: f"{value:.1f}%")
         fig_epc = go.Figure()
         fig_epc.add_trace(
-            go.Scatter(
-                x=epc_summary["_tipo_epc"],
-                y=epc_summary["Monto_MM"],
-                mode="lines+markers+text",
-                line=dict(color="#0F766E", width=3.4),
-                marker=dict(size=11, color="#FFFFFF", line=dict(color="#0F766E", width=2.4)),
+            go.Bar(
+                x=epc_summary["Monto_MM"],
+                y=epc_summary["_tipo_epc"],
+                orientation="h", marker=dict(color="#0F766E", cornerradius=5),
                 text=epc_summary["Monto_fmt"],
-                textposition="top center",
+                textposition="outside", cliponaxis=False,
                 customdata=np.stack([epc_summary["Monto_fmt"], epc_summary["Peso_fmt"], epc_summary["Partidas"]], axis=-1),
                 hovertemplate=(
-                    "<b>%{x}</b><br>"
+                    "<b>%{y}</b><br>"
                     "Monto: %{customdata[0]}<br>"
                     "Peso: %{customdata[1]}<br>"
                     "Partidas: %{customdata[2]}<extra></extra>"
@@ -13722,17 +13507,16 @@ def render_capex10_investor_injection_cash_flow(
         )
         fig_epc.update_layout(
             height=315,
-            margin=dict(l=20, r=20, t=20, b=64),
-            xaxis=dict(title=None, tickangle=0, automargin=True),
-            yaxis=dict(title="MM CLP", rangemode="tozero", gridcolor="rgba(148,163,184,.18)"),
+            margin=dict(l=16, r=110, t=20, b=38),
+            xaxis=dict(title="Millones de pesos · CLP", rangemode="tozero", gridcolor="#EDF2F6"),
+            yaxis=dict(title=None, autorange="reversed", showgrid=False),
             showlegend=False,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="#FFFFFF",
             font=dict(color="#334155", size=12),
         )
-        with st.container(border=True):
-            st.markdown(
-                f"""
+        with st.container(border=True, key="capex10_epc_panel"):
+            st.html(f"""
                 <div class="cash-period-detail-head" style="margin-top:4px;">
                   <div>
                     <b>Primer nivel por TIPO EPC</b>
@@ -13740,11 +13524,9 @@ def render_capex10_investor_injection_cash_flow(
                   </div>
                   <div class="cash-period-detail-total">{format_clp(total_epc)}</div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                """)
             st.plotly_chart(
-                fig_epc,
+                _capex10_style_figure(fig_epc),
                 use_container_width=True,
                 config={"displaylogo": False, "displayModeBar": False},
                 key="capex10_tipo_epc_first_level_active",
@@ -13752,22 +13534,19 @@ def render_capex10_investor_injection_cash_flow(
 
     render_tipo_epc_first_level_chart(period_table_items)
 
-    with st.container(border=True):
-        st.markdown(
-            f"""
+    with st.container(border=True, key="capex10_period_analysis_panel"):
+        st.html(f"""
           <div class="cash-period-head">
             <div><b>Análisis del período seleccionado · {html.escape(selected_plan_label)}</b><span>Detalle de los meses elegidos en el gráfico de inyección según el plan activo.</span></div>
             <div class="cash-period-chip">{html.escape(selected_plan_label)} · {html.escape(selected_period_label)}</div>
           </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            """)
         detail_view_key = "capex10_period_detail_view_mode"
         detail_view_default_version_key = "capex10_period_detail_view_default_version"
         if st.session_state.get(detail_view_default_version_key) != 2:
             st.session_state[detail_view_key] = "Todo el período"
             st.session_state[detail_view_default_version_key] = 2
-        period_selector_col, detail_view_col, _ = st.columns([0.28, 0.28, 0.44])
+        period_selector_col, detail_view_col, method_selector_col = st.columns([0.28, 0.28, 0.44])
         with period_selector_col:
             st.selectbox(
                 "Período para analizar",
@@ -13783,19 +13562,53 @@ def render_capex10_investor_injection_cash_flow(
                 key=detail_view_key,
                 help="Por proveedor mantiene la apertura actual. Todo el período consolida el detalle en una sola vista.",
             )
-        st.markdown(
-            f"""
+        analysis_selected_methods = []
+        if is_plan_a_selected:
+            analysis_method_col = first_matching_column(detail_flow_df, ["Método", "Metodo"])
+            analysis_method_options = _capex10_clean_filter_options(detail_flow_df, analysis_method_col)
+            analysis_method_key = "capex10_investor_injection_analysis_metodos"
+            _capex10_sync_multiselect_state(analysis_method_key, analysis_method_options)
+            with method_selector_col:
+                analysis_selected_methods = st.multiselect(
+                    "Hitos · Método",
+                    analysis_method_options,
+                    key=analysis_method_key,
+                    placeholder="Todos los hitos",
+                    help="Selecciona uno o varios valores de la columna Método para analizar sus gastos del período y acumulados. Sin selección incluye todos.",
+                )
+            analysis_flow_df = _capex10_apply_fund_filter(
+                flow_df, metodo_values=analysis_selected_methods, metodo_col=analysis_method_col,
+            )
+            analysis_detail_df = _capex10_apply_fund_filter(
+                detail_flow_df, metodo_values=analysis_selected_methods, metodo_col=analysis_method_col,
+            )
+            period_items, period_detail_display = build_period_detail(analysis_flow_df, "_month", selected_plan_sort_col)
+            accumulated_period_items, accumulated_period_detail_display = build_period_detail(
+                analysis_flow_df, "_month", selected_plan_sort_col, accumulated=True,
+            )
+            period_table_items, period_table_detail_display = build_period_detail(analysis_detail_df, "_month", selected_plan_sort_col)
+            accumulated_period_table_items, accumulated_period_table_detail_display = build_period_detail(
+                analysis_detail_df, "_month", selected_plan_sort_col, accumulated=True,
+            )
+            period_flow = float(period_items["Disponible_CLP"].sum())
+            accumulated_hito_flow = float(accumulated_period_items["Disponible_CLP"].sum())
+            if analysis_selected_methods:
+                st.caption("Gastos filtrados por Método. La inyección y el saldo corresponden al plan completo.")
+        period_deliverables = 0
+        if "Tarea / Entregable" in period_table_items.columns:
+            deliverable_names = period_table_items["Tarea / Entregable"].dropna().astype(str).str.strip()
+            period_deliverables = int(deliverable_names[~deliverable_names.str.lower().isin(["", "nan", "none", "-"])].nunique())
+        st.html(f"""
           <div class="cash-period-kpis">
             <div class="cash-period-kpi-row cash-period-kpi-row-main">
               <div class="cash-period-kpi" style="--c:#0E7490;"><div class="cash-period-kpi-top"><span>REQ</span><strong>Período seleccionado</strong></div><b>{format_clp(period_flow)}</b><em>{len(period_items)} partidas filtradas</em></div>
+              <div class="cash-period-kpi" style="--c:#0F766E;"><div class="cash-period-kpi-top"><span>IN</span><strong>Inyección del período</strong></div><b>{format_clp(period_injection)}</b><em>Aportes previstos en los meses seleccionados</em></div>
+              <div class="cash-period-kpi" style="--c:#D7605E;"><div class="cash-period-kpi-top"><span>SALDO</span><strong>Saldo al corte</strong></div><b>{format_clp(plan_balance_to_period)}</b><em>Inyección acumulada − requerido acumulado del plan</em></div>
               <div class="cash-period-kpi" style="--c:#164E63;"><div class="cash-period-kpi-top"><span>ACUM</span><strong>Requerido al corte</strong></div><b>{format_clp(accumulated_hito_flow)}</b><em>Hasta {selected_analysis_cutoff_month.strftime('%b %Y')}</em></div>
-              <div class="cash-period-kpi" style="--c:#0F766E;"><div class="cash-period-kpi-top"><span>IN</span><strong>Inyección período</strong></div><b>{format_clp(period_injection)}</b><em>Entrada puntual Plan A</em></div>
-              <div class="cash-period-kpi" style="--c:#D7605E;"><div class="cash-period-kpi-top"><span>GAP</span><strong>Saldo plan al mes</strong></div><b>{format_clp(plan_balance_to_period)}</b><em>Inyección - requerido</em></div>
+              <div class="cash-period-kpi" style="--c:#7C3AED;"><div class="cash-period-kpi-top"><span>TÉCNICO</span><strong>Entregables programados</strong></div><b>{period_deliverables}</b><em>Tareas únicas con gasto calendarizado en el período</em></div>
             </div>
           </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            """)
         render_period_tables(
             period_detail_display,
             period_items,
@@ -13901,15 +13714,12 @@ def render_capex10_investor_injection_cash_flow(
                 responsible_monthly_full["Acumulado_fmt"] = responsible_monthly_full["Acumulado_CLP"].apply(format_clp)
 
                 with st.expander("Flujo de caja por responsable", expanded=False):
-                    st.markdown(
-                        """
+                    st.html("""
                         <div class="cash-injection-head" style="margin-top:18px;border-top:1px solid rgba(226,232,240,.92);padding-top:16px;">
                           <div><b>Flujo de caja por responsable</b><span>Evolución mensual de aportes requeridos por responsable visible.</span></div>
                           <div class="cash-injection-pill">Líneas</div>
                         </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+                        """)
                     line_df = responsible_monthly_full[
                         responsible_monthly_full["_responsable"].isin(visible_responsibles)
                     ].copy()
@@ -13949,8 +13759,7 @@ def render_capex10_investor_injection_cash_flow(
                             key="capex10_responsible_cashflow_mode",
                         )
                     with flow_kpi_col:
-                        st.markdown(
-                            f"""
+                        st.html(f"""
                             <style>
                               .cashflow-kpi-strip {{
                                 display:grid;
@@ -14011,9 +13820,7 @@ def render_capex10_investor_injection_cash_flow(
                               <div class="cashflow-kpi-card"><span>Pico mensual</span><b>{peak_month_value}</b><em>{html.escape(peak_month_label)}</em></div>
                               <div class="cashflow-kpi-card"><span>Promedio mensual</span><b>{format_clp(average_monthly_clp)}</b><em>meses con aporte</em></div>
                             </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
+                            """)
                     y_col = "Acumulado_CLP" if responsible_flow_mode == "Acumulado" else "Flujo_CLP"
                     line_df["Valor_modo_fmt"] = line_df["Acumulado_fmt"] if responsible_flow_mode == "Acumulado" else line_df["Flujo_fmt"]
                     responsible_color_map = _capex10_responsible_color_map(visible_responsibles)
@@ -14340,12 +14147,14 @@ def render_capex10_selected_cash_flow(funds_df: pd.DataFrame) -> None:
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def render_capex10_available_funds_by_phase_line() -> None:
+def render_capex10_available_funds_by_phase_line(filters_container=None) -> None:
     try:
         df_gantt = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
     except Exception as exc:
         st.warning(f"No se pudo cargar el detalle de fondos por fase y línea: {exc}")
         return
+    if df_gantt.attrs.get("fetched_at"):
+        st.caption(f"Datos consultados: {df_gantt.attrs['fetched_at']} · Hora de Santiago")
 
     required_cols = {"Fase", "Línea", "Presupuesto Base (CLP)", "ETAPA", "Estado.1"}
     if df_gantt.empty or not required_cols.issubset(df_gantt.columns):
@@ -14449,61 +14258,19 @@ def render_capex10_available_funds_by_phase_line() -> None:
             milestone_source_df["ETAPA"].astype(str).str.strip().isin(selected_etapas)
         ].copy()
 
-    def _capex10_hito_info(line_name: str, aliases: list[str] | None = None) -> dict[str, object]:
-        if "Línea" not in milestone_source_df.columns or GANTT_DATE_COL_END_REAL not in milestone_source_df.columns:
-            return {"label": line_name, "date": pd.NaT, "date_fmt": "-"}
-        wanted_keys = {normalize_key(line_name), *{normalize_key(alias) for alias in (aliases or [])}}
-        line_keys = milestone_source_df["Línea"].astype(str).map(normalize_key)
-        exact_line_mask = pd.Series(False, index=milestone_source_df.index)
-        for wanted_key in wanted_keys:
-            if wanted_key:
-                exact_line_mask |= line_keys.eq(wanted_key)
-        matching_mask = exact_line_mask.copy()
-        if not matching_mask.any():
-            for wanted_key in wanted_keys:
-                if wanted_key:
-                    matching_mask |= line_keys.str.contains(wanted_key, na=False, regex=False)
-        method_col = first_matching_column(milestone_source_df, ["Método", "Metodo"])
-        if not matching_mask.any() and method_col:
-            method_keys = milestone_source_df[method_col].astype(str).map(normalize_key)
-            for wanted_key in wanted_keys:
-                if wanted_key:
-                    matching_mask |= method_keys.eq(wanted_key)
-                    matching_mask |= method_keys.str.contains(wanted_key, na=False, regex=False)
-        matching_rows = milestone_source_df.loc[matching_mask].copy()
-        if matching_rows.empty:
-            return {"label": line_name, "date": pd.NaT, "date_fmt": "-"}
-        milestone_dates = pd.to_datetime(
-            matching_rows[GANTT_DATE_COL_END_REAL],
-            errors="coerce",
-            dayfirst=True,
-        ).dropna()
-        if milestone_dates.empty:
-            return {"label": line_name, "date": pd.NaT, "date_fmt": "-"}
-        if exact_line_mask.loc[matching_rows.index].any():
-            exact_dates = pd.to_datetime(
-                matching_rows.loc[exact_line_mask.loc[matching_rows.index], GANTT_DATE_COL_END_REAL],
-                errors="coerce",
-                dayfirst=True,
-            ).dropna()
-            milestone_date = pd.Timestamp(exact_dates.iloc[0] if not exact_dates.empty else milestone_dates.iloc[0])
-        else:
-            milestone_date = pd.Timestamp(milestone_dates.iloc[0])
-        return {
-            "label": line_name,
-            "date": milestone_date,
-            "date_fmt": milestone_date.strftime("%d-%m-%Y"),
-        }
 
-    premontaje_hito = _capex10_hito_info("Hito Pre -Montaje")
-    montaje_hito = _capex10_hito_info("Hito Montaje")
-    producto_hito = _capex10_hito_info("Hito Producto")
+    premontaje_hito = _capex10_hito_info(milestone_source_df, "Hito Pre-Montaje 10 kW")
+    montaje_hito = _capex10_hito_info(milestone_source_df, "Hito Montaje 10 kW")
+    producto_hito = _capex10_hito_info(milestone_source_df, "Hito Producto 10 kW")
     producto_80kw_hito = _capex10_hito_info(
-        "Hito Producto 80 kW",
+        milestone_source_df, "Hito Producto 80 kW",
         aliases=["Producto 80 kW", "Hito Producto 80KW", "Producto 80KW", "Producto 80"],
     )
-    piloto_80kw_hito = _capex10_hito_info("Hito Piloto 80 kW", aliases=["Piloto 80 kW", "Hito Piloto 80KW", "80 kW", "80KW"])
-    capex10_milestone_dates = [premontaje_hito, montaje_hito, producto_hito, producto_80kw_hito, piloto_80kw_hito]
+    piloto_80kw_hito = _capex10_hito_info(milestone_source_df, "Hito Piloto 80 kW", aliases=["Piloto 80 kW", "Hito Piloto 80KW", "80 kW", "80KW"])
+    capex10_milestone_dates = sorted(
+        [premontaje_hito, montaje_hito, producto_hito, piloto_80kw_hito, producto_80kw_hito],
+        key=lambda milestone: milestone["date"] if pd.notna(milestone["date"]) else pd.Timestamp.max,
+    )
 
     st.markdown(
         f"""
@@ -14837,12 +14604,7 @@ def render_capex10_available_funds_by_phase_line() -> None:
         """
         <style>
           .capex10-funds-head{display:none !important;margin:0 !important;padding:0 !important;height:0 !important;}
-          div:has(.capex10-hide-funds-filter-expander) + div[data-testid="stExpander"],
-          div:has(.capex10-hide-funds-filter-expander) + details[data-testid="stExpander"]{
-            display:none !important;
-          }
         </style>
-        <div class="capex10-hide-funds-filter-expander" style="display:none;"></div>
         """,
         unsafe_allow_html=True,
     )
@@ -14854,7 +14616,8 @@ def render_capex10_available_funds_by_phase_line() -> None:
             st.session_state[plan_selector_key] = CAPEX10_PLAN_A_LABEL
         st.session_state[plan_a_default_migration_key] = True
 
-    with st.expander("FILTROS DE FONDOS FALTANTES", expanded=False):
+    filters_target = filters_container if filters_container is not None else st
+    with filters_target.expander("FILTROS DE FONDOS FALTANTES", expanded=False):
         st.markdown(
             """
             <div style="font-size:11px;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:#0F766E;margin:0 0 8px 0;">
@@ -15688,7 +15451,7 @@ def render_capex10_stage_line_detail_table() -> None:
         </div>
         """).strip()
     detail_html = "\n".join(line.lstrip() for line in detail_html.splitlines())
-    st.markdown(detail_html, unsafe_allow_html=True)
+    st.html(detail_html)
 
 
 def render_capex10_executed_investment_scaling_80kw() -> None:
@@ -26529,75 +26292,62 @@ def render_inputs_capex_10kw_detail():
         ),
     ]
     if not capex10_hide_subblock_nav:
-        sub_cols = st.columns(len(capex10_subblocks))
-        for idx, (sub_label, sub_value, sub_title, sub_copy) in enumerate(capex10_subblocks):
-            is_active = st.session_state.get(capex10_subblock_key) == sub_value
-            with sub_cols[idx]:
-                st.markdown(
-                    f"""
-                    <div class="capex10-subcard {'active' if is_active else ''}">
-                      <p class="capex10-sub-k">{html.escape(sub_label)}</p>
-                      <p class="capex10-sub-t">{html.escape(sub_title)}</p>
-                      <p class="capex10-sub-s">{html.escape(sub_copy)}</p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                st.button(
-                    selector_button_label(sub_title, is_active),
-                    key=f"inputs_capex10_subblock_{idx}",
-                    use_container_width=True,
-                    type="primary" if is_active else "secondary",
-                    on_click=_set_capex10_subblock,
-                    args=(sub_value,),
-                )
+        render_dashboard_primary_navigation(
+            [(value, label, title, copy) for label, value, title, copy in capex10_subblocks],
+            st.session_state.get(capex10_subblock_key), _set_capex10_subblock, "inputs_capex10_subblock",
+            heading="Capital y ejecución", description="Explora el financiamiento, los hitos técnicos y el control de costos.",
+            variant="secondary",
+        )
 
     selected_capex10_subblock = st.session_state.get(capex10_subblock_key)
     if selected_capex10_subblock is None:
         return
     if selected_capex10_subblock == "vista_integrada":
-        st.markdown(
-            """
-            <div style="clear:both;height:34px;"></div>
-            <div style="height:1px;background:rgba(226,232,240,.9);margin:0 0 18px 0;"></div>
-            """,
-            unsafe_allow_html=True,
-        )
-        with st.container(border=True):
+        with st.container(key="capex10_subblock2"):
+            render_capex10_subblock2_theme()
             render_inputs_project_gantt()
         return
 
     if selected_capex10_subblock == "control_cost":
-        try:
-            df_control_cost = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
-        except Exception as exc:
-            st.warning(f"No se pudo cargar Control Cost: {exc}")
-        else:
-            render_control_cost_block(df_control_cost)
+        with st.container(key="capex10_subblock3"):
+            render_capex10_subblock3_theme()
+            try:
+                df_control_cost = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+            except Exception as exc:
+                st.warning(f"No se pudo cargar Control Cost: {exc}")
+            else:
+                render_control_cost_block(df_control_cost)
         return
 
-    render_capex10_available_funds_by_phase_line()
-    try:
-        df_gantt_costs = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
-    except Exception as exc:
-        st.warning(f"No se pudo cargar el análisis de costos piloto vs comercial: {exc}")
-    else:
-        st.markdown(
-            """
-            <div style="clear:both;height:18px;"></div>
-            <div style="height:1px;background:rgba(226,232,240,.9);margin:0 0 14px 0;"></div>
-            """,
-            unsafe_allow_html=True,
-        )
-        with st.expander("Cost Architecture · Piloto vs Comercial", expanded=False):
-            render_inputs_gantt_cost_analysis(
-                df_gantt_costs,
-                scope_label="toda la hoja del cronograma",
-                pilot_total_reference_clp=get_brecha_piloto_10kw_clp(refresh_nonce=data_refresh_nonce),
-            )
-    with st.expander("Detalle completo · etapa y línea", expanded=False):
-        render_capex10_stage_line_detail_table()
-    return
+    with st.container(key="capex10_subblock1"):
+        capital_content = st.container()
+        funds_filters = st.container()
+        with capital_content:
+            render_capex10_subblock1_theme()
+            render_capex10_capital_summary()
+            render_capex10_available_funds_by_phase_line(filters_container=funds_filters)
+            try:
+                df_gantt_costs = load_project_gantt_data(GANTT_PROJECT_CSV_URL_DEFAULT, refresh_nonce=data_refresh_nonce)
+            except Exception as exc:
+                st.warning(f"No se pudo cargar el análisis de costos piloto vs comercial: {exc}")
+            else:
+                st.markdown(
+                    """
+                    <div style="clear:both;height:18px;"></div>
+                    <div style="height:1px;background:rgba(226,232,240,.9);margin:0 0 14px 0;"></div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                with st.expander("Cost Architecture · Piloto vs Comercial", expanded=False):
+                    render_inputs_gantt_cost_analysis(
+                        df_gantt_costs,
+                        scope_label="toda la hoja del cronograma",
+                        pilot_total_reference_clp=get_brecha_piloto_10kw_clp(refresh_nonce=data_refresh_nonce),
+                        capital_design=True,
+                    )
+            with st.expander("Detalle completo · etapa y línea", expanded=False):
+                render_capex10_stage_line_detail_table()
+        return
 
     st.markdown(
         f"""
@@ -26780,40 +26530,18 @@ def render_inputs_estado_actual_dashboard():
         ("contexto", "Construcción del Activo Tecnológico (en ejecución)"),
         ("financiero", "Materialización del Activo – Piloto 10 kW"),
     ]
-    estado_subblock_icons = {
-        "contexto": "🛠️",
-        "financiero": "🧱",
-    }
     if estado_subblock_key not in st.session_state:
         st.session_state[estado_subblock_key] = None
-
-    subnav_cols = st.columns(2)
-    for idx, (block_value, block_title) in enumerate(estado_subblocks):
-        is_active = st.session_state.get(estado_subblock_key) == block_value
-        with subnav_cols[idx]:
-            st.markdown(
-                f"""
-                <div class="inputs-nav-card {'active' if is_active else ''}">
-                    <div class="inputs-nav-k">Sub-bloque {idx + 1}</div>
-                    <div class="inputs-nav-title-row">
-                        <div class="inputs-nav-ico">{estado_subblock_icons.get(block_value, '📁')}</div>
-                        <div class="inputs-nav-title-wrap">
-                            <div class="inputs-nav-t">{block_title}</div>
-                        </div>
-                    </div>
-                    <div class="inputs-nav-s">{'Seleccionado para análisis' if is_active else 'Haz clic para abrir este sub-bloque'}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.button(
-                selector_button_label(block_title, is_active),
-                key=f"inputs_estado_subnav_{idx}",
-                use_container_width=True,
-                type="primary" if is_active else "secondary",
-                on_click=_set_estado_subblock,
-                args=(block_value,),
-            )
+    estado_descriptions = {
+        "contexto": "Desarrollo de la tecnología, capacidades construidas y contexto técnico del proyecto.",
+        "financiero": "Composición de la inversión ejecutada y del conocimiento incorporado en el piloto de 10 kW.",
+    }
+    render_dashboard_primary_navigation(
+        [(value, f"SUB BLOQUE {index + 1}", title, estado_descriptions[value]) for index, (value, title) in enumerate(estado_subblocks)],
+        st.session_state.get(estado_subblock_key), _set_estado_subblock, "inputs_estado_subnav",
+        heading="Validación tecnológica", description="Selecciona la dimensión del activo tecnológico que quieres revisar.",
+        variant="secondary",
+    )
 
     st.markdown("---")
     selected_estado_subblock = st.session_state.get(estado_subblock_key)
@@ -28018,7 +27746,7 @@ if st.session_state.get("gantt_project_source_version") != GANTT_PROJECT_SOURCE_
     if hasattr(load_project_gantt_data, "clear"):
         load_project_gantt_data.clear()
     st.session_state["gantt_project_source_version"] = GANTT_PROJECT_SOURCE_VERSION
-if st.sidebar.button("🔁 Actualizar datos desde URL"):
+def _refresh_dashboard_data() -> None:
     for key in (
         "inputs_gantt_etapa",
         "inputs_gantt_fase",
@@ -28041,11 +27769,19 @@ if st.sidebar.button("🔁 Actualizar datos desde URL"):
             st.session_state[f"{key}__sticky"] = st.session_state[key]
     if "telecom_market_tab_selector" in st.session_state:
         st.session_state["restore_telecom_market_tab_after_refresh"] = True
-    fetch_remote_file_bytes.clear()
-    if hasattr(load_project_gantt_data, "clear"):
-        load_project_gantt_data.clear()
+    # Invalidate every source and derived model, including the embedded dashboard.
+    st.cache_data.clear()
+    st.cache_resource.clear()
     st.session_state["data_refresh_nonce"] += 1
-    st.rerun()
+    # The button callback runs before the normal render. An early st.rerun()
+    # would discard widgets not yet rendered and reset their selections.
+
+
+st.sidebar.button(
+    "🔁 Actualizar todo",
+    help="Recarga todas las fuentes y recalcula el dashboard conservando la vista y los filtros seleccionados.",
+    on_click=_refresh_dashboard_data,
+)
 
 # =========================
 # DATOS
@@ -29553,24 +29289,26 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
             "evaluación financiera 80kW",
             "Evaluación financiera 10kw+80kw",
         ]
-        financial_eval_view = st.selectbox(
-            "Selector de evaluación financiera",
-            financial_eval_options,
-            index=None,
-            placeholder="Selector de evaluación financiera",
-            key=widget_key("financial_eval_view"),
+        financial_eval_key = widget_key("financial_eval_view")
+        saved_financial_view = st.session_state.get(financial_eval_key)
+        st.session_state[financial_eval_key] = saved_financial_view if saved_financial_view in financial_eval_options else None
+
+        def _set_financial_evaluation(value: str) -> None:
+            st.session_state[financial_eval_key] = value
+
+        render_dashboard_primary_navigation(
+            [
+                (financial_eval_options[0], "MODELO 10 kW", "Evaluación financiera 10 kW", "Flujos, supuestos e indicadores asociados al modelo comercial de 10 kW."),
+                (financial_eval_options[1], "MODELO 80 kW", "Evaluación financiera 80 kW", "Proyección financiera y evaluación del escalamiento comercial de 80 kW."),
+                (financial_eval_options[2], "MODELO CONSOLIDADO", "Evaluación consolidada 10 + 80 kW", "Visión integrada de los flujos y resultados de ambos modelos comerciales."),
+            ],
+            st.session_state.get(financial_eval_key), _set_financial_evaluation, widget_key("financial_eval_card"),
+            heading="Evaluación financiera", description="Elige el modelo de 10 kW, 80 kW o la visión consolidada.",
+            variant="secondary",
         )
+        financial_eval_view = st.session_state.get(financial_eval_key)
         if financial_eval_view is None:
-            st.markdown(
-                """
-                <div class="inputs-info-box">
-                  <div class="inputs-info-k">EVALUACIÓN FINANCIERA SIN SELECCIÓN</div>
-                  <div class="inputs-info-t">Selecciona una evaluación financiera</div>
-                  <p class="inputs-info-p">El selector parte sin tomar 10kW, 80kW ni consolidado hasta que el usuario elija una opción.</p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            st.html('<div class="home-empty-state"><span aria-hidden="true">↗</span><div><strong>Selecciona una evaluación financiera.</strong><br>Abre el modelo que quieras analizar para consultar sus proyecciones e indicadores.</div></div>')
             return
 
         base_fx_preview = float(st.session_state.get(shared_state_key("fx", "base"), fx_default or 1))
@@ -31294,6 +31032,7 @@ input_cards = [
     ("estado_actual", "01 · Validación Tecnológica"),
     ("escalamiento", "02 · CAPEX y Ejecución"),
     ("valorizacion", "03 · Valor Financiero"),
+    ("opcion_analisis", "04 · Opción de análisis"),
 ]
 BLOQUE3_ONLY_MODE = os.environ.get("BLOQUE3_ONLY") == "1"
 CAPEX10_BLOQUE3_ONLY_MODE = os.environ.get("CAPEX10_BLOQUE3_ONLY") == "1"
@@ -31337,6 +31076,8 @@ def _set_inputs_bloque(value: str):
     st.session_state["inputs_bloque_sel"] = value
     if value == "estado_actual":
         st.session_state["inputs_estado_actual_subbloque_sel"] = None
+    elif value == "opcion_analisis":
+        st.session_state["option4_view"] = None
     elif value == "escalamiento":
         st.session_state["inputs_escalamiento_capex_sel"] = "10kw"
         st.session_state["inputs_capex10_subblock_sel"] = None
@@ -31519,50 +31260,18 @@ st.markdown(
 )
 
 if FOCUSED_ACCESS_MODE:
-    st.markdown(
-        f"""
-        <div class="inputs-nav-shell">
-          <div class="inputs-nav-head-k">ACCESO DIRECTO</div>
-          <div class="inputs-nav-head-t">{'Levantamiento TRL 9 + Proyección Comercial' if CAPEX10_BLOQUE3_ONLY_MODE else 'Proyección Financiera Comercial V9'}</div>
-          <div class="inputs-nav-head-s">{'Vista dedicada al CAPEX 10kW y al análisis financiero, sin navegación hacia otros bloques.' if CAPEX10_BLOQUE3_ONLY_MODE else 'Vista dedicada al análisis financiero, sin navegación hacia los otros bloques.'}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    if not CAPEX10_BLOQUE3_ONLY_MODE:
+        st.html('<div class="home-empty-state"><span aria-hidden="true">↗</span><div><strong>Proyección Financiera Comercial V9</strong><br>Análisis financiero y evaluación del escalamiento comercial.</div></div>')
 else:
-    st.markdown(
-        """
-        <div class="inputs-nav-shell">
-          <div class="inputs-nav-head-k">MAPA DE LECTURA</div>
-          <div class="inputs-nav-head-t">Selecciona el bloque estratégico que quieres revisar</div>
-          <div class="inputs-nav-head-s">La pantalla está organizada en tres vistas: validación tecnológica, CAPEX y ejecución, y valor financiero.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_dashboard_primary_navigation(
+        [
+            ("estado_actual", "BLOQUE 1", "Validación Tecnológica", "Estado de la tecnología, evidencia del piloto y brechas para su validación."),
+            ("escalamiento", "BLOQUE 2", "CAPEX y Ejecución", "Necesidades de capital, hitos de ejecución y ruta de industrialización del proyecto."),
+            ("valorizacion", "BLOQUE 3", "Valor Financiero", "Proyecciones comerciales, flujos e indicadores para evaluar la creación de valor."),
+            ("opcion_analisis", "BLOQUE 4", "Opción de análisis", "Capital, hitos técnicos y control PMO desde el nuevo documento de análisis."),
+        ],
+        st.session_state.get("inputs_bloque_sel"), _set_inputs_bloque, "inputs_nav",
     )
-
-    nav_cols = st.columns(len(input_cards))
-    for idx, (block_value, block_title) in enumerate(input_cards):
-        is_active = st.session_state.get("inputs_bloque_sel") == block_value
-        with nav_cols[idx]:
-            st.markdown(
-                f"""
-                <div class="inputs-nav-card {'active' if is_active else ''}">
-                    <div class="inputs-nav-k">BLOQUE {idx + 1}</div>
-                    <div class="inputs-nav-t">{block_title}</div>
-                    <div class="inputs-nav-s">{'Vista activa para análisis' if is_active else 'Abrir vista estratégica'}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.button(
-                selector_button_label(block_title, is_active),
-                key=f"inputs_nav_{idx}",
-                use_container_width=True,
-                type="primary" if is_active else "secondary",
-                on_click=_set_inputs_bloque,
-                args=(block_value,),
-            )
 selected_input_block = st.session_state.get("inputs_bloque_sel")
 
 if selected_input_block:
@@ -31614,41 +31323,17 @@ if CAPEX10_BLOQUE3_ONLY_MODE:
             "EERR consolidado, flujos operacionales e indicadores de evaluación para el escalamiento comercial.",
         ),
     ]
-    focused_cols = st.columns(3)
-    for idx, (section_value, section_label, section_title, section_copy) in enumerate(focused_cards):
-        is_active = st.session_state.get("focused_access_section") == section_value
-        with focused_cols[idx]:
-            st.markdown(
-                f"""
-                <div class="inputs-nav-card {'active' if is_active else ''}">
-                    <div class="inputs-nav-k">{html.escape(section_label)}</div>
-                    <div class="inputs-nav-t">{html.escape(section_title)}</div>
-                    <div class="inputs-nav-s">{html.escape('Vista activa para análisis' if is_active else section_copy)}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.button(
-                selector_button_label(section_title, is_active),
-                key=f"focused_access_section_{idx}",
-                use_container_width=True,
-                type="primary" if is_active else "secondary",
-                on_click=_set_focused_access_section,
-                args=(section_value,),
-            )
+    focused_cards.append(("opcion_analisis", "BLOQUE 4", "Opción de análisis", "Capital, hitos técnicos y control PMO desde el nuevo documento de análisis."))
+    render_dashboard_primary_navigation(
+        focused_cards, st.session_state.get("focused_access_section"),
+        _set_focused_access_section, "focused_access_section",
+    )
 
     selected_focused_section = st.session_state.get("focused_access_section")
     if selected_focused_section is None:
-        st.markdown(
-            """
-            <div class="inputs-info-box">
-              <div class="inputs-info-k">SIN BLOQUE SELECCIONADO</div>
-              <div class="inputs-info-t">Selecciona una de las tres vistas para comenzar</div>
-              <p class="inputs-info-p">El acceso dedicado solo despliega levantamiento TRL 9, hitos técnicos o proyección comercial cuando se selecciona una tarjeta.</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.html('<div class="home-empty-state"><span aria-hidden="true">↗</span><div><strong>Comienza por el área que quieras explorar.</strong><br>Selecciona capital, hitos técnicos o proyección comercial para abrir el análisis.</div></div>')
+    elif selected_focused_section == "opcion_analisis":
+        render_analysis_option(data_refresh_nonce, render_dashboard_primary_navigation)
     elif selected_focused_section == "capital_brecha":
         st.markdown(
             """
@@ -31676,29 +31361,9 @@ if CAPEX10_BLOQUE3_ONLY_MODE:
         render_valorizacion_module_content(key_prefix="inputs_val_")
 elif selected_input_block == "estado_actual":
     render_inputs_estado_actual_dashboard()
+elif selected_input_block == "opcion_analisis":
+    render_analysis_option(data_refresh_nonce, render_dashboard_primary_navigation)
 elif selected_input_block == "escalamiento":
-    try:
-        capital_plan_a_df = load_capex10_plan_a_injection_schedule(refresh_nonce=data_refresh_nonce)
-        capital_resumen_val = float(capital_plan_a_df["Inyeccion_CLP"].sum() or 0.0)
-    except Exception:
-        capital_resumen_val = 0.0
-    if capital_resumen_val <= 0:
-        capital_resumen_val = 1_054_000_000
-    st.markdown(
-        f"""
-        <div style="border-radius:22px;padding:22px 24px;background:linear-gradient(90deg,#f8fbff 0%,#eef7ff 58%,#ffffff 100%);border:1px solid rgba(125,211,252,.42);box-shadow:0 14px 32px rgba(15,23,42,.065);margin:0 0 18px 0;">
-          <div style="font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#0f766e;margin-bottom:8px;">Resumen de capital</div>
-          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;">
-            <div>
-              <div style="font-size:19px;font-weight:900;line-height:1.15;color:#0f172a;margin-bottom:8px;">Capex de escalamiento</div>
-              <div style="font-size:14px;line-height:1.45;color:#475569;font-weight:700;">Mismo total conectado a Plan A · planilla mensual de inyecciones.</div>
-            </div>
-            <div style="font-size:44px;font-weight:950;line-height:1;color:#0f172a;letter-spacing:-.02em;white-space:nowrap;">{format_clp(capital_resumen_val)}</div>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     render_inputs_capex_10kw_detail()
 elif False:
     capex_selector_state_key = "inputs_escalamiento_capex_sel"
@@ -32127,16 +31792,7 @@ elif False:
 elif selected_input_block == "valorizacion":
     render_valorizacion_module_content(key_prefix="inputs_val_")
 else:
-    st.markdown(
-        """
-        <div class="inputs-info-box">
-          <div class="inputs-info-k">SIN BLOQUE SELECCIONADO</div>
-          <div class="inputs-info-t">Selecciona un bloque para comenzar</div>
-          <p class="inputs-info-p">Al abrir o actualizar la página, el panel principal queda sin selección activa.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.html('<div class="home-empty-state"><span aria-hidden="true">↗</span><div><strong>Comienza por el área que quieras explorar.</strong><br>Selecciona uno de los tres bloques para abrir su análisis.</div></div>')
 
 # -------------------------
 # TAB RESUMEN

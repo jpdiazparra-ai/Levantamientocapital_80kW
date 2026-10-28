@@ -1,0 +1,99 @@
+/* Main investment dashboard: restrained, editorial navigation. */
+.home-brandbar{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:0 0 20px;padding:4px 0 17px;border-bottom:1px solid #DCE5EB;}
+.home-wordmark{display:flex;align-items:center;gap:11px;color:#0F2435;}
+.home-brand-symbol{display:flex;align-items:center;justify-content:center;width:34px;height:34px;color:#0F766E;}
+.home-wordmark strong{font-size:15px;font-weight:750;letter-spacing:.12em;line-height:1.4;}
+.home-wordmark small{display:block;color:#64748B;font-size:9px;font-weight:500;letter-spacing:.13em;line-height:1.7;}
+.home-brandbar-note{color:#64748B;font-size:10px;font-weight:600;letter-spacing:.08em;text-align:right;}
+.home-hero{position:relative;isolation:isolate;box-sizing:border-box;overflow:hidden;min-height:330px;padding:42px 46px;border:1px solid #17394B;border-radius:20px;background:#0F2435;margin-bottom:30px;}
+.home-hero-photo{position:absolute;inset:0;z-index:-2;background-size:cover;background-position:center 46%;}
+.home-hero:after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(10,30,44,.99) 0%,rgba(10,30,44,.96) 34%,rgba(10,30,44,.72) 57%,rgba(10,30,44,.12) 100%);}
+.home-hero-content{max-width:790px;}
+.home-eyebrow{display:flex;align-items:center;gap:10px;color:#A9DAD1;font-size:10px;font-weight:650;letter-spacing:.14em;line-height:1.8;margin-bottom:17px;}
+.home-eyebrow:before{content:"";height:1px;width:26px;background:#5EB8A6;}
+.home-hero h1{padding:0!important;margin:0!important;max-width:760px;color:#FFF!important;font-size:clamp(29px,3.7vw,49px)!important;line-height:1.13!important;letter-spacing:-.045em!important;font-weight:600!important;text-wrap:balance;}
+.home-hero p{max-width:590px;margin:19px 0 0;color:#DAE4EB;font-size:14px;line-height:1.9;font-weight:400;}
+.home-hero-topics{display:flex;gap:22px;flex-wrap:wrap;margin-top:27px;padding-top:18px;border-top:1px solid rgba(203,224,232,.2);width:fit-content;}
+.home-hero-topics span{display:flex;align-items:center;gap:7px;color:#DCE9ED;font-size:10px;letter-spacing:.035em;line-height:1.7;}
+.home-hero-topics span:before{content:"";width:4px;height:4px;background:#7AD2BE;border-radius:50%;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]){margin:2px 0 24px;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:22px;margin:0 0 18px;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-heading h2{padding:0;margin:0;color:#0F2435;font-size:21px;line-height:1.4;font-weight:700;letter-spacing:-.025em;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-heading p{margin:5px 0 0;color:#64748B;font-size:12px;line-height:1.8;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-count{color:#64748B;font-size:10px;font-weight:600;letter-spacing:.12em;white-space:nowrap;padding-bottom:4px;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) [class*="st-key-dashboard_entry_"]{box-sizing:border-box;min-width:0;padding:25px 24px 20px!important;border:1px solid #D8E3EB!important;border-radius:16px!important;background:#FFF!important;box-shadow:0 2px 5px rgba(15,36,53,.025)!important;transition:border-color .18s ease,background-color .18s ease;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) [class*="st-key-dashboard_entry_"]:has(button:hover){border-color:#7CAFA3!important;background:#FCFEFD!important;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) [class*="st-key-dashboard_entry_"]:has(.home-nav-entry.is-active){border-color:#0F766E!important;background:#F4FBF8!important;box-shadow:inset 0 3px 0 #0F766E!important;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-top{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:40px;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-icon{display:flex;align-items:center;justify-content:center;width:40px;height:40px;box-sizing:border-box;border:1px solid #D9E8E3;border-radius:10px;background:#F4F9F7;color:#0F766E;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-icon svg{width:21px;height:21px;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-sequence{color:#B4C3CD;font-size:28px;line-height:1;font-weight:500;letter-spacing:-.035em;font-variant-numeric:tabular-nums;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-label{margin-top:20px;color:#64748B;font-size:9px;font-weight:650;line-height:1.7;letter-spacing:.10em;text-transform:uppercase;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-entry h3{padding:0!important;margin:8px 0 0!important;min-height:68px;color:#0F2435!important;font-size:clamp(19px,1.65vw,23px)!important;font-weight:650!important;line-height:1.35!important;letter-spacing:-.025em!important;overflow-wrap:anywhere;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-description{margin:12px 0 0;color:#64748B;font-size:12px;line-height:1.85;min-height:50px;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:20px;padding-top:16px;border-top:1px solid #E7EDF1;min-height:39px;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-tags span{align-self:flex-start;padding:4px 7px;border:1px solid #E2E8F0;border-radius:5px;color:#526577;background:#F8FAFC;font-size:9px;line-height:1.6;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) button[kind="secondary"],
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) button[kind="primary"]{width:100%;margin-top:6px;min-height:42px;border-radius:8px!important;font-size:12px!important;box-shadow:none!important;letter-spacing:0;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) button[kind="secondary"]{border:1px solid #D8E3EB!important;background:#FAFCFD!important;color:#244A5E!important;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) button[kind="secondary"]:hover{border-color:#0F766E!important;background:#F0FDFA!important;color:#0F766E!important;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) button[kind="primary"]{border:1px solid #0F766E!important;background:#0F766E!important;color:#FFF!important;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) button[kind="primary"]:hover{border-color:#115E59!important;background:#115E59!important;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) button[kind="primary"] p{color:#FFF!important;font-size:12px!important;font-weight:600!important;}
+:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) button[kind="secondary"] p{color:inherit!important;font-size:12px!important;font-weight:600!important;}
+.home-empty-state{display:flex;align-items:center;gap:14px;padding:18px 20px;margin-top:6px;border:1px solid #E2E8F0;border-radius:12px;background:#F8FAFC;color:#475569;font-size:12px;line-height:1.8;}
+.home-empty-state>span{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:30px;height:30px;border:1px solid #D8E3EB;border-radius:50%;font-size:16px;color:#0F766E;background:#FFF;}
+.home-empty-state strong{color:#0F2435;font-weight:650;}
+@media(max-width:1100px){
+ .home-hero{padding:34px;min-height:310px;}
+ .home-hero-content{max-width:680px;}
+ .home-hero:after{background:linear-gradient(90deg,rgba(10,30,44,.99),rgba(10,30,44,.88) 55%,rgba(10,30,44,.38));}
+ :is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) [class*="st-key-dashboard_entry_"]{padding:22px 18px 18px!important;}
+ :is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-entry h3{font-size:19px!important;min-height:82px;}
+ :is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-description{min-height:78px;}
+}
+@media(max-width:760px){
+ .home-brandbar{align-items:flex-start;gap:12px;}
+ .home-brandbar-note{font-size:9px;max-width:120px;line-height:1.8;}
+ .home-hero{padding:26px 23px;border-radius:16px;min-height:0;}
+ .home-hero:after{background:rgba(10,30,44,.88);}
+ .home-hero h1{font-size:32px!important;}
+ .home-hero p{font-size:13px;line-height:1.8;}
+ .home-hero-topics{gap:11px;margin-top:22px;}
+ .home-hero-topics span{font-size:9px;}
+ :is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-heading{align-items:flex-start;}
+ :is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-heading h2{font-size:19px;}
+ :is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-count{padding-top:5px;}
+ :is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-entry h3{min-height:0;font-size:22px!important;}
+ :is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-description{min-height:0;font-size:13px;}
+ :is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) .home-nav-tags{min-height:0;}
+ .home-empty-state{align-items:flex-start;padding:16px;}
+}
+@media(prefers-reduced-motion:reduce){:is(.st-key-dashboard_primary_navigation,[class*="st-key-dashboard_subnavigation_"]) [class*="st-key-dashboard_entry_"]{transition:none;}}
+
+/* Secondary cards use roughly 70% of the former vertical space.
+   Compact spacing replaces fixed-height clipping so long names remain readable. */
+[class*="st-key-dashboard_subnavigation_"] {margin:16px 0 18px;}
+[class*="st-key-dashboard_subnavigation_"] .home-nav-heading h2 {font-size:18px!important;}
+[class*="st-key-dashboard_subnavigation_"] [class*="st-key-dashboard_entry_"] {padding:14px!important;border-radius:12px!important;}
+[class*="st-key-dashboard_subnavigation_"] [class*="st-key-dashboard_entry_"] [data-testid="stVerticalBlock"] {gap:8px!important;}
+[class*="st-key-dashboard_subnavigation_"] .home-nav-top {min-height:24px;}
+[class*="st-key-dashboard_subnavigation_"] .home-nav-icon {width:24px;height:24px;border-radius:6px;}
+[class*="st-key-dashboard_subnavigation_"] .home-nav-icon svg {width:15px;height:15px;}
+[class*="st-key-dashboard_subnavigation_"] .home-nav-sequence {font-size:19px;}
+[class*="st-key-dashboard_subnavigation_"] .home-nav-label {margin-top:8px;font-size:9px;line-height:1.5;}
+[class*="st-key-dashboard_subnavigation_"] .home-nav-entry h3 {margin-top:6px!important;font-size:17px!important;min-height:44px;line-height:1.4!important;}
+[class*="st-key-dashboard_subnavigation_"] .home-nav-description {margin-top:8px;font-size:12px;line-height:1.6;min-height:44px;}
+[class*="st-key-dashboard_subnavigation_"] .home-nav-tags {margin-top:8px;padding-top:8px;min-height:0;gap:5px;}
+[class*="st-key-dashboard_subnavigation_"] .home-nav-tags span {padding:3px 6px;}
+[class*="st-key-dashboard_subnavigation_"] button[kind="primary"],
+[class*="st-key-dashboard_subnavigation_"] button[kind="secondary"] {min-height:34px;margin-top:4px;border-radius:6px!important;}
+[class*="st-key-dashboard_subnavigation_"] .home-nav-financial-value {color:#0F766E;font-size:clamp(20px,1.7vw,25px);font-weight:750;font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:1.3;margin:3px 0 8px;}
+@media(max-width:1100px){[class*="st-key-dashboard_subnavigation_"] .home-nav-entry h3{min-height:58px;}[class*="st-key-dashboard_subnavigation_"] .home-nav-description{min-height:62px;}}
+@media(max-width:760px){
+ [class*="st-key-dashboard_subnavigation_"] .home-nav-entry h3{min-height:0;font-size:18px!important;}
+ [class*="st-key-dashboard_subnavigation_"] .home-nav-description{min-height:0;}
+ [class*="st-key-dashboard_subnavigation_"] .home-nav-financial-value{font-size:23px;}
+ [class*="st-key-dashboard_subnavigation_"] button[kind="primary"],
+ [class*="st-key-dashboard_subnavigation_"] button[kind="secondary"]{min-height:44px;}
+}
