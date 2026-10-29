@@ -16,6 +16,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from timeline_scroll import timeline_document
 from capital_charts import render_capital_comparison, render_calendar, render_responsible_funds
+from commercial_analysis import render_commercial_analysis
 
 SOURCE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQOSK1DE0sEuK5Cl-bIahOjtdP6qsBobzqSlekorQCY9gRpwhRDzHYxh9c-Q-mKoQ/pub'
 SHEETS = {'Resumen': '295125200', 'Plan': '1622224524', 'Costos': '1070657893', 'Revision': '735160527', 'Desembolsos': '614082465'}
@@ -116,11 +117,11 @@ def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items(
         raise ValueError('Plan y Costos deben contener los mismos IDs de actividad.')
     cash = cash_from_costs(costs, plan)
     # The current budget is owned by Costos, even if Plan also publishes it.
-    plan = plan.drop(columns=['Presupuesto vigente'], errors='ignore')
+    plan = plan.drop(columns=['Presupuesto vigente', 'Comercial anterior'], errors='ignore')
     shared = [c for c in costs if c in plan and c != 'ID']
     tasks = plan.merge(costs.drop(columns=shared), on='ID', how='left', validate='one_to_one')
     tasks = tasks.merge(revision[['ID', 'Estado / avance actual', 'Control de dependencia']], on='ID', how='left', validate='one_to_one')
-    for col in ['Presupuesto referencia', 'Presupuesto vigente', 'AC económico', 'EAC económico', 'VAC al cierre', 'EV', 'PV', 'CPI', 'SPI', 'ETC actualizado']:
+    for col in ['Presupuesto referencia', 'Presupuesto vigente', 'Comercial anterior', 'AC económico', 'EAC económico', 'VAC al cierre', 'EV', 'PV', 'CPI', 'SPI', 'ETC actualizado']:
         tasks[col] = tasks[col].map(number)
     tasks['_progress'] = tasks['Avance físico'].map(number)
     for col in ['Inicio base', 'Fin base', 'Fin previsto actual', 'Fin real']:
@@ -265,6 +266,7 @@ def capital_view(tasks, cash, cutoff):
     monthly=selected.dropna(subset=['_month']).groupby('_month')[['Pendiente validado CLP','Referencia por validar CLP']].sum(min_count=1).reset_index()
     render_calendar(monthly, milestones=explicit_milestone_rows(tasks))
     st.caption('Los vencimientos anteriores al corte se agrupan en el mes de corte, como en la planilla. Los aportes en especie no equivalen a caja.')
+    render_commercial_analysis(tasks)
     render_responsible_funds(tasks, selected, capital_dimension_summary)
     with st.expander('Detalle de saldos de caja y validación · Costos'):
         st.dataframe(selected[['ID actividad','Concepto / cuota','Fecha FC / desembolso','Estado de pago','Saldo pendiente CLP','Validación del saldo','Caja programada CLP','Pendiente validado CLP','Referencia por validar CLP','Alerta caja','Respaldo / observaciones']].rename(columns={'Concepto / cuota':'Actividad / entregable'}),hide_index=True,use_container_width=True)
