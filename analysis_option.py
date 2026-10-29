@@ -257,7 +257,6 @@ def capital_view(tasks, cash, cutoff):
     with st.expander('Criterio de cálculo y redondeo'):
         st.caption('La caja proviene de Costos: saldos No pagado o Parcial con inclusión activa. La brecha requiere caja disponible e ingresos confirmados.')
         st.caption('Los totales se suman desde las partidas publicadas; pueden diferir algunos pesos del resumen por redondeo. Un importe sin validar no equivale a cero.')
-    render_capital_dimensions(tasks, selected)
     st.subheader('Calendario de desembolsos')
     selected['_month']=selected['_date'].dt.to_period('M').dt.to_timestamp()
     first_month=cutoff.to_period('M').to_timestamp()
@@ -265,6 +264,7 @@ def capital_view(tasks, cash, cutoff):
     monthly=selected.dropna(subset=['_month']).groupby('_month')[['Pendiente validado CLP','Referencia por validar CLP']].sum(min_count=1).reset_index()
     render_calendar(monthly, milestones=explicit_milestone_rows(tasks))
     st.caption('Los vencimientos anteriores al corte se agrupan en el mes de corte, como en la planilla. Los aportes en especie no equivalen a caja.')
+    render_capital_dimensions(tasks, selected)
     render_commercial_analysis(tasks)
     render_responsible_funds(tasks, selected, capital_dimension_summary)
     with st.expander('Detalle de saldos de caja y validación · Costos'):
