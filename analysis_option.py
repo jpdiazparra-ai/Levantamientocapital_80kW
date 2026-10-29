@@ -231,9 +231,8 @@ def render_capital_dimensions(tasks, cash):
 
 def capital_view(tasks, cash, cutoff):
     render_milestone_overview(tasks, cash=cash)
-    st.caption('Visión general por hito. Los filtros siguientes se aplican al análisis de capital y al calendario de desembolsos.')
+    st.caption('Visión general por hito y análisis del capital de ambos proyectos.')
     st.subheader('Análisis de capital')
-    tasks = filters(tasks, 'capital')
     if tasks.empty:
         st.info('No hay actividades para la selección.')
         return

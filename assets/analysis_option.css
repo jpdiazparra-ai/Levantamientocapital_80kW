@@ -122,22 +122,50 @@
 .st-key-analysis_option .option-detail-budget small {font-size:10px;color:var(--muted);}
 .st-key-analysis_option .option-commercial-note {display:grid;gap:5px;padding:14px 18px;margin-bottom:18px;border-left:3px solid var(--teal);border-radius:10px;background:#F0FDFA;color:#475569;font-size:11px;line-height:1.7;}
 .st-key-analysis_option .option-commercial-note b {color:var(--ink);font-size:12px;}
-.st-key-analysis_option [class*="st-key-option4_commercial_project_"] {padding:20px!important;background:#FFF!important;border:1px solid var(--line)!important;border-radius:16px!important;}
-.st-key-analysis_option .option-commercial-head {height:95px;border-bottom:1px solid var(--line);}
-.st-key-analysis_option .option-commercial-head>span {font-size:9px;letter-spacing:.12em;font-weight:750;color:var(--teal);}
-.st-key-analysis_option .option-commercial-head h4 {font-size:23px;color:var(--ink);margin:5px 0;}
-.st-key-analysis_option .option-commercial-head p {font-size:11px;line-height:1.6;color:var(--muted);margin:0;}
+.st-key-analysis_option [data-testid="stVerticalBlock"][class*="st-key-option4_commercial_project_"] {padding:20px!important;background:#FFF!important;border:1px solid var(--line)!important;border-radius:16px!important;}
 .st-key-analysis_option .option-commercial-empty {height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;color:var(--muted);padding:24px;}
 .st-key-analysis_option .option-commercial-empty>div {width:100px;height:100px;display:flex;align-items:center;justify-content:center;border:14px solid #E8EEF2;border-radius:50%;font-size:24px;}
 .st-key-analysis_option .option-commercial-empty b {color:var(--ink);font-size:13px;}
 .st-key-analysis_option .option-commercial-empty>span {font-size:11px;line-height:1.7;max-width:320px;}
-.st-key-analysis_option .option-commercial-legend {display:flex;flex-wrap:wrap;gap:8px 14px;font-size:10px;line-height:1.6;color:#475569;min-height:52px;}
-.st-key-analysis_option .option-commercial-legend span {display:inline-flex;align-items:center;gap:5px;}
-.st-key-analysis_option .option-commercial-legend i {width:8px;height:8px;border-radius:2px;flex-shrink:0;}
-.st-key-analysis_option .option-commercial-metrics {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:16px 0;margin-top:8px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
-.st-key-analysis_option .option-commercial-metrics span {display:block;font-size:10px;color:var(--muted);line-height:1.6;}
-.st-key-analysis_option .option-commercial-metrics b {display:block;font-size:17px;line-height:1.5;color:var(--ink);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
 .st-key-analysis_option .option-commercial-reading {padding:12px 0;font-size:11px;color:#475569;line-height:1.6;}
 .st-key-analysis_option .option-commercial-reading b {color:var(--teal);}
 .st-key-analysis_option .option-commercial-reading p {margin:4px 0;}
-@media(max-width:600px){.st-key-analysis_option .option-commercial-metrics{grid-template-columns:1fr;}.st-key-analysis_option .option-commercial-head{height:auto;padding-bottom:15px;}}
+/* Executive commercial composition: summary, donut and numbered breakdown. */
+.st-key-analysis_option .option-commercial-executive-head {display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding-bottom:16px;}
+.st-key-analysis_option .option-commercial-executive-head>div>span {font-size:9px;font-weight:750;letter-spacing:.12em;color:var(--teal);}
+.st-key-analysis_option .option-commercial-executive-head h4 {margin:4px 0 0;font-size:25px;font-weight:750;line-height:1.4;color:var(--ink);}
+.st-key-analysis_option .option-commercial-source {font-size:10px;color:var(--muted);padding:7px 11px;border:1px solid var(--line);border-radius:7px;}
+.st-key-analysis_option .option-commercial-executive-kpis {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px;}
+.st-key-analysis_option .option-commercial-executive-kpis article {display:flex;flex-direction:column;gap:5px;padding:15px 16px;border:1px solid var(--line);border-radius:10px;min-width:0;}
+.st-key-analysis_option .option-commercial-executive-kpis article>span {color:var(--muted);font-size:10px;line-height:1.6;}
+.st-key-analysis_option .option-commercial-executive-kpis strong {font-size:clamp(19px,1.7vw,28px);color:var(--ink);font-weight:750;letter-spacing:-.025em;line-height:1.4;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
+.st-key-analysis_option .option-commercial-executive-kpis small {font-size:10px;color:var(--muted);line-height:1.6;}
+.st-key-analysis_option .option-commercial-executive-kpis .primary {background:var(--ink);border-color:var(--ink);}
+.st-key-analysis_option .option-commercial-executive-kpis .primary strong {color:#99F6E4;}
+.st-key-analysis_option .option-commercial-executive-kpis .primary>span,.st-key-analysis_option .option-commercial-executive-kpis .primary small {color:#CBD5E1;}
+.st-key-analysis_option .option-commercial-coverage-track {height:4px;background:#E8EEF2;border-radius:4px;margin-top:3px;overflow:hidden;}
+.st-key-analysis_option .option-commercial-coverage-track i {display:block;height:100%;background:var(--teal);border-radius:4px;}
+.st-key-analysis_option .option-commercial-ranking {padding:15px 0 0;}
+.st-key-analysis_option .option-commercial-ranking-head {display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--line);}
+.st-key-analysis_option .option-commercial-ranking-head>b {font-size:13px;color:var(--ink);}
+.st-key-analysis_option .option-commercial-ranking-head>span {font-size:8px;letter-spacing:.06em;color:var(--muted);}
+.st-key-analysis_option .option-commercial-system {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;padding:11px 0 8px;border-bottom:1px solid #F0F4F7;}
+.st-key-analysis_option .option-commercial-system-label {display:grid;grid-template-columns:8px minmax(0,1fr);gap:3px 8px;align-content:center;align-items:center;}
+.st-key-analysis_option .option-commercial-system-label i {width:8px;height:8px;border-radius:2px;}
+.st-key-analysis_option .option-commercial-system-label b {font-size:13px;line-height:1.5;font-weight:650;color:var(--ink);}
+.st-key-analysis_option .option-commercial-system-label small {grid-column:2;font-size:10px;color:var(--muted);}
+.st-key-analysis_option .option-commercial-system-value {display:flex;align-items:center;gap:12px;font-variant-numeric:tabular-nums;}
+.st-key-analysis_option .option-commercial-system-value b {font-size:14px;font-weight:700;color:var(--ink);}
+.st-key-analysis_option .option-commercial-system-value span {min-width:52px;text-align:right;font-size:14px;font-weight:700;color:var(--teal);}
+.st-key-analysis_option .option-commercial-system-track {grid-column:1/-1;height:3px;margin-left:16px;border-radius:4px;background:#EFF3F6;overflow:hidden;}
+.st-key-analysis_option .option-commercial-system-track i {display:block;height:100%;border-radius:4px;}
+.st-key-analysis_option .option-commercial-chart-note {font-size:9px;line-height:1.7;color:var(--muted);text-align:center;padding-bottom:8px;}
+.st-key-analysis_option .option-commercial-insight {display:flex;gap:18px;align-items:center;background:#F0FDFA;border:1px solid #D7EEE9;border-radius:9px;padding:12px 16px;margin:12px 0;}
+.st-key-analysis_option .option-commercial-insight>span {font-size:8px;letter-spacing:.09em;font-weight:750;color:var(--teal);white-space:nowrap;}
+.st-key-analysis_option .option-commercial-insight p {margin:0;font-size:11px;color:#475569;line-height:1.7;}
+.st-key-analysis_option .option-commercial-pending {margin:25px 0;padding:22px;border:1px dashed #CBD5E1;border-radius:10px;display:grid;gap:9px;}
+.st-key-analysis_option .option-commercial-pending>span {font-size:9px;letter-spacing:.1em;color:var(--muted);font-weight:700;}
+.st-key-analysis_option .option-commercial-pending>b {font-size:16px;color:var(--ink);}
+.st-key-analysis_option .option-commercial-pending p {font-size:12px;color:var(--muted);line-height:1.8;margin:0;}
+@media(max-width:1100px){.st-key-analysis_option .option-commercial-executive-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:600px){.st-key-analysis_option .option-commercial-executive-kpis{grid-template-columns:1fr;}.st-key-analysis_option .option-commercial-system-value{gap:6px;flex-direction:column;align-items:flex-end;}.st-key-analysis_option .option-commercial-insight{align-items:flex-start;flex-direction:column;gap:6px;}}
