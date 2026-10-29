@@ -15,6 +15,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 from timeline_scroll import timeline_document
+from capital_charts import render_capital_comparison, render_calendar, render_responsible_funds
 
 SOURCE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQOSK1DE0sEuK5Cl-bIahOjtdP6qsBobzqSlekorQCY9gRpwhRDzHYxh9c-Q-mKoQ/pub'
 SHEETS = {'Resumen': '295125200', 'Plan': '1622224524', 'Costos': '1070657893', 'Revision': '735160527', 'Desembolsos': '614082465'}
@@ -191,35 +192,7 @@ def render_capital_dimensions(tasks, cash):
     for tab, dimension, key in zip(tabs, ['Proyecto', 'Hito objetivo', 'Sistema'], ['project', 'milestone', 'system']):
         with tab:
             summary = capital_dimension_summary(tasks, cash, dimension)
-            height = max(300, 110 + len(summary) * 36)
-            ref_col, cash_col = st.columns([1, 1])
-            with ref_col:
-                st.markdown('**Distribución del presupuesto de referencia**')
-                known = summary[summary['Presupuesto referencia'].notna()]
-                fig = go.Figure(go.Bar(
-                    x=known['Presupuesto referencia'] / 1e6, y=known[dimension], orientation='h',
-                    marker=dict(color='#244A6C', cornerradius=4),
-                    customdata=[[money(value), f'{share:.1f}%', int(count)] for value, share, count in zip(known['Presupuesto referencia'], known['Participación %'], known['Actividades'])],
-                    hovertemplate='<b>%{y}</b><br>Referencia: %{customdata[0]}<br>Participación: %{customdata[1]}<br>Actividades: %{customdata[2]}<extra></extra>',
-                ))
-                fig.update_layout(height=height, xaxis_title='Millones de CLP', yaxis=dict(autorange='reversed'))
-                chart(fig, f'capital_{key}_reference')
-            with cash_col:
-                st.markdown('**Caja validada y referencias por validar**')
-                fig = go.Figure()
-                for field, color in [('Caja por validar', '#B7791F'), ('Caja validada', '#0F766E')]:
-                    known = summary[summary[field].notna()]
-                    if not known.empty:
-                        fig.add_bar(x=known[field] / 1e6, y=known[dimension], orientation='h', name=field,
-                            marker=dict(color=color, cornerradius=4), customdata=[[money(value)] for value in known[field]],
-                            hovertemplate='<b>%{y}</b><br>%{customdata[0]}<extra>' + field + '</extra>')
-                if fig.data:
-                    fig.update_layout(height=height, barmode='group', xaxis_title='Millones de CLP',
-                        yaxis=dict(autorange='reversed', categoryorder='array', categoryarray=summary[dimension].tolist()),
-                        legend=dict(orientation='h', y=1.12, x=0))
-                    chart(fig, f'capital_{key}_cash')
-                else:
-                    st.info('No hay importes de caja informados para esta selección.')
+            render_capital_comparison(summary, dimension, key)
             # Reads come from the same aggregates as the charts, respecting all filters.
             known = summary[summary['Presupuesto referencia'].notna()]
             if not known.empty:
@@ -269,17 +242,9 @@ def capital_view(tasks, cash, cutoff):
     first_month=cutoff.to_period('M').to_timestamp()
     selected['_month']=selected['_month'].mask(selected['_month'].lt(first_month),first_month)
     monthly=selected.dropna(subset=['_month']).groupby('_month')[['Pendiente validado CLP','Referencia por validar CLP']].sum(min_count=1).reset_index()
-    visible=monthly[monthly[['Pendiente validado CLP','Referencia por validar CLP']].notna().any(axis=1)]
-    fig=go.Figure()
-    for field,label,color in [('Pendiente validado CLP','Validado','#0F766E'),('Referencia por validar CLP','Por validar','#B7791F')]:
-        if visible[field].notna().any():
-            fig.add_bar(x=visible['_month'],y=visible[field]/1e6,name=label,marker_color=color,hovertemplate='%{x|%m/%Y}<br>%{y:,.2f} MM CLP<extra>'+label+'</extra>')
-    if fig.data:
-        fig.update_layout(barmode='group',yaxis_title='Millones de CLP',xaxis_title='Mes de salida de caja')
-        chart(fig,'cash')
-    else:
-        st.info('La selección no tiene desembolsos calendarizados con montos informados.')
+    render_calendar(monthly)
     st.caption('Los vencimientos anteriores al corte se agrupan en el mes de corte, como en la planilla. Los aportes en especie no equivalen a caja.')
+    render_responsible_funds(tasks, selected, capital_dimension_summary)
     with st.expander('Detalle de saldos de caja y validación · Costos'):
         st.dataframe(selected[['ID actividad','Concepto / cuota','Fecha FC / desembolso','Estado de pago','Saldo pendiente CLP','Validación del saldo','Caja programada CLP','Pendiente validado CLP','Referencia por validar CLP','Alerta caja','Respaldo / observaciones']].rename(columns={'Concepto / cuota':'Actividad / entregable'}),hide_index=True,use_container_width=True)
     with st.expander('Calendario mensual · selección activa'):

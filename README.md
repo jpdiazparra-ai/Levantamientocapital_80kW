@@ -22,6 +22,6 @@ Usa esta carpeta como servicio independiente en Render.
 
 El botón **Actualizar todo** recarga las fuentes y conserva la vista y los filtros activos.
 
-`analysis_option.py` implementa el Bloque 4 y `timeline_scroll.py` su cronograma. Los estilos se encuentran en `assets/`. La propuesta de análisis y los criterios de validación están en [ANALISIS_BLOQUE4.md](ANALISIS_BLOQUE4.md).
+`analysis_option.py` implementa el Bloque 4, `timeline_scroll.py` su cronograma y `capital_charts.py` las comparaciones de capital, el calendario mensual y los fondos por responsable. Los estilos se encuentran en `assets/`. La propuesta de análisis y los criterios de validación están en [ANALISIS_BLOQUE4.md](ANALISIS_BLOQUE4.md).
 
 El entorno virtual, las credenciales y el historial PMO local no se publican. La aplicación permite comenzar sin un archivo de historial y lo crea al guardar el primer corte.

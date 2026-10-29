@@ -39,6 +39,18 @@
 .st-key-analysis_option .option-capital-reading>span {font-size:9px;font-weight:750;letter-spacing:.1em;color:var(--teal);}
 .st-key-analysis_option .option-capital-reading p {margin:8px 0 0;font-size:12px;line-height:1.8;color:#475569;}
 .st-key-analysis_option .option-capital-reading b {color:var(--ink);font-weight:650;}
+.st-key-analysis_option [class*="_reference_panel"],
+.st-key-analysis_option [class*="_cash_panel"],
+.st-key-analysis_option .st-key-capital_calendar_panel,
+.st-key-analysis_option .st-key-capital_responsible_panel {padding:18px!important;border:1px solid var(--line)!important;border-radius:16px!important;background:#FFF!important;box-shadow:none!important;}
+.st-key-analysis_option .option-finance-chart-head {display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;padding-bottom:14px;border-bottom:1px solid #E8EDF1;margin-bottom:8px;}
+.st-key-analysis_option .option-finance-chart-head>div {min-width:0;flex:1 1 180px;}
+.st-key-analysis_option .option-finance-chart-head strong {display:block;color:var(--ink);font-size:14px;font-weight:700;line-height:1.5;}
+.st-key-analysis_option .option-finance-chart-head span {display:block;color:var(--muted);font-size:10px;line-height:1.7;margin-top:4px;}
+.st-key-analysis_option .option-finance-chart-head>b {display:block;color:var(--ink);font-size:19px;font-weight:750;line-height:1.5;letter-spacing:-.025em;font-variant-numeric:tabular-nums;}
+.st-key-analysis_option .option-finance-legend {display:flex;flex-wrap:wrap;gap:14px;padding:5px 0 0;color:var(--muted);font-size:10px;}
+.st-key-analysis_option .option-finance-legend>span {display:inline-flex;align-items:center;gap:6px;}
+.st-key-analysis_option .option-finance-legend i {display:inline-block;width:8px;height:8px;border-radius:2px;}
 @media(max-width:1200px){.st-key-analysis_option .option-milestone-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:760px){.st-key-analysis_option .option-milestone-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:480px){.st-key-analysis_option .option-milestone-grid{grid-template-columns:1fr;}}

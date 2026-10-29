@@ -27,3 +27,9 @@ Cuando existan saldos y registros conciliados, incorporar caja inicial, ingresos
 ## Regla de los KPI por hito
 
 Los nombres y las fechas de las tarjetas se construyen exclusivamente con las filas cuya columna **Paquete / línea** contiene la palabra **Hito**. El nombre mostrado es el paquete marcador y **Fin previsto actual** se toma de esos marcadores, sin extenderlo por actividades ordinarias. Si existen varios marcadores para un mismo Hito objetivo, se muestra el fin máximo entre ellos. El avance ponderado, los importes y los conteos siguen resumiendo las actividades asignadas a ese hito; los gráficos y el cronograma conservan su alcance según los filtros.
+
+## Lectura visual del capital
+
+Los gráficos comparativos de presupuesto y caja comparten escala y muestran los montos al final de cada barra. Azul identifica referencia, verde caja validada y ámbar caja por validar. El calendario apila los importes disjuntos validados y por validar, muestra el total mensual e identifica el mes con mayor necesidad. Los montos faltantes permanecen sin informar.
+
+Fondos por responsable agrupa las actividades seleccionadas por **Entidad responsable** (opción inicial) o **Responsable persona**; la asignación vacía aparece como Sin responsable asignado. La suma coincide con la caja seleccionada sin duplicar actividades. Esta clasificación describe al responsable de ejecución y no acredita al aportante del financiamiento.
