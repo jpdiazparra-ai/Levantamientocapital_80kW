@@ -108,7 +108,47 @@ def render_capital_comparison(summary,dimension,key):
     st.caption('Ambos gráficos usan la misma escala. MM = millones de pesos chilenos. Los valores vacíos no se interpretan como cero.')
 
 
-def calendar_figure(monthly):
+def add_calendar_milestones(fig, visible, milestones):
+    if milestones is None or milestones.empty:
+        return
+    markers = milestones.dropna(subset=['Fin previsto actual']).copy()
+    markers = markers.drop_duplicates(['Paquete / línea', 'Fin previsto actual']).sort_values('Fin previsto actual')
+    if markers.empty:
+        return
+    first = min(visible['_month'].min(), markers['Fin previsto actual'].min()).to_period('M').to_timestamp()
+    last = max(visible['_month'].max(), markers['Fin previsto actual'].max()).to_period('M').to_timestamp() + pd.offsets.MonthEnd(0)
+    dates = pd.date_range(first, last, freq='MS')
+    span = max((last-first).days, 1)
+    palette = ['#244A6C', '#2563EB', '#D97706', '#0891B2', '#B45309']
+    occupied = []
+    max_level = 0
+    for index, (_, row) in enumerate(markers.iterrows()):
+        date = row['Fin previsto actual']
+        relative = (date-first).days / span
+        level = next((i for i, previous in enumerate(occupied) if relative-previous >= .19), len(occupied))
+        if level == len(occupied):
+            occupied.append(relative)
+        else:
+            occupied[level] = relative
+        max_level = max(max_level, level)
+        color = palette[index % len(palette)]
+        label = '<br>'.join(html.escape(line) for line in textwrap.wrap(str(row['Paquete / línea']), width=25))
+        fig.add_shape(type='line', x0=date, x1=date, xref='x', y0=0, y1=1, yref='paper',
+            line=dict(color=color, width=1.4, dash='dot'), layer='above')
+        fig.add_annotation(x=date, xref='x', y=1.02, yref='paper',
+            yshift=level*58, xanchor='center', yanchor='bottom',
+            text=f'<b>{label}</b><br>{date:%d-%m-%Y}', showarrow=False,
+            bordercolor=color, borderwidth=1, borderpad=6, bgcolor='#FFFFFF',
+            font=dict(family='Arial, sans-serif',size=10,color=color), align='center',
+            hovertext=f'{html.escape(str(row["ID"]))} · Fin previsto actual de Plan')
+    padding = pd.Timedelta(days=max(18, span*.055))
+    fig.update_xaxes(range=[first-padding,last+padding],tickmode='array',tickvals=dates.tolist(),
+        ticktext=[MONTHS[value.month-1]+'<br>'+str(value.year) for value in dates])
+    top = 92 + max_level*58
+    fig.update_layout(height=420+top-50,margin=dict(l=12,r=25,t=top,b=65))
+
+
+def calendar_figure(monthly, milestones=None):
     visible=monthly[monthly[['Pendiente validado CLP','Referencia por validar CLP']].notna().any(axis=1)].copy()
     total=visible[['Pendiente validado CLP','Referencia por validar CLP']].sum(axis=1,min_count=1)
     fig=go.Figure()
@@ -126,11 +166,12 @@ def calendar_figure(monthly):
         fig.update_yaxes(range=[0,max(1,float(total.max())/1e6*1.23)])
         fig.update_xaxes(tickmode='array',tickvals=visible['_month'].tolist(),
             ticktext=[MONTHS[value.month-1]+'<br>'+str(value.year) for value in visible['_month']],tickangle=0)
+        add_calendar_milestones(fig, visible, milestones)
     return fig,visible,total
 
 
-def render_calendar(monthly):
-    fig,visible,total=calendar_figure(monthly)
+def render_calendar(monthly, milestones=None):
+    fig,visible,total=calendar_figure(monthly, milestones)
     with st.container(border=True,key='capital_calendar_panel'):
         header('Caja mes a mes',amount(total.sum(min_count=1)),
             'Total mensual · caja validada y por validar')
@@ -141,6 +182,8 @@ def render_calendar(monthly):
             st.caption(f'Mayor necesidad mensual: {MONTHS[month.month-1]} {month.year} · {amount(total.loc[peak])}. Los importes escritos sobre las barras son los totales del mes.')
         else:st.info('La selección no tiene desembolsos calendarizados con montos informados.')
         if monthly['Pendiente validado CLP'].isna().all():st.caption('No hay importes validados informados; las barras ámbar corresponden a montos por validar.')
+        if milestones is not None and not milestones.empty:
+            st.caption('Líneas verticales: hitos de Paquete / línea. Los recuadros muestran su Fin previsto actual en Plan y respetan los filtros de la selección.')
 
 
 def render_responsible_funds(tasks,cash,summary_function):

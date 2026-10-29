@@ -30,6 +30,6 @@ Los nombres y las fechas de las tarjetas se construyen exclusivamente con las fi
 
 ## Lectura visual del capital
 
-Los gráficos comparativos de presupuesto y caja comparten escala y muestran los montos al final de cada barra. Azul identifica referencia, verde caja validada y ámbar caja por validar. El calendario apila los importes disjuntos validados y por validar, muestra el total mensual e identifica el mes con mayor necesidad. Los montos faltantes permanecen sin informar.
+Los gráficos comparativos de presupuesto y caja comparten escala y muestran los montos al final de cada barra. Azul identifica referencia, verde caja validada y ámbar caja por validar. El calendario apila los importes disjuntos validados y por validar, muestra el total mensual e identifica el mes con mayor necesidad. También marca los hitos con líneas verticales y recuadros superiores de nombre y Fin previsto actual; usa solo las filas Hito de Paquete / línea y respeta los filtros. Las etiquetas se escalonan para evitar superponerse. Los montos faltantes permanecen sin informar.
 
 Fondos por responsable agrupa las actividades seleccionadas por **Entidad responsable** (opción inicial) o **Responsable persona**; la asignación vacía aparece como Sin responsable asignado. La suma coincide con la caja seleccionada sin duplicar actividades. Esta clasificación describe al responsable de ejecución y no acredita al aportante del financiamiento.
