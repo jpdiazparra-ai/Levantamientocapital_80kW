@@ -150,8 +150,14 @@ def chart(fig, key):
 
 
 def filters(tasks, view):
-    with st.container(border=True):
-        st.markdown('**Filtros de análisis**')
+    with st.container(border=True, key=f'option4_filters_{view}'):
+        if view == 'capital':
+            st.html('<div class="option-filter-head"><span class="option-filter-icon" aria-hidden="true">'
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v7l-4 2v-9z"/></svg></span>'
+                '<div><span class="option-filter-eyebrow">ALCANCE DEL ANÁLISIS</span><strong>Selecciona el capital que quieres revisar</strong>'
+                '</div></div>')
+        else:
+            st.markdown('**Filtros de análisis**')
         scope = tasks.copy()
         cols = st.columns(4)
         for area, field in zip(cols, ['Proyecto','Hito objetivo','Sistema','Estado por avance']):
@@ -160,10 +166,14 @@ def filters(tasks, view):
             if key in st.session_state:
                 st.session_state[key]=[v for v in st.session_state[key] if v in options]
             with area:
-                selected=st.multiselect(field, options, key=key, placeholder='Todos')
+                selected=st.multiselect(field, options, key=key, placeholder={'Proyecto':'Todos los proyectos','Hito objetivo':'Todos los hitos','Sistema':'Todos los sistemas','Estado por avance':'Todos los estados'}[field])
             if selected:
                 scope=scope[scope[field].isin(selected)].copy()
-        st.caption(f'{len(scope)} de {len(tasks)} actividades · Todos los indicadores de esta vista respetan la selección.')
+        if view == 'capital':
+            st.html(f'<div class="option-filter-footer"><span><b>{len(scope)}</b> de {len(tasks)} actividades en alcance</span>'
+                '<span>Los gráficos, la caja y los responsables siguen esta selección.</span></div>')
+        else:
+            st.caption(f'{len(scope)} de {len(tasks)} actividades · Todos los indicadores de esta vista respetan la selección.')
     return scope
 
 
@@ -228,14 +238,23 @@ def capital_view(tasks, cash, cutoff):
     reference = tasks['Presupuesto referencia'].sum(min_count=1)
     pending = selected['Referencia por validar CLP'].sum(min_count=1)
     valid = selected['Pendiente validado CLP'].sum(min_count=1)
-    metrics([
-        ('Presupuesto de referencia',money(reference),'Suma de referencias informadas'),
-        ('Caja por validar',money(pending),'Referencia pendiente de revisión'),
-        ('Desembolsos validados',money(valid),'Solo saldos con validación confirmada'),
-        ('Actividades de caja por validar',str(selected['Validación del saldo'].eq('Por validar').sum()),'Saldos y fechas FC de Costos'),
-    ])
-    st.caption('Los totales se suman desde las partidas publicadas; pueden diferir algunos pesos del resumen por redondeo.')
-    st.info('La caja se toma de Costos: saldos No pagado o Parcial con inclusión activa. La parte por validar está incluida en el programa, no se suma nuevamente. La brecha exige caja disponible e ingresos confirmados.')
+    summary_items = [
+        ('Presupuesto de referencia', money(reference), 'Suma de referencias informadas', 'reference'),
+        ('Caja por validar', money(pending), 'Pendiente de revisión', 'pending'),
+        ('Caja validada', money(valid), 'Saldos con validación confirmada', 'validated'),
+        ('Actividades de caja por validar', str(selected['Validación del saldo'].eq('Por validar').sum()), 'Saldos y fechas FC de Costos', 'activities'),
+    ]
+    summary_html = ''.join(
+        f'<article class="option-capital-total {kind}"><span>{html.escape(label)}</span>'
+        f'<strong>{html.escape(value)}</strong><small>{html.escape(note)}</small></article>'
+        for label, value, note, kind in summary_items
+    )
+    st.html('<div class="option-capital-totals">' + summary_html + '</div>'
+        '<div class="option-capital-rule"><span aria-hidden="true">i</span>'
+        '<p>La caja por validar forma parte del programa. <b>No se suma nuevamente a la caja pendiente de cubrir.</b></p></div>')
+    with st.expander('Criterio de cálculo y redondeo'):
+        st.caption('La caja proviene de Costos: saldos No pagado o Parcial con inclusión activa. La brecha requiere caja disponible e ingresos confirmados.')
+        st.caption('Los totales se suman desde las partidas publicadas; pueden diferir algunos pesos del resumen por redondeo. Un importe sin validar no equivale a cero.')
     render_capital_dimensions(tasks, selected)
     st.subheader('Calendario de desembolsos')
     selected['_month']=selected['_date'].dt.to_period('M').dt.to_timestamp()

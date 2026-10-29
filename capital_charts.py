@@ -47,8 +47,9 @@ def render(fig, key):
         'modeBarButtonsToRemove':['lasso2d','select2d']},key='option4_'+key)
 
 
-def header(title, value, note):
-    st.html('<div class="option-finance-chart-head"><div><strong>'+html.escape(title)+'</strong>'
+def header(title, value, note, comparison=False):
+    extra = ' option-finance-comparison-head' if comparison else ''
+    st.html('<div class="option-finance-chart-head' + extra + '"><div><strong>'+html.escape(title)+'</strong>'
         '<span>'+html.escape(note)+'</span></div><b>'+html.escape(value)+'</b></div>')
 
 
@@ -94,17 +95,20 @@ def render_capital_comparison(summary,dimension,key):
     with left:
         with st.container(border=True,key=f'capital_{key}_reference_panel'):
             header('Presupuesto de referencia',amount(summary['Presupuesto referencia'].sum(min_count=1)),
-                'Monto y participación de cada categoría')
+                'Monto y participación de cada categoría', comparison=True)
+            st.html('<div class="option-finance-legend option-finance-comparison-legend"><span><i style="background:'+NAVY+'"></i>Referencia presupuestaria</span></div>')
             if reference.data:render(reference,f'capital_{key}_reference')
-            else:st.info('No hay presupuestos de referencia informados.')
+            else:st.html(f'<div class="option-finance-chart-empty" style="height:{reference.layout.height}px">No hay presupuestos de referencia informados.</div>')
+            st.html('<div class="option-finance-comparison-footer">Porcentajes sobre el presupuesto de referencia de la selección.</div>')
     with right:
         with st.container(border=True,key=f'capital_{key}_cash_panel'):
             header('Caja pendiente de cubrir',amount(summary[['Caja por validar','Caja validada']].sum(axis=1,min_count=1).sum(min_count=1)),
-                'Validada y por validar se presentan por separado')
-            st.html('<div class="option-finance-legend"><span><i style="background:'+VALID+'"></i>Validada</span><span><i style="background:'+PENDING+'"></i>Por validar</span></div>')
+                'Validada y por validar se presentan por separado', comparison=True)
+            st.html('<div class="option-finance-legend option-finance-comparison-legend"><span><i style="background:'+VALID+'"></i>Validada</span><span><i style="background:'+PENDING+'"></i>Por validar</span></div>')
             if cash.data:render(cash,f'capital_{key}_cash')
-            else:st.info('No hay importes de caja informados.')
-            if summary['Caja validada'].isna().all():st.caption('Caja validada: sin importes informados en esta selección.')
+            else:st.html(f'<div class="option-finance-chart-empty" style="height:{cash.layout.height}px">No hay importes de caja informados.</div>')
+            footer = 'Sin importes de caja validada informados en esta selección.' if summary['Caja validada'].isna().all() else 'La validación se muestra por separado de los importes pendientes de revisar.'
+            st.html('<div class="option-finance-comparison-footer">'+html.escape(footer)+'</div>')
     st.caption('Ambos gráficos usan la misma escala. MM = millones de pesos chilenos. Los valores vacíos no se interpretan como cero.')
 
 
