@@ -23,3 +23,7 @@ Los tres subbloques usan filtros propios por proyecto, hito, sistema y estado de
 ## Siguiente evolución
 
 Cuando existan saldos y registros conciliados, incorporar caja inicial, ingresos confirmados y reserva mínima para calcular fondos adicionales. Después añadir curvas de EV/PV/AC sobre datos validados. La aceptación técnica y la liberación TRL requieren evidencia: el porcentaje de avance no las certifica. No se infiere ruta crítica mientras las dependencias no estén validadas. Comercial necesita cantidades, precios y cotizaciones antes de visualizar un costo industrial confirmado.
+
+## Regla de los KPI por hito
+
+Los nombres y las fechas de las tarjetas se construyen exclusivamente con las filas cuya columna **Paquete / línea** contiene la palabra **Hito**. El nombre mostrado es el paquete marcador y **Fin previsto actual** se toma de esos marcadores, sin extenderlo por actividades ordinarias. Si existen varios marcadores para un mismo Hito objetivo, se muestra el fin máximo entre ellos. El avance ponderado, los importes y los conteos siguen resumiendo las actividades asignadas a ese hito; los gráficos y el cronograma conservan su alcance según los filtros.

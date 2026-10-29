@@ -460,27 +460,39 @@ def render_technical_timeline(tasks):
         file_name='cronograma_tecnico_filtrado.csv', mime='text/csv', key='option4_timeline_download')
 
 
+def explicit_milestone_rows(tasks):
+    # Only the explicit Hito markers in Plan define the overview cards.
+    packages = tasks['Paquete / línea'].fillna('').astype(str)
+    return tasks[packages.str.contains(r'\bhitos?\b', case=False, regex=True, na=False)].copy()
+
+
 def render_milestone_overview(tasks, cash=None):
+    milestone_rows = explicit_milestone_rows(tasks)
+    if milestone_rows.empty:
+        st.info('No hay filas con Hito en Paquete / línea para construir las tarjetas.')
+        return
     sequence = ['Premontaje 10 kW', 'Montaje 10 kW', 'Producto 10 kW', 'Piloto 80 kW', 'Producto 80 kW']
-    available = tasks['Hito objetivo'].dropna().unique().tolist()
+    available = milestone_rows['Hito objetivo'].dropna().unique().tolist()
     ordered = [name for name in sequence if name in available] + sorted(name for name in available if name not in sequence)
     cards = []
     finish_sources = []
     for index, name in enumerate(ordered, start=1):
         group = tasks[tasks['Hito objetivo'].eq(name)]
+        markers = milestone_rows[milestone_rows['Hito objetivo'].eq(name)]
+        display_name = ' / '.join(markers['Paquete / línea'].astype(str).str.strip().drop_duplicates())
         progress = weighted_progress(group)
-        progress_label = 'Sin referencia' if pd.isna(progress) else f'{progress:.1f}%'.replace('.', ',')
+        progress_label = 'Sin avance informado' if pd.isna(progress) else f'{progress:.1f}%'.replace('.', ',')
         percentage = 0 if pd.isna(progress) else float(np.clip(progress, 0, 100))
         completed = int(group['_progress'].ge(100).sum())
         delayed = int(group['_delay'].gt(0).sum())
-        finish = group['Fin previsto actual'].max()
+        finish = markers['Fin previsto actual'].max()
         finish_label = 'Sin fecha' if pd.isna(finish) else finish.strftime('%d-%m-%Y')
-        drivers = group[group['Fin previsto actual'].eq(finish)] if pd.notna(finish) else group.iloc[:0]
+        drivers = markers[markers['Fin previsto actual'].eq(finish)] if pd.notna(finish) else markers.iloc[:0]
         driver_ids = drivers['ID'].astype(str).tolist()
         source_label = 'Plan · ' + ', '.join(driver_ids[:2]) if driver_ids else 'Sin fecha informada en Plan'
         if len(driver_ids) > 2:
             source_label += f' + {len(driver_ids) - 2} actividades'
-        finish_sources.extend(drivers[['Hito objetivo', 'ID', 'Actividad / entregable', 'Fin previsto actual']].to_dict('records'))
+        finish_sources.extend(drivers[['Hito objetivo', 'Paquete / línea', 'ID', 'Actividad / entregable', 'Fin previsto actual']].to_dict('records'))
         tag = '80 kW' if '80' in name else '10 kW' if '10' in name else 'Hito'
         capital_html = ''
         if cash is not None:
@@ -496,20 +508,20 @@ def render_milestone_overview(tasks, cash=None):
         cards.append(
             '<article class="option-milestone-card">'
             f'<div class="option-milestone-top"><span>HITO {index:02d}</span><i>{tag}</i></div>'
-            f'<h3>{html.escape(name)}</h3>'
+            f'<h3>{html.escape(display_name)}</h3>'
             f'{capital_html}'
             f'<div class="option-milestone-progress"><strong>{progress_label}</strong><span>avance físico</span></div>'
             f'<div class="option-milestone-track" role="img" aria-label="Avance: {progress_label}"><i style="width:{percentage:.2f}%"></i></div>'
             f'<div class="option-milestone-stats"><span><b>{completed} / {len(group)}</b> terminadas</span>'
             f'<span class="{"has-delay" if delayed else ""}"><b>{delayed}</b> con atraso previsto</span></div>'
-            f'<div class="option-milestone-finish"><span title="Fecha máxima de Fin previsto actual entre las actividades del hito">Fin previsto actual</span><b>{finish_label}</b><small>{html.escape(source_label)}</small></div>'
+            f'<div class="option-milestone-finish"><span title="Fin previsto actual de las filas con Hito en Paquete / línea">Fin previsto actual</span><b>{finish_label}</b><small>{html.escape(source_label)}</small></div>'
             '</article>'
         )
     grid_class = 'option-milestone-grid option-capital-milestones' if cash is not None else 'option-milestone-grid'
     st.html(f'<div class="{grid_class}">' + ''.join(cards) + '</div>')
-    st.caption('Avance ponderado por presupuesto de referencia. Terminada = avance físico de 100%; la aceptación técnica se registra por separado.')
-    with st.expander('Actividad que determina el fin de cada hito'):
-        st.caption('El KPI toma la fecha más tardía de Fin previsto actual en Plan. Las actividades con fechas posteriores también forman parte del cierre del hito.')
+    st.caption('Nombre y fin previsto: filas de Plan que contienen Hito en Paquete / línea. El avance ponderado, los importes y los conteos resumen las actividades asignadas a cada hito.')
+    with st.expander('Filas Hito que determinan las tarjetas y sus fechas'):
+        st.caption('Solo se consideran los marcadores Hito de Paquete / línea. Si hay varios para el mismo Hito objetivo, la fecha corresponde al último de esos marcadores.')
         if finish_sources:
             st.dataframe(pd.DataFrame(finish_sources), hide_index=True, use_container_width=True,
                 column_config={'Actividad / entregable':st.column_config.TextColumn(width='large'),
