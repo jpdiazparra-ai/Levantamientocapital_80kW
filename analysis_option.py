@@ -115,6 +115,8 @@ def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items(
     if set(plan['ID']) != set(costs['ID']):
         raise ValueError('Plan y Costos deben contener los mismos IDs de actividad.')
     cash = cash_from_costs(costs, plan)
+    # The current budget is owned by Costos, even if Plan also publishes it.
+    plan = plan.drop(columns=['Presupuesto vigente'], errors='ignore')
     shared = [c for c in costs if c in plan and c != 'ID']
     tasks = plan.merge(costs.drop(columns=shared), on='ID', how='left', validate='one_to_one')
     tasks = tasks.merge(revision[['ID', 'Estado / avance actual', 'Control de dependencia']], on='ID', how='left', validate='one_to_one')
@@ -427,21 +429,31 @@ def render_technical_timeline(tasks):
     if level != 'Actividades':
         st.caption('Cada barra resume el intervalo entre la primera y la última fecha del grupo; puede incluir períodos sin actividad. El estado y el avance del grupo se ponderan por presupuesto de referencia.')
     st.caption('Los rombos identifican actividades de un solo día. Fin real conserva el cierre efectivo; la previsión técnica se mantiene separada de las fechas de desembolso.')
-    st.markdown('#### Detalle del cronograma')
     detail = scope.copy()
-    columns = ['Hito objetivo', 'Sistema', 'Paquete / línea', 'ID', 'Actividad / entregable', 'Estado por avance', '_progress', 'Inicio base', 'Fin base', 'Fin previsto actual', 'Fin real', '_delay']
+    columns = ['Hito objetivo', 'Sistema', 'Paquete / línea', 'ID', 'Actividad / entregable', 'Estado por avance', 'Presupuesto vigente', '_progress', 'Inicio base', 'Fin base', 'Fin previsto actual', 'Fin real', '_delay']
     detail_order = ['Inicio base', end, 'ID'] if order == 'Fecha de inicio' else [end, 'Inicio base', 'ID'] if order == 'Fecha de término' else ['Sistema', 'Paquete / línea', 'Inicio base', 'ID']
     detail = detail[columns].sort_values(list(dict.fromkeys(detail_order)), kind='stable')
-    st.caption(f'{len(detail)} actividades · Los filtros de hito, estado, sistema y paquete también se aplican al detalle.')
-    st.dataframe(detail, hide_index=True, use_container_width=True, height=400,
-        column_config={
+    budget = detail['Presupuesto vigente']
+    styled = detail.style.format({'Presupuesto vigente': money}, na_rep='Sin informar')
+    styled = styled.set_properties(subset=['Presupuesto vigente'], **{'background-color':'#F0FDFA', 'color':'#115E59', 'font-weight':'600'})
+    styled = styled.map(lambda value: {'Completado':'color: #15803D; background-color: #F0FDF4', 'En curso':'color: #92400E; background-color: #FFFBEB', 'Pendiente':'color: #475569; background-color: #F1F5F9'}.get(value, ''), subset=['Estado por avance'])
+    styled = styled.map(lambda value: 'color: #B91C1C; font-weight: 600' if pd.notna(value) and value > 0 else '', subset=['_delay'])
+    with st.container(key='option4_timeline_detail'):
+        st.html('<div class="option-detail-head"><div><span>ACTIVIDADES Y COSTOS</span><h4>Detalle del cronograma</h4><p>La selección del cronograma también se aplica a esta tabla.</p></div>'
+            f'<div class="option-detail-budget"><span>Presupuesto vigente · CLP</span><strong>{money(budget.sum(min_count=1))}</strong>'
+            f'<small>{len(detail)} actividades · {budget.notna().sum()} con monto informado</small></div></div>')
+        st.dataframe(styled, hide_index=True, use_container_width=True, height=480,
+            column_config={
+            'ID': st.column_config.TextColumn('ID', width='small'),
+            'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Monto de Presupuesto vigente en la pestaña Costos, vinculado por ID de actividad.'),
             'Actividad / entregable': st.column_config.TextColumn('Actividad / entregable', width='large'),
             '_progress': st.column_config.ProgressColumn('Avance físico', min_value=0, max_value=100, format='%.1f%%'),
             '_delay': st.column_config.NumberColumn('Desvío previsto (días)', format='%d'),
             **{name: st.column_config.DatetimeColumn(name, format='DD-MM-YYYY', width='small') for name in ['Inicio base', 'Fin base', 'Fin previsto actual', 'Fin real']},
         })
-    st.download_button('Descargar detalle del cronograma', data=detail.rename(columns={'_progress':'Avance físico %','_delay':'Desvío previsto (días)'}).to_csv(index=False).encode('utf-8-sig'),
-        file_name='cronograma_tecnico_filtrado.csv', mime='text/csv', key='option4_timeline_download')
+        st.caption('Montos en pesos chilenos · Fuente: Costos, vinculada por ID. Los montos sin informar se mantienen vacíos. Puedes ordenar las columnas y ampliar la tabla.')
+        st.download_button('Descargar detalle · CSV', data=detail.rename(columns={'_progress':'Avance físico %','_delay':'Desvío previsto (días)'}).to_csv(index=False).encode('utf-8-sig'),
+            file_name='cronograma_tecnico_filtrado.csv', mime='text/csv', key='option4_timeline_download')
 
 
 def explicit_milestone_rows(tasks):
