@@ -42,7 +42,7 @@
 .st-key-analysis_option [class*="_reference_panel"],
 .st-key-analysis_option [class*="_cash_panel"],
 .st-key-analysis_option .st-key-capital_calendar_panel,
-.st-key-analysis_option .st-key-capital_responsible_panel {padding:18px!important;border:1px solid var(--line)!important;border-radius:16px!important;background:#FFF!important;box-shadow:none!important;}
+.st-key-analysis_option .st-key-capital_responsible_panel {padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;}
 .st-key-analysis_option .option-finance-chart-head {display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;padding-bottom:14px;border-bottom:1px solid #E8EDF1;margin-bottom:8px;}
 .st-key-analysis_option .option-finance-chart-head>div {min-width:0;flex:1 1 180px;}
 .st-key-analysis_option .option-finance-chart-head strong {display:block;color:var(--ink);font-size:14px;font-weight:700;line-height:1.5;}
@@ -122,7 +122,7 @@
 .st-key-analysis_option .option-detail-budget small {font-size:10px;color:var(--muted);}
 .st-key-analysis_option .option-commercial-note {display:grid;gap:5px;padding:14px 18px;margin-bottom:18px;border-left:3px solid var(--teal);border-radius:10px;background:#F0FDFA;color:#475569;font-size:11px;line-height:1.7;}
 .st-key-analysis_option .option-commercial-note b {color:var(--ink);font-size:12px;}
-.st-key-analysis_option [data-testid="stVerticalBlock"][class*="st-key-option4_commercial_project_"] {padding:20px!important;background:#FFF!important;border:1px solid var(--line)!important;border-radius:16px!important;}
+.st-key-analysis_option [data-testid="stVerticalBlock"][class*="st-key-option4_commercial_project_"] {padding:0!important;background:transparent!important;border:0!important;border-radius:0!important;}
 .st-key-analysis_option .option-commercial-empty {height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;color:var(--muted);padding:24px;}
 .st-key-analysis_option .option-commercial-empty>div {width:100px;height:100px;display:flex;align-items:center;justify-content:center;border:14px solid #E8EEF2;border-radius:50%;font-size:24px;}
 .st-key-analysis_option .option-commercial-empty b {color:var(--ink);font-size:13px;}
@@ -169,3 +169,9 @@
 .st-key-analysis_option .option-commercial-pending p {font-size:12px;color:var(--muted);line-height:1.8;margin:0;}
 @media(max-width:1100px){.st-key-analysis_option .option-commercial-executive-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:600px){.st-key-analysis_option .option-commercial-executive-kpis{grid-template-columns:1fr;}.st-key-analysis_option .option-commercial-system-value{gap:6px;flex-direction:column;align-items:flex-end;}.st-key-analysis_option .option-commercial-insight{align-items:flex-start;flex-direction:column;gap:6px;}}
+
+/* One frame owns the title, controls, graphics and detail for each analysis. */
+.st-key-analysis_option [data-testid="stVerticalBlock"][class*="st-key-option4_analysis_"] {padding:22px!important;border:1px solid var(--line)!important;border-radius:16px!important;background:#FFF!important;box-shadow:none!important;}
+.st-key-analysis_option [class*="st-key-option4_analysis_"] [data-testid="stSubheader"] {padding-top:0;}
+.st-key-analysis_option [class*="_cash_panel"] {padding-left:22px!important;border-left:1px solid #E8EDF1!important;}
+@media(max-width:760px){.st-key-analysis_option [data-testid="stVerticalBlock"][class*="st-key-option4_analysis_"]{padding:15px!important;}.st-key-analysis_option [class*="_cash_panel"]{padding-left:0!important;border-left:0!important;border-top:1px solid #E8EDF1!important;padding-top:18px!important;}}

@@ -93,7 +93,7 @@ def render_capital_comparison(summary,dimension,key):
     reference,cash=comparison_figures(summary,dimension)
     left,right=st.columns(2,gap='large')
     with left:
-        with st.container(border=True,key=f'capital_{key}_reference_panel'):
+        with st.container(border=False,key=f'capital_{key}_reference_panel'):
             header('Presupuesto de referencia',amount(summary['Presupuesto referencia'].sum(min_count=1)),
                 'Monto y participación de cada categoría', comparison=True)
             st.html('<div class="option-finance-legend option-finance-comparison-legend"><span><i style="background:'+NAVY+'"></i>Referencia presupuestaria</span></div>')
@@ -101,7 +101,7 @@ def render_capital_comparison(summary,dimension,key):
             else:st.html(f'<div class="option-finance-chart-empty" style="height:{reference.layout.height}px">No hay presupuestos de referencia informados.</div>')
             st.html('<div class="option-finance-comparison-footer">Porcentajes sobre el presupuesto de referencia de la selección.</div>')
     with right:
-        with st.container(border=True,key=f'capital_{key}_cash_panel'):
+        with st.container(border=False,key=f'capital_{key}_cash_panel'):
             header('Caja pendiente de cubrir',amount(summary[['Caja por validar','Caja validada']].sum(axis=1,min_count=1).sum(min_count=1)),
                 'Validada y por validar se presentan por separado', comparison=True)
             st.html('<div class="option-finance-legend option-finance-comparison-legend"><span><i style="background:'+VALID+'"></i>Validada</span><span><i style="background:'+PENDING+'"></i>Por validar</span></div>')
@@ -176,7 +176,7 @@ def calendar_figure(monthly, milestones=None):
 
 def render_calendar(monthly, milestones=None):
     fig,visible,total=calendar_figure(monthly, milestones)
-    with st.container(border=True,key='capital_calendar_panel'):
+    with st.container(border=False,key='capital_calendar_panel'):
         header('Caja mes a mes',amount(total.sum(min_count=1)),
             'Total mensual · caja validada y por validar')
         st.html('<div class="option-finance-legend"><span><i style="background:'+VALID+'"></i>Validada</span><span><i style="background:'+PENDING+'"></i>Por validar</span></div>')
@@ -191,40 +191,41 @@ def render_calendar(monthly, milestones=None):
 
 
 def render_responsible_funds(tasks,cash,summary_function):
-    st.subheader('Fondos por responsable')
-    field=st.radio('Agrupar responsables por',['Entidad responsable','Responsable persona'],horizontal=True,key='option4_capital_responsible_field')
-    scope=tasks.copy()
-    scope[field]=scope[field].fillna('').astype(str).str.strip().replace('','Sin responsable asignado')
-    summary=summary_function(scope,cash,field)
-    summary['_total']=summary[['Caja validada','Caja por validar']].sum(axis=1,min_count=1)
-    summary=summary.sort_values('_total',ascending=False,na_position='last')
-    labels=summary[field].tolist()
-    fig=go.Figure()
-    for value,color in [('Caja validada',VALID),('Caja por validar',PENDING)]:
-        known=summary[summary[value].notna()]
-        if not known.empty:
-            fig.add_bar(x=known[value]/1e6,y=known[field],orientation='h',name=value,
-                marker=dict(color=color,cornerradius=4),width=.42,
-                customdata=[[amount(money),wrap(label)] for money,label in zip(known[value],known[field])],
-                hovertemplate='<b>%{customdata[1]}</b><br>'+value+': %{customdata[0]}<extra></extra>')
-    known=summary[summary['_total'].notna()]
-    if fig.data:
-        fig.add_scatter(x=known['_total']/1e6,y=known[field],mode='text',
-            text=[amount(value,True) for value in known['_total']],textposition='middle right',
-            hoverinfo='skip',cliponaxis=False,textfont=dict(size=11,color='#0F2435'))
-        limit=max(1,float(known['_total'].max())/1e6*1.3)
-        figure_style(fig,height=max(300,110+len(summary)*46),limit=limit)
-        fig.update_layout(barmode='stack')
-        fig.update_xaxes(title='Millones de CLP · caja pendiente')
-        fig.update_yaxes(categoryorder='array',categoryarray=labels,autorange='reversed')
-        with st.container(border=True,key='capital_responsible_panel'):
-            header('Asignación de caja pendiente',amount(summary['_total'].sum(min_count=1)),
-                'Responsable de la actividad según Plan')
-            st.html('<div class="option-finance-legend"><span><i style="background:'+VALID+'"></i>Validada</span><span><i style="background:'+PENDING+'"></i>Por validar</span></div>')
-            render(fig,'capital_responsible')
-    else:st.info('No hay fondos informados para los responsables de esta selección.')
-    st.caption('Esta distribución identifica al responsable de la actividad; no confirma quién aportará el financiamiento. Respeta los filtros de proyecto, hito, sistema y estado.')
-    with st.expander('Detalle de fondos por responsable'):
-        st.dataframe(summary.drop(columns='_total'),hide_index=True,use_container_width=True)
-        st.download_button('Descargar fondos por responsable',summary.drop(columns='_total').to_csv(index=False).encode('utf-8-sig'),
-            file_name='fondos_por_responsable.csv',mime='text/csv',key='option4_responsible_download')
+    with st.container(border=True, key='option4_analysis_responsible'):
+        st.subheader('Fondos por responsable')
+        field=st.radio('Agrupar responsables por',['Entidad responsable','Responsable persona'],horizontal=True,key='option4_capital_responsible_field')
+        scope=tasks.copy()
+        scope[field]=scope[field].fillna('').astype(str).str.strip().replace('','Sin responsable asignado')
+        summary=summary_function(scope,cash,field)
+        summary['_total']=summary[['Caja validada','Caja por validar']].sum(axis=1,min_count=1)
+        summary=summary.sort_values('_total',ascending=False,na_position='last')
+        labels=summary[field].tolist()
+        fig=go.Figure()
+        for value,color in [('Caja validada',VALID),('Caja por validar',PENDING)]:
+            known=summary[summary[value].notna()]
+            if not known.empty:
+                fig.add_bar(x=known[value]/1e6,y=known[field],orientation='h',name=value,
+                    marker=dict(color=color,cornerradius=4),width=.42,
+                    customdata=[[amount(money),wrap(label)] for money,label in zip(known[value],known[field])],
+                    hovertemplate='<b>%{customdata[1]}</b><br>'+value+': %{customdata[0]}<extra></extra>')
+        known=summary[summary['_total'].notna()]
+        if fig.data:
+            fig.add_scatter(x=known['_total']/1e6,y=known[field],mode='text',
+                text=[amount(value,True) for value in known['_total']],textposition='middle right',
+                hoverinfo='skip',cliponaxis=False,textfont=dict(size=11,color='#0F2435'))
+            limit=max(1,float(known['_total'].max())/1e6*1.3)
+            figure_style(fig,height=max(300,110+len(summary)*46),limit=limit)
+            fig.update_layout(barmode='stack')
+            fig.update_xaxes(title='Millones de CLP · caja pendiente')
+            fig.update_yaxes(categoryorder='array',categoryarray=labels,autorange='reversed')
+            with st.container(border=False,key='capital_responsible_panel'):
+                header('Asignación de caja pendiente',amount(summary['_total'].sum(min_count=1)),
+                    'Responsable de la actividad según Plan')
+                st.html('<div class="option-finance-legend"><span><i style="background:'+VALID+'"></i>Validada</span><span><i style="background:'+PENDING+'"></i>Por validar</span></div>')
+                render(fig,'capital_responsible')
+        else:st.info('No hay fondos informados para los responsables de esta selección.')
+        st.caption('Esta distribución identifica al responsable de la actividad; no confirma quién aportará el financiamiento.')
+        with st.expander('Detalle de fondos por responsable'):
+            st.dataframe(summary.drop(columns='_total'),hide_index=True,use_container_width=True)
+            st.download_button('Descargar fondos por responsable',summary.drop(columns='_total').to_csv(index=False).encode('utf-8-sig'),
+                file_name='fondos_por_responsable.csv',mime='text/csv',key='option4_responsible_download')

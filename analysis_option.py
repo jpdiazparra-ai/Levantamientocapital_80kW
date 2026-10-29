@@ -201,76 +201,80 @@ def capital_dimension_summary(tasks, cash, dimension):
 
 
 def render_capital_dimensions(tasks, cash):
-    tabs = st.tabs(['Por proyecto', 'Por hito', 'Por sistema'])
-    for tab, dimension, key in zip(tabs, ['Proyecto', 'Hito objetivo', 'Sistema'], ['project', 'milestone', 'system']):
-        with tab:
-            summary = capital_dimension_summary(tasks, cash, dimension)
-            render_capital_comparison(summary, dimension, key)
-            # Reads come from the same aggregates as the charts, respecting all filters.
-            known = summary[summary['Presupuesto referencia'].notna()]
-            if not known.empty:
-                lead = known.iloc[0]
-                share = lead['Participación %']
-                share_text = f' ({share:.1f}% de la referencia seleccionada)' if pd.notna(share) else ''
-                top = html.escape(str(lead[dimension]))
-                pending = summary['Caja por validar'].sum(min_count=1)
-                valid = summary['Caja validada'].sum(min_count=1)
-                validation_text = 'No hay caja validada informada.' if pd.isna(valid) else f'Caja validada informada: {money(valid)}.'
-                st.html('<div class="option-capital-reading"><span>LECTURA DE CAPITAL</span>'
-                    f'<p><b>{top}</b> concentra la mayor referencia: <b>{money(lead["Presupuesto referencia"])}</b>{share_text}.</p>'
-                    f'<p>Caja por validar de la selección: <b>{money(pending)}</b>. {validation_text}</p></div>')
-            with st.expander(f'Detalle de capital por {dimension.lower()}'):
-                st.dataframe(summary, hide_index=True, use_container_width=True,
-                    column_config={
-                        field: st.column_config.NumberColumn(field + ' (CLP)', format='$ %.0f')
-                        for field in ['Presupuesto referencia', 'Caja por validar', 'Caja validada']
-                    })
-                st.download_button('Descargar este análisis', summary.to_csv(index=False).encode('utf-8-sig'),
-                    file_name=f'capital_por_{key}.csv', mime='text/csv', key=f'option4_capital_{key}_download')
+    with st.container(border=True, key='option4_analysis_budget'):
+        st.subheader('Presupuesto de referencia y caja')
+        tabs = st.tabs(['Por proyecto', 'Por hito', 'Por sistema'])
+        for tab, dimension, key in zip(tabs, ['Proyecto', 'Hito objetivo', 'Sistema'], ['project', 'milestone', 'system']):
+            with tab:
+                summary = capital_dimension_summary(tasks, cash, dimension)
+                render_capital_comparison(summary, dimension, key)
+                # Reads come from the same aggregates as the charts, respecting all filters.
+                known = summary[summary['Presupuesto referencia'].notna()]
+                if not known.empty:
+                    lead = known.iloc[0]
+                    share = lead['Participación %']
+                    share_text = f' ({share:.1f}% de la referencia seleccionada)' if pd.notna(share) else ''
+                    top = html.escape(str(lead[dimension]))
+                    pending = summary['Caja por validar'].sum(min_count=1)
+                    valid = summary['Caja validada'].sum(min_count=1)
+                    validation_text = 'No hay caja validada informada.' if pd.isna(valid) else f'Caja validada informada: {money(valid)}.'
+                    st.html('<div class="option-capital-reading"><span>LECTURA DE CAPITAL</span>'
+                        f'<p><b>{top}</b> concentra la mayor referencia: <b>{money(lead["Presupuesto referencia"])}</b>{share_text}.</p>'
+                        f'<p>Caja por validar de la selección: <b>{money(pending)}</b>. {validation_text}</p></div>')
+                with st.expander(f'Detalle de capital por {dimension.lower()}'):
+                    st.dataframe(summary, hide_index=True, use_container_width=True,
+                        column_config={
+                            field: st.column_config.NumberColumn(field + ' (CLP)', format='$ %.0f')
+                            for field in ['Presupuesto referencia', 'Caja por validar', 'Caja validada']
+                        })
+                    st.download_button('Descargar este análisis', summary.to_csv(index=False).encode('utf-8-sig'),
+                        file_name=f'capital_por_{key}.csv', mime='text/csv', key=f'option4_capital_{key}_download')
 
 
 def capital_view(tasks, cash, cutoff):
     render_milestone_overview(tasks, cash=cash)
     st.caption('Visión general por hito y análisis del capital de ambos proyectos.')
-    st.subheader('Análisis de capital')
     if tasks.empty:
         st.info('No hay actividades para la selección.')
         return
     selected = cash[cash['ID actividad'].isin(tasks['ID'])].copy()
-    reference = tasks['Presupuesto referencia'].sum(min_count=1)
-    pending = selected['Referencia por validar CLP'].sum(min_count=1)
-    valid = selected['Pendiente validado CLP'].sum(min_count=1)
-    summary_items = [
-        ('Presupuesto de referencia', money(reference), 'Suma de referencias informadas', 'reference'),
-        ('Caja por validar', money(pending), 'Pendiente de revisión', 'pending'),
-        ('Caja validada', money(valid), 'Saldos con validación confirmada', 'validated'),
-        ('Actividades de caja por validar', str(selected['Validación del saldo'].eq('Por validar').sum()), 'Saldos y fechas FC de Costos', 'activities'),
-    ]
-    summary_html = ''.join(
-        f'<article class="option-capital-total {kind}"><span>{html.escape(label)}</span>'
-        f'<strong>{html.escape(value)}</strong><small>{html.escape(note)}</small></article>'
-        for label, value, note, kind in summary_items
-    )
-    st.html('<div class="option-capital-totals">' + summary_html + '</div>'
-        '<div class="option-capital-rule"><span aria-hidden="true">i</span>'
-        '<p>La caja por validar forma parte del programa. <b>No se suma nuevamente a la caja pendiente de cubrir.</b></p></div>')
-    with st.expander('Criterio de cálculo y redondeo'):
-        st.caption('La caja proviene de Costos: saldos No pagado o Parcial con inclusión activa. La brecha requiere caja disponible e ingresos confirmados.')
-        st.caption('Los totales se suman desde las partidas publicadas; pueden diferir algunos pesos del resumen por redondeo. Un importe sin validar no equivale a cero.')
-    st.subheader('Calendario de desembolsos')
-    selected['_month']=selected['_date'].dt.to_period('M').dt.to_timestamp()
-    first_month=cutoff.to_period('M').to_timestamp()
-    selected['_month']=selected['_month'].mask(selected['_month'].lt(first_month),first_month)
-    monthly=selected.dropna(subset=['_month']).groupby('_month')[['Pendiente validado CLP','Referencia por validar CLP']].sum(min_count=1).reset_index()
-    render_calendar(monthly, milestones=explicit_milestone_rows(tasks))
-    st.caption('Los vencimientos anteriores al corte se agrupan en el mes de corte, como en la planilla. Los aportes en especie no equivalen a caja.')
+    with st.container(border=True, key='option4_analysis_overview'):
+        st.subheader('Análisis de capital')
+        reference = tasks['Presupuesto referencia'].sum(min_count=1)
+        pending = selected['Referencia por validar CLP'].sum(min_count=1)
+        valid = selected['Pendiente validado CLP'].sum(min_count=1)
+        summary_items = [
+            ('Presupuesto de referencia', money(reference), 'Suma de referencias informadas', 'reference'),
+            ('Caja por validar', money(pending), 'Pendiente de revisión', 'pending'),
+            ('Caja validada', money(valid), 'Saldos con validación confirmada', 'validated'),
+            ('Actividades de caja por validar', str(selected['Validación del saldo'].eq('Por validar').sum()), 'Saldos y fechas FC de Costos', 'activities'),
+        ]
+        summary_html = ''.join(
+            f'<article class="option-capital-total {kind}"><span>{html.escape(label)}</span>'
+            f'<strong>{html.escape(value)}</strong><small>{html.escape(note)}</small></article>'
+            for label, value, note, kind in summary_items
+        )
+        st.html('<div class="option-capital-totals">' + summary_html + '</div>'
+            '<div class="option-capital-rule"><span aria-hidden="true">i</span>'
+            '<p>La caja por validar forma parte del programa. <b>No se suma nuevamente a la caja pendiente de cubrir.</b></p></div>')
+        with st.expander('Criterio de cálculo y redondeo'):
+            st.caption('La caja proviene de Costos: saldos No pagado o Parcial con inclusión activa. La brecha requiere caja disponible e ingresos confirmados.')
+            st.caption('Los totales se suman desde las partidas publicadas; pueden diferir algunos pesos del resumen por redondeo. Un importe sin validar no equivale a cero.')
+    with st.container(border=True, key='option4_analysis_calendar'):
+        st.subheader('Calendario de desembolsos')
+        selected['_month']=selected['_date'].dt.to_period('M').dt.to_timestamp()
+        first_month=cutoff.to_period('M').to_timestamp()
+        selected['_month']=selected['_month'].mask(selected['_month'].lt(first_month),first_month)
+        monthly=selected.dropna(subset=['_month']).groupby('_month')[['Pendiente validado CLP','Referencia por validar CLP']].sum(min_count=1).reset_index()
+        render_calendar(monthly, milestones=explicit_milestone_rows(tasks))
+        st.caption('Los vencimientos anteriores al corte se agrupan en el mes de corte, como en la planilla. Los aportes en especie no equivalen a caja.')
+        with st.expander('Detalle de saldos de caja y validación · Costos'):
+            st.dataframe(selected[['ID actividad','Concepto / cuota','Fecha FC / desembolso','Estado de pago','Saldo pendiente CLP','Validación del saldo','Caja programada CLP','Pendiente validado CLP','Referencia por validar CLP','Alerta caja','Respaldo / observaciones']].rename(columns={'Concepto / cuota':'Actividad / entregable'}),hide_index=True,use_container_width=True)
+        with st.expander('Calendario mensual · selección activa'):
+            st.dataframe(monthly.rename(columns={'_month':'Mes'}),hide_index=True,use_container_width=True)
     render_capital_dimensions(tasks, selected)
     render_commercial_analysis(tasks)
     render_responsible_funds(tasks, selected, capital_dimension_summary)
-    with st.expander('Detalle de saldos de caja y validación · Costos'):
-        st.dataframe(selected[['ID actividad','Concepto / cuota','Fecha FC / desembolso','Estado de pago','Saldo pendiente CLP','Validación del saldo','Caja programada CLP','Pendiente validado CLP','Referencia por validar CLP','Alerta caja','Respaldo / observaciones']].rename(columns={'Concepto / cuota':'Actividad / entregable'}),hide_index=True,use_container_width=True)
-    with st.expander('Calendario mensual · selección activa'):
-        st.dataframe(monthly.rename(columns={'_month':'Mes'}),hide_index=True,use_container_width=True)
 
 
 def build_timeline_rows(tasks, end, level):
