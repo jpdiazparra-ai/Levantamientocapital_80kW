@@ -27,6 +27,7 @@
 .st-key-analysis_option .option-milestone-stats .has-delay b {color:#B45309;}
 .st-key-analysis_option .option-milestone-finish {display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px;border-top:1px solid #E8EDF1;margin-top:12px;padding-top:10px;font-size:10px;line-height:1.6;color:var(--muted);}
 .st-key-analysis_option .option-milestone-finish b {font-weight:600;color:#334155;}
+.st-key-analysis_option .option-milestone-finish small {flex-basis:100%;color:var(--muted);font-size:9px;line-height:1.5;}
 .st-key-analysis_option .option-milestone-capital {margin:12px 0;}
 .st-key-analysis_option .option-milestone-capital>span {display:block;font-size:9px;color:var(--muted);line-height:1.6;}
 .st-key-analysis_option .option-milestone-capital strong {display:block;margin-top:5px;color:var(--ink);font-size:clamp(17px,1.5vw,23px);font-weight:750;font-variant-numeric:tabular-nums;letter-spacing:-.025em;overflow-wrap:anywhere;}

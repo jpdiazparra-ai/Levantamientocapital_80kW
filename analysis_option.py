@@ -99,7 +99,8 @@ def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items(
     token = f'{refresh_nonce}_{time.time_ns()}'
     def download(item):
         name, gid = item
-        response = requests.get(source_url, params={'output':'csv', 'gid':gid, '_cb':token}, timeout=(10, 40))
+        response = requests.get(source_url, params={'output':'csv', 'gid':gid, '_cb':token},
+            headers={'Cache-Control':'no-cache', 'Pragma':'no-cache'}, timeout=(10, 40))
         response.raise_for_status()
         return name, pd.read_csv(BytesIO(response.content), header=None, dtype=str, keep_default_na=False)
     with ThreadPoolExecutor(max_workers=5) as pool:
@@ -125,7 +126,7 @@ def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items(
     cutoff = dates(pd.Series([raw['Resumen'].iloc[3,1]])).iloc[0]
     if pd.isna(cutoff):
         raise ValueError('La fecha de corte del documento no es válida.')
-    return tasks, cash, cutoff, pd.Timestamp.now(tz='America/Santiago').strftime('%d-%m-%Y %H:%M')
+    return tasks, cash, cutoff, pd.Timestamp.now(tz='America/Santiago').strftime('%d-%m-%Y %H:%M:%S')
 
 
 def weighted_progress(frame):
@@ -464,6 +465,7 @@ def render_milestone_overview(tasks, cash=None):
     available = tasks['Hito objetivo'].dropna().unique().tolist()
     ordered = [name for name in sequence if name in available] + sorted(name for name in available if name not in sequence)
     cards = []
+    finish_sources = []
     for index, name in enumerate(ordered, start=1):
         group = tasks[tasks['Hito objetivo'].eq(name)]
         progress = weighted_progress(group)
@@ -473,6 +475,12 @@ def render_milestone_overview(tasks, cash=None):
         delayed = int(group['_delay'].gt(0).sum())
         finish = group['Fin previsto actual'].max()
         finish_label = 'Sin fecha' if pd.isna(finish) else finish.strftime('%d-%m-%Y')
+        drivers = group[group['Fin previsto actual'].eq(finish)] if pd.notna(finish) else group.iloc[:0]
+        driver_ids = drivers['ID'].astype(str).tolist()
+        source_label = 'Plan · ' + ', '.join(driver_ids[:2]) if driver_ids else 'Sin fecha informada en Plan'
+        if len(driver_ids) > 2:
+            source_label += f' + {len(driver_ids) - 2} actividades'
+        finish_sources.extend(drivers[['Hito objetivo', 'ID', 'Actividad / entregable', 'Fin previsto actual']].to_dict('records'))
         tag = '80 kW' if '80' in name else '10 kW' if '10' in name else 'Hito'
         capital_html = ''
         if cash is not None:
@@ -494,12 +502,20 @@ def render_milestone_overview(tasks, cash=None):
             f'<div class="option-milestone-track" role="img" aria-label="Avance: {progress_label}"><i style="width:{percentage:.2f}%"></i></div>'
             f'<div class="option-milestone-stats"><span><b>{completed} / {len(group)}</b> terminadas</span>'
             f'<span class="{"has-delay" if delayed else ""}"><b>{delayed}</b> con atraso previsto</span></div>'
-            f'<div class="option-milestone-finish"><span>Fin previsto</span><b>{finish_label}</b></div>'
+            f'<div class="option-milestone-finish"><span title="Fecha máxima de Fin previsto actual entre las actividades del hito">Fin previsto actual</span><b>{finish_label}</b><small>{html.escape(source_label)}</small></div>'
             '</article>'
         )
     grid_class = 'option-milestone-grid option-capital-milestones' if cash is not None else 'option-milestone-grid'
     st.html(f'<div class="{grid_class}">' + ''.join(cards) + '</div>')
     st.caption('Avance ponderado por presupuesto de referencia. Terminada = avance físico de 100%; la aceptación técnica se registra por separado.')
+    with st.expander('Actividad que determina el fin de cada hito'):
+        st.caption('El KPI toma la fecha más tardía de Fin previsto actual en Plan. Las actividades con fechas posteriores también forman parte del cierre del hito.')
+        if finish_sources:
+            st.dataframe(pd.DataFrame(finish_sources), hide_index=True, use_container_width=True,
+                column_config={'Actividad / entregable':st.column_config.TextColumn(width='large'),
+                    'Fin previsto actual':st.column_config.DatetimeColumn(format='DD-MM-YYYY')})
+        else:
+            st.info('No hay fechas previstas informadas para los hitos.')
 
 
 def technical_view(tasks):
