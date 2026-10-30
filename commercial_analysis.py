@@ -20,6 +20,15 @@ def commercial_budget_variation(frame):
     return (budget - commercial).div(commercial.where(commercial.ne(0))) * 100
 
 
+def commercial_unit_cost(frame):
+    quantities = frame['Unidades'].map(lambda value:
+        value.strip().replace('\u00a0', '').replace(' ', '').replace('.', '').replace(',', '.')
+        if isinstance(value, str) else value)
+    quantities = pd.to_numeric(quantities, errors='coerce')
+    commercial = pd.to_numeric(frame[COMMERCIAL], errors='coerce')
+    return commercial.div(quantities.where(quantities.gt(0)))
+
+
 def commercial_product_scope(tasks):
     classification = tasks['Costo para producto'].fillna('').astype(str).str.strip().str.casefold()
     return tasks[classification.eq('aplica')].copy()
@@ -113,15 +122,17 @@ def _summary_table(summary, dimension, scope, key):
     if 'Unidades' not in details:
         details['Unidades'] = pd.NA
     details['Unidades'] = details['Unidades'].replace('', pd.NA)
+    details['Costo por unidad · CLP'] = commercial_unit_cost(details)
     details['Variación %'] = commercial_budget_variation(details)
-    fields = ['ID', 'Actividad / entregable', 'Unidades', 'Sistema', 'Hito objetivo', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente', 'Variación %']
+    fields = ['ID', 'Actividad / entregable', 'Unidades', 'Costo por unidad · CLP', 'Hito objetivo', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente', 'Variación %']
     details = details[[field for field in fields if field in details]].rename(columns={'Unidades': 'Cantidad'})
-    st.dataframe(details.style.format({**{field: amount for field in [COMMERCIAL, 'Presupuesto vigente'] if field in details},
+    st.dataframe(details.style.format({**{field: amount for field in [COMMERCIAL, 'Presupuesto vigente', 'Costo por unidad · CLP'] if field in details},
             'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar'),
         hide_index=True, use_container_width=True, height=min(460, 38+len(details)*35),
         column_config={'ID': st.column_config.TextColumn(width='small'),
             'Actividad / entregable': st.column_config.TextColumn(width='large'),
             'Cantidad': st.column_config.TextColumn(width='small', help='Unidades de Plan (columna G), vinculadas por ID de actividad.'),
+            'Costo por unidad · CLP': st.column_config.NumberColumn(width='medium', help='Monto comercial ÷ Cantidad (Unidades de Plan). Sin cálculo cuando falta un dato o la cantidad no es positiva.'),
             COMMERCIAL: st.column_config.NumberColumn('Monto comercial · CLP', width='medium'),
             'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
             'Variación %': st.column_config.NumberColumn('Variación %', width='small', help=VARIATION_HELP)})
@@ -213,15 +224,17 @@ def render_commercial_analysis(tasks):
                 with milestone_tab:
                     _summary_table(commercial_breakdown(scope, 'Hito objetivo'), 'Hito objetivo', scope, f'option4_commercial_milestone_{index}')
             with st.expander('Trazabilidad de partidas · Costos'):
-                fields = ['ID', 'Actividad / entregable', 'Hito objetivo', 'Unidades', 'Sistema', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente']
+                fields = ['ID', 'Actividad / entregable', 'Hito objetivo', 'Unidades', 'Costo por unidad · CLP', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente']
                 detail = scope.reindex(columns=fields).sort_values(COMMERCIAL, ascending=False, na_position='last', kind='stable')
+                detail['Costo por unidad · CLP'] = commercial_unit_cost(detail)
                 detail = detail.rename(columns={'Unidades': 'Cantidad'})
                 detail['Variación %'] = commercial_budget_variation(detail)
-                st.dataframe(detail.style.format({**{field: amount for field in [COMMERCIAL, 'Presupuesto vigente'] if field in detail},
+                st.dataframe(detail.style.format({**{field: amount for field in [COMMERCIAL, 'Presupuesto vigente', 'Costo por unidad · CLP'] if field in detail},
                         'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar'),
                     hide_index=True, use_container_width=True, height=350,
                     column_config={'Actividad / entregable': st.column_config.TextColumn(width='large'),
                         'Cantidad': st.column_config.TextColumn(width='small', help='Unidades de Plan (columna G), vinculadas por ID de actividad.'),
+                        'Costo por unidad · CLP': st.column_config.NumberColumn(width='medium', help='Monto comercial ÷ Cantidad (Unidades de Plan). Sin cálculo cuando falta un dato o la cantidad no es positiva.'),
                         'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
                         'Variación %': st.column_config.NumberColumn('Variación %', width='small', help=VARIATION_HELP)})
                 st.download_button('Descargar análisis comercial · CSV', detail.to_csv(index=False).encode('utf-8-sig'),
