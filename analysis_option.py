@@ -108,13 +108,24 @@ def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items(
     with ThreadPoolExecutor(max_workers=5) as pool:
         raw = dict(pool.map(download, sheets))
     plan = table_from(raw['Plan'], 4, 'ID')
+    # Plan can contain preallocated IDs for activities that have not been entered.
+    # Ignore only rows empty in every field except ID; partially entered work
+    # must still participate in validation against Costos.
+    populated = plan.drop(columns='ID').apply(lambda col: col.fillna('').astype(str).str.strip().ne('')).any(axis=1)
+    plan = plan.loc[populated].reset_index(drop=True)
     costs = table_from(raw['Costos'], 4, 'ID')
     revision = table_from(raw['Revision'], 4, 'ID')
     for name, frame in [('Plan', plan), ('Costos', costs), ('Revision', revision)]:
         if frame['ID'].duplicated().any():
             raise ValueError(f'{name} contiene IDs duplicados; revisa la planilla antes de agregar montos.')
     if set(plan['ID']) != set(costs['ID']):
-        raise ValueError('Plan y Costos deben contener los mismos IDs de actividad.')
+        differences = []
+        for label, ids in [('Faltan en Costos', set(plan['ID']) - set(costs['ID'])),
+                           ('Faltan en Plan', set(costs['ID']) - set(plan['ID']))]:
+            if ids:
+                ordered = sorted(ids, key=lambda value: re.sub(r'\d+', lambda match: match.group().zfill(20), value))
+                differences.append(label + ': ' + ', '.join(ordered[:15]) + ('…' if len(ordered) > 15 else ''))
+        raise ValueError('Plan y Costos deben contener los mismos IDs de actividad. ' + '. '.join(differences))
     cash = cash_from_costs(costs, plan)
     # Financial amounts and commercial eligibility are owned by Costos.
     plan = plan.drop(columns=['Presupuesto vigente', 'Comercial anterior', 'Costo para producto'], errors='ignore')
@@ -539,7 +550,10 @@ def technical_view(tasks):
     delayed=tasks[tasks['_delay'].gt(0)].nlargest(10,'_delay')
     st.dataframe(delayed[['ID','Actividad / entregable','Sistema','Estado por avance','Presupuesto referencia','Fin base','Fin previsto actual','Fin real','_delay']].rename(columns={'_delay':'Días de desvío'}),hide_index=True,use_container_width=True,column_config={'Actividad / entregable':st.column_config.TextColumn(width='large'),'Presupuesto referencia':st.column_config.NumberColumn('Referencia CLP',format='$ %.0f')})
     with st.expander('Detalle técnico y evidencia'):
-        st.dataframe(tasks[['ID','Actividad / entregable','Entidad responsable','Responsable persona','Estado informado','Avance físico','Predecesoras (ID)','Evidencia / aceptación','Liberación técnica','Acción requerida']],hide_index=True,use_container_width=True)
+        fields = ['ID','Actividad / entregable','Entidad responsable','Responsable persona','Estado informado','Avance físico','Predecesoras (ID)','Evidencia / aceptación','Liberación técnica','Acción requerida']
+        st.dataframe(tasks.reindex(columns=fields),hide_index=True,use_container_width=True)
+        if 'Liberación técnica' not in tasks:
+            st.caption('La fuente actual no incluye Liberación técnica; esa columna se mantiene sin informar.')
 
 
 def pmo_view(tasks):
