@@ -11,6 +11,13 @@ from capital_charts import amount
 
 COMMERCIAL = 'Comercial anterior'
 COLORS = ['#244A6C', '#0F766E', '#2E90A5', '#B7791F', '#718096', '#735D96', '#CBD5E1']
+VARIATION_HELP = '(Presupuesto vigente − Monto comercial) / Monto comercial × 100. Positivo: presupuesto superior al comercial. Sin cálculo si falta un monto o el comercial es cero.'
+
+
+def commercial_budget_variation(frame):
+    commercial = pd.to_numeric(frame[COMMERCIAL], errors='coerce')
+    budget = pd.to_numeric(frame['Presupuesto vigente'], errors='coerce')
+    return (budget - commercial).div(commercial.where(commercial.ne(0))) * 100
 
 
 def commercial_breakdown(tasks, dimension):
@@ -101,15 +108,19 @@ def _summary_table(summary, dimension, scope, key):
     if 'Unidades' not in details:
         details['Unidades'] = pd.NA
     details['Unidades'] = details['Unidades'].replace('', pd.NA)
-    fields = ['ID', 'Actividad / entregable', 'Unidades', 'Sistema', 'Hito objetivo', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente', 'Entidad responsable']
+    details['Variación %'] = commercial_budget_variation(details)
+    fields = ['ID', 'Actividad / entregable', 'Unidades', 'Sistema', 'Hito objetivo', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente', 'Variación %']
     details = details[[field for field in fields if field in details]].rename(columns={'Unidades': 'Cantidad'})
-    st.dataframe(details.style.format({field: amount for field in [COMMERCIAL, 'Presupuesto vigente'] if field in details}, na_rep='Sin informar'),
+    st.dataframe(details.style.format({**{field: amount for field in [COMMERCIAL, 'Presupuesto vigente'] if field in details},
+            'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar'),
         hide_index=True, use_container_width=True, height=min(460, 38+len(details)*35),
         column_config={'ID': st.column_config.TextColumn(width='small'),
             'Actividad / entregable': st.column_config.TextColumn(width='large'),
             'Cantidad': st.column_config.TextColumn(width='small', help='Unidades de Plan (columna G), vinculadas por ID de actividad.'),
             COMMERCIAL: st.column_config.NumberColumn('Monto comercial · CLP', width='medium'),
-            'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.')})
+            'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
+            'Variación %': st.column_config.NumberColumn('Variación %', width='small', help=VARIATION_HELP)})
+    st.caption('Variación respecto del monto comercial: positivo = presupuesto mayor; negativo = presupuesto menor. Sin cálculo cuando el comercial es cero o falta un monto.')
     st.download_button('Descargar partidas seleccionadas · CSV', details.to_csv(index=False).encode('utf-8-sig'),
         file_name='partidas_comerciales_seleccionadas.csv', mime='text/csv', key=group_key+'_download')
 
@@ -192,11 +203,14 @@ def render_commercial_analysis(tasks):
                 fields = ['ID', 'Actividad / entregable', 'Hito objetivo', 'Unidades', 'Sistema', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente']
                 detail = scope.reindex(columns=fields).sort_values(COMMERCIAL, ascending=False, na_position='last', kind='stable')
                 detail = detail.rename(columns={'Unidades': 'Cantidad'})
-                st.dataframe(detail.style.format({field: amount for field in [COMMERCIAL, 'Presupuesto vigente'] if field in detail}, na_rep='Sin informar'),
+                detail['Variación %'] = commercial_budget_variation(detail)
+                st.dataframe(detail.style.format({**{field: amount for field in [COMMERCIAL, 'Presupuesto vigente'] if field in detail},
+                        'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar'),
                     hide_index=True, use_container_width=True, height=350,
                     column_config={'Actividad / entregable': st.column_config.TextColumn(width='large'),
                         'Cantidad': st.column_config.TextColumn(width='small', help='Unidades de Plan (columna G), vinculadas por ID de actividad.'),
-                        'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.')})
+                        'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
+                        'Variación %': st.column_config.NumberColumn('Variación %', width='small', help=VARIATION_HELP)})
                 st.download_button('Descargar análisis comercial · CSV', detail.to_csv(index=False).encode('utf-8-sig'),
                     file_name=f'costo_comercial_{index}.csv', mime='text/csv', key=f'option4_commercial_download_{index}')
         with st.expander('Cómo interpretar el costo comercial'):
