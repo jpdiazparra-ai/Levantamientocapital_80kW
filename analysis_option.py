@@ -116,8 +116,8 @@ def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items(
     if set(plan['ID']) != set(costs['ID']):
         raise ValueError('Plan y Costos deben contener los mismos IDs de actividad.')
     cash = cash_from_costs(costs, plan)
-    # The current budget is owned by Costos, even if Plan also publishes it.
-    plan = plan.drop(columns=['Presupuesto vigente', 'Comercial anterior'], errors='ignore')
+    # Financial amounts and commercial eligibility are owned by Costos.
+    plan = plan.drop(columns=['Presupuesto vigente', 'Comercial anterior', 'Costo para producto'], errors='ignore')
     shared = [c for c in costs if c in plan and c != 'ID']
     tasks = plan.merge(costs.drop(columns=shared), on='ID', how='left', validate='one_to_one')
     tasks = tasks.merge(revision[['ID', 'Estado / avance actual', 'Control de dependencia']], on='ID', how='left', validate='one_to_one')

@@ -22,7 +22,7 @@ def commercial_budget_variation(frame):
 
 def commercial_product_scope(tasks):
     classification = tasks['Costo para producto'].fillna('').astype(str).str.strip().str.casefold()
-    return tasks[classification.isin(['aplica', 'aprobado'])].copy()
+    return tasks[classification.eq('aplica')].copy()
 
 
 def commercial_breakdown(tasks, dimension):
@@ -138,7 +138,7 @@ def render_commercial_analysis(tasks):
             st.info('La fuente publicada no contiene la columna Comercial anterior en Costos.')
             return
         if 'Costo para producto' not in tasks:
-            st.info('Falta Costo para producto en Plan para identificar las partidas aplicables al análisis comercial.')
+            st.info('Falta Costo para producto en Costos para identificar las partidas aplicables al análisis comercial.')
             return
         st.html('<div class="option-commercial-note"><b>Base comercial histórica</b><span>Los valores representan las partidas informadas en “Comercial anterior”. '
             'Un subtotal con cobertura parcial no determina el costo completo del piloto ni un precio de venta actualizado.</span></div>')
@@ -156,7 +156,7 @@ def render_commercial_analysis(tasks):
         project_tasks = tasks[tasks['Proyecto'].eq(project)].copy()
         scope = commercial_product_scope(project_tasks)
         excluded = len(project_tasks) - len(scope)
-        st.caption(f'Costo para producto: Aplica o Aprobado · {len(scope)} partidas incluidas · {excluded} excluidas por su clasificación en Plan.')
+        st.caption(f'Costo para producto: solo Aplica · {len(scope)} partidas incluidas · {excluded} excluidas por su clasificación en Costos.')
         values = scope[COMMERCIAL]
         total = values.sum(min_count=1)
         known, count = int(values.notna().sum()), len(scope)
@@ -200,7 +200,7 @@ def render_commercial_analysis(tasks):
                     st.html('<div class="option-commercial-pending"><span>DATOS PENDIENTES</span><b>Completar la base comercial del piloto</b>'
                         f'<p>Hay {count} actividades sin monto comercial informado. Al completar Comercial anterior en Costos y actualizar el panel, aparecerán aquí los montos y su distribución.</p></div>')
                 else:
-                    st.info('El proyecto no tiene partidas clasificadas como Aplica o Aprobado en Costo para producto de Plan.')
+                    st.info('El proyecto no tiene partidas clasificadas como Aplica en Costo para producto de Costos.')
             if can_draw:
                 st.html('<div class="option-commercial-insight"><span>LECTURA EJECUTIVA</span>'
                     f'<p>Los {concentration_count} sistemas de mayor monto concentran <b>{concentration_label}</b> del subtotal. '
@@ -228,7 +228,7 @@ def render_commercial_analysis(tasks):
                     file_name=f'costo_comercial_{index}.csv', mime='text/csv', key=f'option4_commercial_download_{index}')
         with st.expander('Cómo interpretar el costo comercial'):
             st.markdown('El subtotal suma **Comercial anterior** una sola vez por ID de actividad, vinculado desde **Costos** a **Plan**. '
-                'Se incluyen únicamente las partidas con **Costo para producto = Aplica o Aprobado** en Plan. Las filas No aplica o sin clasificación se excluyen de los importes, conteos, gráficos y descargas comerciales. '
+                'Se incluyen únicamente las partidas con **Costo para producto = Aplica** en Costos. Las filas Aprobado, No aplica o sin clasificación se excluyen de los importes, conteos, gráficos y descargas comerciales. '
                 'La cobertura mide registros con monto respecto de las actividades seleccionadas; no mide cuánto presupuesto está cubierto. '
                 'Los ceros explícitos cuentan como informados y los vacíos se conservan como faltantes. '
                 'El donut distribuye el subtotal informado por sistema. El indicador por kW divide ese mismo subtotal por la potencia nominal del proyecto; '
