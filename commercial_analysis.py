@@ -71,7 +71,8 @@ def commercial_group_details(scope, dimension, group, include_missing=False):
     details = scope[labels.eq(group)].copy()
     if not include_missing:
         details = details[details[COMMERCIAL].notna()]
-    return details.sort_values(COMMERCIAL, ascending=False, na_position='last', kind='stable')
+    return details.sort_values('ID', kind='stable', key=lambda ids:
+        ids.astype(str).str.casefold().str.replace(r'\d+', lambda match: match.group().zfill(20), regex=True))
 
 
 def _summary_table(summary, dimension, scope, key):
