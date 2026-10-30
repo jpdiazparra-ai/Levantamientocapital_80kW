@@ -2,7 +2,7 @@
 # Dashboard CAPEX Piloto Eólico 80 kW (versión mejorada)
 
 import ast
-from analysis_option import render_analysis_option
+from dashboard_runtime import APP_RELEASE, dashboard_revision, render_analysis_option
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -27733,6 +27733,7 @@ def render_riesgo_matrix_chart(riesgo_url: str, key_prefix: str = ""):
 # SIDEBAR
 # =========================
 st.sidebar.title("⚙️ Parámetros")
+st.sidebar.caption(f"Versión · {APP_RELEASE} · {dashboard_revision()[:8]}")
 capex_url = CAPEX_CSV_URL_DEFAULT
 
 st.sidebar.markdown("---")
