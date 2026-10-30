@@ -20,6 +20,11 @@ def commercial_budget_variation(frame):
     return (budget - commercial).div(commercial.where(commercial.ne(0))) * 100
 
 
+def commercial_product_scope(tasks):
+    classification = tasks['Costo para producto'].fillna('').astype(str).str.strip().str.casefold()
+    return tasks[classification.isin(['aplica', 'aprobado'])].copy()
+
+
 def commercial_breakdown(tasks, dimension):
     """Keep missing amounts missing and reconcile every group to its activity IDs."""
     data = tasks.copy()
@@ -132,6 +137,9 @@ def render_commercial_analysis(tasks):
         if COMMERCIAL not in tasks:
             st.info('La fuente publicada no contiene la columna Comercial anterior en Costos.')
             return
+        if 'Costo para producto' not in tasks:
+            st.info('Falta Costo para producto en Plan para identificar las partidas aplicables al análisis comercial.')
+            return
         st.html('<div class="option-commercial-note"><b>Base comercial histórica</b><span>Los valores representan las partidas informadas en “Comercial anterior”. '
             'Un subtotal con cobertura parcial no determina el costo completo del piloto ni un precio de venta actualizado.</span></div>')
         projects = list(tasks['Proyecto'].dropna().unique())
@@ -145,7 +153,10 @@ def render_commercial_analysis(tasks):
         project = st.selectbox('Piloto del análisis comercial', projects, key=project_key,
             help='Alterna los pilotos de 10 kW y 80 kW para revisar sus montos comerciales y partidas.')
         index = re.sub(r'\W+', '_', str(project))
-        scope = tasks[tasks['Proyecto'].eq(project)].copy()
+        project_tasks = tasks[tasks['Proyecto'].eq(project)].copy()
+        scope = commercial_product_scope(project_tasks)
+        excluded = len(project_tasks) - len(scope)
+        st.caption(f'Costo para producto: Aplica o Aprobado · {len(scope)} partidas incluidas · {excluded} excluidas por su clasificación en Plan.')
         values = scope[COMMERCIAL]
         total = values.sum(min_count=1)
         known, count = int(values.notna().sum()), len(scope)
@@ -178,16 +189,18 @@ def render_commercial_analysis(tasks):
                     st.plotly_chart(fig, use_container_width=True, config={'displaylogo': False}, key=f'option4_commercial_donut_{index}')
                     st.html('<div class="option-commercial-chart-note">Participación sobre el subtotal informado · Detalle completo a la derecha</div>')
                 else:
-                    reason = 'Sin montos comerciales informados' if not known else 'Sin distribución positiva' if nonnegative else 'Hay ajustes negativos en la fuente'
+                    reason = 'Sin partidas aplicables al producto' if not count else 'Sin montos comerciales informados' if not known else 'Sin distribución positiva' if nonnegative else 'Hay ajustes negativos en la fuente'
                     st.html('<div class="option-commercial-empty"><div>—</div><b>'+reason+'</b><span>Consulta el detalle de partidas. El donut requiere montos no negativos y un subtotal positivo.</span></div>')
             with detail_col:
                 if known:
                     if not can_draw:
                         wedges = pd.DataFrame(columns=['Sistema'])
                     st.html(commercial_system_ranking(summary, total, wedges))
-                else:
+                elif count:
                     st.html('<div class="option-commercial-pending"><span>DATOS PENDIENTES</span><b>Completar la base comercial del piloto</b>'
                         f'<p>Hay {count} actividades sin monto comercial informado. Al completar Comercial anterior en Costos y actualizar el panel, aparecerán aquí los montos y su distribución.</p></div>')
+                else:
+                    st.info('El proyecto no tiene partidas clasificadas como Aplica o Aprobado en Costo para producto de Plan.')
             if can_draw:
                 st.html('<div class="option-commercial-insight"><span>LECTURA EJECUTIVA</span>'
                     f'<p>Los {concentration_count} sistemas de mayor monto concentran <b>{concentration_label}</b> del subtotal. '
@@ -215,6 +228,7 @@ def render_commercial_analysis(tasks):
                     file_name=f'costo_comercial_{index}.csv', mime='text/csv', key=f'option4_commercial_download_{index}')
         with st.expander('Cómo interpretar el costo comercial'):
             st.markdown('El subtotal suma **Comercial anterior** una sola vez por ID de actividad, vinculado desde **Costos** a **Plan**. '
+                'Se incluyen únicamente las partidas con **Costo para producto = Aplica o Aprobado** en Plan. Las filas No aplica o sin clasificación se excluyen de los importes, conteos, gráficos y descargas comerciales. '
                 'La cobertura mide registros con monto respecto de las actividades seleccionadas; no mide cuánto presupuesto está cubierto. '
                 'Los ceros explícitos cuentan como informados y los vacíos se conservan como faltantes. '
                 'El donut distribuye el subtotal informado por sistema. El indicador por kW divide ese mismo subtotal por la potencia nominal del proyecto; '
