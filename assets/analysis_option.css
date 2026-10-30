@@ -175,3 +175,5 @@
 .st-key-analysis_option [class*="st-key-option4_analysis_"] [data-testid="stSubheader"] {padding-top:0;}
 .st-key-analysis_option [class*="_cash_panel"] {padding-left:22px!important;border-left:1px solid #E8EDF1!important;}
 @media(max-width:760px){.st-key-analysis_option [data-testid="stVerticalBlock"][class*="st-key-option4_analysis_"]{padding:15px!important;}.st-key-analysis_option [class*="_cash_panel"]{padding-left:0!important;border-left:0!important;border-top:1px solid #E8EDF1!important;padding-top:18px!important;}}
+.st-key-analysis_option [class*="_package_controls"] {padding:12px 14px;border:1px solid #E2E8F0;border-radius:10px;background:#FAFCFD;}
+.st-key-analysis_option [class*="_package_controls"] [data-testid="stButtonGroup"] {flex-wrap:wrap;gap:7px;}

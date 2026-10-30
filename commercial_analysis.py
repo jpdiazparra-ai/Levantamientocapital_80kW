@@ -114,11 +114,27 @@ def _summary_table(summary, dimension, scope, key):
     group_key = key + '_' + str(group)
     include_missing = st.checkbox('Incluir partidas sin monto comercial', key=group_key+'_missing')
     details = commercial_group_details(scope, dimension, group, include_missing)
-    st.html('<div class="option-commercial-reading"><b>'+html.escape(str(group))+'</b>'
-        f'<p>{len(details)} partidas · Subtotal comercial: {amount(details[COMMERCIAL].sum(min_count=1))}</p></div>')
     if details.empty:
         st.info('Este grupo no tiene partidas con monto comercial informado. Activa la opción anterior para revisar sus actividades pendientes de monto.')
         return
+    packages = details['Paquete / línea'].fillna('').astype(str).str.strip().replace('', 'Sin paquete')
+    package_counts = packages.value_counts()
+    package_total = len(details)
+    all_packages = 'Todos los paquetes'
+    options = [all_packages, *sorted(package_counts.index, key=str.casefold)]
+    package_key = group_key + '_package'
+    if package_key in st.session_state and st.session_state[package_key] not in options:
+        st.session_state[package_key] = all_packages
+    with st.container(key=group_key+'_package_controls'):
+        package = st.segmented_control('Paquete / línea de las partidas', options, default=all_packages,
+            key=package_key, selection_mode='single', width='stretch',
+            format_func=lambda value: f'{value} ({package_total if value == all_packages else package_counts[value]})',
+            help='Selecciona un paquete para reducir las partidas. Todos los paquetes muestra el sistema o hito completo.')
+    if package and package != all_packages:
+        details = details[packages.eq(package)].copy()
+    selection_label = str(group) + (' · ' + package if package and package != all_packages else ' · Todos los paquetes')
+    st.html('<div class="option-commercial-reading"><b>'+html.escape(selection_label)+'</b>'
+        f'<p>{len(details)} partidas · Subtotal comercial: {amount(details[COMMERCIAL].sum(min_count=1))}</p></div>')
     if 'Unidades' not in details:
         details['Unidades'] = pd.NA
     details['Unidades'] = details['Unidades'].replace('', pd.NA)
