@@ -22,9 +22,9 @@ SOURCE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQOSK1DE0sEuK5Cl-bIahO
 SHEETS = {'Resumen': '295125200', 'Plan': '1622224524', 'Costos': '1070657893', 'Revision': '735160527', 'Desembolsos': '614082465'}
 MONTHS = {'ene':'01','feb':'02','mar':'03','abr':'04','may':'05','jun':'06','jul':'07','ago':'08','sept':'09','sep':'09','oct':'10','nov':'11','dic':'12'}
 VIEWS = [
-    ('capital', 'SUB BLOQUE 1', 'Levantamiento de Capital y Brecha TRL 9', 'Presupuesto de referencia, desembolsos mensuales y fondos pendientes de validación.'),
-    ('technical', 'SUB BLOQUE 2', 'Hitos Técnicos e Industrialización', 'Avance físico, fechas base y previstas, dependencias y evidencia de cierre.'),
-    ('pmo', 'SUB BLOQUE 3', 'Control PMO de Costos', 'Aprobación de bases, conciliación económica e inconsistencias por resolver.'),
+    ('capital', 'SUB BLOQUE 1', 'Capital, desembolsos y costo comercial', 'Compara presupuesto y caja pendiente, revisa los desembolsos por hito y analiza el costo comercial por sistema y paquete.'),
+    ('technical', 'SUB BLOQUE 2', 'Avance técnico, hitos y plazos', 'Sigue el avance de hitos y actividades, compara fechas base y previstas e identifica atrasos, dependencias y evidencia de cierre.'),
+    ('pmo', 'SUB BLOQUE 3', 'Control de costos y validación PMO', 'Revisa presupuestos aprobados, registros conciliados e inconsistencias para priorizar las acciones de control.'),
 ]
 
 
@@ -579,12 +579,12 @@ def pmo_view(tasks):
 def render_analysis_option(refresh_nonce, render_navigation):
     with st.container(key='analysis_option'):
         st.html('<style>'+Path(__file__).with_name('assets').joinpath('analysis_option.css').read_text()+'</style>')
-        st.html('<header class="option-head"><span>BLOQUE 4 · FUENTE ALTERNATIVA</span><h1>Opción de análisis</h1><p>Una lectura integrada del capital, el avance técnico y la validación económica del proyecto.</p></header>')
+        st.html('<header class="option-head"><span>BLOQUE 4 · PILOTOS 10 kW Y 80 kW</span><h1>Control integral del proyecto</h1><p>Analiza el capital de cada piloto, sigue el avance de sus hitos y revisa los costos pendientes de validación.</p></header>')
         def choose(value):st.session_state['option4_view']=value
-        render_navigation(VIEWS,st.session_state.get('option4_view'),choose,'option4_subnav',heading='Capital, hitos y control PMO',description='Selecciona la dimensión del proyecto que quieres analizar.',variant='secondary')
+        render_navigation(VIEWS,st.session_state.get('option4_view'),choose,'option4_subnav',heading='Elige el análisis que necesitas',description='Consulta capital y costo comercial, seguimiento técnico o validación de costos.',variant='secondary')
         view=st.session_state.get('option4_view')
         if view is None:
-            st.info('Comienza por capital y desembolsos, continúa con el avance técnico y revisa la validación económica en Control PMO de Costos.')
+            st.info('Selecciona una vista para analizar capital y costo comercial, seguir el avance técnico o revisar la validación de costos.')
             return
         try:
             with st.spinner('Consultando el documento de análisis…'):

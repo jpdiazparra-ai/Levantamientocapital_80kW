@@ -2,7 +2,7 @@
 
 Dashboard Streamlit para validación tecnológica, CAPEX y ejecución, valor financiero y análisis alternativo del proyecto eólico.
 
-El **Bloque 4 · Opción de análisis** usa el documento publicado de control del proyecto y contiene capital y desembolsos, hitos técnicos y control PMO. Separa importes de referencia, por validar y validados. El cronograma incluye filtros por hito, sistema, paquete y estado, orden cronológico, fin previsto actual, línea de hoy y desplazamiento continuo con encabezados fijos.
+El **Bloque 4 · Control integral del proyecto** usa el documento publicado de control del proyecto y contiene capital y desembolsos, hitos técnicos y control PMO. Separa importes de referencia, por validar y validados. El cronograma incluye filtros por hito, sistema, paquete y estado, orden cronológico, fin previsto actual, línea de hoy y desplazamiento continuo con encabezados fijos.
 
 ## Ejecutar local
 
@@ -27,3 +27,5 @@ El panel lateral muestra la versión del código en ejecución. `dashboard_runti
 `analysis_option.py` implementa el Bloque 4, `timeline_scroll.py` su cronograma y `capital_charts.py` las comparaciones de capital, el calendario mensual y los fondos por responsable. Los estilos se encuentran en `assets/`. La propuesta de análisis y los criterios de validación están en [ANALISIS_BLOQUE4.md](ANALISIS_BLOQUE4.md).
 
 El entorno virtual, las credenciales y el historial PMO local no se publican. La aplicación permite comenzar sin un archivo de historial y lo crea al guardar el primer corte.
+
+El Bloque 4 orienta la lectura en tres vistas: **Capital, desembolsos y costo comercial**, **Avance técnico, hitos y plazos**, y **Control de costos y validación PMO**.

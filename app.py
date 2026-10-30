@@ -202,7 +202,7 @@ def render_dashboard_primary_navigation(
         "control_fondos": ["Necesidades de capital", "Brecha TRL 9"],
         "vista_integrada": ["Cronograma", "Industrialización"],
         "control_cost": ["Seguimiento PMO", "Control de costos"],
-        "opcion_analisis": ["Fuente alternativa", "Capital · Hitos · PMO"],
+        "opcion_analisis": ["Pilotos 10 kW y 80 kW", "Capital · Plazos · Costos"],
         "costo_ejecutado": ["Inversión ejecutada"],
         "capacidades_externas": ["Capacidades complementarias"],
         "know_how_fw": ["Conocimiento técnico"],
@@ -31033,7 +31033,7 @@ input_cards = [
     ("estado_actual", "01 · Validación Tecnológica"),
     ("escalamiento", "02 · CAPEX y Ejecución"),
     ("valorizacion", "03 · Valor Financiero"),
-    ("opcion_analisis", "04 · Opción de análisis"),
+    ("opcion_analisis", "04 · Control integral del proyecto"),
 ]
 BLOQUE3_ONLY_MODE = os.environ.get("BLOQUE3_ONLY") == "1"
 CAPEX10_BLOQUE3_ONLY_MODE = os.environ.get("CAPEX10_BLOQUE3_ONLY") == "1"
@@ -31269,7 +31269,7 @@ else:
             ("estado_actual", "BLOQUE 1", "Validación Tecnológica", "Estado de la tecnología, evidencia del piloto y brechas para su validación."),
             ("escalamiento", "BLOQUE 2", "CAPEX y Ejecución", "Necesidades de capital, hitos de ejecución y ruta de industrialización del proyecto."),
             ("valorizacion", "BLOQUE 3", "Valor Financiero", "Proyecciones comerciales, flujos e indicadores para evaluar la creación de valor."),
-            ("opcion_analisis", "BLOQUE 4", "Opción de análisis", "Capital, hitos técnicos y control PMO desde el nuevo documento de análisis."),
+            ("opcion_analisis", "BLOQUE 4", "Control integral del proyecto", "Capital y costo comercial, avance técnico y validación de costos de los pilotos de 10 kW y 80 kW."),
         ],
         st.session_state.get("inputs_bloque_sel"), _set_inputs_bloque, "inputs_nav",
     )
@@ -31324,7 +31324,7 @@ if CAPEX10_BLOQUE3_ONLY_MODE:
             "EERR consolidado, flujos operacionales e indicadores de evaluación para el escalamiento comercial.",
         ),
     ]
-    focused_cards.append(("opcion_analisis", "BLOQUE 4", "Opción de análisis", "Capital, hitos técnicos y control PMO desde el nuevo documento de análisis."))
+    focused_cards.append(("opcion_analisis", "BLOQUE 4", "Control integral del proyecto", "Capital y costo comercial, avance técnico y validación de costos de los pilotos de 10 kW y 80 kW."))
     render_dashboard_primary_navigation(
         focused_cards, st.session_state.get("focused_access_section"),
         _set_focused_access_section, "focused_access_section",
