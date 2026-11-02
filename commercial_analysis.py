@@ -97,21 +97,30 @@ def commercial_group_details(scope, dimension, group, include_missing=False):
 
 
 def _summary_table(summary, dimension, scope, key):
-    # Keep a selected row tied to the same scope and displayed group order.
+    # Remember the group by name rather than its row number: amounts and IDs
+    # can change during refresh, resetting the dataframe's native selection.
+    selection_key = key + '_selected_group'
+    group_base_key = key
     identity = repr((scope['ID'].tolist(), summary[dimension].tolist())).encode('utf-8')
     key += '_' + hashlib.sha1(identity).hexdigest()[:10]
+    groups = summary[dimension].tolist()
+    def remember_group():
+        rows = st.session_state[key]['selection']['rows']
+        st.session_state[selection_key] = groups[rows[0]] if rows and rows[0] < len(groups) else None
     st.caption('Selecciona una fila para ver las partidas que componen su monto comercial.')
     event = st.dataframe(summary.style.format({'Monto comercial · CLP': amount, 'Participación %': '{:.1f}%', 'Cobertura %': '{:.1f}%'}, na_rep='Sin informar'),
         hide_index=True, use_container_width=True,
-        key=key, on_select='rerun', selection_mode='single-row',
+        key=key, on_select=remember_group, selection_mode='single-row',
         column_config={dimension: st.column_config.TextColumn(dimension, width='medium'),
             'Monto comercial · CLP': st.column_config.NumberColumn('Monto comercial · CLP', width='medium'),
             'Cobertura %': st.column_config.ProgressColumn('Cobertura de datos', min_value=0, max_value=100, format='%.1f%%')})
     selected = event['selection']['rows']
-    if not selected or selected[0] >= len(summary):
+    if selection_key not in st.session_state and selected and selected[0] < len(summary):
+        st.session_state[selection_key] = groups[selected[0]]
+    group = st.session_state.get(selection_key)
+    if group not in groups:
         return
-    group = summary.iloc[selected[0]][dimension]
-    group_key = key + '_' + str(group)
+    group_key = group_base_key + '_' + str(group)
     include_missing = st.checkbox('Incluir partidas sin monto comercial', key=group_key+'_missing')
     details = commercial_group_details(scope, dimension, group, include_missing)
     if details.empty:
@@ -123,8 +132,10 @@ def _summary_table(summary, dimension, scope, key):
     all_packages = 'Todos los paquetes'
     options = [all_packages, *sorted(package_counts.index, key=str.casefold)]
     package_key = group_key + '_package'
-    if package_key not in st.session_state or st.session_state[package_key] not in options:
-        st.session_state[package_key] = all_packages
+    remembered_package = st.session_state.get(package_key, all_packages)
+    # Counts are part of the button labels and can change the widget identity.
+    # Explicitly carry the current choice into that newly rendered widget.
+    st.session_state[package_key] = remembered_package if remembered_package in options else all_packages
     with st.container(key=group_key+'_package_controls'):
         package = st.segmented_control('Paquete / línea de las partidas', options,
             key=package_key, selection_mode='single', width='stretch',
