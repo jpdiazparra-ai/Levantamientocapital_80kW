@@ -66,7 +66,7 @@ def commercial_selection_totals(frame):
         'HH': hours.sum(min_count=1) if is_hh.any() else 0,
         'HH pendientes': int((is_hh & hours.isna()).sum()),
         COMMERCIAL: frame[COMMERCIAL].sum(min_count=1),
-        'Presupuesto vigente': frame['Presupuesto vigente'].sum(min_count=1),
+        'Presupuesto vigente': pd.to_numeric(frame.get('Presupuesto vigente', pd.Series(float('nan'), index=frame.index)), errors='coerce').sum(min_count=1),
     }
 
 
@@ -102,6 +102,23 @@ def commercial_breakdown(tasks, dimension):
     result['Participación %'] = result['Monto comercial · CLP'] / total * 100 if pd.notna(total) and total > 0 else float('nan')
     result['Cobertura %'] = result['Partidas informadas'] / result['Actividades'] * 100
     return result.sort_values('Monto comercial · CLP', ascending=False, na_position='last', kind='stable')
+
+
+def commercial_summary_with_total(summary, dimension, scope):
+    totals = commercial_selection_totals(scope)
+    count = len(scope)
+    known = int(scope[COMMERCIAL].notna().sum())
+    total_row = {
+        dimension: 'TOTAL',
+        'Monto comercial · CLP': totals[COMMERCIAL],
+        'Monto no comercial · CLP': totals['Presupuesto vigente'],
+        'Partidas informadas': known,
+        'Actividades': count,
+        'HH': totals['HH'],
+        'Participación %': 100.0 if pd.notna(totals[COMMERCIAL]) and totals[COMMERCIAL] > 0 else float('nan'),
+        'Cobertura %': known / count * 100 if count else float('nan'),
+    }
+    return pd.concat([summary, pd.DataFrame([total_row])], ignore_index=True)
 
 
 def commercial_donut(summary, project, total):
@@ -165,7 +182,10 @@ def _summary_table(summary, dimension, scope, key, project_scope=None):
         rows = st.session_state[key]['selection']['rows']
         st.session_state[selection_key] = groups[rows[0]] if rows and rows[0] < len(groups) else None
     st.caption('Selecciona una fila para ver las partidas que componen su monto comercial.')
-    event = st.dataframe(summary.style.format({'Monto comercial · CLP': amount, 'Monto no comercial · CLP': amount, 'HH': lambda value: f'{value:,.1f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), 'Participación %': '{:.1f}%', 'Cobertura %': '{:.1f}%'}, na_rep='Sin informar'),
+    display_summary = commercial_summary_with_total(summary, dimension, scope)
+    styled_summary = display_summary.style.format({'Monto comercial · CLP': amount, 'Monto no comercial · CLP': amount, 'HH': lambda value: f'{value:,.1f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), 'Participación %': '{:.1f}%', 'Cobertura %': '{:.1f}%'}, na_rep='Sin informar')
+    styled_summary = styled_summary.set_properties(subset=pd.IndexSlice[[display_summary.index[-1]], :], **{'background-color': '#E8F3F0', 'color': '#0F4D46'})
+    event = st.dataframe(styled_summary,
         hide_index=True, use_container_width=True,
         key=key, on_select=remember_group, selection_mode='single-row',
         column_config={dimension: st.column_config.TextColumn(dimension, width='medium'),
