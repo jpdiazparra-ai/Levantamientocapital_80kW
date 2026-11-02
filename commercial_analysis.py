@@ -140,14 +140,15 @@ def _summary_table(summary, dimension, scope, key):
     details['Unidades'] = details['Unidades'].replace('', pd.NA)
     details['Costo por unidad · CLP'] = commercial_unit_cost(details)
     details['Variación %'] = commercial_budget_variation(details)
-    fields = ['ID', 'Actividad / entregable', 'Unidades', 'Costo por unidad · CLP', 'Hito objetivo', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente', 'Variación %']
-    details = details[[field for field in fields if field in details]].rename(columns={'Unidades': 'Cantidad'})
+    fields = ['ID', 'Actividad / entregable', 'Criterio', 'Unidades', 'Costo por unidad · CLP', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente', 'Variación %']
+    details = details.reindex(columns=fields).rename(columns={'Unidades': 'Cantidad'})
     st.dataframe(details.style.format({**{field: amount for field in [COMMERCIAL, 'Presupuesto vigente', 'Costo por unidad · CLP'] if field in details},
             'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar'),
         hide_index=True, use_container_width=True, row_height=72, height=min(460, 40+len(details)*72),
         column_config={'ID': st.column_config.TextColumn(width='small'),
             'Actividad / entregable': st.column_config.TextColumn(width='large'),
-            'Cantidad': st.column_config.TextColumn(width='small', help='Unidades de Plan (columna G), vinculadas por ID de actividad.'),
+            'Criterio': st.column_config.TextColumn(width='small', help='Criterio de Plan (columna G), vinculado por ID de actividad.'),
+            'Cantidad': st.column_config.TextColumn(width='small', help='Unidades de Plan, vinculadas por ID de actividad.'),
             'Costo por unidad · CLP': st.column_config.NumberColumn(width='medium', help='Monto comercial ÷ Cantidad (Unidades de Plan). Sin cálculo cuando falta un dato o la cantidad no es positiva.'),
             COMMERCIAL: st.column_config.NumberColumn('Monto comercial · CLP', width='medium'),
             'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
@@ -240,7 +241,7 @@ def render_commercial_analysis(tasks):
                 with milestone_tab:
                     _summary_table(commercial_breakdown(scope, 'Hito objetivo'), 'Hito objetivo', scope, f'option4_commercial_milestone_{index}')
             with st.expander('Trazabilidad de partidas · Costos'):
-                fields = ['ID', 'Actividad / entregable', 'Hito objetivo', 'Unidades', 'Costo por unidad · CLP', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente']
+                fields = ['ID', 'Actividad / entregable', 'Criterio', 'Unidades', 'Costo por unidad · CLP', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente']
                 detail = scope.reindex(columns=fields).sort_values(COMMERCIAL, ascending=False, na_position='last', kind='stable')
                 detail['Costo por unidad · CLP'] = commercial_unit_cost(detail)
                 detail = detail.rename(columns={'Unidades': 'Cantidad'})
@@ -249,7 +250,8 @@ def render_commercial_analysis(tasks):
                         'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar'),
                     hide_index=True, use_container_width=True, row_height=72, height=350,
                     column_config={'Actividad / entregable': st.column_config.TextColumn(width='large'),
-                        'Cantidad': st.column_config.TextColumn(width='small', help='Unidades de Plan (columna G), vinculadas por ID de actividad.'),
+                        'Criterio': st.column_config.TextColumn(width='small', help='Criterio de Plan (columna G), vinculado por ID de actividad.'),
+                        'Cantidad': st.column_config.TextColumn(width='small', help='Unidades de Plan, vinculadas por ID de actividad.'),
                         'Costo por unidad · CLP': st.column_config.NumberColumn(width='medium', help='Monto comercial ÷ Cantidad (Unidades de Plan). Sin cálculo cuando falta un dato o la cantidad no es positiva.'),
                         'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
                         'Variación %': st.column_config.NumberColumn('Variación %', width='small', help=VARIATION_HELP)})

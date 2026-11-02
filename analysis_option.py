@@ -108,6 +108,7 @@ def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items(
     with ThreadPoolExecutor(max_workers=5) as pool:
         raw = dict(pool.map(download, sheets))
     plan = table_from(raw['Plan'], 4, 'ID')
+    plan = plan.rename(columns={col: 'Criterio' for col in plan if col.casefold() == 'criterio'})
     # Plan can contain preallocated IDs for activities that have not been entered.
     # Ignore only rows empty in every field except ID; partially entered work
     # must still participate in validation against Costos.
