@@ -107,14 +107,25 @@ def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items(
         return name, pd.read_csv(BytesIO(response.content), header=None, dtype=str, keep_default_na=False)
     with ThreadPoolExecutor(max_workers=5) as pool:
         raw = dict(pool.map(download, sheets))
-    plan = table_from(raw['Plan'], 4, 'ID')
-    plan = plan.rename(columns={col: 'Criterio' for col in plan if col.casefold() == 'criterio'})
-    # Plan can contain preallocated IDs for activities that have not been entered.
-    # Ignore only rows empty in every field except ID; partially entered work
-    # must still participate in validation against Costos.
-    populated = plan.drop(columns='ID').apply(lambda col: col.fillna('').astype(str).str.strip().ne('')).any(axis=1)
-    plan = plan.loc[populated].reset_index(drop=True)
-    costs = table_from(raw['Costos'], 4, 'ID')
+    for attempt in range(3):
+        plan = table_from(raw['Plan'], 4, 'ID')
+        plan = plan.rename(columns={col: 'Criterio' for col in plan if col.casefold() == 'criterio'})
+        # Plan can contain preallocated IDs for activities that have not been entered.
+        # Ignore only rows empty in every field except ID; partially entered work
+        # must still participate in validation against Costos.
+        populated = plan.drop(columns='ID').apply(lambda col: col.fillna('').astype(str).str.strip().ne('')).any(axis=1)
+        plan = plan.loc[populated].reset_index(drop=True)
+        costs = table_from(raw['Costos'], 4, 'ID')
+        if set(plan['ID']) == set(costs['ID']):
+            break
+        if attempt < 2:
+            # Published tabs may briefly expose different revisions while edited.
+            # Re-read both tabs together before declaring a genuine mismatch.
+            time.sleep(0.3 * (attempt + 1))
+            token = f'{refresh_nonce}_{time.time_ns()}'
+            related = [(name, gid) for name, gid in sheets if name in ('Plan', 'Costos')]
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                raw.update(pool.map(download, related))
     revision = table_from(raw['Revision'], 4, 'ID')
     for name, frame in [('Plan', plan), ('Costos', costs), ('Revision', revision)]:
         if frame['ID'].duplicated().any():
