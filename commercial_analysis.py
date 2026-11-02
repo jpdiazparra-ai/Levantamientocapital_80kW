@@ -24,6 +24,14 @@ def commercial_unit_cost(frame):
     return pd.to_numeric(frame['Presupuesto referencia'], errors='coerce')
 
 
+def commercial_quantities(frame):
+    # Costos owns the quantities behind the displayed financial amounts.
+    # Keep Plan units only for workbooks predating the Cantidad column.
+    if 'Cantidad' in frame:
+        return frame['Cantidad']
+    return frame.get('Unidades', pd.Series(float('nan'), index=frame.index))
+
+
 def commercial_product_scope(tasks):
     classification = tasks['Costo para producto'].fillna('').astype(str).str.strip().str.casefold()
     return tasks[classification.eq('aplica')].copy()
@@ -35,7 +43,7 @@ def commercial_breakdown(tasks, dimension):
     data[dimension] = data[dimension].fillna('').replace('', 'Sin clasificar')
     criteria = data.get('Criterio', pd.Series('', index=data.index)).fillna('').astype(str)
     data['_is_hh'] = criteria.str.replace(r'[\s.]', '', regex=True).str.casefold().eq('hh')
-    quantities = data.get('Unidades', pd.Series(float('nan'), index=data.index)).map(lambda value:
+    quantities = commercial_quantities(data).map(lambda value:
         value.strip().replace('\u00a0', '').replace(' ', '').replace('.', '').replace(',', '.')
         if isinstance(value, str) else value)
     quantities = pd.to_numeric(quantities, errors='coerce')
@@ -120,7 +128,7 @@ def _summary_table(summary, dimension, scope, key):
         key=key, on_select=remember_group, selection_mode='single-row',
         column_config={dimension: st.column_config.TextColumn(dimension, width='medium'),
             'Monto comercial · CLP': st.column_config.NumberColumn('Monto comercial · CLP', width='medium'),
-            'HH': st.column_config.NumberColumn('HH', width='small', help='Horas-hombre informadas: suma de Unidades de Plan solo para partidas con criterio HH, tengan o no monto comercial. Las cantidades faltantes no se estiman; no incluye insumos.'),
+            'HH': st.column_config.NumberColumn('HH', width='small', help='Horas-hombre informadas: suma de Cantidad de Costos solo para partidas con criterio HH, tengan o no monto comercial. Las cantidades faltantes no se estiman; no incluye insumos.'),
             'Cobertura %': st.column_config.ProgressColumn('Cobertura de datos', min_value=0, max_value=100, format='%.1f%%')})
     selected = event['selection']['rows']
     if selection_key not in st.session_state and selected and selected[0] < len(summary):
@@ -154,8 +162,7 @@ def _summary_table(summary, dimension, scope, key):
     selection_label = str(group) + (' · ' + package if package and package != all_packages else ' · Todos los paquetes')
     st.html('<div class="option-commercial-reading"><b>'+html.escape(selection_label)+'</b>'
         f'<p>{len(details)} partidas · Subtotal comercial: {amount(details[COMMERCIAL].sum(min_count=1))}</p></div>')
-    if 'Unidades' not in details:
-        details['Unidades'] = pd.NA
+    details['Unidades'] = commercial_quantities(details)
     details['Unidades'] = details['Unidades'].replace('', pd.NA)
     details['Costo por unidad · CLP'] = commercial_unit_cost(details)
     details['Variación %'] = commercial_budget_variation(details)
@@ -168,7 +175,7 @@ def _summary_table(summary, dimension, scope, key):
         column_config={'ID': st.column_config.TextColumn(width='small'),
             'Actividad / entregable': st.column_config.TextColumn(width='large'),
             'Criterio': st.column_config.TextColumn(width='small', help='Criterio de Plan (columna G), vinculado por ID de actividad.'),
-            'Cantidad': st.column_config.TextColumn(width='small', help='Unidades de Plan, vinculadas por ID de actividad.'),
+            'Cantidad': st.column_config.TextColumn(width='small', help='Cantidad de Costos, vinculada por ID de actividad.'),
             'Costo por unidad · CLP': st.column_config.NumberColumn(width='medium', help='Valor de Presupuesto referencia de Costos, vinculado por ID de actividad. Se muestra directamente como costo por unidad.'),
             COMMERCIAL: st.column_config.NumberColumn('Monto comercial · CLP', width='medium'),
             'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
@@ -262,7 +269,7 @@ def render_commercial_analysis(tasks):
                     _summary_table(commercial_breakdown(scope, 'Hito objetivo'), 'Hito objetivo', scope, f'option4_commercial_milestone_{index}')
             with st.expander('Trazabilidad de partidas · Costos'):
                 fields = ['ID', 'Actividad / entregable', 'Criterio', 'Unidades', 'Costo por unidad · CLP', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente']
-                detail = scope.assign(**{'Costo por unidad · CLP': commercial_unit_cost(scope)})
+                detail = scope.assign(**{'Unidades': commercial_quantities(scope), 'Costo por unidad · CLP': commercial_unit_cost(scope)})
                 detail = detail.reindex(columns=fields).sort_values(COMMERCIAL, ascending=False, na_position='last', kind='stable')
                 detail = detail.rename(columns={'Unidades': 'Cantidad'})
                 detail['Variación %'] = commercial_budget_variation(detail)
@@ -272,7 +279,7 @@ def render_commercial_analysis(tasks):
                     hide_index=True, use_container_width=True, row_height=72, height=350,
                     column_config={'Actividad / entregable': st.column_config.TextColumn(width='large'),
                         'Criterio': st.column_config.TextColumn(width='small', help='Criterio de Plan (columna G), vinculado por ID de actividad.'),
-                        'Cantidad': st.column_config.TextColumn(width='small', help='Unidades de Plan, vinculadas por ID de actividad.'),
+                        'Cantidad': st.column_config.TextColumn(width='small', help='Cantidad de Costos, vinculada por ID de actividad.'),
                         'Costo por unidad · CLP': st.column_config.NumberColumn(width='medium', help='Valor de Presupuesto referencia de Costos, vinculado por ID de actividad. Se muestra directamente como costo por unidad.'),
                         'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
                         'Variación %': st.column_config.NumberColumn('Variación %', width='small', help=VARIATION_HELP)})
