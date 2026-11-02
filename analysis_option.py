@@ -99,7 +99,7 @@ def cash_from_costs(costs, plan):
     return cash.reset_index(drop=True)
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=45, show_spinner=False)
 def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items())):
     token = f'{refresh_nonce}_{time.time_ns()}'
     def download(item):
@@ -612,6 +612,7 @@ def pmo_view(tasks):
     st.download_button('Descargar análisis PMO',data=tasks.drop(columns=[c for c in tasks if c.startswith('_')]).to_csv(index=False).encode('utf-8-sig'),file_name='opcion_analisis_pmo.csv',mime='text/csv',key='option4_download')
 
 
+@st.fragment(run_every=60)
 def render_analysis_option(refresh_nonce, render_navigation):
     with st.container(key='analysis_option'):
         st.html('<style>'+Path(__file__).with_name('assets').joinpath('analysis_option.css').read_text()+'</style>')
@@ -629,6 +630,7 @@ def render_analysis_option(refresh_nonce, render_navigation):
             st.error(f'No se pudo cargar el documento de análisis: {exc}')
             return
         st.caption(f'Corte del documento: {cutoff:%d-%m-%Y} · Consultado: {fetched_at} · Hora de Santiago')
+        st.caption('Actualización automática cada 60 segundos mientras esta vista está abierta. Los importes se leen de la publicación de Costos.')
         st.markdown(f'[Abrir documento fuente]({SOURCE}?output=csv)')
         title=next(item[2] for item in VIEWS if item[0]==view)
         st.subheader(title)
