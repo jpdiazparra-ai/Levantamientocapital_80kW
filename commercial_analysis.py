@@ -123,10 +123,10 @@ def _summary_table(summary, dimension, scope, key):
     all_packages = 'Todos los paquetes'
     options = [all_packages, *sorted(package_counts.index, key=str.casefold)]
     package_key = group_key + '_package'
-    if package_key in st.session_state and st.session_state[package_key] not in options:
+    if package_key not in st.session_state or st.session_state[package_key] not in options:
         st.session_state[package_key] = all_packages
     with st.container(key=group_key+'_package_controls'):
-        package = st.segmented_control('Paquete / línea de las partidas', options, default=all_packages,
+        package = st.segmented_control('Paquete / línea de las partidas', options,
             key=package_key, selection_mode='single', width='stretch',
             format_func=lambda value: f'{value} ({package_total if value == all_packages else package_counts[value]})',
             help='Selecciona un paquete para reducir las partidas. Todos los paquetes muestra el sistema o hito completo.')
