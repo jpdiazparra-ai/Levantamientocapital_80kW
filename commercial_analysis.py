@@ -33,10 +33,22 @@ def commercial_breakdown(tasks, dimension):
     """Keep missing amounts missing and reconcile every group to its activity IDs."""
     data = tasks.copy()
     data[dimension] = data[dimension].fillna('').replace('', 'Sin clasificar')
+    criteria = data.get('Criterio', pd.Series('', index=data.index)).fillna('').astype(str)
+    data['_is_hh'] = criteria.str.replace(r'[\s.]', '', regex=True).str.casefold().eq('hh')
+    quantities = data.get('Unidades', pd.Series(float('nan'), index=data.index)).map(lambda value:
+        value.strip().replace('\u00a0', '').replace(' ', '').replace('.', '').replace(',', '.')
+        if isinstance(value, str) else value)
+    quantities = pd.to_numeric(quantities, errors='coerce')
+    data['_hh'] = quantities.where(data['_is_hh'] & quantities.ge(0))
     result = data.groupby(dimension, sort=False, dropna=False).agg(
         **{'Monto comercial · CLP': (COMMERCIAL, lambda values: values.sum(min_count=1)),
-           'Partidas informadas': (COMMERCIAL, 'count'), 'Actividades': ('ID', 'size')}
+           'Partidas informadas': (COMMERCIAL, 'count'), 'Actividades': ('ID', 'size'),
+           'HH': ('_hh', lambda values: values.sum(min_count=1)),
+           '_hh_activities': ('_is_hh', 'sum')}
     ).reset_index()
+    # No HH activities means zero hours; HH activities without quantities remain unknown.
+    result['HH'] = result['HH'].mask(result['_hh_activities'].eq(0), 0)
+    result = result.drop(columns='_hh_activities')
     total = result['Monto comercial · CLP'].sum(min_count=1)
     result['Participación %'] = result['Monto comercial · CLP'] / total * 100 if pd.notna(total) and total > 0 else float('nan')
     result['Cobertura %'] = result['Partidas informadas'] / result['Actividades'] * 100
@@ -103,11 +115,12 @@ def _summary_table(summary, dimension, scope, key):
         rows = st.session_state[key]['selection']['rows']
         st.session_state[selection_key] = groups[rows[0]] if rows and rows[0] < len(groups) else None
     st.caption('Selecciona una fila para ver las partidas que componen su monto comercial.')
-    event = st.dataframe(summary.style.format({'Monto comercial · CLP': amount, 'Participación %': '{:.1f}%', 'Cobertura %': '{:.1f}%'}, na_rep='Sin informar'),
+    event = st.dataframe(summary.style.format({'Monto comercial · CLP': amount, 'HH': lambda value: f'{value:,.1f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), 'Participación %': '{:.1f}%', 'Cobertura %': '{:.1f}%'}, na_rep='Sin informar'),
         hide_index=True, use_container_width=True,
         key=key, on_select=remember_group, selection_mode='single-row',
         column_config={dimension: st.column_config.TextColumn(dimension, width='medium'),
             'Monto comercial · CLP': st.column_config.NumberColumn('Monto comercial · CLP', width='medium'),
+            'HH': st.column_config.NumberColumn('HH', width='small', help='Horas-hombre informadas: suma de Unidades de Plan solo para partidas con criterio HH, tengan o no monto comercial. Las cantidades faltantes no se estiman; no incluye insumos.'),
             'Cobertura %': st.column_config.ProgressColumn('Cobertura de datos', min_value=0, max_value=100, format='%.1f%%')})
     selected = event['selection']['rows']
     if selection_key not in st.session_state and selected and selected[0] < len(summary):
