@@ -76,7 +76,10 @@ def cash_from_costs(costs, plan):
         raise ValueError('Faltan columnas de caja en Costos: ' + ', '.join(missing))
     include = costs['Incluir en caja'].str.strip().str.casefold().isin(['sí', 'si'])
     unpaid = costs['Estado de pago caja'].str.strip().str.casefold().isin(['no pagado', 'parcial'])
-    selected = costs[include & unpaid].merge(plan[['ID', 'Proyecto', 'Actividad / entregable']], on='ID', validate='one_to_one')
+    # Costos may also publish descriptive columns. Keep the Plan descriptions
+    # authoritative and avoid pandas renaming them with _x / _y suffixes.
+    selected = costs[include & unpaid].drop(columns=['Proyecto', 'Actividad / entregable'], errors='ignore').merge(
+        plan[['ID', 'Proyecto', 'Actividad / entregable']], on='ID', validate='one_to_one')
     cash = pd.DataFrame(index=selected.index)
     cash['ID actividad'] = selected['ID']
     cash['Proyecto'] = selected['Proyecto']
