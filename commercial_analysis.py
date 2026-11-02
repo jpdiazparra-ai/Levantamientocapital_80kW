@@ -21,12 +21,7 @@ def commercial_budget_variation(frame):
 
 
 def commercial_unit_cost(frame):
-    quantities = frame['Unidades'].map(lambda value:
-        value.strip().replace('\u00a0', '').replace(' ', '').replace('.', '').replace(',', '.')
-        if isinstance(value, str) else value)
-    quantities = pd.to_numeric(quantities, errors='coerce')
-    commercial = pd.to_numeric(frame[COMMERCIAL], errors='coerce')
-    return commercial.div(quantities.where(quantities.gt(0)))
+    return pd.to_numeric(frame['Presupuesto referencia'], errors='coerce')
 
 
 def commercial_product_scope(tasks):
@@ -161,7 +156,7 @@ def _summary_table(summary, dimension, scope, key):
             'Actividad / entregable': st.column_config.TextColumn(width='large'),
             'Criterio': st.column_config.TextColumn(width='small', help='Criterio de Plan (columna G), vinculado por ID de actividad.'),
             'Cantidad': st.column_config.TextColumn(width='small', help='Unidades de Plan, vinculadas por ID de actividad.'),
-            'Costo por unidad · CLP': st.column_config.NumberColumn(width='medium', help='Monto comercial ÷ Cantidad (Unidades de Plan). Sin cálculo cuando falta un dato o la cantidad no es positiva.'),
+            'Costo por unidad · CLP': st.column_config.NumberColumn(width='medium', help='Valor de Presupuesto referencia de Costos, vinculado por ID de actividad. Se muestra directamente como costo por unidad.'),
             COMMERCIAL: st.column_config.NumberColumn('Monto comercial · CLP', width='medium'),
             'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
             'Variación %': st.column_config.NumberColumn('Variación %', width='small', help=VARIATION_HELP)})
@@ -254,8 +249,8 @@ def render_commercial_analysis(tasks):
                     _summary_table(commercial_breakdown(scope, 'Hito objetivo'), 'Hito objetivo', scope, f'option4_commercial_milestone_{index}')
             with st.expander('Trazabilidad de partidas · Costos'):
                 fields = ['ID', 'Actividad / entregable', 'Criterio', 'Unidades', 'Costo por unidad · CLP', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente']
-                detail = scope.reindex(columns=fields).sort_values(COMMERCIAL, ascending=False, na_position='last', kind='stable')
-                detail['Costo por unidad · CLP'] = commercial_unit_cost(detail)
+                detail = scope.assign(**{'Costo por unidad · CLP': commercial_unit_cost(scope)})
+                detail = detail.reindex(columns=fields).sort_values(COMMERCIAL, ascending=False, na_position='last', kind='stable')
                 detail = detail.rename(columns={'Unidades': 'Cantidad'})
                 detail['Variación %'] = commercial_budget_variation(detail)
                 st.dataframe(detail.style.format({**{field: amount for field in [COMMERCIAL, 'Presupuesto vigente', 'Costo por unidad · CLP'] if field in detail},
@@ -265,7 +260,7 @@ def render_commercial_analysis(tasks):
                     column_config={'Actividad / entregable': st.column_config.TextColumn(width='large'),
                         'Criterio': st.column_config.TextColumn(width='small', help='Criterio de Plan (columna G), vinculado por ID de actividad.'),
                         'Cantidad': st.column_config.TextColumn(width='small', help='Unidades de Plan, vinculadas por ID de actividad.'),
-                        'Costo por unidad · CLP': st.column_config.NumberColumn(width='medium', help='Monto comercial ÷ Cantidad (Unidades de Plan). Sin cálculo cuando falta un dato o la cantidad no es positiva.'),
+                        'Costo por unidad · CLP': st.column_config.NumberColumn(width='medium', help='Valor de Presupuesto referencia de Costos, vinculado por ID de actividad. Se muestra directamente como costo por unidad.'),
                         'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
                         'Variación %': st.column_config.NumberColumn('Variación %', width='small', help=VARIATION_HELP)})
                 st.download_button('Descargar análisis comercial · CSV', detail.to_csv(index=False).encode('utf-8-sig'),
