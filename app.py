@@ -27783,6 +27783,11 @@ st.sidebar.button(
     help="Recarga todas las fuentes y recalcula el dashboard conservando la vista y los filtros seleccionados.",
     on_click=_refresh_dashboard_data,
 )
+st.sidebar.radio(
+    "Moneda de visualización · Bloque 4",
+    ["CLP", "USD"], horizontal=True, key="option4_currency",
+    help="Convierte los importes del Bloque 4 con el tipo de cambio CLP/USD indicado en este panel.",
+)
 
 # =========================
 # DATOS
@@ -27818,6 +27823,9 @@ global_fx_value = st.sidebar.number_input(
     help="Valor base global CLP/USD. Se usa como referencia inicial para los cálculos y parámetros ligados al dólar.",
 )
 fx_used = global_fx_value if np.isfinite(global_fx_value) and global_fx_value > 0 else fx_base
+st.session_state["option4_fx_rate"] = float(fx_used)
+if st.session_state.get("option4_currency") == "USD":
+    st.sidebar.caption(f"Bloque 4 en USD · 1 USD = {fx_used:,.2f} CLP")
 df_capex = df_capex_base.copy()
 if np.isfinite(fx_used) and fx_used > 0:
     df_capex["Monto_CLP"] = df_capex["Monto_USD"] * fx_used

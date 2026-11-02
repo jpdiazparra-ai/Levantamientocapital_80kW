@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from capital_charts import amount
+from display_currency import currency_label, currency_code, currency_export
 
 COMMERCIAL = 'Comercial anterior'
 COLORS = ['#244A6C', '#0F766E', '#2E90A5', '#B7791F', '#718096', '#735D96', '#CBD5E1']
@@ -112,7 +113,7 @@ def commercial_donut(summary, project, total):
         textinfo='text', textposition='inside', textfont=dict(size=14, color='#FFFFFF'),
         marker=dict(colors=COLORS, line=dict(color='#FFFFFF', width=3)),
         customdata=[amount(value) for value in positive['Monto comercial · CLP']],
-        hovertemplate='<b>%{label}</b><br>%{customdata} CLP<br>%{percent:.1%} del subtotal<extra></extra>'))
+        hovertemplate='<b>%{label}</b><br>%{customdata} '+currency_code()+'<br>%{percent:.1%} del subtotal<extra></extra>'))
     fig.update_layout(height=340, margin=dict(l=14, r=14, t=20, b=20), showlegend=False,
         paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Arial, sans-serif', color='#0F2435'),
         hoverlabel=dict(bgcolor='#FFFFFF', bordercolor='#D8E3EB', font=dict(size=12, color='#0F2435')),
@@ -137,7 +138,7 @@ def commercial_system_ranking(summary, total, wedges):
             f'<small>{int(row["Partidas informadas"])} partidas con monto</small></div>'
             f'<div class="option-commercial-system-value"><b>{amount(value)}</b><span>{label}</span></div>'
             f'<div class="option-commercial-system-track"><i style="width:{width:.3f}%;background:{color}"></i></div></div>')
-    return '<div class="option-commercial-ranking"><div class="option-commercial-ranking-head"><b>Composición del costo por sistema</b><span>MONTO CLP / PARTICIPACIÓN</span></div>'+''.join(rows)+'</div>'
+    return '<div class="option-commercial-ranking"><div class="option-commercial-ranking-head"><b>Composición del costo por sistema</b><span>MONTO '+currency_code()+' / PARTICIPACIÓN</span></div>'+''.join(rows)+'</div>'
 
 
 def commercial_group_details(scope, dimension, group, include_missing=False):
@@ -166,7 +167,7 @@ def _summary_table(summary, dimension, scope, key, project_scope=None):
         hide_index=True, use_container_width=True,
         key=key, on_select=remember_group, selection_mode='single-row',
         column_config={dimension: st.column_config.TextColumn(dimension, width='medium'),
-            'Monto comercial · CLP': st.column_config.NumberColumn('Monto comercial · CLP', width='medium'),
+            'Monto comercial · CLP': st.column_config.NumberColumn(currency_label('Monto comercial · CLP'), width='medium'),
             'HH': st.column_config.NumberColumn('HH', width='small', help='Horas-hombre informadas: suma de Cantidad de Costos solo para partidas con criterio HH, tengan o no monto comercial. Las cantidades faltantes no se estiman; no incluye insumos.'),
             'Cobertura %': st.column_config.ProgressColumn('Cobertura de datos', min_value=0, max_value=100, format='%.1f%%')})
     selected = event['selection']['rows']
@@ -206,8 +207,8 @@ def _summary_table(summary, dimension, scope, key, project_scope=None):
     hours_note = f'{totals["HH pendientes"]} partidas HH sin cantidad informada' if totals['HH pendientes'] else 'Solo partidas con criterio HH'
     st.html('<div class="option-commercial-package-totals">'
         f'<article class="hours"><span>Total HH informadas</span><strong>{hours_label}</strong><small>{hours_note}</small></article>'
-        f'<article class="commercial"><span>Total monto comercial · CLP</span><strong>{amount(totals[COMMERCIAL])}</strong><small>Suma de las partidas visibles</small></article>'
-        f'<article class="budget"><span>Total presupuesto vigente · CLP</span><strong>{amount(totals["Presupuesto vigente"])}</strong><small>Suma de las partidas visibles</small></article></div>')
+        f'<article class="commercial"><span>Total monto comercial · {currency_code()}</span><strong>{amount(totals[COMMERCIAL])}</strong><small>Suma de las partidas visibles</small></article>'
+        f'<article class="budget"><span>Total presupuesto vigente · {currency_code()}</span><strong>{amount(totals["Presupuesto vigente"])}</strong><small>Suma de las partidas visibles</small></article></div>')
     details['Unidades'] = commercial_quantities(details)
     details['Unidades'] = details['Unidades'].replace('', pd.NA)
     details['Costo por unidad · CLP'] = commercial_unit_cost(details)
@@ -225,15 +226,15 @@ def _summary_table(summary, dimension, scope, key, project_scope=None):
             'Actividad / entregable': st.column_config.TextColumn(width='large'),
             'Criterio': st.column_config.TextColumn(width='small', help='Criterio de Plan (columna G), vinculado por ID de actividad.'),
             'Cantidad': st.column_config.TextColumn(width='small', help='Cantidad de Costos, vinculada por ID de actividad.'),
-            'Costo por unidad · CLP': st.column_config.NumberColumn(width='medium', help='Valor de Presupuesto referencia de Costos, vinculado por ID de actividad. Se muestra directamente como costo por unidad.'),
-            COMMERCIAL: st.column_config.NumberColumn('Monto comercial · CLP', width='medium'),
-            'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
+            'Costo por unidad · CLP': st.column_config.NumberColumn(currency_label('Costo por unidad · CLP'), width='medium', help='Valor de Presupuesto referencia de Costos, vinculado por ID de actividad. Se muestra directamente como costo por unidad.'),
+            COMMERCIAL: st.column_config.NumberColumn(currency_label('Monto comercial · CLP'), width='medium'),
+            'Presupuesto vigente': st.column_config.NumberColumn(currency_label('Presupuesto vigente · CLP'), width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
             '% del paquete': st.column_config.NumberColumn(width='small', help='Monto comercial del ID ÷ total comercial de su paquete, dentro del sistema o hito de esta selección × 100.'),
             '% del proyecto': st.column_config.NumberColumn(width='small', help='Monto comercial del ID ÷ total comercial del piloto completo seleccionado × 100. Considera las partidas Aplica de Costos y no cambia al filtrar sistema o paquete.'),
             'Variación %': st.column_config.NumberColumn('Variación %', width='small', help=VARIATION_HELP)})
     st.caption('Participación del ID sobre el monto comercial de su paquete y del piloto completo seleccionado. Los porcentajes se calculan con importes informados; no se calculan si el total es cero o falta información.')
     st.caption('Variación respecto del monto comercial: positivo = presupuesto mayor; negativo = presupuesto menor. Sin cálculo cuando el comercial es cero o falta un monto.')
-    st.download_button('Descargar partidas seleccionadas · CSV', details.to_csv(index=False).encode('utf-8-sig'),
+    st.download_button('Descargar partidas seleccionadas · CSV', currency_export(details).to_csv(index=False).encode('utf-8-sig'),
         file_name='partidas_comerciales_seleccionadas.csv', mime='text/csv', key=group_key+'_download')
 
 
@@ -290,8 +291,8 @@ def render_commercial_analysis(tasks):
             st.html(f'<div class="option-commercial-executive-head"><div><span>ANÁLISIS COMERCIAL</span><h4>{safe_project}</h4></div>'
                 f'<span class="option-commercial-source">Vista {mode} · Costos · Comercial anterior</span></div>'
                 '<div class="option-commercial-executive-kpis">'
-                f'<article class="primary"><span>Subtotal comercial · CLP</span><strong>{amount(total)}</strong><small>{known} partidas con monto informado</small></article>'
-                f'<article><span>{unit_label} · CLP/kW</span><strong>{unit}</strong><small>Potencia nominal: {capacity if capacity else "sin informar"} kW · base histórica</small></article>'
+                f'<article class="primary"><span>Subtotal comercial · {currency_code()}</span><strong>{amount(total)}</strong><small>{known} partidas con monto informado</small></article>'
+                f'<article><span>{unit_label} · {currency_code()}/kW</span><strong>{unit}</strong><small>Potencia nominal: {capacity if capacity else "sin informar"} kW · base histórica</small></article>'
                 f'<article><span>Cobertura de registros</span><strong>{coverage:.1f}%</strong><small>{known} de {count} partidas · {count-known} sin monto</small>'
                 f'<div class="option-commercial-coverage-track"><i style="width:{coverage:.3f}%"></i></div></article>'
                 f'<article><span>Concentración en {concentration_count or 3} sistemas</span><strong>{concentration_label}</strong><small>{funded_systems} sistemas con monto informado</small></article></div>')
@@ -343,12 +344,12 @@ def render_commercial_analysis(tasks):
                     column_config={'Actividad / entregable': st.column_config.TextColumn(width='large'),
                         'Criterio': st.column_config.TextColumn(width='small', help='Criterio de Plan (columna G), vinculado por ID de actividad.'),
                         'Cantidad': st.column_config.TextColumn(width='small', help='Cantidad de Costos, vinculada por ID de actividad.'),
-                        'Costo por unidad · CLP': st.column_config.NumberColumn(width='medium', help='Valor de Presupuesto referencia de Costos, vinculado por ID de actividad. Se muestra directamente como costo por unidad.'),
-                        'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
+                        'Costo por unidad · CLP': st.column_config.NumberColumn(currency_label('Costo por unidad · CLP'), width='medium', help='Valor de Presupuesto referencia de Costos, vinculado por ID de actividad. Se muestra directamente como costo por unidad.'),
+                        'Presupuesto vigente': st.column_config.NumberColumn(currency_label('Presupuesto vigente · CLP'), width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
                         '% del paquete': st.column_config.NumberColumn(width='small', help='Monto comercial del ID ÷ total comercial de su paquete dentro del mismo sistema × 100.'),
                         '% del proyecto': st.column_config.NumberColumn(width='small', help='Monto comercial del ID ÷ total comercial del piloto completo seleccionado, con partidas Aplica de Costos × 100.'),
                         'Variación %': st.column_config.NumberColumn('Variación %', width='small', help=VARIATION_HELP)})
-                st.download_button('Descargar análisis comercial · CSV', detail.to_csv(index=False).encode('utf-8-sig'),
+                st.download_button('Descargar análisis comercial · CSV', currency_export(detail).to_csv(index=False).encode('utf-8-sig'),
                     file_name=f'costo_comercial_{index}.csv', mime='text/csv', key=f'option4_commercial_download_{index}')
         with st.expander('Cómo interpretar el costo comercial'):
             st.markdown('El subtotal suma **Comercial anterior** una sola vez por ID de actividad, vinculado desde **Costos** a **Plan**. '

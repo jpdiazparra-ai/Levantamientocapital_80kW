@@ -4,19 +4,12 @@ import textwrap
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from display_currency import amount, currency_label, currency_code, chart_scale, chart_units, currency_column_config, currency_export
 
 NAVY = '#244A6C'
 VALID = '#0F766E'
 PENDING = '#B7791F'
 MONTHS = ['ene','feb','mar','abr','may','jun','jul','ago','sept','oct','nov','dic']
-
-
-def amount(value, compact=False):
-    if pd.isna(value):
-        return 'Sin informar'
-    if compact and abs(value) >= 1_000_000:
-        return '$' + f'{value/1e6:,.1f}'.replace(',', 'X').replace('.', ',').replace('X', '.') + ' MM'
-    return '$' + f'{value:,.0f}'.replace(',', '.')
 
 
 def wrap(value):
@@ -34,10 +27,10 @@ def figure_style(fig, height=320, limit=None, horizontal=True):
     fig.update_yaxes(automargin=True, zeroline=False, showline=False,
         gridcolor='#EDF2F6', title_font=dict(size=11,color='#64748B'), tickfont=dict(size=11))
     if horizontal:
-        fig.update_xaxes(title='Millones de CLP · misma escala',range=[0,limit or 1],showgrid=True)
+        fig.update_xaxes(title=chart_units()+' · misma escala',range=[0,limit or 1],showgrid=True)
         fig.update_yaxes(showgrid=False,title=None)
     else:
-        fig.update_yaxes(title='Millones de CLP',showgrid=True)
+        fig.update_yaxes(title=chart_units(),showgrid=True)
         fig.update_xaxes(showgrid=False,title=None)
     return fig
 
@@ -56,7 +49,7 @@ def header(title, value, note, comparison=False):
 def comparison_figures(summary, dimension):
     values=summary[['Presupuesto referencia','Caja por validar','Caja validada']]
     maximum=values.max().max()
-    limit=max(1,float(maximum)/1e6*1.32) if pd.notna(maximum) else 1
+    limit=max(1,float(maximum)/chart_scale()*1.32) if pd.notna(maximum) else 1
     labels=summary[dimension].astype(str).tolist()
     height=max(270,110+len(summary)*48)
     known=summary[summary['Presupuesto referencia'].notna()]
@@ -64,7 +57,7 @@ def comparison_figures(summary, dimension):
     if not known.empty:
         texts=[amount(value,True)+' · '+f'{share:.1f}%'.replace('.',',') if pd.notna(share) else amount(value,True)
             for value,share in zip(known['Presupuesto referencia'],known['Participación %'])]
-        reference.add_bar(x=known['Presupuesto referencia']/1e6,y=known[dimension].astype(str),orientation='h',width=.38,
+        reference.add_bar(x=known['Presupuesto referencia']/chart_scale(),y=known[dimension].astype(str),orientation='h',width=.38,
             marker=dict(color=NAVY,cornerradius=4),text=texts,textposition='outside',cliponaxis=False,
             textfont=dict(size=11,color='#0F2435'),
             customdata=[[amount(value),f'{share:.1f}%'.replace('.',',') if pd.notna(share) else 'Sin base',int(count),wrap(label)]
@@ -75,7 +68,7 @@ def comparison_figures(summary, dimension):
     for field,color in [('Caja validada',VALID),('Caja por validar',PENDING)]:
         known=summary[summary[field].notna()]
         if not known.empty:
-            cash.add_bar(x=known[field]/1e6,y=known[dimension].astype(str),orientation='h',name=field,
+            cash.add_bar(x=known[field]/chart_scale(),y=known[dimension].astype(str),orientation='h',name=field,
                 width=.26 if len(available)>1 else .38,marker=dict(color=color,cornerradius=4),
                 text=[amount(value,True) for value in known[field]],textposition='outside',cliponaxis=False,
                 textfont=dict(size=11,color='#0F2435'),
@@ -109,7 +102,7 @@ def render_capital_comparison(summary,dimension,key):
             else:st.html(f'<div class="option-finance-chart-empty" style="height:{cash.layout.height}px">No hay importes de caja informados.</div>')
             footer = 'Sin importes de caja validada informados en esta selección.' if summary['Caja validada'].isna().all() else 'La validación se muestra por separado de los importes pendientes de revisar.'
             st.html('<div class="option-finance-comparison-footer">'+html.escape(footer)+'</div>')
-    st.caption('Ambos gráficos usan la misma escala. MM = millones de pesos chilenos. Los valores vacíos no se interpretan como cero.')
+    st.caption('Ambos gráficos usan la misma escala. ' + ('Los ejes se expresan en miles de USD.' if currency_code() == 'USD' else 'MM = millones de pesos chilenos.') + ' Los valores vacíos no se interpretan como cero.')
 
 
 def add_calendar_milestones(fig, visible, milestones):
@@ -158,16 +151,16 @@ def calendar_figure(monthly, milestones=None):
     fig=go.Figure()
     for field,name,color in [('Pendiente validado CLP','Validado',VALID),('Referencia por validar CLP','Por validar',PENDING)]:
         if visible[field].notna().any():
-            fig.add_bar(x=visible['_month'],y=visible[field]/1e6,name=name,
+            fig.add_bar(x=visible['_month'],y=visible[field]/chart_scale(),name=name,
                 marker=dict(color=color,cornerradius=4),customdata=[[amount(value)] for value in visible[field]],
                 hovertemplate='<b>%{x|%m/%Y}</b><br>'+name+': %{customdata[0]}<extra></extra>')
     if fig.data:
-        fig.add_scatter(x=visible['_month'],y=total/1e6,mode='text',
+        fig.add_scatter(x=visible['_month'],y=total/chart_scale(),mode='text',
             text=[amount(value,True) for value in total],textposition='top center',
             textfont=dict(size=10,color='#0F2435'),hoverinfo='skip',showlegend=False,cliponaxis=False)
         figure_style(fig,height=420,horizontal=False)
         fig.update_layout(barmode='stack',bargap=.35,margin=dict(l=12,r=25,t=50,b=65))
-        fig.update_yaxes(range=[0,max(1,float(total.max())/1e6*1.23)])
+        fig.update_yaxes(range=[0,max(1,float(total.max())/chart_scale()*1.23)])
         fig.update_xaxes(tickmode='array',tickvals=visible['_month'].tolist(),
             ticktext=[MONTHS[value.month-1]+'<br>'+str(value.year) for value in visible['_month']],tickangle=0)
         add_calendar_milestones(fig, visible, milestones)
@@ -205,19 +198,19 @@ def render_responsible_funds(tasks,cash,summary_function):
         for value,color in [('Caja validada',VALID),('Caja por validar',PENDING)]:
             known=summary[summary[value].notna()]
             if not known.empty:
-                fig.add_bar(x=known[value]/1e6,y=known[field],orientation='h',name=value,
+                fig.add_bar(x=known[value]/chart_scale(),y=known[field],orientation='h',name=value,
                     marker=dict(color=color,cornerradius=4),width=.42,
                     customdata=[[amount(money),wrap(label)] for money,label in zip(known[value],known[field])],
                     hovertemplate='<b>%{customdata[1]}</b><br>'+value+': %{customdata[0]}<extra></extra>')
         known=summary[summary['_total'].notna()]
         if fig.data:
-            fig.add_scatter(x=known['_total']/1e6,y=known[field],mode='text',
+            fig.add_scatter(x=known['_total']/chart_scale(),y=known[field],mode='text',
                 text=[amount(value,True) for value in known['_total']],textposition='middle right',
                 hoverinfo='skip',cliponaxis=False,textfont=dict(size=11,color='#0F2435'))
-            limit=max(1,float(known['_total'].max())/1e6*1.3)
+            limit=max(1,float(known['_total'].max())/chart_scale()*1.3)
             figure_style(fig,height=max(300,110+len(summary)*46),limit=limit)
             fig.update_layout(barmode='stack')
-            fig.update_xaxes(title='Millones de CLP · caja pendiente')
+            fig.update_xaxes(title=chart_units()+' · caja pendiente')
             fig.update_yaxes(categoryorder='array',categoryarray=labels,autorange='reversed')
             with st.container(border=False,key='capital_responsible_panel'):
                 header('Asignación de caja pendiente',amount(summary['_total'].sum(min_count=1)),
@@ -227,6 +220,6 @@ def render_responsible_funds(tasks,cash,summary_function):
         else:st.info('No hay fondos informados para los responsables de esta selección.')
         st.caption('Esta distribución identifica al responsable de la actividad; no confirma quién aportará el financiamiento.')
         with st.expander('Detalle de fondos por responsable'):
-            st.dataframe(summary.drop(columns='_total'),hide_index=True,use_container_width=True)
-            st.download_button('Descargar fondos por responsable',summary.drop(columns='_total').to_csv(index=False).encode('utf-8-sig'),
+            st.dataframe(summary.drop(columns='_total'),hide_index=True,use_container_width=True,column_config=currency_column_config(summary))
+            st.download_button('Descargar fondos por responsable',currency_export(summary.drop(columns='_total')).to_csv(index=False).encode('utf-8-sig'),
                 file_name='fondos_por_responsable.csv',mime='text/csv',key='option4_responsible_download')

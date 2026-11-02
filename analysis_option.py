@@ -16,6 +16,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from timeline_scroll import timeline_document
 from capital_charts import render_capital_comparison, render_calendar, render_responsible_funds
+from display_currency import amount, currency_code, currency_label, currency_number_format, currency_column_config, currency_export, convert_workbook, exchange_rate
 from commercial_analysis import render_commercial_analysis
 
 SOURCE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQOSK1DE0sEuK5Cl-bIahOjtdP6qsBobzqSlekorQCY9gRpwhRDzHYxh9c-Q-mKoQ/pub'
@@ -46,7 +47,7 @@ def number(value):
 
 
 def money(value):
-    return 'Por validar' if pd.isna(value) else '$' + f'{value:,.0f}'.replace(',', '.')
+    return 'Por validar' if pd.isna(value) else amount(value)
 
 
 def dates(series):
@@ -251,10 +252,10 @@ def render_capital_dimensions(tasks, cash):
                 with st.expander(f'Detalle de capital por {dimension.lower()}'):
                     st.dataframe(summary, hide_index=True, use_container_width=True,
                         column_config={
-                            field: st.column_config.NumberColumn(field + ' (CLP)', format='$ %.0f')
+                            field: st.column_config.NumberColumn(field + ' ('+currency_code()+')', format=currency_number_format())
                             for field in ['Presupuesto referencia', 'Caja por validar', 'Caja validada']
                         })
-                    st.download_button('Descargar este análisis', summary.to_csv(index=False).encode('utf-8-sig'),
+                    st.download_button('Descargar este análisis', currency_export(summary).to_csv(index=False).encode('utf-8-sig'),
                         file_name=f'capital_por_{key}.csv', mime='text/csv', key=f'option4_capital_{key}_download')
 
 
@@ -298,9 +299,9 @@ def capital_view(tasks, cash, cutoff):
         render_calendar(monthly, milestones=explicit_milestone_rows(tasks))
         st.caption('Los vencimientos anteriores al corte se agrupan en el mes de corte, como en la planilla. Los aportes en especie no equivalen a caja.')
         with st.expander('Detalle de saldos de caja y validación · Costos'):
-            st.dataframe(selected[['ID actividad','Concepto / cuota','Fecha FC / desembolso','Estado de pago','Saldo pendiente CLP','Validación del saldo','Caja programada CLP','Pendiente validado CLP','Referencia por validar CLP','Alerta caja','Respaldo / observaciones']].rename(columns={'Concepto / cuota':'Actividad / entregable'}),hide_index=True,use_container_width=True)
+            st.dataframe(selected[['ID actividad','Concepto / cuota','Fecha FC / desembolso','Estado de pago','Saldo pendiente CLP','Validación del saldo','Caja programada CLP','Pendiente validado CLP','Referencia por validar CLP','Alerta caja','Respaldo / observaciones']].rename(columns={'Concepto / cuota':'Actividad / entregable'}),hide_index=True,use_container_width=True,column_config=currency_column_config(selected))
         with st.expander('Calendario mensual · selección activa'):
-            st.dataframe(monthly.rename(columns={'_month':'Mes'}),hide_index=True,use_container_width=True)
+            st.dataframe(monthly.rename(columns={'_month':'Mes'}),hide_index=True,use_container_width=True,column_config=currency_column_config(monthly))
     render_capital_dimensions(tasks, selected)
     render_commercial_analysis(tasks)
     render_responsible_funds(tasks, selected, capital_dimension_summary)
@@ -474,19 +475,19 @@ def render_technical_timeline(tasks):
     styled = styled.map(lambda value: 'color: #B91C1C; font-weight: 600' if pd.notna(value) and value > 0 else '', subset=['_delay'])
     with st.container(key='option4_timeline_detail'):
         st.html('<div class="option-detail-head"><div><span>ACTIVIDADES Y COSTOS</span><h4>Detalle del cronograma</h4><p>La selección del cronograma también se aplica a esta tabla.</p></div>'
-            f'<div class="option-detail-budget"><span>Presupuesto vigente · CLP</span><strong>{money(budget.sum(min_count=1))}</strong>'
+            f'<div class="option-detail-budget"><span>Presupuesto vigente · {currency_code()}</span><strong>{money(budget.sum(min_count=1))}</strong>'
             f'<small>{len(detail)} actividades · {budget.notna().sum()} con monto informado</small></div></div>')
         st.dataframe(styled, hide_index=True, use_container_width=True, height=480,
             column_config={
             'ID': st.column_config.TextColumn('ID', width='small'),
-            'Presupuesto vigente': st.column_config.NumberColumn('Presupuesto vigente · CLP', width='medium', help='Monto de Presupuesto vigente en la pestaña Costos, vinculado por ID de actividad.'),
+            'Presupuesto vigente': st.column_config.NumberColumn(currency_label('Presupuesto vigente · CLP'), width='medium', help='Monto de Presupuesto vigente en la pestaña Costos, vinculado por ID de actividad.'),
             'Actividad / entregable': st.column_config.TextColumn('Actividad / entregable', width='large'),
             '_progress': st.column_config.ProgressColumn('Avance físico', min_value=0, max_value=100, format='%.1f%%'),
             '_delay': st.column_config.NumberColumn('Desvío previsto (días)', format='%d'),
             **{name: st.column_config.DatetimeColumn(name, format='DD-MM-YYYY', width='small') for name in ['Inicio base', 'Fin base', 'Fin previsto actual', 'Fin real']},
         })
-        st.caption('Montos en pesos chilenos · Fuente: Costos, vinculada por ID. Los montos sin informar se mantienen vacíos. Puedes ordenar las columnas y ampliar la tabla.')
-        st.download_button('Descargar detalle · CSV', data=detail.rename(columns={'_progress':'Avance físico %','_delay':'Desvío previsto (días)'}).to_csv(index=False).encode('utf-8-sig'),
+        st.caption('Montos en '+currency_code()+' · Fuente: Costos, vinculada por ID. Los montos sin informar se mantienen vacíos. Puedes ordenar las columnas y ampliar la tabla.')
+        st.download_button('Descargar detalle · CSV', data=currency_export(detail.rename(columns={'_progress':'Avance físico %','_delay':'Desvío previsto (días)'})).to_csv(index=False).encode('utf-8-sig'),
             file_name='cronograma_tecnico_filtrado.csv', mime='text/csv', key='option4_timeline_download')
 
 
@@ -567,7 +568,7 @@ def technical_view(tasks):
     st.subheader('Top 10 · desvío previsto')
     st.caption('Identifica las diez actividades con mayor diferencia entre el fin previsto actual y el fin de la línea base. Este ranking ayuda a priorizar la revisión de plazos; mide desvío previsto, no el atraso real de cierre.')
     delayed=tasks[tasks['_delay'].gt(0)].nlargest(10,'_delay')
-    st.dataframe(delayed[['ID','Actividad / entregable','Sistema','Estado por avance','Presupuesto referencia','Fin base','Fin previsto actual','Fin real','_delay']].rename(columns={'_delay':'Días de desvío'}),hide_index=True,use_container_width=True,column_config={'Actividad / entregable':st.column_config.TextColumn(width='large'),'Presupuesto referencia':st.column_config.NumberColumn('Referencia CLP',format='$ %.0f')})
+    st.dataframe(delayed[['ID','Actividad / entregable','Sistema','Estado por avance','Presupuesto referencia','Fin base','Fin previsto actual','Fin real','_delay']].rename(columns={'_delay':'Días de desvío'}),hide_index=True,use_container_width=True,column_config={'Actividad / entregable':st.column_config.TextColumn(width='large'),'Presupuesto referencia':st.column_config.NumberColumn(currency_label('Referencia CLP'),format=currency_number_format())})
     with st.expander('Detalle técnico y evidencia'):
         fields = ['ID','Actividad / entregable','Entidad responsable','Responsable persona','Estado informado','Avance físico','Predecesoras (ID)','Evidencia / aceptación','Liberación técnica','Acción requerida']
         st.dataframe(tasks.reindex(columns=fields),hide_index=True,use_container_width=True)
@@ -608,8 +609,8 @@ def pmo_view(tasks):
     chart(px.bar(actions,x='Actividades',y='Acción',orientation='h',color_discrete_sequence=['#B7791F']),'actions')
     st.subheader('Matriz de validación y seguimiento')
     st.caption('Revisa por actividad el presupuesto, el estado de validación y la acción pendiente. Usa esta matriz para localizar los registros que necesitan respaldo o corrección antes de validar el análisis económico.')
-    st.dataframe(tasks[['ID','Actividad / entregable','Hito objetivo','Sistema','Base aprobada','Registros conciliados','Presupuesto referencia','AC económico','EAC económico','Estado / avance actual','Acción requerida']],hide_index=True,use_container_width=True)
-    st.download_button('Descargar análisis PMO',data=tasks.drop(columns=[c for c in tasks if c.startswith('_')]).to_csv(index=False).encode('utf-8-sig'),file_name='opcion_analisis_pmo.csv',mime='text/csv',key='option4_download')
+    st.dataframe(tasks[['ID','Actividad / entregable','Hito objetivo','Sistema','Base aprobada','Registros conciliados','Presupuesto referencia','AC económico','EAC económico','Estado / avance actual','Acción requerida']],hide_index=True,use_container_width=True,column_config=currency_column_config(tasks))
+    st.download_button('Descargar análisis PMO',data=currency_export(tasks.drop(columns=[c for c in tasks if c.startswith('_')])).to_csv(index=False).encode('utf-8-sig'),file_name='opcion_analisis_pmo.csv',mime='text/csv',key='option4_download')
 
 
 @st.fragment(run_every=60)
@@ -629,6 +630,8 @@ def render_analysis_option(refresh_nonce, render_navigation):
         except Exception as exc:
             st.error(f'No se pudo cargar el documento de análisis: {exc}')
             return
+        tasks, cash = convert_workbook(tasks, cash, number)
+        st.caption('Moneda: '+currency_code() + (f' · Conversión: 1 USD = {exchange_rate():,.2f} CLP' if currency_code() == 'USD' else ' · Importes publicados en pesos chilenos'))
         st.caption(f'Corte del documento: {cutoff:%d-%m-%Y} · Consultado: {fetched_at} · Hora de Santiago')
         st.caption('Actualización automática cada 60 segundos mientras esta vista está abierta. Los importes se leen de la publicación de Costos.')
         st.markdown(f'[Abrir documento fuente]({SOURCE}?output=csv)')
