@@ -229,6 +229,7 @@ def capital_dimension_summary(tasks, cash, dimension):
 def render_capital_dimensions(tasks, cash):
     with st.container(border=True, key='option4_analysis_budget'):
         st.subheader('Presupuesto de referencia y caja')
+        st.caption('Compara cómo se distribuyen el presupuesto y la caja pendiente entre proyectos, hitos y sistemas. Cambia de vista para identificar dónde se concentra el capital y qué montos están validados o pendientes de revisión.')
         tabs = st.tabs(['Por proyecto', 'Por hito', 'Por sistema'])
         for tab, dimension, key in zip(tabs, ['Proyecto', 'Hito objetivo', 'Sistema'], ['project', 'milestone', 'system']):
             with tab:
@@ -266,6 +267,7 @@ def capital_view(tasks, cash, cutoff):
     selected = cash[cash['ID actividad'].isin(tasks['ID'])].copy()
     with st.container(border=True, key='option4_analysis_overview'):
         st.subheader('Análisis de capital')
+        st.caption('Resume el presupuesto informado y los saldos pendientes de cubrir. Distingue la referencia presupuestaria de la caja validada y de los importes que aún requieren revisión.')
         reference = tasks['Presupuesto referencia'].sum(min_count=1)
         pending = selected['Referencia por validar CLP'].sum(min_count=1)
         valid = selected['Pendiente validado CLP'].sum(min_count=1)
@@ -288,6 +290,7 @@ def capital_view(tasks, cash, cutoff):
             st.caption('Los totales se suman desde las partidas publicadas; pueden diferir algunos pesos del resumen por redondeo. Un importe sin validar no equivale a cero.')
     with st.container(border=True, key='option4_analysis_calendar'):
         st.subheader('Calendario de desembolsos')
+        st.caption('Muestra cuándo se necesita caja y en qué meses se concentran los desembolsos previstos. Relaciona los montos mensuales con las fechas de los hitos para revisar la secuencia de financiamiento y ejecución.')
         selected['_month']=selected['_date'].dt.to_period('M').dt.to_timestamp()
         first_month=cutoff.to_period('M').to_timestamp()
         selected['_month']=selected['_month'].mask(selected['_month'].lt(first_month),first_month)
@@ -369,7 +372,7 @@ def timeline_tooltip(row, level, mode):
 
 
 def render_technical_timeline(tasks):
-    st.caption('Explora el alcance por sistema, luego por paquete / línea y finalmente por actividad.')
+    st.caption('Sigue las fechas y el avance de las actividades que componen cada hito. Explora por sistema y paquete, filtra por estado y compara la previsión actual con la línea base para localizar cambios en el cronograma.')
     with st.container(border=True, key='option4_timeline_controls'):
         hito_key = 'option4_timeline_hitos'
         hito_options = sorted(tasks['Hito objetivo'].dropna().loc[lambda value: value.ne('')].unique())
@@ -562,6 +565,7 @@ def technical_view(tasks):
     st.subheader('Cronograma técnico')
     render_technical_timeline(tasks)
     st.subheader('Top 10 · desvío previsto')
+    st.caption('Identifica las diez actividades con mayor diferencia entre el fin previsto actual y el fin de la línea base. Este ranking ayuda a priorizar la revisión de plazos; mide desvío previsto, no el atraso real de cierre.')
     delayed=tasks[tasks['_delay'].gt(0)].nlargest(10,'_delay')
     st.dataframe(delayed[['ID','Actividad / entregable','Sistema','Estado por avance','Presupuesto referencia','Fin base','Fin previsto actual','Fin real','_delay']].rename(columns={'_delay':'Días de desvío'}),hide_index=True,use_container_width=True,column_config={'Actividad / entregable':st.column_config.TextColumn(width='large'),'Presupuesto referencia':st.column_config.NumberColumn('Referencia CLP',format='$ %.0f')})
     with st.expander('Detalle técnico y evidencia'):
@@ -583,6 +587,7 @@ def pmo_view(tasks):
         ('Sin responsable persona',str(missing_owner.sum()),'Asignación pendiente'),
     ])
     st.subheader('Control económico validado')
+    st.caption('Consulta el costo registrado, la estimación al cierre y los indicadores de desempeño económico. Se calculan cuando la selección cuenta con bases aprobadas y registros conciliados; los datos pendientes conservan su condición de no validados.')
     economic_ready=approved & reconciled
     complete=economic_ready.all()
     def aggregate(field):
@@ -599,8 +604,10 @@ def pmo_view(tasks):
     if not complete:st.info('La selección aún requiere aprobación de bases y conciliación. Los indicadores económicos permanecen sin validar; el avance físico se consulta por separado.')
     actions=pd.DataFrame({'Acción':['Aprobar base','Conciliar registros','Asignar persona','Revisar estado / avance','Respaldar cierres'], 'Actividades':[int((~approved).sum()),int((~reconciled).sum()),int(missing_owner.sum()),int(inconsistent.sum()),int((tasks['_progress'].ge(100)&tasks['Evidencia / aceptación'].str.strip().eq('')).sum())]})
     st.subheader('Prioridades de control')
+    st.caption('Identifica cuántas actividades requieren aprobación, conciliación, asignación de responsable o revisión de evidencia. Una misma actividad puede necesitar más de una acción de control.')
     chart(px.bar(actions,x='Actividades',y='Acción',orientation='h',color_discrete_sequence=['#B7791F']),'actions')
     st.subheader('Matriz de validación y seguimiento')
+    st.caption('Revisa por actividad el presupuesto, el estado de validación y la acción pendiente. Usa esta matriz para localizar los registros que necesitan respaldo o corrección antes de validar el análisis económico.')
     st.dataframe(tasks[['ID','Actividad / entregable','Hito objetivo','Sistema','Base aprobada','Registros conciliados','Presupuesto referencia','AC económico','EAC económico','Estado / avance actual','Acción requerida']],hide_index=True,use_container_width=True)
     st.download_button('Descargar análisis PMO',data=tasks.drop(columns=[c for c in tasks if c.startswith('_')]).to_csv(index=False).encode('utf-8-sig'),file_name='opcion_analisis_pmo.csv',mime='text/csv',key='option4_download')
 

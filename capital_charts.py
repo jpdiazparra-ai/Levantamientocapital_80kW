@@ -193,6 +193,7 @@ def render_calendar(monthly, milestones=None):
 def render_responsible_funds(tasks,cash,summary_function):
     with st.container(border=True, key='option4_analysis_responsible'):
         st.subheader('Fondos por responsable')
+        st.caption('Relaciona la caja pendiente con la entidad o persona responsable de cada actividad. Cambia la agrupación para revisar la distribución de los montos y coordinar su seguimiento.')
         field=st.radio('Agrupar responsables por',['Entidad responsable','Responsable persona'],horizontal=True,key='option4_capital_responsible_field')
         scope=tasks.copy()
         scope[field]=scope[field].fillna('').astype(str).str.strip().replace('','Sin responsable asignado')

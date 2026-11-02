@@ -168,7 +168,7 @@ def _summary_table(summary, dimension, scope, key):
 def render_commercial_analysis(tasks):
     with st.container(border=True, key='option4_analysis_commercial'):
         st.subheader('Costo comercial de los pilotos')
-        st.caption('Visión ejecutiva · Costos → Comercial anterior · Comparación por piloto y composición por sistema.')
+        st.caption('Analiza el monto comercial informado para cada piloto y su composición por sistema y paquete. Se incluyen solo las partidas marcadas Aplica en Costos; el detalle permite contrastar cantidades, costos de referencia y presupuesto vigente.')
         if COMMERCIAL not in tasks:
             st.info('La fuente publicada no contiene la columna Comercial anterior en Costos.')
             return
