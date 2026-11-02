@@ -37,17 +37,31 @@ def commercial_product_scope(tasks):
     return tasks[classification.eq('aplica')].copy()
 
 
+def commercial_hour_values(frame):
+    criteria = frame.get('Criterio', pd.Series('', index=frame.index)).fillna('').astype(str)
+    is_hh = criteria.str.replace(r'[\s.]', '', regex=True).str.casefold().eq('hh')
+    quantities = commercial_quantities(frame).map(lambda value:
+        value.strip().replace('\u00a0', '').replace(' ', '').replace('.', '').replace(',', '.')
+        if isinstance(value, str) else value)
+    quantities = pd.to_numeric(quantities, errors='coerce')
+    return quantities.where(is_hh & quantities.ge(0)), is_hh
+
+
+def commercial_selection_totals(frame):
+    hours, is_hh = commercial_hour_values(frame)
+    return {
+        'HH': hours.sum(min_count=1) if is_hh.any() else 0,
+        'HH pendientes': int((is_hh & hours.isna()).sum()),
+        COMMERCIAL: frame[COMMERCIAL].sum(min_count=1),
+        'Presupuesto vigente': frame['Presupuesto vigente'].sum(min_count=1),
+    }
+
+
 def commercial_breakdown(tasks, dimension):
     """Keep missing amounts missing and reconcile every group to its activity IDs."""
     data = tasks.copy()
     data[dimension] = data[dimension].fillna('').replace('', 'Sin clasificar')
-    criteria = data.get('Criterio', pd.Series('', index=data.index)).fillna('').astype(str)
-    data['_is_hh'] = criteria.str.replace(r'[\s.]', '', regex=True).str.casefold().eq('hh')
-    quantities = commercial_quantities(data).map(lambda value:
-        value.strip().replace('\u00a0', '').replace(' ', '').replace('.', '').replace(',', '.')
-        if isinstance(value, str) else value)
-    quantities = pd.to_numeric(quantities, errors='coerce')
-    data['_hh'] = quantities.where(data['_is_hh'] & quantities.ge(0))
+    data['_hh'], data['_is_hh'] = commercial_hour_values(data)
     result = data.groupby(dimension, sort=False, dropna=False).agg(
         **{'Monto comercial · CLP': (COMMERCIAL, lambda values: values.sum(min_count=1)),
            'Partidas informadas': (COMMERCIAL, 'count'), 'Actividades': ('ID', 'size'),
@@ -161,7 +175,14 @@ def _summary_table(summary, dimension, scope, key):
         details = details[packages.eq(package)].copy()
     selection_label = str(group) + (' · ' + package if package and package != all_packages else ' · Todos los paquetes')
     st.html('<div class="option-commercial-reading"><b>'+html.escape(selection_label)+'</b>'
-        f'<p>{len(details)} partidas · Subtotal comercial: {amount(details[COMMERCIAL].sum(min_count=1))}</p></div>')
+        f'<p>{len(details)} partidas en la selección</p></div>')
+    totals = commercial_selection_totals(details)
+    hours_label = 'Sin informar' if pd.isna(totals['HH']) else f'{totals["HH"]:,.2f}'.rstrip('0').rstrip('.').replace(',', 'X').replace('.', ',').replace('X', '.') + ' HH'
+    hours_note = f'{totals["HH pendientes"]} partidas HH sin cantidad informada' if totals['HH pendientes'] else 'Solo partidas con criterio HH'
+    st.html('<div class="option-commercial-package-totals">'
+        f'<article class="hours"><span>Total HH informadas</span><strong>{hours_label}</strong><small>{hours_note}</small></article>'
+        f'<article class="commercial"><span>Total monto comercial · CLP</span><strong>{amount(totals[COMMERCIAL])}</strong><small>Suma de las partidas visibles</small></article>'
+        f'<article class="budget"><span>Total presupuesto vigente · CLP</span><strong>{amount(totals["Presupuesto vigente"])}</strong><small>Suma de las partidas visibles</small></article></div>')
     details['Unidades'] = commercial_quantities(details)
     details['Unidades'] = details['Unidades'].replace('', pd.NA)
     details['Costo por unidad · CLP'] = commercial_unit_cost(details)
