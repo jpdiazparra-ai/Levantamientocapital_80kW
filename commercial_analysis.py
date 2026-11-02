@@ -143,7 +143,8 @@ def _summary_table(summary, dimension, scope, key):
     fields = ['ID', 'Actividad / entregable', 'Criterio', 'Unidades', 'Costo por unidad · CLP', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente', 'Variación %']
     details = details.reindex(columns=fields).rename(columns={'Unidades': 'Cantidad'})
     st.dataframe(details.style.format({**{field: amount for field in [COMMERCIAL, 'Presupuesto vigente', 'Costo por unidad · CLP'] if field in details},
-            'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar'),
+            'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar')
+            .set_properties(subset=[COMMERCIAL], **{'background-color': '#FFF1ED', 'color': '#9F3A28'}),
         hide_index=True, use_container_width=True, row_height=72, height=min(460, 40+len(details)*72),
         column_config={'ID': st.column_config.TextColumn(width='small'),
             'Actividad / entregable': st.column_config.TextColumn(width='large'),
@@ -247,7 +248,8 @@ def render_commercial_analysis(tasks):
                 detail = detail.rename(columns={'Unidades': 'Cantidad'})
                 detail['Variación %'] = commercial_budget_variation(detail)
                 st.dataframe(detail.style.format({**{field: amount for field in [COMMERCIAL, 'Presupuesto vigente', 'Costo por unidad · CLP'] if field in detail},
-                        'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar'),
+                        'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar')
+                        .set_properties(subset=[COMMERCIAL], **{'background-color': '#FFF1ED', 'color': '#9F3A28'}),
                     hide_index=True, use_container_width=True, row_height=72, height=350,
                     column_config={'Actividad / entregable': st.column_config.TextColumn(width='large'),
                         'Criterio': st.column_config.TextColumn(width='small', help='Criterio de Plan (columna G), vinculado por ID de actividad.'),
