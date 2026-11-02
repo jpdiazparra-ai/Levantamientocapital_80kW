@@ -18,6 +18,7 @@ CASH_MONEY_COLUMNS = {
 DISPLAY_MONEY_COLUMNS = TASK_MONEY_COLUMNS | CASH_MONEY_COLUMNS | {
     'Monto comercial · CLP', 'Costo por unidad · CLP', 'Caja por validar', 'Caja validada',
     'Monto comercial · USD', 'Costo por unidad · USD',
+    'Monto no comercial · CLP', 'Monto no comercial · USD',
 }
 
 

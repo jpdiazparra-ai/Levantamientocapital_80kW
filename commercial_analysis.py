@@ -87,8 +87,10 @@ def commercial_breakdown(tasks, dimension):
     data = tasks.copy()
     data[dimension] = data[dimension].fillna('').replace('', 'Sin clasificar')
     data['_hh'], data['_is_hh'] = commercial_hour_values(data)
+    data['_non_commercial'] = pd.to_numeric(data.get('Presupuesto vigente', pd.Series(float('nan'), index=data.index)), errors='coerce')
     result = data.groupby(dimension, sort=False, dropna=False).agg(
         **{'Monto comercial · CLP': (COMMERCIAL, lambda values: values.sum(min_count=1)),
+           'Monto no comercial · CLP': ('_non_commercial', lambda values: values.sum(min_count=1)),
            'Partidas informadas': (COMMERCIAL, 'count'), 'Actividades': ('ID', 'size'),
            'HH': ('_hh', lambda values: values.sum(min_count=1)),
            '_hh_activities': ('_is_hh', 'sum')}
@@ -163,11 +165,12 @@ def _summary_table(summary, dimension, scope, key, project_scope=None):
         rows = st.session_state[key]['selection']['rows']
         st.session_state[selection_key] = groups[rows[0]] if rows and rows[0] < len(groups) else None
     st.caption('Selecciona una fila para ver las partidas que componen su monto comercial.')
-    event = st.dataframe(summary.style.format({'Monto comercial · CLP': amount, 'HH': lambda value: f'{value:,.1f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), 'Participación %': '{:.1f}%', 'Cobertura %': '{:.1f}%'}, na_rep='Sin informar'),
+    event = st.dataframe(summary.style.format({'Monto comercial · CLP': amount, 'Monto no comercial · CLP': amount, 'HH': lambda value: f'{value:,.1f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), 'Participación %': '{:.1f}%', 'Cobertura %': '{:.1f}%'}, na_rep='Sin informar'),
         hide_index=True, use_container_width=True,
         key=key, on_select=remember_group, selection_mode='single-row',
         column_config={dimension: st.column_config.TextColumn(dimension, width='medium'),
             'Monto comercial · CLP': st.column_config.NumberColumn(currency_label('Monto comercial · CLP'), width='medium'),
+            'Monto no comercial · CLP': st.column_config.NumberColumn(currency_label('Monto no comercial · CLP'), width='medium', help='Suma de Presupuesto vigente de Costos para las partidas incluidas en este sistema o hito, en la moneda seleccionada.'),
             'HH': st.column_config.NumberColumn('HH', width='small', help='Horas-hombre informadas: suma de Cantidad de Costos solo para partidas con criterio HH, tengan o no monto comercial. Las cantidades faltantes no se estiman; no incluye insumos.'),
             'Cobertura %': st.column_config.ProgressColumn('Cobertura de datos', min_value=0, max_value=100, format='%.1f%%')})
     selected = event['selection']['rows']
