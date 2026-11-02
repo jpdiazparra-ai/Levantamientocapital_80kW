@@ -2,6 +2,7 @@
 import html
 import hashlib
 import re
+import unicodedata
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -35,6 +36,17 @@ def commercial_quantities(frame):
 def commercial_product_scope(tasks):
     classification = tasks['Costo para producto'].fillna('').astype(str).str.strip().str.casefold()
     return tasks[classification.eq('aplica')].copy()
+
+
+def commercial_composition_scope(tasks, mode):
+    if mode == 'Total':
+        return tasks.copy()
+    def normalize(value):
+        text = unicodedata.normalize('NFKD', str(value))
+        return ' '.join(''.join(char for char in text if not unicodedata.combining(char)).casefold().split())
+    excluded = {'fundaciones y anclajes', 'montaje', 'montaje y logistica', 'logistica y montaje'}
+    systems = tasks['Sistema'].fillna('').map(normalize)
+    return tasks[~systems.isin(excluded)].copy()
 
 
 def commercial_hour_values(frame):
@@ -137,7 +149,8 @@ def commercial_group_details(scope, dimension, group, include_missing=False):
         ids.astype(str).str.casefold().str.replace(r'\d+', lambda match: match.group().zfill(20), regex=True))
 
 
-def _summary_table(summary, dimension, scope, key):
+def _summary_table(summary, dimension, scope, key, project_scope=None):
+    project_scope = scope if project_scope is None else project_scope
     # Remember the group by name rather than its row number: amounts and IDs
     # can change during refresh, resetting the dataframe's native selection.
     selection_key = key + '_selected_group'
@@ -198,7 +211,7 @@ def _summary_table(summary, dimension, scope, key):
     details['Unidades'] = commercial_quantities(details)
     details['Unidades'] = details['Unidades'].replace('', pd.NA)
     details['Costo por unidad · CLP'] = commercial_unit_cost(details)
-    details = commercial_participations(details, scope)
+    details = commercial_participations(details, project_scope)
     details['Variación %'] = commercial_budget_variation(details)
     fields = ['ID', 'Actividad / entregable', 'Criterio', 'Unidades', 'Costo por unidad · CLP', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente', '% del paquete', '% del proyecto', 'Variación %']
     details = details.reindex(columns=fields).rename(columns={'Unidades': 'Cantidad'})
@@ -301,11 +314,18 @@ def render_commercial_analysis(tasks):
                     f'La cobertura es de <b>{coverage:.1f}% de los registros</b>; '
                     + ('el costo completo del piloto sigue pendiente de completar.' if known < count else 'todas las actividades seleccionadas tienen monto informado.') + '</p></div>')
             with st.expander('Composición por sistema e hito', expanded=False):
+                composition_key = f'option4_commercial_composition_{index}'
+                remembered_mode = st.session_state.get(composition_key, 'Total')
+                st.session_state[composition_key] = remembered_mode if remembered_mode in ('Total', 'Comercial') else 'Total'
+                mode = st.segmented_control('Alcance de la composición', ['Total', 'Comercial'], key=composition_key,
+                    help='Total conserva todos los sistemas de esta vista. Comercial excluye Fundaciones y anclajes y Montaje y Logística.') or 'Total'
+                composition_scope = commercial_composition_scope(scope, mode)
+                st.caption('Comercial excluye fundaciones y anclajes, montaje y logística.' if mode == 'Comercial' else 'Total incluye todos los sistemas de las partidas marcadas Aplica en Costos.')
                 system_tab, milestone_tab = st.tabs(['Por sistema', 'Por hito'])
                 with system_tab:
-                    _summary_table(summary, 'Sistema', scope, f'option4_commercial_system_{index}')
+                    _summary_table(commercial_breakdown(composition_scope, 'Sistema'), 'Sistema', composition_scope, f'option4_commercial_system_{index}', project_scope=scope)
                 with milestone_tab:
-                    _summary_table(commercial_breakdown(scope, 'Hito objetivo'), 'Hito objetivo', scope, f'option4_commercial_milestone_{index}')
+                    _summary_table(commercial_breakdown(composition_scope, 'Hito objetivo'), 'Hito objetivo', composition_scope, f'option4_commercial_milestone_{index}', project_scope=scope)
             with st.expander('Trazabilidad de partidas · Costos'):
                 fields = ['ID', 'Actividad / entregable', 'Criterio', 'Unidades', 'Costo por unidad · CLP', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente', '% del paquete', '% del proyecto']
                 detail = commercial_participations(scope, scope).assign(**{'Unidades': commercial_quantities(scope), 'Costo por unidad · CLP': commercial_unit_cost(scope)})
