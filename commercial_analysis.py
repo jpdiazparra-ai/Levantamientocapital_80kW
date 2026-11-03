@@ -39,6 +39,12 @@ def commercial_product_scope(tasks):
     return tasks[classification.eq('aplica')].copy()
 
 
+
+def commercial_project_label(project):
+    capacity = re.search(r'(?<!\d)(10|80)\s*kw\b', str(project), re.I)
+    return f'Turbina de {capacity.group(1)} kW' if capacity else str(project)
+
+
 def commercial_project_rows(tasks, project):
     capacity = re.search(r'(10|80)\s*kw', str(project), re.I)
     if capacity and '_cost_hito_objetivo' in tasks:
@@ -115,8 +121,8 @@ def commercial_detail_columns():
         COMMERCIAL: st.column_config.NumberColumn(currency_label('Monto comercial · CLP'), width=180),
         'Presupuesto vigente': st.column_config.NumberColumn(currency_label('Presupuesto vigente · CLP'), width=200, help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
         'Variación %': st.column_config.NumberColumn(width=115, help=VARIATION_HELP),
-        '% del paquete': st.column_config.NumberColumn(width=125, help='Monto comercial del ID ÷ total comercial del mismo sistema y paquete en el piloto completo × 100. Solo partidas Aplica de Costos; no cambia al filtrar por hito.'),
-        '% del proyecto': st.column_config.NumberColumn(width=130, help='Monto comercial del ID ÷ total comercial del piloto completo × 100. Solo partidas Aplica según Hito objetivo de Costos; no cambia al filtrar sistema o paquete.'),
+        '% del paquete': st.column_config.NumberColumn(width=125, help='Monto comercial del ID ÷ total comercial del mismo sistema y paquete en la turbina completa × 100. Solo partidas Aplica de Costos; no cambia al filtrar por hito.'),
+        '% del proyecto': st.column_config.NumberColumn(width=130, help='Monto comercial del ID ÷ total comercial de la turbina completa × 100. Solo partidas Aplica según Hito objetivo de Costos; no cambia al filtrar sistema o paquete.'),
         'Registros conciliados': st.column_config.TextColumn(width=185, help='Estado de Registros conciliados de la pestaña Costos, vinculado por ID de actividad.'),
     }
 
@@ -302,7 +308,7 @@ def _summary_table(summary, dimension, scope, key, project_scope=None):
             .set_properties(subset=[COMMERCIAL], **{'background-color': '#FFF1ED', 'color': '#9F3A28'}),
         hide_index=True, use_container_width=True, row_height=72, height=min(460, 40+len(details)*72),
         column_config=commercial_detail_columns())
-    st.caption('Participación del ID sobre el monto comercial de su mismo sistema y paquete, y del piloto completo seleccionado. Ambas bases incluyen todas las partidas Aplica del piloto y se mantienen al filtrar. Los porcentajes se calculan con importes informados; no se calculan si el total es cero o falta información.')
+    st.caption('Participación del ID sobre el monto comercial de su mismo sistema y paquete, y de la turbina completa seleccionada. Ambas bases incluyen todas las partidas Aplica de la turbina y se mantienen al filtrar. Los porcentajes se calculan con importes informados; no se calculan si el total es cero o falta información.')
     st.caption('Variación respecto del monto comercial: positivo = presupuesto mayor; negativo = presupuesto menor. Sin cálculo cuando el comercial es cero o falta un monto.')
     st.download_button('Descargar partidas seleccionadas · CSV', currency_export(details).to_csv(index=False).encode('utf-8-sig'),
         file_name='partidas_comerciales_seleccionadas.csv', mime='text/csv', key=group_key+'_download')
@@ -310,8 +316,8 @@ def _summary_table(summary, dimension, scope, key, project_scope=None):
 
 def render_commercial_analysis(tasks):
     with st.container(border=True, key='option4_analysis_commercial'):
-        st.subheader('Costo comercial de los pilotos')
-        st.caption('Analiza el monto comercial informado para cada piloto y su composición por sistema y paquete. Se incluyen solo las partidas marcadas Aplica en Costos; el detalle permite contrastar cantidades, costos de referencia y presupuesto vigente.')
+        st.subheader('Costo comercial de las turbinas')
+        st.caption('Analiza el monto comercial informado para cada turbina y su composición por sistema y paquete. Se incluyen solo las partidas marcadas Aplica en Costos; el detalle permite contrastar cantidades, costos de referencia y presupuesto vigente.')
         if COMMERCIAL not in tasks:
             st.info('La fuente publicada no contiene la columna Comercial anterior en Costos.')
             return
@@ -319,7 +325,7 @@ def render_commercial_analysis(tasks):
             st.info('Falta Costo para producto en Costos para identificar las partidas aplicables al análisis comercial.')
             return
         st.html('<div class="option-commercial-note"><b>Base comercial histórica</b><span>Los valores representan las partidas informadas en “Comercial anterior”. '
-            'Un subtotal con cobertura parcial no determina el costo completo del piloto ni un precio de venta actualizado.</span></div>')
+            'Un subtotal con cobertura parcial no determina el costo completo de la turbina ni un precio de venta actualizado.</span></div>')
         projects = list(tasks['Proyecto'].dropna().unique())
         projects.sort(key=lambda name: (0 if re.search(r'10\s*k[wW]', name) else 1, name))
         if not projects:
@@ -331,9 +337,9 @@ def render_commercial_analysis(tasks):
         def select_project():
             selected = re.sub(r'\W+', '_', str(st.session_state[project_key]))
             st.session_state[f'option4_commercial_composition_{selected}'] = 'Total'
-        project = st.selectbox('Piloto del análisis comercial', projects, key=project_key,
+        project = st.selectbox('Turbina del análisis comercial', projects, key=project_key, format_func=commercial_project_label,
             on_change=select_project,
-            help='Alterna los pilotos de 10 kW y 80 kW para revisar sus montos comerciales y partidas.')
+            help='Alterna las turbinas de 10 kW y 80 kW para revisar sus montos comerciales y partidas.')
         index = re.sub(r'\W+', '_', str(project))
         project_tasks = commercial_project_rows(tasks, project)
         project_scope = commercial_product_scope(project_tasks)
@@ -342,11 +348,11 @@ def render_commercial_analysis(tasks):
         mode = remembered_mode if remembered_mode in ('Total', 'Comercial') else 'Total'
         st.session_state[composition_key] = mode
         mode = st.segmented_control('Alcance del análisis', ['Total', 'Comercial'], key=composition_key,
-            help='Controla el gráfico y las tablas: Comercial excluye Fundaciones y anclajes y Montaje y Logística. Los KPI superiores conservan el total del piloto completo.') or 'Total'
+            help='Controla el gráfico y las tablas: Comercial excluye Fundaciones y anclajes y Montaje y Logística. Los KPI superiores conservan el total de la turbina completa.') or 'Total'
         scope = commercial_composition_scope(project_scope, mode)
         excluded = len(project_tasks) - len(project_scope)
         mode_note = f' · Vista Comercial: {len(scope)} partidas, con {len(project_scope) - len(scope)} excluidas del gráfico y detalle' if mode == 'Comercial' else ''
-        st.caption(f'Piloto completo: {len(project_scope)} partidas Aplica · {excluded} excluidas por su clasificación en Costos.{mode_note}')
+        st.caption(f'Turbina completa: {len(project_scope)} partidas Aplica · {excluded} excluidas por su clasificación en Costos.{mode_note}')
         values = scope[COMMERCIAL]
         total = values.sum(min_count=1)
         project_values = project_scope[COMMERCIAL]
@@ -362,7 +368,7 @@ def render_commercial_analysis(tasks):
             excluded_scope = project_scope[~project_scope['ID'].isin(scope['ID'])]
             excluded_amount = excluded_scope[COMMERCIAL].sum(min_count=1) if len(excluded_scope) else 0
             st.html('<div class="option-commercial-note"><b>El gráfico Comercial excluye fundaciones y montaje</b>'
-                f'<span>Total comercial del piloto: <b>{amount(project_scope[COMMERCIAL].sum(min_count=1))}</b>'
+                f'<span>Total comercial de la turbina: <b>{amount(project_scope[COMMERCIAL].sum(min_count=1))}</b>'
                 f' · Fuera del gráfico Comercial: <b>{amount(excluded_amount)}</b>'
                 f' · Subtotal del gráfico: <b>{amount(total)}</b>.</span></div>')
         known, count = int(values.notna().sum()), len(scope)
@@ -370,7 +376,7 @@ def render_commercial_analysis(tasks):
         summary = commercial_breakdown(scope, 'Sistema')
         capacity = re.search(r'(10|80)\s*kw', str(project), re.I)
         capacity = int(capacity.group(1)) if capacity else None
-        safe_project = html.escape(str(project))
+        safe_project = html.escape(commercial_project_label(project))
         nonnegative = values.dropna().ge(0).all()
         can_draw = known > 0 and nonnegative and total > 0
         funded_systems = int(summary['Monto comercial · CLP'].notna().sum())
@@ -378,17 +384,17 @@ def render_commercial_analysis(tasks):
         concentration = summary['Monto comercial · CLP'].head(concentration_count).sum(min_count=1) / total * 100 if can_draw else float('nan')
         concentration_label = f'{concentration:.1f}%'.replace('.', ',') if pd.notna(concentration) else 'Sin informar'
         unit = amount(project_total / capacity) if capacity and pd.notna(project_total) else 'Sin informar'
-        unit_label = 'Subtotal del piloto por kW' if project_known < project_count else 'Monto del piloto por kW'
+        unit_label = 'Subtotal de la turbina por kW' if project_known < project_count else 'Monto de la turbina por kW'
         with st.container(border=False, key=f'option4_commercial_project_{index}'):
             st.html(f'<div class="option-commercial-executive-head"><div><span>ANÁLISIS COMERCIAL</span><h4>{safe_project}</h4></div>'
                 f'<span class="option-commercial-source">Gráfico: {mode} · Costos · Comercial anterior</span></div>'
                 '<div class="option-commercial-executive-kpis">'
-                f'<article class="primary"><span>Total comercial del piloto · {currency_code()}</span><strong>{amount(project_total)}</strong><small>Costos · Hito objetivo {capacity if capacity else ""} kW · Aplica</small></article>'
+                f'<article class="primary"><span>Total comercial de la turbina · {currency_code()}</span><strong>{amount(project_total)}</strong><small>Costos · Hito objetivo {capacity if capacity else ""} kW · Aplica</small></article>'
                 f'<article><span>{unit_label} · {currency_code()}/kW</span><strong>{unit}</strong><small>Potencia nominal: {capacity if capacity else "sin informar"} kW · base histórica</small></article>'
-                f'<article><span>Cobertura del piloto completo</span><strong>{project_coverage:.1f}%</strong><small>{project_known} de {project_count} partidas · {project_count-project_known} sin monto</small>'
+                f'<article><span>Cobertura de la turbina completa</span><strong>{project_coverage:.1f}%</strong><small>{project_known} de {project_count} partidas · {project_count-project_known} sin monto</small>'
                 f'<div class="option-commercial-coverage-track"><i style="width:{project_coverage:.3f}%"></i></div></article>'
-                f'<article><span>Concentración del piloto en {project_top_count or 3} sistemas</span><strong>{project_concentration_label}</strong><small>{project_systems} sistemas con monto informado</small></article></div>')
-            st.caption(f'Gráfico y desglose · Vista {mode} · Subtotal del gráfico: {amount(total)}. El total comercial del piloto conserva todas las partidas Aplica del Hito objetivo correspondiente en Costos.')
+                f'<article><span>Concentración de la turbina en {project_top_count or 3} sistemas</span><strong>{project_concentration_label}</strong><small>{project_systems} sistemas con monto informado</small></article></div>')
+            st.caption(f'Gráfico y desglose · Vista {mode} · Subtotal del gráfico: {amount(total)}. El total comercial de la turbina conserva todas las partidas Aplica del Hito objetivo correspondiente en Costos.')
             donut_col, detail_col = st.columns([.85, 1.3], gap='large')
             with donut_col:
                 if can_draw:
@@ -404,7 +410,7 @@ def render_commercial_analysis(tasks):
                         wedges = pd.DataFrame(columns=['Sistema'])
                     st.html(commercial_system_ranking(summary, total, wedges))
                 elif count:
-                    st.html('<div class="option-commercial-pending"><span>DATOS PENDIENTES</span><b>Completar la base comercial del piloto</b>'
+                    st.html('<div class="option-commercial-pending"><span>DATOS PENDIENTES</span><b>Completar la base comercial de la turbina</b>'
                         f'<p>Hay {count} actividades sin monto comercial informado. Al completar Comercial anterior en Costos y actualizar el panel, aparecerán aquí los montos y su distribución.</p></div>')
                 else:
                     st.info('El proyecto no tiene partidas clasificadas como Aplica en Costo para producto de Costos.')
@@ -412,7 +418,7 @@ def render_commercial_analysis(tasks):
                 st.html('<div class="option-commercial-insight"><span>LECTURA EJECUTIVA</span>'
                     f'<p>Los {concentration_count} sistemas de mayor monto concentran <b>{concentration_label}</b> del subtotal. '
                     f'La cobertura es de <b>{coverage:.1f}% de los registros</b>; '
-                    + ('el costo completo del piloto sigue pendiente de completar.' if known < count else 'todas las actividades seleccionadas tienen monto informado.') + '</p></div>')
+                    + ('el costo completo de la turbina sigue pendiente de completar.' if known < count else 'todas las actividades seleccionadas tienen monto informado.') + '</p></div>')
             with st.expander('Composición por sistema e hito', expanded=False):
                 st.caption(f'Alcance seleccionado: {mode}. ' + ('Excluye fundaciones y anclajes, montaje y logística.' if mode == 'Comercial' else 'Incluye todos los sistemas de las partidas marcadas Aplica en Costos.'))
                 system_tab, milestone_tab = st.tabs(['Por sistema', 'Por hito'])

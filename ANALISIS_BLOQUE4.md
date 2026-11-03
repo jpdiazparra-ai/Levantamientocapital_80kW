@@ -93,3 +93,6 @@ Se retiran los cuatro indicadores superiores del Desglose técnico (líneas, par
 
 
 Las tarjetas de Líneas del sistema conservan su altura y tipografía, con siete columnas en escritorio en lugar de cinco: aproximadamente un 30 % menos de ancho por tarjeta. La distribución adaptable en ventanas pequeñas sigue vigente.
+
+
+El análisis comercial muestra Turbina de 10 kW y Turbina de 80 kW en el selector y encabezado del gráfico de composición. Las denominaciones visibles y textos de contexto usan turbina; los nombres originales de Proyecto e IDs de los filtros se conservan para mantener los cruces y selecciones existentes.
