@@ -290,12 +290,21 @@ def render_commercial_analysis(tasks):
         remembered_mode = st.session_state.get(composition_key, 'Total')
         mode = remembered_mode if remembered_mode in ('Total', 'Comercial') else 'Total'
         st.session_state[composition_key] = mode
+        mode = st.segmented_control('Alcance del análisis', ['Total', 'Comercial'], key=composition_key,
+            help='Total incluye todas las partidas Aplica del piloto. Comercial excluye Fundaciones y anclajes y Montaje y Logística; cambia los KPI, el gráfico y las tablas.') or 'Total'
         scope = commercial_composition_scope(project_scope, mode)
         excluded = len(project_tasks) - len(project_scope)
         mode_note = f' · {len(project_scope) - len(scope)} excluidas del alcance Comercial' if mode == 'Comercial' else ''
         st.caption(f'Costo para producto: solo Aplica · {len(scope)} partidas incluidas · {excluded} excluidas por su clasificación en Costos.{mode_note}')
         values = scope[COMMERCIAL]
         total = values.sum(min_count=1)
+        if mode == 'Comercial':
+            excluded_scope = project_scope[~project_scope['ID'].isin(scope['ID'])]
+            excluded_amount = excluded_scope[COMMERCIAL].sum(min_count=1) if len(excluded_scope) else 0
+            st.html('<div class="option-commercial-note"><b>El alcance Comercial excluye fundaciones y montaje</b>'
+                f'<span>Total comercial del piloto en vista Total: <b>{amount(project_scope[COMMERCIAL].sum(min_count=1))}</b>'
+                f' · Fuera del alcance Comercial: <b>{amount(excluded_amount)}</b>'
+                f' · Subtotal visible: <b>{amount(total)}</b>.</span></div>')
         known, count = int(values.notna().sum()), len(scope)
         coverage = 100 * known / count if count else 0
         summary = commercial_breakdown(scope, 'Sistema')
@@ -314,7 +323,7 @@ def render_commercial_analysis(tasks):
             st.html(f'<div class="option-commercial-executive-head"><div><span>ANÁLISIS COMERCIAL</span><h4>{safe_project}</h4></div>'
                 f'<span class="option-commercial-source">Vista {mode} · Costos · Comercial anterior</span></div>'
                 '<div class="option-commercial-executive-kpis">'
-                f'<article class="primary"><span>Subtotal comercial · {currency_code()}</span><strong>{amount(total)}</strong><small>{known} partidas con monto informado</small></article>'
+                f'<article class="primary"><span>Monto comercial · Vista {mode} · {currency_code()}</span><strong>{amount(total)}</strong><small>{known} partidas con monto informado</small></article>'
                 f'<article><span>{unit_label} · {currency_code()}/kW</span><strong>{unit}</strong><small>Potencia nominal: {capacity if capacity else "sin informar"} kW · base histórica</small></article>'
                 f'<article><span>Cobertura de registros</span><strong>{coverage:.1f}%</strong><small>{known} de {count} partidas · {count-known} sin monto</small>'
                 f'<div class="option-commercial-coverage-track"><i style="width:{coverage:.3f}%"></i></div></article>'
@@ -344,9 +353,7 @@ def render_commercial_analysis(tasks):
                     f'La cobertura es de <b>{coverage:.1f}% de los registros</b>; '
                     + ('el costo completo del piloto sigue pendiente de completar.' if known < count else 'todas las actividades seleccionadas tienen monto informado.') + '</p></div>')
             with st.expander('Composición por sistema e hito', expanded=False):
-                st.segmented_control('Alcance de la composición', ['Total', 'Comercial'], key=composition_key,
-                    help='Actualiza los KPI, el gráfico y las partidas de este análisis. Total incluye todos los sistemas; Comercial excluye Fundaciones y anclajes y Montaje y Logística.')
-                st.caption('Comercial excluye fundaciones y anclajes, montaje y logística.' if mode == 'Comercial' else 'Total incluye todos los sistemas de las partidas marcadas Aplica en Costos.')
+                st.caption(f'Alcance seleccionado: {mode}. ' + ('Excluye fundaciones y anclajes, montaje y logística.' if mode == 'Comercial' else 'Incluye todos los sistemas de las partidas marcadas Aplica en Costos.'))
                 system_tab, milestone_tab = st.tabs(['Por sistema', 'Por hito'])
                 with system_tab:
                     _summary_table(summary, 'Sistema', scope, f'option4_commercial_system_{index}', project_scope=project_scope)
