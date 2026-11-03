@@ -147,6 +147,7 @@ def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items(
     plan = plan.drop(columns=['Presupuesto referencia', 'Presupuesto vigente', 'Comercial anterior', 'Costo para producto'], errors='ignore')
     shared = [c for c in costs if c in plan and c != 'ID']
     tasks = plan.merge(costs.drop(columns=shared), on='ID', how='left', validate='one_to_one')
+    tasks['_cost_hito_objetivo'] = tasks['ID'].map(costs.set_index('ID')['Hito objetivo'])
     tasks = tasks.merge(revision[['ID', 'Estado / avance actual', 'Control de dependencia']], on='ID', how='left', validate='one_to_one')
     for col in ['Presupuesto referencia', 'Presupuesto vigente', 'Comercial anterior', 'AC económico', 'EAC económico', 'VAC al cierre', 'EV', 'PV', 'CPI', 'SPI', 'ETC actualizado']:
         tasks[col] = tasks[col].map(number)
