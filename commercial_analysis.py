@@ -370,29 +370,20 @@ def render_commercial_analysis(tasks):
         mode = remembered_mode if remembered_mode in ('Total', 'Comercial') else 'Total'
         st.session_state[composition_key] = mode
         mode = st.segmented_control('Alcance del análisis', ['Total', 'Comercial'], key=composition_key,
-            help='Controla el gráfico y las tablas: Comercial excluye Fundaciones y anclajes y Montaje y Logística. Los KPI superiores conservan el total de la turbina completa.') or 'Total'
+            help='Actualiza KPI, gráficos, tablas e informe general. Comercial excluye Fundaciones y anclajes y Montaje y Logística; Total incluye todas las partidas Aplica de la turbina.') or 'Total'
         scope = commercial_composition_scope(project_scope, mode)
         excluded = len(project_tasks) - len(project_scope)
-        mode_note = f' · Vista Comercial: {len(scope)} partidas, con {len(project_scope) - len(scope)} excluidas del gráfico y detalle' if mode == 'Comercial' else ''
+        mode_note = f' · Vista Comercial: {len(scope)} partidas, con {len(project_scope) - len(scope)} excluidas del alcance' if mode == 'Comercial' else ''
         st.caption(f'Turbina completa: {len(project_scope)} partidas Aplica · {excluded} excluidas por su clasificación en Costos.{mode_note}')
         values = scope[COMMERCIAL]
         total = values.sum(min_count=1)
-        project_values = project_scope[COMMERCIAL]
-        project_total = project_values.sum(min_count=1)
-        project_known, project_count = int(project_values.notna().sum()), len(project_scope)
-        project_coverage = 100 * project_known / project_count if project_count else 0
-        project_summary = commercial_breakdown(project_scope, 'Sistema')
-        project_systems = int(project_summary['Monto comercial · CLP'].notna().sum())
-        project_top_count = min(3, project_systems)
-        project_concentration = project_summary['Monto comercial · CLP'].head(project_top_count).sum(min_count=1) / project_total * 100 if pd.notna(project_total) and project_total > 0 else float('nan')
-        project_concentration_label = f'{project_concentration:.1f}%'.replace('.', ',') if pd.notna(project_concentration) else 'Sin informar'
         if mode == 'Comercial':
             excluded_scope = project_scope[~project_scope['ID'].isin(scope['ID'])]
             excluded_amount = excluded_scope[COMMERCIAL].sum(min_count=1) if len(excluded_scope) else 0
-            st.html('<div class="option-commercial-note"><b>El gráfico Comercial excluye fundaciones y montaje</b>'
-                f'<span>Total comercial de la turbina: <b>{amount(project_scope[COMMERCIAL].sum(min_count=1))}</b>'
-                f' · Fuera del gráfico Comercial: <b>{amount(excluded_amount)}</b>'
-                f' · Subtotal del gráfico: <b>{amount(total)}</b>.</span></div>')
+            st.html('<div class="option-commercial-note"><b>El alcance Comercial excluye fundaciones y montaje</b>'
+                f'<span>Referencia de la turbina completa (Total): <b>{amount(project_scope[COMMERCIAL].sum(min_count=1))}</b>'
+                f' · Excluido del alcance Comercial: <b>{amount(excluded_amount)}</b>'
+                f' · Monto del alcance Comercial: <b>{amount(total)}</b>.</span></div>')
         known, count = int(values.notna().sum()), len(scope)
         coverage = 100 * known / count if count else 0
         summary = commercial_breakdown(scope, 'Sistema')
@@ -403,20 +394,20 @@ def render_commercial_analysis(tasks):
         can_draw = known > 0 and nonnegative and total > 0
         funded_systems = int(summary['Monto comercial · CLP'].notna().sum())
         concentration_count = min(3, funded_systems)
-        concentration = summary['Monto comercial · CLP'].head(concentration_count).sum(min_count=1) / total * 100 if can_draw else float('nan')
+        concentration = summary['Monto comercial · CLP'].head(concentration_count).sum(min_count=1) / total * 100 if pd.notna(total) and total > 0 else float('nan')
         concentration_label = f'{concentration:.1f}%'.replace('.', ',') if pd.notna(concentration) else 'Sin informar'
-        unit = amount(project_total / capacity) if capacity and pd.notna(project_total) else 'Sin informar'
-        unit_label = 'Subtotal de la turbina por kW' if project_known < project_count else 'Monto de la turbina por kW'
+        unit = amount(total / capacity) if capacity and pd.notna(total) else 'Sin informar'
+        unit_label = 'Subtotal del alcance por kW' if known < count else 'Monto del alcance por kW'
         with st.container(border=False, key=f'option4_commercial_project_{index}'):
             st.html(f'<div class="option-commercial-executive-head"><div><span>ANÁLISIS COMERCIAL</span><h4>{safe_project}</h4></div>'
-                f'<span class="option-commercial-source">Gráfico: {mode} · Costos · Comercial anterior</span></div>'
+                f'<span class="option-commercial-source">Alcance: {mode} · Costos · Comercial anterior</span></div>'
                 '<div class="option-commercial-executive-kpis">'
-                f'<article class="primary"><span>Total comercial de la turbina · {currency_code()}</span><strong>{amount(project_total)}</strong><small>Costos · Hito objetivo {capacity if capacity else ""} kW · Aplica</small></article>'
+                f'<article class="primary"><span>Monto comercial · Alcance {mode} · {currency_code()}</span><strong>{amount(total)}</strong><small>Costos · Hito objetivo {capacity if capacity else ""} kW · Aplica</small></article>'
                 f'<article><span>{unit_label} · {currency_code()}/kW</span><strong>{unit}</strong><small>Potencia nominal: {capacity if capacity else "sin informar"} kW · base histórica</small></article>'
-                f'<article><span>Cobertura de la turbina completa</span><strong>{project_coverage:.1f}%</strong><small>{project_known} de {project_count} partidas · {project_count-project_known} sin monto</small>'
-                f'<div class="option-commercial-coverage-track"><i style="width:{project_coverage:.3f}%"></i></div></article>'
-                f'<article><span>Concentración de la turbina en {project_top_count or 3} sistemas</span><strong>{project_concentration_label}</strong><small>{project_systems} sistemas con monto informado</small></article></div>')
-            st.caption(f'Gráfico y desglose · Vista {mode} · Subtotal del gráfico: {amount(total)}. El total comercial de la turbina conserva todas las partidas Aplica del Hito objetivo correspondiente en Costos.')
+                f'<article><span>Cobertura del alcance {mode}</span><strong>{coverage:.1f}%</strong><small>{known} de {count} partidas · {count-known} sin monto</small>'
+                f'<div class="option-commercial-coverage-track"><i style="width:{coverage:.3f}%"></i></div></article>'
+                f'<article><span>Concentración en {concentration_count} sistemas</span><strong>{concentration_label}</strong><small>{funded_systems} sistemas con monto informado</small></article></div>')
+            st.caption(f'Gráfico y desglose · Vista {mode} · Monto del alcance: {amount(total)}. Los cuatro KPI, gráficos, tablas e informe general respetan el alcance seleccionado. La referencia de la turbina completa se conserva en el detalle de participaciones del proyecto.')
             donut_col, detail_col = st.columns([.85, 1.3], gap='large')
             with donut_col:
                 if can_draw:
