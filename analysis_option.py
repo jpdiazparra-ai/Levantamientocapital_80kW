@@ -144,7 +144,7 @@ def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items(
         raise ValueError('Plan y Costos deben contener los mismos IDs de actividad. ' + '. '.join(differences))
     cash = cash_from_costs(costs, plan)
     # Financial amounts and commercial eligibility are owned by Costos.
-    plan = plan.drop(columns=['Presupuesto referencia', 'Presupuesto vigente', 'Comercial anterior', 'Costo para producto'], errors='ignore')
+    plan = plan.drop(columns=['Presupuesto referencia', 'Presupuesto vigente', 'Comercial anterior', 'Costo para producto', 'Registros conciliados'], errors='ignore')
     shared = [c for c in costs if c in plan and c != 'ID']
     tasks = plan.merge(costs.drop(columns=shared), on='ID', how='left', validate='one_to_one')
     tasks['_cost_hito_objetivo'] = tasks['ID'].map(costs.set_index('ID')['Hito objetivo'])

@@ -85,11 +85,40 @@ def commercial_participations(frame, project_scope):
     amounts = pd.to_numeric(result[COMMERCIAL], errors='coerce')
     packages = result['Paquete / línea'].fillna('').astype(str).str.strip()
     systems = result.get('Sistema', pd.Series('', index=result.index)).fillna('').astype(str).str.strip()
-    package_totals = amounts.groupby([systems, packages], dropna=False).transform(lambda values: values.sum(min_count=1))
-    project_total = pd.to_numeric(project_scope[COMMERCIAL], errors='coerce').sum(min_count=1)
+    project_amounts = pd.to_numeric(project_scope[COMMERCIAL], errors='coerce')
+    project_packages = project_scope['Paquete / línea'].fillna('').astype(str).str.strip()
+    project_systems = project_scope.get('Sistema', pd.Series('', index=project_scope.index)).fillna('').astype(str).str.strip()
+    totals_by_package = project_amounts.groupby([project_systems, project_packages], dropna=False).sum(min_count=1)
+    # Use the complete pilot as denominator, even when the visible group is a hito.
+    package_totals = pd.Series([totals_by_package.get(pair, float('nan')) for pair in zip(systems, packages)], index=result.index)
+    project_total = project_amounts.sum(min_count=1)
     result['% del paquete'] = amounts.div(package_totals.where(package_totals.gt(0))) * 100
     result['% del proyecto'] = amounts / project_total * 100 if pd.notna(project_total) and project_total > 0 else float('nan')
     return result
+
+
+DETAIL_FIELDS = ['ID', 'Actividad / entregable', 'Criterio', 'Unidades',
+    'Costo por unidad · CLP', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente',
+    'Variación %', '% del paquete', '% del proyecto', 'Registros conciliados']
+
+
+def commercial_detail_columns():
+    # Explicit widths keep monetary values and percentage headers readable.
+    # Streamlit provides horizontal scrolling when the viewport is narrower.
+    return {
+        'ID': st.column_config.TextColumn(width=64),
+        'Actividad / entregable': st.column_config.TextColumn(width=400),
+        'Criterio': st.column_config.TextColumn(width=80, help='Criterio de Plan (columna G), vinculado por ID de actividad.'),
+        'Cantidad': st.column_config.TextColumn(width=85, help='Cantidad de Costos, vinculada por ID de actividad.'),
+        'Costo por unidad · CLP': st.column_config.NumberColumn(currency_label('Costo por unidad · CLP'), width=180, help='Presupuesto referencia de Costos, vinculado por ID. Se muestra directamente como costo por unidad.'),
+        'Paquete / línea': st.column_config.TextColumn(width=190),
+        COMMERCIAL: st.column_config.NumberColumn(currency_label('Monto comercial · CLP'), width=180),
+        'Presupuesto vigente': st.column_config.NumberColumn(currency_label('Presupuesto vigente · CLP'), width=200, help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
+        'Variación %': st.column_config.NumberColumn(width=115, help=VARIATION_HELP),
+        '% del paquete': st.column_config.NumberColumn(width=125, help='Monto comercial del ID ÷ total comercial del mismo sistema y paquete en el piloto completo × 100. Solo partidas Aplica de Costos; no cambia al filtrar por hito.'),
+        '% del proyecto': st.column_config.NumberColumn(width=130, help='Monto comercial del ID ÷ total comercial del piloto completo × 100. Solo partidas Aplica según Hito objetivo de Costos; no cambia al filtrar sistema o paquete.'),
+        'Registros conciliados': st.column_config.TextColumn(width=185, help='Estado de Registros conciliados de la pestaña Costos, vinculado por ID de actividad.'),
+    }
 
 
 def commercial_breakdown(tasks, dimension):
@@ -247,7 +276,7 @@ def _summary_table(summary, dimension, scope, key, project_scope=None):
     details['Costo por unidad · CLP'] = commercial_unit_cost(details)
     details = commercial_participations(details, project_scope)
     details['Variación %'] = commercial_budget_variation(details)
-    fields = ['ID', 'Actividad / entregable', 'Criterio', 'Unidades', 'Costo por unidad · CLP', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente', '% del paquete', '% del proyecto', 'Variación %']
+    fields = DETAIL_FIELDS
     details = details.reindex(columns=fields).rename(columns={'Unidades': 'Cantidad'})
     st.dataframe(details.style.format({**{field: amount for field in [COMMERCIAL, 'Presupuesto vigente', 'Costo por unidad · CLP'] if field in details},
             '% del paquete': lambda value: f'{value:.2f}%'.replace('.', ','),
@@ -255,17 +284,8 @@ def _summary_table(summary, dimension, scope, key, project_scope=None):
             'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar')
             .set_properties(subset=[COMMERCIAL], **{'background-color': '#FFF1ED', 'color': '#9F3A28'}),
         hide_index=True, use_container_width=True, row_height=72, height=min(460, 40+len(details)*72),
-        column_config={'ID': st.column_config.TextColumn(width='small'),
-            'Actividad / entregable': st.column_config.TextColumn(width='large'),
-            'Criterio': st.column_config.TextColumn(width='small', help='Criterio de Plan (columna G), vinculado por ID de actividad.'),
-            'Cantidad': st.column_config.TextColumn(width='small', help='Cantidad de Costos, vinculada por ID de actividad.'),
-            'Costo por unidad · CLP': st.column_config.NumberColumn(currency_label('Costo por unidad · CLP'), width='medium', help='Valor de Presupuesto referencia de Costos, vinculado por ID de actividad. Se muestra directamente como costo por unidad.'),
-            COMMERCIAL: st.column_config.NumberColumn(currency_label('Monto comercial · CLP'), width='medium'),
-            'Presupuesto vigente': st.column_config.NumberColumn(currency_label('Presupuesto vigente · CLP'), width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
-            '% del paquete': st.column_config.NumberColumn(width='small', help='Monto comercial del ID ÷ total comercial de su paquete, dentro del sistema o hito de esta selección × 100.'),
-            '% del proyecto': st.column_config.NumberColumn(width='small', help='Monto comercial del ID ÷ total comercial del piloto completo seleccionado × 100. Considera las partidas Aplica de Costos y no cambia al filtrar sistema o paquete.'),
-            'Variación %': st.column_config.NumberColumn('Variación %', width='small', help=VARIATION_HELP)})
-    st.caption('Participación del ID sobre el monto comercial de su paquete y del piloto completo seleccionado. Los porcentajes se calculan con importes informados; no se calculan si el total es cero o falta información.')
+        column_config=commercial_detail_columns())
+    st.caption('Participación del ID sobre el monto comercial de su mismo sistema y paquete, y del piloto completo seleccionado. Ambas bases incluyen todas las partidas Aplica del piloto y se mantienen al filtrar. Los porcentajes se calculan con importes informados; no se calculan si el total es cero o falta información.')
     st.caption('Variación respecto del monto comercial: positivo = presupuesto mayor; negativo = presupuesto menor. Sin cálculo cuando el comercial es cero o falta un monto.')
     st.download_button('Descargar partidas seleccionadas · CSV', currency_export(details).to_csv(index=False).encode('utf-8-sig'),
         file_name='partidas_comerciales_seleccionadas.csv', mime='text/csv', key=group_key+'_download')
@@ -384,7 +404,7 @@ def render_commercial_analysis(tasks):
                 with milestone_tab:
                     _summary_table(commercial_breakdown(scope, 'Hito objetivo'), 'Hito objetivo', scope, f'option4_commercial_milestone_{index}', project_scope=project_scope)
             with st.expander('Trazabilidad de partidas · Costos'):
-                fields = ['ID', 'Actividad / entregable', 'Criterio', 'Unidades', 'Costo por unidad · CLP', 'Paquete / línea', COMMERCIAL, 'Presupuesto vigente', '% del paquete', '% del proyecto']
+                fields = DETAIL_FIELDS
                 detail = commercial_participations(scope, project_scope).assign(**{'Unidades': commercial_quantities(scope), 'Costo por unidad · CLP': commercial_unit_cost(scope)})
                 detail = detail.reindex(columns=fields).sort_values(COMMERCIAL, ascending=False, na_position='last', kind='stable')
                 detail = detail.rename(columns={'Unidades': 'Cantidad'})
@@ -395,14 +415,7 @@ def render_commercial_analysis(tasks):
                         'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar')
                         .set_properties(subset=[COMMERCIAL], **{'background-color': '#FFF1ED', 'color': '#9F3A28'}),
                     hide_index=True, use_container_width=True, row_height=72, height=350,
-                    column_config={'Actividad / entregable': st.column_config.TextColumn(width='large'),
-                        'Criterio': st.column_config.TextColumn(width='small', help='Criterio de Plan (columna G), vinculado por ID de actividad.'),
-                        'Cantidad': st.column_config.TextColumn(width='small', help='Cantidad de Costos, vinculada por ID de actividad.'),
-                        'Costo por unidad · CLP': st.column_config.NumberColumn(currency_label('Costo por unidad · CLP'), width='medium', help='Valor de Presupuesto referencia de Costos, vinculado por ID de actividad. Se muestra directamente como costo por unidad.'),
-                        'Presupuesto vigente': st.column_config.NumberColumn(currency_label('Presupuesto vigente · CLP'), width='medium', help='Presupuesto vigente de Costos, vinculado por ID de actividad.'),
-                        '% del paquete': st.column_config.NumberColumn(width='small', help='Monto comercial del ID ÷ total comercial de su paquete dentro del mismo sistema × 100.'),
-                        '% del proyecto': st.column_config.NumberColumn(width='small', help='Monto comercial del ID ÷ total comercial del piloto completo seleccionado, con partidas Aplica de Costos × 100.'),
-                        'Variación %': st.column_config.NumberColumn('Variación %', width='small', help=VARIATION_HELP)})
+                    column_config=commercial_detail_columns())
                 st.download_button('Descargar análisis comercial · CSV', currency_export(detail).to_csv(index=False).encode('utf-8-sig'),
                     file_name=f'costo_comercial_{index}.csv', mime='text/csv', key=f'option4_commercial_download_{index}')
         with st.expander('Cómo interpretar el costo comercial'):
