@@ -251,14 +251,40 @@ def _summary_table(summary, dimension, scope, key, project_scope=None):
     options = [all_packages, *sorted(package_counts.index, key=str.casefold)]
     package_key = group_key + '_package'
     remembered_package = st.session_state.get(package_key, all_packages)
-    # Counts are part of the button labels and can change the widget identity.
-    # Explicitly carry the current choice into that newly rendered widget.
-    st.session_state[package_key] = remembered_package if remembered_package in options else all_packages
+    package = remembered_package if remembered_package in options else all_packages
+    st.session_state[package_key] = package
+    group_details = commercial_group_details(scope, dimension, group, include_missing=True)
+    group_packages = group_details['Paquete / línea'].fillna('').astype(str).str.strip()
+    total_hours = commercial_selection_totals(group_details)['HH']
+    hours_text = 'Sin informar' if pd.isna(total_hours) else f'{total_hours:,.1f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+    criteria = group_details.get('Criterio', pd.Series('', index=group_details.index)).fillna('').astype(str).str.strip().str.casefold()
+    insumos = int(criteria.isin(['insumo', 'insumos']).sum())
+    package_hours, _ = commercial_hour_values(details)
+    def select_package(value):
+        st.session_state[package_key] = value
     with st.container(key=group_key+'_package_controls'):
-        package = st.segmented_control('Paquete / línea de las partidas', options,
-            key=package_key, selection_mode='single', width='stretch',
-            format_func=lambda value: f'{value} ({package_total if value == all_packages else package_counts[value]})',
-            help='Selecciona un paquete para reducir las partidas. Todos los paquetes muestra el sistema o hito completo.')
+        st.html('<div class="option-package-heading"><div><span>DESGLOSE TÉCNICO</span>'
+            '<strong>Paquetes del '+('sistema' if dimension == 'Sistema' else 'hito')+'</strong>'
+            f'<p>{html.escape(str(group))}</p></div></div>'
+            '<div class="option-package-overview">'
+            f'<div><b>{int(group_packages[group_packages.ne("")].nunique())}</b><span>Paquetes</span></div>'
+            f'<div><b>{len(group_details)}</b><span>Partidas totales</span></div>'
+            f'<div><b>{hours_text}</b><span>HH informadas</span></div>'
+            f'<div><b>{insumos}</b><span>Partidas de insumos</span></div></div>')
+        st.caption(f'Selecciona un paquete · {len(details)} de {len(group_details)} partidas disponibles con el filtro actual. HH suma solo cantidades con criterio HH; los insumos se cuentan como partidas.')
+        for row_start in range(0, len(options), 5):
+            columns = st.columns(5, gap='small')
+            for column, value in zip(columns, options[row_start:row_start + 5]):
+                mask = pd.Series(True, index=details.index) if value == all_packages else packages.eq(value)
+                count = int(mask.sum())
+                hours = package_hours[mask].sum(min_count=1)
+                hh_note = f" · {hours:,.1f} HH".replace(',', 'X').replace('.', ',').replace('X', '.') if pd.notna(hours) else ''
+                label = f'{value}\n\n{count} '+('partida' if count == 1 else 'partidas')+hh_note
+                with column:
+                    st.button(label, key=group_key+'_package_card_'+hashlib.sha1(value.encode()).hexdigest()[:12],
+                        type='primary' if value == package else 'secondary', use_container_width=True,
+                        on_click=select_package, args=(value,),
+                        help=f'Ver {count} partidas de {value}. Las cantidades de insumos no se suman como HH.')
     if package and package != all_packages:
         details = details[packages.eq(package)].copy()
     selection_label = str(group) + (' · ' + package if package and package != all_packages else ' · Todos los paquetes')

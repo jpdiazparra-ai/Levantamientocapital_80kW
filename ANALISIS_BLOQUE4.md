@@ -78,3 +78,6 @@ El piloto comercial se determina por Hito objetivo de Costos que contenga 10 kW 
 
 
 Las tablas de partidas ordenan las columnas finales como Presupuesto vigente, Variación %, % del paquete, % del proyecto y Registros conciliados (Costos, por ID). La variación usa (vigente − comercial) / comercial; las participaciones usan el monto comercial del ID sobre su sistema y paquete completo o sobre el piloto completo, respectivamente, con partidas Aplica de Costos. Estas bases no cambian al filtrar por hito o paquete. Se conservan faltantes y divisores cero sin cálculo. Los anchos explícitos permiten leer importes CLP/USD y los encabezados, con desplazamiento horizontal cuando sea necesario.
+
+
+El desglose de paquetes se presenta en tarjetas de cinco columnas, con nombres multilínea, conteo de partidas y HH informadas por paquete. Un resumen técnico muestra paquetes y partidas totales del sistema o hito, HH y número de partidas de insumos; el texto aclara cuántas partidas están disponibles según el filtro de montos faltantes. El paquete activo se destaca en verde y su selección se conserva al actualizar datos o cambiar ese filtro.
