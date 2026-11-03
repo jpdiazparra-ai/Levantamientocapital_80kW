@@ -105,3 +105,6 @@ El selector comercial incorpora Comparar ambas turbinas. La vista alinea por sis
 
 
 La vista Comparar ambas turbinas dispone de Descargar informe de la comparación · PDF. Exporta la selección exacta de alcance, sistema/líneas, moneda e indicador: portada ejecutiva, gráficos vectoriales con todas las filas seleccionadas y matriz completa dividida en montos, normalización/participación, HH e intensidad, y cobertura/comparabilidad. Los nombres completos y las referencias por fila se conservan en las cuatro secciones. Incluye corte, consulta, tipo de cambio en USD y enlace al documento fuente. La descarga no recarga la aplicación ni modifica filtros.
+
+
+Para cada turbina individual existe Descargar informe completo de la turbina · PDF sin seleccionar previamente un sistema. El informe general toma todos los registros Aplica del alcance Total/Comercial activo, incluidos los que no tienen monto. Incluye gráficos por sistema, resumen técnico por sistema con totales y lectura ejecutiva, detalle completo de todos los IDs y anexo con sistema, línea, participaciones y conciliación. Las descargas filtradas por sistema/hito y la comparación mantienen sus botones independientes.

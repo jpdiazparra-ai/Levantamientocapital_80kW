@@ -13,7 +13,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.utils import simpleSplit
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, LongTable, PageBreak, Flowable
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, LongTable, PageBreak, Flowable, KeepTogether
 
 NAVY = '#183448'
 GOLD = '#B99847'
@@ -52,9 +52,10 @@ def _sum(frame, column):
 
 class SelectionCharts(Flowable):
     """Two fully vector charts with readable legends and exact amounts."""
-    def __init__(self, data, currency, width):
+    def __init__(self, data, currency, width, dimension='Paquete / línea'):
         super().__init__()
         self.data, self.currency, self.width, self.height = data, currency, width, 232
+        self.dimension = dimension
 
     def draw(self):
         c, w = self.canv, self.width
@@ -65,12 +66,12 @@ class SelectionCharts(Flowable):
         for x in [0, half + 24]:
             c.setFillColor(colors.white); c.setStrokeColor(colors.HexColor('#DEE6EB'))
             c.roundRect(x, 0, half, self.height, 9, stroke=1, fill=1)
-        text(14, 211, 'Composición comercial por línea', 10, bold=True)
-        groups = self.data.assign(_line=self.data['Paquete / línea'].fillna('').replace('', 'Sin línea asignada')).groupby('_line', sort=False)[COMMERCIAL].sum(min_count=1).sort_values(ascending=False)
+        text(14, 211, 'Composición comercial por '+('sistema' if self.dimension == 'Sistema' else 'línea'), 10, bold=True)
+        groups = self.data.assign(_line=self.data[self.dimension].fillna('').replace('', 'Sin clasificar')).groupby('_line', sort=False)[COMMERCIAL].sum(min_count=1).sort_values(ascending=False)
         known = groups.dropna()
         positive = known[known.gt(0)]
         if len(positive) > 5:
-            positive = pd.concat([positive.iloc[:4], pd.Series({'Otras líneas': positive.iloc[4:].sum()})])
+            positive = pd.concat([positive.iloc[:4], pd.Series({('Otros sistemas' if self.dimension == 'Sistema' else 'Otras líneas'): positive.iloc[4:].sum()})])
         total = known.sum(min_count=1)
         if positive.empty or known.lt(0).any() or pd.isna(total) or total <= 0:
             text(16, 145, 'Sin base positiva para un gráfico de torta.', 8, MUTED)
@@ -99,11 +100,11 @@ class SelectionCharts(Flowable):
                 y -= 15
         x = half + 24
         text(x+14, 211, 'Comercial y presupuesto vigente', 10, bold=True)
-        rows = self.data.assign(_line=self.data['Paquete / línea'].fillna('').replace('', 'Sin línea asignada')).groupby('_line', sort=False)[[COMMERCIAL, 'Presupuesto vigente']].sum(min_count=1)
+        rows = self.data.assign(_line=self.data[self.dimension].fillna('').replace('', 'Sin clasificar')).groupby('_line', sort=False)[[COMMERCIAL, 'Presupuesto vigente']].sum(min_count=1)
         rows = rows.sort_values(COMMERCIAL, ascending=False, na_position='last')
         if len(rows) > 3:
             rest = rows.iloc[2:].sum(min_count=1)
-            rows = pd.concat([rows.iloc[:2], pd.DataFrame([rest], index=['Otras líneas'])])
+            rows = pd.concat([rows.iloc[:2], pd.DataFrame([rest], index=['Otros sistemas' if self.dimension == 'Sistema' else 'Otras líneas'])])
         numeric = rows.apply(pd.to_numeric, errors='coerce')
         maximum = numeric.abs().max().max()
         maximum = float(maximum) if pd.notna(maximum) and maximum > 0 else 1
@@ -176,7 +177,30 @@ def build_commercial_pdf(details, context):
     if context.get('missing_hours', 0):
         missing_note = '1 partida HH sin cantidad informada.' if context['missing_hours'] == 1 else f"{context['missing_hours']} partidas HH sin cantidad informada."
         story.append(paragraph(missing_note+' No se estiman horas ni se suman cantidades de insumos como HH.'))
-    story += [SelectionCharts(data, currency, width), Spacer(1, 8), paragraph('Los gráficos representan exclusivamente las partidas seleccionadas. Los importes faltantes no se interpretan como cero. El subtotal informado no equivale a un precio de venta. La agrupación de otras líneas afecta solo al gráfico; el detalle conserva todas las partidas.')]
+    story += [SelectionCharts(data, currency, width, dimension=context.get('chart_dimension', 'Paquete / línea')), Spacer(1, 8), paragraph('Los gráficos representan exclusivamente las partidas seleccionadas. Los importes faltantes no se interpretan como cero. El subtotal informado no equivale a un precio de venta. La agrupación de otras líneas afecta solo al gráfico; el detalle conserva todas las partidas.')]
+    if context.get('system_summary'):
+        story += [PageBreak(), paragraph('Resumen técnico y comercial por sistema', 'SectionTitle'),
+            paragraph('Todos los sistemas del alcance seleccionado. La participación de este resumen se calcula sobre el subtotal del alcance; el % del proyecto en el detalle usa la turbina completa. La cobertura mide partidas con monto; las HH incluyen únicamente criterio HH. Los vacíos no se estiman.')]
+        headings = ['Sistema', 'Comercial\n'+currency, 'Presupuesto vigente\n'+currency, 'HH', 'Partidas con monto / totales', 'Participación %', 'Cobertura %']
+        summary_rows = [[paragraph(value, 'HeaderCell') for value in headings]]
+        for row in context['system_summary']:
+            cells = [row['Sistema'], _money(row['Monto comercial · CLP'], currency), _money(row['Monto no comercial · CLP'], currency), _decimal(row['HH']),
+                str(int(row['Partidas informadas']))+' / '+str(int(row['Actividades'])),
+                _decimal(row['Participación %'])+'%' if pd.notna(row['Participación %']) else 'Sin cálculo', _decimal(row['Cobertura %'])+'%']
+            summary_rows.append([paragraph(value, 'Cell') for value in cells])
+        summary_rows.append([paragraph(value, 'Cell') for value in ['TOTAL DEL ALCANCE', _money(total, currency), _money(budget, currency), _decimal(hours), str(known)+' / '+str(len(data)), '100,0%' if pd.notna(total) and total > 0 else 'Sin cálculo', _decimal(100*known/len(data))+'%' if len(data) else 'Sin cálculo']])
+        overview = LongTable(summary_rows, colWidths=[width-95-110-65-105-85-85,95,110,65,105,85,85], repeatRows=1, splitInRow=1)
+        overview.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor(NAVY)),('VALIGN',(0,0),(-1,-1),'TOP'),('TOPPADDING',(0,0),(-1,-1),8),('BOTTOMPADDING',(0,0),(-1,-1),8),('INNERGRID',(0,1),(-1,-1),.3,colors.HexColor('#E2E7EB')),('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#F7F9FB')])]))
+        overview.setStyle(TableStyle([('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#E8F3F0'))]))
+        story.append(overview)
+        ranked = sorted([row for row in context['system_summary'] if pd.notna(row['Monto comercial · CLP'])], key=lambda row: row['Monto comercial · CLP'], reverse=True)
+        if ranked and pd.notna(total) and total > 0:
+            leading = ranked[0]
+            top_count = min(3, len(ranked))
+            concentration = sum(row['Monto comercial · CLP'] for row in ranked[:top_count]) / total * 100
+            story += [Spacer(1, 12), paragraph('Lectura ejecutiva', 'SectionTitle'),
+                paragraph(str(leading['Sistema'])+' concentra '+_money(leading['Monto comercial · CLP'], currency)+' ('+_decimal(leading['Participación %'])+'% del monto comercial informado). Los '+str(top_count)+' sistemas de mayor monto reúnen el '+_decimal(concentration)+'% del subtotal.'),
+                paragraph('La cobertura de montos es '+_decimal(100*known/len(data))+'%: '+str(known)+' de '+str(len(data))+' partidas. El informe conserva también las partidas sin monto y no las interpreta como cero.')]
     story += [PageBreak(), paragraph('Detalle económico de las partidas', 'SectionTitle'), paragraph('Descripciones completas y valores de Costos. Orden natural por ID; importes expresados en '+currency+'.')]
     economic_fields = ['ID', 'Actividad / entregable', 'Criterio', 'Cantidad', 'Costo por unidad · CLP', COMMERCIAL, 'Presupuesto vigente', 'Variación %']
     headers = ['ID', 'Actividad / entregable', 'Criterio', 'Cantidad', 'Costo por unidad\n'+currency, 'Monto comercial\n'+currency, 'Presupuesto vigente\n'+currency, 'Variación %']
@@ -201,17 +225,20 @@ def build_commercial_pdf(details, context):
     story.append(table(rows, [34, width-34-47-55-88-98-100-59, 47,55,88,98,100,59], 5))
     story += [Spacer(1, 9), paragraph('Variación = (presupuesto vigente − monto comercial) / monto comercial × 100. Positivo: presupuesto superior. Sin cálculo si falta un importe o el comercial es cero.')]
     story += [PageBreak(), paragraph('Líneas, participaciones y conciliación', 'SectionTitle'), paragraph('Se conserva la misma selección y orden de IDs del detalle económico. Los porcentajes usan los denominadores completos de la turbina, aunque se filtre una línea o un hito.')]
-    headers = ['ID','Línea del sistema','% del paquete','% del proyecto','Registros conciliados']
+    show_system = 'Sistema' in data
+    headers = ['ID', *(['Sistema'] if show_system else []), 'Línea del sistema','% del paquete','% del proyecto','Registros conciliados']
     rows = [[paragraph(value, 'HeaderCell') for value in headers]]
     for _, row in data.iterrows():
-        cells = [row['ID'], row.get('Paquete / línea')]
+        cells = [row['ID'], *([row.get('Sistema')] if show_system else []), row.get('Paquete / línea')]
         cells += [_decimal(row.get(field), 2)+'%' if pd.notna(row.get(field)) else 'Sin cálculo' for field in ['% del paquete','% del proyecto']]
         cells += [row.get('Registros conciliados')]
         rows.append([paragraph(value, 'Cell') for value in cells])
-    story.append(table(rows, [45, width-45-100-105-185,100,105,185]))
-    story += [Spacer(1, 12), paragraph('Bases del análisis', 'SectionTitle'), paragraph('% del paquete: monto comercial del ID / total comercial de su mismo sistema y línea en la turbina completa. % del proyecto: monto comercial del ID / total comercial de la turbina completa. Se incluyen solo partidas Aplica de Costos; una base nula o cero queda sin cálculo.'), paragraph('Costo por unidad: Presupuesto referencia de Costos. Cantidad y Registros conciliados: Costos, vinculados por ID. Criterio: Plan. Los estados de conciliación se reproducen como están publicados; no constituyen una validación adicional.')]
+    control_widths = [35,145,width-35-145-85-90-165,85,90,165] if show_system else [45,width-45-100-105-185,100,105,185]
+    story.append(table(rows, control_widths))
+    methodology = [ paragraph('Bases del análisis', 'SectionTitle'), paragraph('% del paquete: monto comercial del ID / total comercial de su mismo sistema y línea en la turbina completa. % del proyecto: monto comercial del ID / total comercial de la turbina completa. Se incluyen solo partidas Aplica de Costos; una base nula o cero queda sin cálculo.'), paragraph('Costo por unidad: Presupuesto referencia de Costos. Cantidad y Registros conciliados: Costos, vinculados por ID. Criterio: Plan. Los estados de conciliación se reproducen como están publicados; no constituyen una validación adicional.')]
     if context.get('source_url'):
-        story.append(Paragraph('<link href="'+escape(context['source_url'], {'"':'&quot;'})+'" color="'+TEAL+'">Abrir documento fuente publicado</link>', styles['ReportBody']))
+        methodology.append(Paragraph('<link href="'+escape(context['source_url'], {'"':'&quot;'})+'" color="'+TEAL+'">Abrir documento fuente publicado</link>', styles['ReportBody']))
+    story += [Spacer(1, 12), KeepTogether(methodology)]
     doc.build(story, onFirstPage=page_frame, onLaterPages=page_frame)
     return output.getvalue()
 

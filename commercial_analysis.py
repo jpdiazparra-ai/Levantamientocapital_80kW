@@ -441,6 +441,25 @@ def render_commercial_analysis(tasks):
                     f'<p>Los {concentration_count} sistemas de mayor monto concentran <b>{concentration_label}</b> del subtotal. '
                     f'La cobertura es de <b>{coverage:.1f}% de los registros</b>; '
                     + ('el costo completo de la turbina sigue pendiente de completar.' if known < count else 'todas las actividades seleccionadas tienen monto informado.') + '</p></div>')
+            if count:
+                download_slot = st.empty()
+                overview_details = commercial_participations(scope, project_scope)
+                overview_details['Unidades'] = commercial_quantities(overview_details)
+                overview_details['Costo por unidad · CLP'] = commercial_unit_cost(overview_details)
+                overview_details['Variación %'] = commercial_budget_variation(overview_details)
+                overview_details = overview_details.reindex(columns=[*DETAIL_FIELDS, 'Sistema']).rename(columns={'Unidades': 'Cantidad'})
+                overview_details = overview_details.sort_values('ID', kind='stable', key=lambda ids:
+                    ids.astype(str).str.casefold().str.replace(r'\d+', lambda match: match.group().zfill(20), regex=True))
+                overview_totals = commercial_selection_totals(scope)
+                overview_context = dict(project=commercial_project_label(project), selection='Todos los sistemas · Todas las líneas', mode=mode,
+                    currency=currency_code(), fx_rate=exchange_rate(), hours=overview_totals['HH'], missing_hours=overview_totals['HH pendientes'],
+                    chart_dimension='Sistema', system_summary=summary.to_dict('records'),
+                    generated_at=datetime.now(ZoneInfo('America/Santiago')).strftime('%d-%m-%Y %H:%M'),
+                    cutoff=scope.attrs.get('document_cutoff'), consulted_at=scope.attrs.get('consulted_at'), source_url=scope.attrs.get('source_url'))
+                download_slot.download_button('Descargar informe completo de la turbina · PDF', cached_commercial_pdf(overview_details, overview_context),
+                    file_name=f'informe_completo_turbina_{capacity}_kW.pdf', mime='application/pdf',
+                    key=f'option4_commercial_full_download_{index}', on_click='ignore')
+                st.caption(f'Informe general · {commercial_project_label(project)} · Todos los sistemas y líneas del alcance actual, incluidas partidas sin monto. Disponible sin seleccionar un sistema; el detalle de una selección conserva su descarga independiente.')
             with st.expander('Composición por sistema e hito', expanded=False):
                 st.caption(f'Alcance seleccionado: {mode}. ' + ('Excluye fundaciones y anclajes, montaje y logística.' if mode == 'Comercial' else 'Incluye todos los sistemas de las partidas marcadas Aplica en Costos.'))
                 system_tab, milestone_tab = st.tabs(['Por sistema', 'Por hito'])
