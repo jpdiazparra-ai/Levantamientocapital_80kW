@@ -87,3 +87,6 @@ El selector se titula Líneas del sistema (o del hito) y usa Todas las líneas c
 
 
 El recuadro de Desglose técnico compacta encabezado, indicadores, espaciados y tarjetas para reducir su altura aproximadamente un 30 %. Conserva nombres de líneas a 15 px y detalles a 12 px; las tarjetas tienen un mínimo de 76 px y crecen cuando el texto lo requiere.
+
+
+Se retiran los cuatro indicadores superiores del Desglose técnico (líneas, partidas totales, HH e insumos). El recuadro conserva el encabezado, contexto del filtro y tarjetas de selección de líneas, con sus partidas y HH.

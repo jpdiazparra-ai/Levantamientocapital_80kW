@@ -195,13 +195,6 @@
 .st-key-analysis_option .option-package-heading span {font-size:11px;font-weight:750;letter-spacing:1.4px;color:#8A681F;}
 .st-key-analysis_option .option-package-heading strong {display:block;font-size:21px;line-height:1.3;font-weight:750;letter-spacing:-.4px;color:#183448;margin-top:3px;}
 .st-key-analysis_option .option-package-heading p {margin:3px 0 0;font-size:14px;font-weight:550;color:#526578;}
-.st-key-analysis_option .option-package-overview {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:0;}
-.st-key-analysis_option .option-package-overview>div {display:grid;gap:3px;padding:9px 13px;background:#FFF;border:1px solid #DDE5EB;border-radius:11px;border-top:3px solid #C8AB64;}
-.st-key-analysis_option .option-package-overview b {font-size:26px;line-height:1.1;color:#183448;letter-spacing:-.6px;font-variant-numeric:tabular-nums;}
-.st-key-analysis_option .option-package-overview span {font-size:13px;font-weight:550;color:#526578;}
-.st-key-analysis_option .option-package-overview>div:first-child {background:#183448;border-color:#183448;border-top-color:#C8AB64;}
-.st-key-analysis_option .option-package-overview>div:first-child b {color:#F1D58E;}
-.st-key-analysis_option .option-package-overview>div:first-child span {color:#E4EBEF;}
 .st-key-analysis_option [class*="_package_controls"] [data-testid="stCaptionContainer"] p {font-size:13px!important;line-height:1.4!important;margin:0!important;color:#526578!important;}
 .st-key-analysis_option [class*="_package_controls"] [data-testid="stButton"] button {
   min-height:76px;height:100%;padding:9px 13px!important;border-radius:11px!important;
@@ -226,7 +219,6 @@
 .st-key-analysis_option [class*="_package_controls"] [data-testid="stButton"] button:focus-visible {
   outline:3px solid #B99847!important;outline-offset:3px;}
 @media(max-width:760px){
- .st-key-analysis_option .option-package-overview{grid-template-columns:repeat(2,minmax(0,1fr));}
  .st-key-analysis_option [class*="_package_controls"]{padding:12px!important;}
  .st-key-analysis_option .option-package-heading strong{font-size:20px;}
 }

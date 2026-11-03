@@ -253,23 +253,13 @@ def _summary_table(summary, dimension, scope, key, project_scope=None):
     package = remembered_package if remembered_package in options else all_packages
     st.session_state[package_key] = package
     group_details = commercial_group_details(scope, dimension, group, include_missing=True)
-    group_packages = group_details['Paquete / línea'].fillna('').astype(str).str.strip()
-    total_hours = commercial_selection_totals(group_details)['HH']
-    hours_text = 'Sin informar' if pd.isna(total_hours) else f'{total_hours:,.1f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
-    criteria = group_details.get('Criterio', pd.Series('', index=group_details.index)).fillna('').astype(str).str.strip().str.casefold()
-    insumos = int(criteria.isin(['insumo', 'insumos']).sum())
     package_hours, _ = commercial_hour_values(details)
     def select_package(value):
         st.session_state[package_key] = value
     with st.container(key=group_key+'_package_controls'):
         st.html('<div class="option-package-heading"><div><span>DESGLOSE TÉCNICO</span>'
             '<strong>Líneas del '+('sistema' if dimension == 'Sistema' else 'hito')+'</strong>'
-            f'<p>{html.escape(str(group))}</p></div></div>'
-            '<div class="option-package-overview">'
-            f'<div><b>{int(group_packages[group_packages.ne("")].nunique())}</b><span>Líneas del {"sistema" if dimension == "Sistema" else "hito"}</span></div>'
-            f'<div><b>{len(group_details)}</b><span>Partidas totales</span></div>'
-            f'<div><b>{hours_text}</b><span>HH informadas</span></div>'
-            f'<div><b>{insumos}</b><span>Partidas de insumos</span></div></div>')
+            f'<p>{html.escape(str(group))}</p></div></div>')
         st.caption(f'Selecciona una línea · {package_counts.size} líneas con partidas visibles · {len(details)} de {len(group_details)} partidas. HH considera solo cantidades con criterio HH.')
         for row_start in range(0, len(options), 5):
             columns = st.columns(5, gap='small')
