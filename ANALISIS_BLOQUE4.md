@@ -81,3 +81,6 @@ Las tablas de partidas ordenan las columnas finales como Presupuesto vigente, Va
 
 
 El desglose de paquetes se presenta en tarjetas de cinco columnas, con nombres multilínea, conteo de partidas y HH informadas por paquete. Un resumen técnico muestra paquetes y partidas totales del sistema o hito, HH y número de partidas de insumos; el texto aclara cuántas partidas están disponibles según el filtro de montos faltantes. El paquete activo se destaca en verde y su selección se conserva al actualizar datos o cambiar ese filtro.
+
+
+El selector se titula Líneas del sistema (o del hito) y usa Todas las líneas como opción general, conservando las selecciones previas. La presentación combina azul profundo y acentos dorados: título de 24 px, indicadores de 30 px, nombres de líneas de 15 px y metadatos de 12 px. La línea activa incorpora una marca de verificación y borde dorado; los nombres se ajustan en varias líneas.
