@@ -84,3 +84,6 @@ El desglose de paquetes se presenta en tarjetas de cinco columnas, con nombres m
 
 
 El selector se titula Líneas del sistema (o del hito) y usa Todas las líneas como opción general, conservando las selecciones previas. La presentación combina azul profundo y acentos dorados: título de 24 px, indicadores de 30 px, nombres de líneas de 15 px y metadatos de 12 px. La línea activa incorpora una marca de verificación y borde dorado; los nombres se ajustan en varias líneas.
+
+
+El recuadro de Desglose técnico compacta encabezado, indicadores, espaciados y tarjetas para reducir su altura aproximadamente un 30 %. Conserva nombres de líneas a 15 px y detalles a 12 px; las tarjetas tienen un mínimo de 76 px y crecen cuando el texto lo requiere.
