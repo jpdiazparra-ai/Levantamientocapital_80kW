@@ -13,6 +13,7 @@ import streamlit as st
 from capital_charts import amount
 from display_currency import currency_label, currency_code, currency_export, exchange_rate
 from commercial_report import build_commercial_pdf
+from commercial_comparison import render_commercial_comparison
 
 cached_commercial_pdf = st.cache_data(show_spinner=False, max_entries=24)(build_commercial_pdf)
 
@@ -344,6 +345,7 @@ def render_commercial_analysis(tasks):
         if not projects:
             st.info('No hay proyectos para la selección de capital.')
             return
+        projects.append('Comparar ambas turbinas')
         project_key = 'option4_commercial_project_select'
         if project_key in st.session_state and st.session_state[project_key] not in projects:
             st.session_state[project_key] = projects[0]
@@ -352,7 +354,14 @@ def render_commercial_analysis(tasks):
             st.session_state[f'option4_commercial_composition_{selected}'] = 'Total'
         project = st.selectbox('Turbina del análisis comercial', projects, key=project_key, format_func=commercial_project_label,
             on_change=select_project,
-            help='Alterna las turbinas de 10 kW y 80 kW para revisar sus montos comerciales y partidas.')
+            help='Revisa una turbina o compara ambas por sistema y línea, con costos, HH y variaciones porcentuales.')
+        if project == 'Comparar ambas turbinas':
+            scopes = {}
+            for capacity in (10, 80):
+                source_project = next((name for name in projects if re.search(rf'(?<!\d){capacity}\s*kw\b', str(name), re.I)), f'Turbina de {capacity} kW')
+                scopes[capacity] = commercial_product_scope(commercial_project_rows(tasks, source_project))
+            render_commercial_comparison(scopes)
+            return
         index = re.sub(r'\W+', '_', str(project))
         project_tasks = commercial_project_rows(tasks, project)
         project_scope = commercial_product_scope(project_tasks)

@@ -230,3 +230,17 @@
  .st-key-analysis_option [class*="_package_controls"] [data-testid="stHorizontalBlock"]{flex-wrap:wrap!important;}
  .st-key-analysis_option [class*="_package_controls"] [data-testid="stHorizontalBlock"]>[data-testid="stColumn"]{flex:1 1 100%!important;width:100%!important;min-width:100%!important;}
 }
+
+/* Technical and commercial turbine comparison. */
+.st-key-analysis_option .option-comparison-kpis {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0;}
+.st-key-analysis_option .option-comparison-kpis article {padding:18px;border:1px solid #DAE4EB;border-top:3px solid #B99847;border-radius:12px;background:#FFF;}
+.st-key-analysis_option .option-comparison-kpis article:first-child {background:#183448;color:#FFF;border-color:#183448;border-top-color:#B99847;}
+.st-key-analysis_option .option-comparison-kpis span {display:block;font-size:11px;font-weight:650;line-height:1.5;color:#526578;}
+.st-key-analysis_option .option-comparison-kpis strong {display:block;font-size:clamp(20px,1.7vw,28px);line-height:1.3;margin:10px 0;font-weight:750;font-variant-numeric:tabular-nums;color:#183448;overflow-wrap:anywhere;}
+.st-key-analysis_option .option-comparison-kpis p {font-size:12px;line-height:1.5;margin:5px 0;color:#526578;}
+.st-key-analysis_option .option-comparison-kpis small {font-size:11px;line-height:1.5;color:#526578;}
+.st-key-analysis_option .option-comparison-kpis article:first-child :is(span,p,small) {color:#DCE6ED;}
+.st-key-analysis_option .option-comparison-kpis article:first-child strong {color:#F1D58E;}
+.st-key-analysis_option .option-comparison-kpis article.normalized {background:#F0F9F7;border-top-color:#0F766E;}
+@media(max-width:1100px){.st-key-analysis_option .option-comparison-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:600px){.st-key-analysis_option .option-comparison-kpis{grid-template-columns:1fr;}}
