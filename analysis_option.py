@@ -158,7 +158,9 @@ def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items(
     cutoff = dates(pd.Series([raw['Resumen'].iloc[3,1]])).iloc[0]
     if pd.isna(cutoff):
         raise ValueError('La fecha de corte del documento no es válida.')
-    return tasks, cash, cutoff, pd.Timestamp.now(tz='America/Santiago').strftime('%d-%m-%Y %H:%M:%S')
+    consulted_at = pd.Timestamp.now(tz='America/Santiago').strftime('%d-%m-%Y %H:%M:%S')
+    tasks.attrs.update(document_cutoff=cutoff.strftime('%d-%m-%Y'), consulted_at=consulted_at, source_url=source_url)
+    return tasks, cash, cutoff, consulted_at
 
 
 def weighted_progress(frame):

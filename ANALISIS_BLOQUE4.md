@@ -96,3 +96,6 @@ Las tarjetas de Líneas del sistema conservan su altura y tipografía, con siete
 
 
 El análisis comercial muestra Turbina de 10 kW y Turbina de 80 kW en el selector y encabezado del gráfico de composición. Las denominaciones visibles y textos de contexto usan turbina; los nombres originales de Proyecto e IDs de los filtros se conservan para mantener los cruces y selecciones existentes.
+
+
+La descarga de partidas seleccionadas entrega un PDF vectorial con la selección vigente (turbina, sistema/hito, líneas, alcance y moneda). Incluye portada ejecutiva con HH y totales, gráficos de composición comercial y comparación con presupuesto vigente, detalle económico con descripciones completas y un anexo por ID con líneas, participaciones y conciliación. Los encabezados se repiten al paginar; el PDF informa corte, consulta, moneda y tipo de cambio cuando corresponde. La descarga no vuelve a ejecutar la página. ReportLab ya forma parte de las dependencias; no requiere Chrome ni Kaleido para generar los gráficos. La exportación CSV de trazabilidad general continúa disponible en su sección independiente.

@@ -3,13 +3,18 @@ import html
 import hashlib
 import re
 import unicodedata
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from capital_charts import amount
-from display_currency import currency_label, currency_code, currency_export
+from display_currency import currency_label, currency_code, currency_export, exchange_rate
+from commercial_report import build_commercial_pdf
+
+cached_commercial_pdf = st.cache_data(show_spinner=False, max_entries=24)(build_commercial_pdf)
 
 COMMERCIAL = 'Comercial anterior'
 COLORS = ['#244A6C', '#0F766E', '#2E90A5', '#B7791F', '#718096', '#735D96', '#CBD5E1']
@@ -214,7 +219,7 @@ def commercial_group_details(scope, dimension, group, include_missing=False):
         ids.astype(str).str.casefold().str.replace(r'\d+', lambda match: match.group().zfill(20), regex=True))
 
 
-def _summary_table(summary, dimension, scope, key, project_scope=None):
+def _summary_table(summary, dimension, scope, key, project_scope=None, report_context=None):
     project_scope = scope if project_scope is None else project_scope
     # Remember the group by name rather than its row number: amounts and IDs
     # can change during refresh, resetting the dataframe's native selection.
@@ -310,8 +315,16 @@ def _summary_table(summary, dimension, scope, key, project_scope=None):
         column_config=commercial_detail_columns())
     st.caption('Participación del ID sobre el monto comercial de su mismo sistema y paquete, y de la turbina completa seleccionada. Ambas bases incluyen todas las partidas Aplica de la turbina y se mantienen al filtrar. Los porcentajes se calculan con importes informados; no se calculan si el total es cero o falta información.')
     st.caption('Variación respecto del monto comercial: positivo = presupuesto mayor; negativo = presupuesto menor. Sin cálculo cuando el comercial es cero o falta un monto.')
-    st.download_button('Descargar partidas seleccionadas · CSV', currency_export(details).to_csv(index=False).encode('utf-8-sig'),
-        file_name='partidas_comerciales_seleccionadas.csv', mime='text/csv', key=group_key+'_download')
+    context = dict(report_context or {})
+    context.update(currency=currency_code(), fx_rate=exchange_rate(), selection=selection_label,
+        project=context.get('project', 'Análisis comercial'), mode=context.get('mode', 'Total'),
+        hours=totals['HH'], missing_hours=totals['HH pendientes'],
+        generated_at=datetime.now(ZoneInfo('America/Santiago')).strftime('%d-%m-%Y %H:%M'),
+        cutoff=scope.attrs.get('document_cutoff'), consulted_at=scope.attrs.get('consulted_at'),
+        source_url=scope.attrs.get('source_url'))
+    filename = re.sub(r'[^a-zA-Z0-9_-]+', '_', context['project']+'_'+selection_label).strip('_')
+    st.download_button('Descargar informe de la selección · PDF', cached_commercial_pdf(details, context),
+        file_name=filename+'.pdf', mime='application/pdf', key=group_key+'_download', on_click='ignore')
 
 
 def render_commercial_analysis(tasks):
@@ -423,9 +436,9 @@ def render_commercial_analysis(tasks):
                 st.caption(f'Alcance seleccionado: {mode}. ' + ('Excluye fundaciones y anclajes, montaje y logística.' if mode == 'Comercial' else 'Incluye todos los sistemas de las partidas marcadas Aplica en Costos.'))
                 system_tab, milestone_tab = st.tabs(['Por sistema', 'Por hito'])
                 with system_tab:
-                    _summary_table(summary, 'Sistema', scope, f'option4_commercial_system_{index}', project_scope=project_scope)
+                    _summary_table(summary, 'Sistema', scope, f'option4_commercial_system_{index}', project_scope=project_scope, report_context={'project': commercial_project_label(project), 'mode': mode})
                 with milestone_tab:
-                    _summary_table(commercial_breakdown(scope, 'Hito objetivo'), 'Hito objetivo', scope, f'option4_commercial_milestone_{index}', project_scope=project_scope)
+                    _summary_table(commercial_breakdown(scope, 'Hito objetivo'), 'Hito objetivo', scope, f'option4_commercial_milestone_{index}', project_scope=project_scope, report_context={'project': commercial_project_label(project), 'mode': mode})
             with st.expander('Trazabilidad de partidas · Costos'):
                 fields = DETAIL_FIELDS
                 detail = commercial_participations(scope, project_scope).assign(**{'Unidades': commercial_quantities(scope), 'Costo por unidad · CLP': commercial_unit_cost(scope)})
