@@ -1,12 +1,17 @@
 """Comparable commercial indicators for the 10 kW and 80 kW turbines."""
 import html
 import textwrap
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from display_currency import amount, currency_code
+from display_currency import amount, currency_code, exchange_rate
+from commercial_report import build_comparison_pdf
+
+cached_comparison_pdf = st.cache_data(show_spinner=False, max_entries=24)(build_comparison_pdf)
 
 COMMERCIAL = 'Comercial anterior'
 NAVY, TEAL, GOLD, MUTED = '#183448', '#0F766E', '#B99847', '#526578'
@@ -174,3 +179,14 @@ def render_commercial_comparison(project_scopes):
             '**Alineación:** se comparan nombres de sistema y, en detalle, sistema + línea; no se infiere equivalencia entre líneas con nombres diferentes. '
             '**Cobertura:** partidas con monto / partidas Aplica; incluye ceros explícitos. Un sistema ausente se conserva sin monto, no como cero. '
             'Los gráficos muestran todas las filas filtradas, sin páginas.')
+
+    line_note = (" · 1 línea seleccionada" if len(frame) == 1 else f" · {len(frame)} líneas seleccionadas") if by_line else ''
+    context = dict(currency=currency_code(), fx_rate=exchange_rate(), mode=mode, level=level,
+        selection=system+line_note, metric=metric, metric_field=metric_field,
+        generated_at=datetime.now(ZoneInfo('America/Santiago')).strftime('%d-%m-%Y %H:%M'),
+        cutoff=project_scopes[10].attrs.get('document_cutoff'),
+        consulted_at=project_scopes[10].attrs.get('consulted_at'),
+        source_url=project_scopes[10].attrs.get('source_url'))
+    st.download_button('Descargar informe de la comparación · PDF', cached_comparison_pdf(frame, context),
+        file_name='comparacion_turbinas_10_80_kW_'+('lineas' if by_line else 'sistemas')+'.pdf',
+        mime='application/pdf', key='option4_comparison_download', on_click='ignore')
