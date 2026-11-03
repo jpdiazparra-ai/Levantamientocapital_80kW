@@ -90,3 +90,6 @@ El recuadro de Desglose técnico compacta encabezado, indicadores, espaciados y 
 
 
 Se retiran los cuatro indicadores superiores del Desglose técnico (líneas, partidas totales, HH e insumos). El recuadro conserva el encabezado, contexto del filtro y tarjetas de selección de líneas, con sus partidas y HH.
+
+
+Las tarjetas de Líneas del sistema conservan su altura y tipografía, con siete columnas en escritorio en lugar de cinco: aproximadamente un 30 % menos de ancho por tarjeta. La distribución adaptable en ventanas pequeñas sigue vigente.

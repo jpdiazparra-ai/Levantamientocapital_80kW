@@ -261,9 +261,10 @@ def _summary_table(summary, dimension, scope, key, project_scope=None):
             '<strong>Líneas del '+('sistema' if dimension == 'Sistema' else 'hito')+'</strong>'
             f'<p>{html.escape(str(group))}</p></div></div>')
         st.caption(f'Selecciona una línea · {package_counts.size} líneas con partidas visibles · {len(details)} de {len(group_details)} partidas. HH considera solo cantidades con criterio HH.')
-        for row_start in range(0, len(options), 5):
-            columns = st.columns(5, gap='small')
-            for column, value in zip(columns, options[row_start:row_start + 5]):
+        cards_per_row = 7  # About 30% narrower than the previous five-column layout.
+        for row_start in range(0, len(options), cards_per_row):
+            columns = st.columns(cards_per_row, gap='small')
+            for column, value in zip(columns, options[row_start:row_start + cards_per_row]):
                 mask = pd.Series(True, index=details.index) if value == all_packages else packages.eq(value)
                 count = int(mask.sum())
                 hours = package_hours[mask].sum(min_count=1)
