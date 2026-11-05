@@ -9,6 +9,7 @@ import streamlit as st
 
 from display_currency import amount, currency_code, exchange_rate
 from valuation_data import load_valuation, SOURCE, SHEETS, number
+from valuation_interactive import diagnostics_panel, unit_panel, projection_panel, dcf_lab
 
 NAVY,TEAL,GOLD,ORANGE,MUTED='#183448','#0F766E','#B99847','#B65A27','#526578'
 
@@ -87,36 +88,41 @@ def overview(model):
         ('VAN económico sin terminal',money(s['npv_economic']),'Incluye el costo económico de los activos en especie'),
         ('TIR económica sin terminal',pct(s['irr_economic']),'Tasa publicada en 00 Evaluación · sin perpetuidad'),
         ('Precio previo negociado',money(s['pre_money']),'Precio implícito de la operación propuesta; separado del DCF')])
-    left,right=st.columns([1.2,1],gap='large')
-    with left:
-        st.markdown('##### De los flujos explícitos al DCF')
-        st.caption('El arranque consume caja en Año 0; el terminal se descuenta desde el final del año 10. El aporte de capital nuevo no integra este valor.')
-        pv_future=a.loc[a['Año modelo'].gt(0),'pv_fcff'].sum(min_count=1)
-        terminal_pv=s['terminal_value']/(1+s['rate'])**10 if s['rate']>s['growth'] else float('nan')
-        values=[pv_future,a.iloc[0]['fcff'],terminal_pv,s['dcf']]
-        fig=go.Figure(go.Waterfall(x=['VP flujos años 1–10','Caja de arranque','VP del terminal','DCF publicado'],y=[displayed(v)/1e6 for v in values],measure=['relative','relative','relative','total'],text=[money(v,True) for v in values],textposition='outside',connector=dict(line=dict(color='#C8D3DB')),increasing=dict(marker_color=TEAL),decreasing=dict(marker_color=ORANGE),totals=dict(marker_color=NAVY)))
-        fig.update_yaxes(title_text='Millones de '+currency_code());plot(fig,'dcf_bridge')
-    with right:
-        st.markdown('##### DCF y valores de negociación')
-        st.caption('El precio previo más el aporte primario determina el precio posterior implícito. La compra secundaria remunera a fundadores y no ingresa a FW.')
-        names=['Precio previo negociado','Precio posterior negociado','DCF antes de fondos nuevos']
-        vals=[s['pre_money'],s['post_money'],s['dcf']]
-        fig=go.Figure(go.Bar(y=names,x=[displayed(v)/1e6 for v in vals],orientation='h',marker_color=[GOLD,GOLD,NAVY],text=[money(v,True) for v in vals],textposition='outside',cliponaxis=False))
-        fig.update_xaxes(title_text='Millones de '+currency_code());fig.update_yaxes(autorange='reversed');plot(fig,'deal_values')
-    context('Lectura del valor',f'El terminal representa {pct(s["terminal_weight"])} del DCF publicado. El VAN económico de {money(s["npv_economic"])} resta el aporte de activos de {money(s["assets_in_kind"])} al VAN de caja sin terminal. Los fondos primarios de {money(s["primary"])} se presentan aparte y su estado es {model["status"]}.')
-    st.markdown('##### Sensibilidad publicada · precio y tasa de descuento')
-    st.caption('Nueve resultados de la matriz nativa de 03 Supuestos. Explora la sensibilidad del DCF manteniendo el resto del caso; no son escenarios completos recalculados aquí.')
-    sens=model['sensitivity'].pivot(index='Tasa',columns='Precio x',values='DCF USD').sort_index()
-    z=displayed(sens.to_numpy())/1e6
-    labels=[[money(v,True) for v in row] for row in sens.to_numpy()]
-    fig=go.Figure(go.Heatmap(z=z,x=[f'{v:.2f}x'.replace('.',',') for v in sens.columns],y=sens.index.tolist(),text=labels,texttemplate='%{text}',colorscale=[[0,'#EDF3F6'],[.5,'#7DBBB3'],[1,NAVY]],colorbar=dict(title='MM '+currency_code()),hovertemplate='Precio %{x}<br>Tasa %{y:.0%}<br>%{text}<extra></extra>'))
-    fig.update_xaxes(title_text='Multiplicador de precio');fig.update_yaxes(title_text='Tasa de descuento',tickmode='array',tickvals=sens.index.tolist(),ticktext=[pct(v) for v in sens.index],autorange='reversed');plot(fig,'sensitivity',320)
-    if not model['pending'].empty:
-        with st.expander('Condiciones del caso pendientes de respaldo',expanded=True):
-            st.caption('Estados tomados de 00 Evaluación. La conciliación matemática del modelo no acredita presupuestos ni contratos.')
-            st.dataframe(model['pending'],hide_index=True,use_container_width=True)
-    source_note('00 Evaluación','00 Datos de entrada','01 Resumen','03 Supuestos','04 Resultados y flujo')
-
+    sections=st.tabs(['Diagnóstico financiero','Economía por turbina','Proyección y caja','Laboratorio DCF'])
+    with sections[0]:
+        diagnostics_panel(model)
+        left,right=st.columns([1.2,1],gap='large')
+        with left:
+            st.markdown('##### De los flujos explícitos al DCF')
+            st.caption('El arranque consume caja en Año 0; el terminal se descuenta desde el final del año 10. El aporte de capital nuevo no integra este valor.')
+            pv_future=a.loc[a['Año modelo'].gt(0),'pv_fcff'].sum(min_count=1)
+            terminal_pv=s['terminal_value']/(1+s['rate'])**10 if s['rate']>s['growth'] else float('nan')
+            values=[pv_future,a.iloc[0]['fcff'],terminal_pv,s['dcf']]
+            fig=go.Figure(go.Waterfall(x=['VP flujos años 1–10','Caja de arranque','VP del terminal','DCF publicado'],y=[displayed(v)/1e6 for v in values],measure=['relative','relative','relative','total'],text=[money(v,True) for v in values],textposition='outside',connector=dict(line=dict(color='#C8D3DB')),increasing=dict(marker_color=TEAL),decreasing=dict(marker_color=ORANGE),totals=dict(marker_color=NAVY)))
+            fig.update_yaxes(title_text='Millones de '+currency_code());plot(fig,'dcf_bridge')
+        with right:
+            st.markdown('##### DCF y valores de negociación')
+            st.caption('El precio previo más el aporte primario determina el precio posterior implícito. La compra secundaria remunera a fundadores y no ingresa a FW.')
+            names=['Precio previo negociado','Precio posterior negociado','DCF antes de fondos nuevos']
+            vals=[s['pre_money'],s['post_money'],s['dcf']]
+            fig=go.Figure(go.Bar(y=names,x=[displayed(v)/1e6 for v in vals],orientation='h',marker_color=[GOLD,GOLD,NAVY],text=[money(v,True) for v in vals],textposition='outside',cliponaxis=False))
+            fig.update_xaxes(title_text='Millones de '+currency_code());fig.update_yaxes(autorange='reversed');plot(fig,'deal_values')
+        context('Lectura del valor',f'El terminal representa {pct(s["terminal_weight"])} del DCF publicado. El VAN económico de {money(s["npv_economic"])} resta el aporte de activos de {money(s["assets_in_kind"])} al VAN de caja sin terminal. Los fondos primarios de {money(s["primary"])} se presentan aparte y su estado es {model["status"]}.')
+        st.markdown('##### Sensibilidad publicada · precio y tasa de descuento')
+        st.caption('Nueve resultados de la matriz nativa de 03 Supuestos. Explora la sensibilidad del DCF manteniendo el resto del caso; no son escenarios completos recalculados aquí.')
+        sens=model['sensitivity'].pivot(index='Tasa',columns='Precio x',values='DCF USD').sort_index()
+        z=displayed(sens.to_numpy())/1e6
+        labels=[[money(v,True) for v in row] for row in sens.to_numpy()]
+        fig=go.Figure(go.Heatmap(z=z,x=[f'{v:.2f}x'.replace('.',',') for v in sens.columns],y=sens.index.tolist(),text=labels,texttemplate='%{text}',colorscale=[[0,'#EDF3F6'],[.5,'#7DBBB3'],[1,NAVY]],colorbar=dict(title='MM '+currency_code()),hovertemplate='Precio %{x}<br>Tasa %{y:.0%}<br>%{text}<extra></extra>'))
+        fig.update_xaxes(title_text='Multiplicador de precio');fig.update_yaxes(title_text='Tasa de descuento',tickmode='array',tickvals=sens.index.tolist(),ticktext=[pct(v) for v in sens.index],autorange='reversed');plot(fig,'sensitivity',320)
+        if not model['pending'].empty:
+            with st.expander('Condiciones del caso pendientes de respaldo',expanded=True):
+                st.caption('Estados tomados de 00 Evaluación. La conciliación matemática del modelo no acredita presupuestos ni contratos.')
+                st.dataframe(model['pending'],hide_index=True,use_container_width=True)
+        source_note('00 Evaluación','00 Datos de entrada','01 Resumen','03 Supuestos','04 Resultados y flujo')
+    with sections[1]:unit_panel(model)
+    with sections[2]:projection_panel(model)
+    with sections[3]:dcf_lab(model)
 
 def investment(model):
     s=model['scalars']

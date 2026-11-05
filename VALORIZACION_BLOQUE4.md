@@ -19,7 +19,7 @@ La interfaz organiza el contenido en seis pestañas:
 | OPEX y activos | Presupuesto por área, partidas y ajustes, inventario valorizado, referencias históricas y depreciación. |
 | Supuestos y trazabilidad | Conciliaciones propias, supuestos publicados, referencias de indicadores, caso activo/base V6 y lectura íntegra de las once pestañas. |
 
-El año operativo actualiza resultados unitarios, balance y presupuesto OPEX. El DCF y las curvas completas mantienen los diez años de la fuente. Las sensibilidades son los nueve resultados publicados: no se presentan multiplicadores Conservador/Optimista como si fueran resultados recalculados.
+El año operativo actualiza resultados unitarios, balance y presupuesto OPEX. El DCF y las curvas completas mantienen los diez años de la fuente. La sensibilidad nativa conserva los nueve resultados publicados. El resumen incorpora además cuatro vistas interactivas descritas abajo; sus simulaciones analíticas se distinguen del caso publicado y no recalculan el libro completo.
 
 ## Convenciones y trazabilidad
 
@@ -38,3 +38,14 @@ El año operativo actualiza resultados unitarios, balance y presupuesto OPEX. El
 `valuation_data.py` contrasta catorce controles: completitud, puente del DCF, VAN económico, Gordon, coincidencia con resumen, destino de fondos, precio previo/posterior, inversión inicial, activos en especie, caja inicial, balance, EBITDA, OPEX y flujo mensual/anual. Las tolerancias se muestran en su unidad y reconocen que el CSV redondea importes; no acreditan presupuestos ni contratos. Las discrepancias y errores de fórmula se señalan y se localizan en la pestaña de trazabilidad.
 
 La caché dura 60 segundos y participa en Actualizar todo mediante el mismo nonce de refresco. Los filtros tienen claves estables. La vista se carga antes del documento Plan/Costos de los otros sub bloques: un error de IDs en ese documento no impide revisar valorización. La revisión visual y las pruebas verificaron ambas monedas, navegación, cambios de año, los once orígenes y conservación de selecciones.
+
+## Resumen financiero interactivo
+
+El resumen mantiene sus cuatro KPI publicados y añade estas vistas:
+
+- **Diagnóstico financiero:** DCF/ventas y DCF/EBITDA del primer año, índice de rentabilidad económico, payback simple y descontado, spread tasa–crecimiento y relación entre precio previo negociado y DCF. Los múltiplos describen el modelo; no son comparables de mercado ni múltiplos EV. El índice descuenta entradas y salidas económicas, incluidos activos aportados, sin terminal. El payback interpola flujos anuales y no representa un calendario mensual ni el retorno del socio.
+- **Economía por turbina:** año independiente, selección de 10/80 kW, gráfico por equipo o por kW, matriz de precios, fabricación, margen bruto, OPEX específico y contribución antes de OPEX común. Los adicionales de terceros se asignan por producto únicamente si concilian con fabricación consolidada; una discrepancia material deja el margen sin cálculo. El laboratorio de mix usa ambos productos a costos/precios unitarios constantes, volumen editable y OPEX común fijo: muestra EBITDA aproximado, punto de equilibrio en equipos equivalentes, margen de seguridad y apalancamiento operativo. No recalcula economías de escala, impuestos, capital de trabajo ni capacidad de proveedores.
+- **Proyección y caja:** intervalo de años seleccionable, ventas y EBITDA, flujo libre/caja y entregas/capacidad. Los ratios incluyen margen EBITDA ponderado, CAGR de ventas y conversión FCFF/EBITDA. Los flujos se suman; la caja es el saldo del último año seleccionado. La tabla transpuesta muestra demanda, capacidad, entregas, externalización, sobrecostos, resultados y caja.
+- **Laboratorio DCF:** tasa de descuento y crecimiento perpetuo editables, inclusión/exclusión del terminal y restauración de los supuestos publicados. Conserva los FCFF de años 0–10 y el FCFF normalizado publicado del año 11. La tasa modifica el descuento y el crecimiento solo el denominador de Gordon: no recalcula el flujo normalizado ni los resultados operativos. Exige r > g para usar terminal. Incluye mapa de sensibilidad y detalle de descuento anual.
+
+Las variaciones del laboratorio se comparan con una base reconstruida usando los mismos importes CSV, que pueden estar redondeados. Los datos faltantes se conservan sin cálculo. `valuation_finance.py` contiene las fórmulas puras; `valuation_interactive.py`, los controles y gráficos. La conversión de moneda afecta la presentación, no los cálculos en USD de la fuente. Los controles conservan sus selecciones al actualizar.
