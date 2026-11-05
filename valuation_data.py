@@ -54,6 +54,26 @@ class Sheet:
     def ref(self,label,value_col='E',label_col='C'):return f'{self.name}!{value_col}{self.find(label,label_col)}'
 
 
+def parse_deal(sheet):
+    """Preserve every published deal term, including notes and cell references."""
+    blocks={'Condiciones de la operación','Precio y participación accionaria',
+            'Aplicación de los fondos en FW','Valorización del modelo y precio negociado'}
+    block=None;records=[];criteria=[]
+    for row in range(1,len(sheet.rows)+1):
+        label=sheet.cell(f'C{row}').strip()
+        if label in blocks:block=label;continue
+        if label=='Criterios de lectura':block='Criterios';continue
+        if block=='Criterios' and label:criteria.append(label);continue
+        value=sheet.cell(f'E{row}').strip()
+        if block in blocks and label and value:
+            unit=sheet.cell(f'F{row}').strip()
+            if value.endswith('%'):unit='%'
+            records.append({'Bloque':block,'Concepto':label,'Valor fuente':value,
+                'Valor':number(value),'Unidad':unit,'Observación':sheet.cell(f'H{row}'),
+                'Referencia':f'{sheet.name}!E{row}'})
+    return pd.DataFrame(records),criteria
+
+
 def parse_model(raw):
     sheets={name:Sheet(name,raw[name]) for name in SHEETS}
     evaluation,inputs,summary,deal,assumptions,results,balance,monthly,operations,opex,assets=[sheets[name] for name in SHEETS]
@@ -150,6 +170,7 @@ def parse_model(raw):
         r=evaluation.find(label,'B');provenance.append({'Indicador':label,'Valor publicado':evaluation.cell(f'C{r}'),'Fuente':f'00 Evaluación!C{r}'})
     model=dict(scalars=scalars,scenario=scenario,production=production,status=status,annual=annual,monthly=months,
         opex=pd.DataFrame(opex_records),assets=pd.DataFrame(asset_records),sensitivity=pd.DataFrame(sensitivity),pending=pd.DataFrame(pending),provenance=pd.DataFrame(provenance),raw=raw,formula_errors=pd.DataFrame(source_errors),sheets=sheets)
+    model['deal_details'],model['deal_criteria']=parse_deal(deal)
     model['checks']=audit_model(model)
     return model
 

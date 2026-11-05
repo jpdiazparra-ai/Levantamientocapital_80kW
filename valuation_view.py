@@ -129,24 +129,74 @@ def overview(model):
     with sections[2]:projection_panel(model)
     with sections[3]:dcf_lab(model)
 
+def deal_table(model,block):
+    """Report table with complete wrapped terms; monetary values follow display currency."""
+    data=model['deal_details'];data=data[data['Bloque'].eq(block)]
+    rows=[]
+    for _,row in data.iterrows():
+        value=money(row['Valor']) if row['Unidad']=='USD' else pct(row['Valor']) if row['Unidad']=='%' else row['Valor fuente']+(' '+row['Unidad'] if row['Unidad'] else '')
+        rows.append('<tr><th scope="row" title="'+html.escape(row['Referencia'])+'">'+html.escape(row['Concepto'])+'</th><td class="deal-value">'+html.escape(value)+'</td><td class="deal-note">'+html.escape(row['Observación'])+'</td></tr>')
+    st.html('<div class="deal-report"><table><caption>'+html.escape(block)+'</caption><thead><tr><th>Concepto</th><th>Valor · '+currency_code()+' / unidad</th><th>Contexto de la fuente</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>')
+
+
 def investment(model):
-    s=model['scalars']
-    st.subheader('Inversión, destino de fondos y participación')
-    st.caption('Revisa cuánto llega a la empresa, cuánto corresponde a compra de acciones y cómo se distribuye la propiedad. El calendario modela la operación aun cuando su estado sea Propuesta.')
-    kpis([('Pago total del inversionista',money(s['investment_total']),model['status']),('Capital primario para FW',money(s['primary']),'Aumenta caja y capital; no aumenta EBITDA'),('Compra secundaria a fundadores',money(s['secondary']),'Pago directo fuera de la caja de FW'),('Caja objetivo de arranque',money(s['cash_target']),'Reserva objetivo, no gasto adicional')])
-    left,right=st.columns(2,gap='large')
+    with st.container(key='option4_valuation_investment'):
+        investment_details(model)
+
+
+def investment_details(model):
+    s=model['scalars'];details=model['deal_details']
+    def value(label):
+        rows=details.loc[details['Concepto'].eq(label),'Valor']
+        return rows.iloc[0] if len(rows) else float('nan')
+    section('01 / OPERACIÓN','Inversión, condiciones y estructura accionaria')
+    st.caption('Condiciones publicadas en 02 Inversión y socios. Distingue el aporte que ingresa a FW, la compra secundaria y el precio implícito de las acciones. Los importes mantienen el estado de la operación: '+model['status']+'.')
+    kpis([('Pago total del inversionista',money(s['investment_total']),model['status']),
+        ('Capital primario para FW',money(s['primary']),'Entrada de caja y capital de la empresa'),
+        ('Participación final inversionista',pct(s['investor_share']),'Emisión primaria + compra secundaria'),
+        ('Caja objetivo después del arranque',money(s['cash_target']),'Reserva de liquidez publicada')])
+    left,right=st.columns([1.1,1],gap='medium')
+    with left:deal_table(model,'Condiciones de la operación')
+    with right:deal_table(model,'Precio y participación accionaria')
+    left,right=st.columns(2,gap='medium')
     with left:
-        fig=go.Figure(go.Sankey(node=dict(label=['Inversionista','Capital primario a FW','Compra a fundadores'],color=[NAVY,TEAL,GOLD],pad=24,thickness=18),link=dict(source=[0,0],target=[1,2],value=[displayed(s['primary']),displayed(s['secondary'])],color=['#A3D1C7','#E6D6AB'],customdata=[money(s['primary']),money(s['secondary'])],hovertemplate='%{customdata}<extra></extra>')))
-        fig.update_layout(title='Destino del pago de inversión · '+currency_code());plot(fig,'funds')
+        destinations=['Aporte a FW','Compra a fundadores'];amounts=[s['primary'],s['secondary']]
+        fig=go.Figure(go.Bar(y=destinations,x=[displayed(v)/1e6 for v in amounts],orientation='h',width=.4,
+            marker_color=[NAVY,GOLD],text=[money(v,True) for v in amounts],textposition='outside',cliponaxis=False,
+            customdata=[money(v) for v in amounts],hovertemplate='%{y}<br>%{customdata}<extra></extra>'))
+        fig.update_layout(title='Destino del pago de inversión');fig.update_xaxes(title_text='MM '+currency_code(),range=[0,max(max(displayed(v)/1e6 for v in amounts)*1.3,1)]);fig.update_yaxes(autorange='reversed',showgrid=False);plot(fig,'funds',270)
     with right:
-        fig=go.Figure(go.Pie(labels=['Inversionista · emisión primaria','Inversionista · compra secundaria','Accionistas actuales'],values=[s['primary_share'],s['secondary_share'],s['founder_share']],hole=.64,sort=False,marker=dict(colors=[NAVY,GOLD,TEAL]),textinfo='percent',hovertemplate='%{label}<br>%{percent}<extra></extra>'))
-        fig.update_layout(title='Participación accionaria implícita',annotations=[dict(x=.5,y=.5,text='<b>'+pct(s['investor_share'])+'</b><br>inversionista',showarrow=False,font=dict(size=18,color=NAVY))]);plot(fig,'ownership')
-    st.markdown('##### Del aporte a la caja libre del año 0')
-    initial_vat=model['annual'].iloc[0]['vat_change']
-    vals=[s['primary'],-s['preop'],-s['spares'],-initial_vat,s['cash_y0']]
-    fig=go.Figure(go.Waterfall(x=['Aporte a FW','Preoperacionales','Repuestos iniciales','IVA inicial neto','Caja libre Año 0'],y=[displayed(v)/1e6 for v in vals],measure=['relative']*4+['total'],text=[money(v,True) for v in vals],textposition='outside',increasing=dict(marker_color=TEAL),decreasing=dict(marker_color=GOLD),totals=dict(marker_color=NAVY)))
-    fig.update_yaxes(title_text='Millones de '+currency_code());plot(fig,'start_cash')
-    context('Capital y liquidez',f'El aporte para cubrir arranque y conservar la caja objetivo asciende a {money(s["target_funding"])}. La caja libre publicada de {money(s["cash_y0"])} deja {money(s["cash_y0"]-s["cash_target"])} sobre el objetivo. El puente adicional del caso es {money(s["bridge"])}; estos valores dependen de la fecha y materialización del aporte propuesto.')
+        fig=go.Figure(go.Pie(labels=['Inversionista · emisión primaria','Inversionista · compra secundaria','Accionistas actuales'],values=[s['primary_share'],s['secondary_share'],s['founder_share']],hole=.68,sort=False,
+            marker=dict(colors=[NAVY,GOLD,TEAL],line=dict(color='white',width=2)),textinfo='percent',textposition='inside',hovertemplate='%{label}<br>%{percent}<extra></extra>'))
+        fig.update_layout(title='Participación accionaria después de la operación',annotations=[dict(x=.5,y=.5,text='<b>'+pct(s['investor_share'])+'</b><br>inversionista',showarrow=False,font=dict(size=16,color=NAVY))]);plot(fig,'ownership',360)
+    section('02 / LIQUIDEZ','Aplicación de los fondos y caja de arranque')
+    st.caption('El uso de caja está neto de anticipos. La reserva objetivo, el financiamiento puente y el aporte adicional se muestran por separado; el patrimonio contable es distinto del precio negociado y del DCF.')
+    extra=value('Aporte adicional para caja objetivo');equity=value('Patrimonio contable al cierre del año 0')
+    kpis([('Caja libre al cierre del año 0',money(value('Caja libre al cierre del año 0')),'Saldo publicado después del arranque'),
+        ('Aporte total para conservar caja',money(s['target_funding']),'Uso de caja + reserva objetivo'),
+        ('Aporte adicional para caja objetivo',money(extra),'Necesidad adicional publicada'),
+        ('Patrimonio contable inicial',money(equity),'Balance al cierre del año 0')],secondary=True)
+    left,right=st.columns([1.2,1],gap='medium')
+    with left:deal_table(model,'Aplicación de los fondos en FW')
+    with right:
+        bridge=value('Financiamiento puente / adicional requerido');closing=value('Caja libre al cierre del año 0')
+        vals=[value('Capital de caja aportado a FW'),-s['cash_required'],closing]
+        fig=go.Figure(go.Waterfall(x=['Capital a FW','Uso neto de caja','Caja libre Año 0'],y=[displayed(v)/1e6 for v in vals],measure=['relative','relative','total'],text=[money(v,True) for v in vals],textposition='outside',connector=dict(line=dict(color='#CCD8E2')),increasing=dict(marker_color=TEAL),decreasing=dict(marker_color=GOLD),totals=dict(marker_color=NAVY)))
+        fig.update_layout(title='Del aporte al saldo disponible');fig.update_yaxes(title_text='MM '+currency_code(),range=[min(0,displayed(closing)/1e6),max(max(displayed(v)/1e6 for v in vals)*1.2,1)]);plot(fig,'start_cash',300)
+        context('Caja objetivo y financiamiento',f'El saldo publicado supera o queda bajo la caja objetivo en {money(closing-s["cash_target"])}. El puente / adicional requerido es {money(bridge)} y la necesidad adicional para conservar la reserva es {money(extra)}. El puente es un déficit proyectado, no un aporte firmado.')
+    section('03 / PRECIO Y VALOR','Negociación frente a la valorización del modelo')
+    st.caption('Compara el valor previo implícito de la operación con el DCF antes de fondos nuevos. La diferencia publicada no acredita un descuento de mercado ni representa el retorno del inversionista.')
+    left,right=st.columns([1.2,1],gap='medium')
+    with left:deal_table(model,'Valorización del modelo y precio negociado')
+    with right:
+        labels=['DCF antes de fondos nuevos','Precio previo negociado'];amounts=[value('Valor DCF antes de fondos nuevos'),value('Valor previo implícito en negociación')]
+        fig=go.Figure(go.Bar(y=labels,x=[displayed(v)/1e6 for v in amounts],orientation='h',width=.4,marker_color=[NAVY,TEAL],text=[money(v,True) for v in amounts],textposition='outside',cliponaxis=False,customdata=[money(v) for v in amounts],hovertemplate='%{y}<br>%{customdata}<extra></extra>'))
+        fig.update_layout(title='Valor operativo y precio de entrada');fig.update_xaxes(title_text='MM '+currency_code(),range=[0,max(max(displayed(v)/1e6 for v in amounts)*1.3,1)]);fig.update_yaxes(autorange='reversed',showgrid=False);plot(fig,'deal_price_comparison',250)
+    context('Lectura de la negociación',f'Precio negociado / DCF publicado: {pct(value("Precio negociado / DCF"))}. Diferencia negociación menos DCF: {money(value("Diferencia negociación menos DCF"))}. Se conserva el importe publicado, que puede diferir de una resta entre valores visibles por redondeo. El aporte primario aumenta caja y capital; no aumenta EBITDA ni VAN operativo.')
+    with st.expander('Criterios de la operación y trazabilidad de los importes'):
+        for criterion in model['deal_criteria']:st.write('• '+criterion)
+        st.caption('La participación de los accionistas actuales se presenta agregada; no se infiere un reparto individual ni quién recibe las acciones por activos aportados. Mes y año del desembolso son coordenadas del modelo, no una fecha de cierre confirmada.')
+        st.dataframe(details[['Concepto','Valor fuente','Unidad','Referencia']],hide_index=True,use_container_width=True,height=320)
     source_note('02 Inversión y socios','05 Balance y cobros','09 Activos y arranque')
 
 

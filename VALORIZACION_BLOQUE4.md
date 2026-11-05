@@ -55,3 +55,11 @@ Las variaciones del laboratorio se comparan con una base reconstruida usando los
 La vista utiliza una paleta de azul pizarra, blanco y acentos verde azulado. Los KPI se agrupan en bandas compactas; los indicadores derivados tienen menor jerarquía que los resultados publicados. La fuente, moneda y año de detalle están en un panel plegable. Los importes exactos y notas se mantienen visibles.
 
 La economía unitaria usa barras horizontales apiladas con precio de referencia; ventas y EBITDA se presentan en paneles alineados con escalas monetarias identificadas. Los mapas de sensibilidad muestran celdas separadas y valores rotulados. El diseño adapta los KPI a dos columnas en pantallas estrechas y conserva filtros, fórmulas y criterios de conciliación.
+
+## Inversión y socios: condiciones completas de la operación
+
+La vista incorpora las cuatro secciones de **02 Inversión y socios**: condiciones de la operación, precio y participación accionaria, aplicación de fondos y comparación entre negociación y DCF. Actualmente son 26 campos y cinco criterios de lectura, incluyendo mes/año del desembolso, estado, emisión primaria, compra secundaria, accionistas actuales, fracción vendida de acciones antiguas, aporte adicional para caja objetivo y patrimonio contable inicial.
+
+Las tablas conservan las observaciones publicadas, unidades y referencias de celda. Los importes USD se convierten con el selector de visualización; porcentajes, estado y coordenadas del calendario mantienen sus unidades originales. Los ceros contables se muestran como cero, incluido un desembolso en año 0. La diferencia negociación–DCF y el cociente precio/DCF se muestran tal como se publican, respetando sus redondeos. Los gráficos complementan las tablas con destino del pago, estructura accionaria, puente de caja y contraste precio/DCF.
+
+El estado Propuesta no acredita fondos. La compra secundaria se mantiene fuera de la caja de FW. No se infiere el reparto individual entre accionistas ni se convierte mes/año del modelo en una fecha de cierre confirmada. La trazabilidad incluye los valores originales en USD y los criterios completos de la fuente.

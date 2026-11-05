@@ -41,3 +41,14 @@
 .st-key-option4_valuation .valuation-kpis span{font-size:12px;}
 .st-key-option4_valuation .valuation-kpis small{font-size:11px;}
 .st-key-option4_valuation [data-testid="stCaptionContainer"] p{font-size:12.5px;}
+.st-key-option4_valuation .deal-report{border:1px solid #DCE5ED;border-radius:8px;overflow-x:auto;margin:4px 0 12px;background:#FFF;}
+.st-key-option4_valuation .deal-report table{width:100%;border-collapse:collapse;font-size:12px;color:#415D74;}
+.st-key-option4_valuation .deal-report caption{text-align:left;font-size:14px;font-weight:700;color:#203E58;padding:13px 14px;background:#F3F7FA;border-bottom:1px solid #DCE5ED;}
+.st-key-option4_valuation .deal-report thead th{text-align:left;background:#FAFBFC;color:#627588;font-size:10px;letter-spacing:.2px;padding:9px 12px;font-weight:600;}
+.st-key-option4_valuation .deal-report tbody :is(th,td){padding:10px 12px;border-top:1px solid #E8EEF3;vertical-align:top;line-height:1.55;white-space:normal;overflow-wrap:anywhere;}
+.st-key-option4_valuation .deal-report tbody th{font-weight:500;text-align:left;width:40%;}
+.st-key-option4_valuation .deal-report .deal-value{color:#203E58;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;min-width:135px;}
+.st-key-option4_valuation .deal-report .deal-note{font-size:11px;color:#627588;width:34%;}
+.st-key-option4_valuation .deal-report tbody tr:nth-child(even){background:#FAFCFD;}
+.st-key-option4_valuation .deal-report table{min-width:470px;}
+@media(max-width:1250px){.st-key-option4_valuation_investment [data-testid="stHorizontalBlock"]{flex-direction:column;gap:12px;}.st-key-option4_valuation_investment [data-testid="stColumn"]{width:100%!important;flex:1 1 100%!important;min-width:0!important;}}
