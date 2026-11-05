@@ -11,7 +11,7 @@ from display_currency import amount, currency_code, exchange_rate
 from valuation_data import load_valuation, SOURCE, SHEETS, number
 from valuation_interactive import diagnostics_panel, unit_panel, projection_panel, dcf_lab
 
-NAVY,TEAL,GOLD,ORANGE,MUTED='#183448','#0F766E','#B99847','#B65A27','#526578'
+NAVY,TEAL,GOLD,ORANGE,MUTED='#315E7D','#3B8F96','#9DAFC0','#B36A52','#627588'
 
 
 def money(value,compact=False):
@@ -26,31 +26,36 @@ def pct(value):return 'Sin dato' if pd.isna(value) else f'{value:.1%}'.replace('
 def count(value):return 'Sin dato' if pd.isna(value) else f'{value:,.0f}'.replace(',','.')
 
 
-def kpis(items):
+def kpis(items,secondary=False):
     cards=''.join(f'<article><span>{html.escape(label)}</span><strong>{html.escape(str(value))}</strong><small>{html.escape(note)}</small></article>' for label,value,note in items)
-    st.html('<div class="valuation-kpis">'+cards+'</div>')
+    st.html('<div class="valuation-kpis'+(' secondary' if secondary else '')+'">'+cards+'</div>')
 
 
 def context(title,text):
     st.html('<div class="valuation-reading"><b>'+html.escape(title)+'</b><p>'+html.escape(text)+'</p></div>')
 
 
-def plot(fig,key,height=390):
-    pie = bool(fig.data) and fig.data[0].type == 'pie'
-    has_title = bool(fig.layout.title.text)
-    multiple = len(fig.data) > 1
-    top = 95 if has_title and multiple else 65 if has_title else 60
-    legend = dict(orientation='h',y=1.10,yanchor='bottom',x=0,font=dict(size=11))
-    bottom = 45
+def section(number,title):
+    st.html('<div class="valuation-section"><em>'+html.escape(number)+'</em><h3>'+html.escape(title)+'</h3></div>')
+
+
+def plot(fig,key,height=330):
+    pie=bool(fig.data) and fig.data[0].type=='pie'
+    has_title=bool(fig.layout.title.text)
+    multiple=len(fig.data)>1
+    top=80 if has_title and multiple else 52 if has_title else 42
+    legend=dict(orientation='h',y=1.03,yanchor='bottom',x=0,font=dict(size=11))
+    bottom=40
     if pie:
-        height=max(height,440)
-        bottom=100
-        legend.update(y=-.14,yanchor='top')
-    fig.update_layout(height=height,font=dict(family='Arial, sans-serif',color=MUTED,size=12),paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='#FFFFFF',margin=dict(l=20,r=40,t=top,b=bottom),legend=legend,hoverlabel=dict(bgcolor='white',font_color=NAVY))
-    if has_title:fig.update_layout(title=dict(x=0,y=.98,yanchor='top',font=dict(size=17)))
-    fig.update_xaxes(automargin=True,gridcolor='#EEF2F5')
-    fig.update_yaxes(automargin=True,gridcolor='#EEF2F5')
-    st.plotly_chart(fig,use_container_width=True,key='option4_valuation_'+key,config={'displaylogo':False})
+        height=max(height,360);bottom=80;legend.update(y=-.12,yanchor='top')
+    fig.update_layout(height=height,font=dict(family='Arial, sans-serif',color=MUTED,size=11),
+        paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='#FFFFFF',margin=dict(l=16,r=30,t=top,b=bottom),
+        legend=legend,hoverlabel=dict(bgcolor='#203E58',font=dict(color='white',size=12),bordercolor='#203E58'),
+        bargap=.38,separators=',.',modebar=dict(bgcolor='rgba(255,255,255,0)',color='#8296A7'))
+    if has_title:fig.update_layout(title=dict(x=.015,y=.98,yanchor='top',font=dict(size=14,color='#203E58')))
+    fig.update_xaxes(automargin=True,gridcolor='#EEF2F6',zeroline=False,tickfont=dict(size=11))
+    fig.update_yaxes(automargin=True,gridcolor='#EEF2F6',zeroline=False,tickfont=dict(size=11))
+    st.plotly_chart(fig,use_container_width=True,key='option4_valuation_'+key,config={'displaylogo':False,'scrollZoom':False,'modeBarButtonsToRemove':['select2d','lasso2d']})
 
 
 def financial_table(data,money_cols=(),percent_cols=(),key=None):
@@ -82,8 +87,8 @@ def annual_bars(a,fields,key,title):
 
 def overview(model):
     s,a=model['scalars'],model['annual']
-    st.subheader('Valor indicativo y fundamentos del caso')
-    st.caption('Lee el valor operativo antes de capital nuevo, el retorno económico y el precio negociado como conceptos distintos. El DCF es una proyección del caso publicado, sujeto a sus supuestos y condiciones pendientes.')
+    section('01 / RESUMEN EJECUTIVO','Valor indicativo y fundamentos del caso')
+    st.caption('Valor operativo, retorno económico y precio negociado del caso publicado. Importes en '+currency_code()+' · condiciones y supuestos disponibles en trazabilidad.')
     kpis([('DCF antes de capital nuevo',money(s['dcf']),f'Tasa {pct(s["rate"])} · crecimiento terminal {pct(s["growth"])}'),
         ('VAN económico sin terminal',money(s['npv_economic']),'Incluye el costo económico de los activos en especie'),
         ('TIR económica sin terminal',pct(s['irr_economic']),'Tasa publicada en 00 Evaluación · sin perpetuidad'),
@@ -99,14 +104,14 @@ def overview(model):
             terminal_pv=s['terminal_value']/(1+s['rate'])**10 if s['rate']>s['growth'] else float('nan')
             values=[pv_future,a.iloc[0]['fcff'],terminal_pv,s['dcf']]
             fig=go.Figure(go.Waterfall(x=['VP flujos años 1–10','Caja de arranque','VP del terminal','DCF publicado'],y=[displayed(v)/1e6 for v in values],measure=['relative','relative','relative','total'],text=[money(v,True) for v in values],textposition='outside',connector=dict(line=dict(color='#C8D3DB')),increasing=dict(marker_color=TEAL),decreasing=dict(marker_color=ORANGE),totals=dict(marker_color=NAVY)))
-            fig.update_yaxes(title_text='Millones de '+currency_code());plot(fig,'dcf_bridge')
+            fig.update_yaxes(title_text='Millones de '+currency_code());plot(fig,'dcf_bridge',300)
         with right:
             st.markdown('##### DCF y valores de negociación')
             st.caption('El precio previo más el aporte primario determina el precio posterior implícito. La compra secundaria remunera a fundadores y no ingresa a FW.')
             names=['Precio previo negociado','Precio posterior negociado','DCF antes de fondos nuevos']
             vals=[s['pre_money'],s['post_money'],s['dcf']]
             fig=go.Figure(go.Bar(y=names,x=[displayed(v)/1e6 for v in vals],orientation='h',marker_color=[GOLD,GOLD,NAVY],text=[money(v,True) for v in vals],textposition='outside',cliponaxis=False))
-            fig.update_xaxes(title_text='Millones de '+currency_code());fig.update_yaxes(autorange='reversed');plot(fig,'deal_values')
+            fig.update_xaxes(title_text='Millones de '+currency_code());fig.update_yaxes(autorange='reversed');plot(fig,'deal_values',300)
         context('Lectura del valor',f'El terminal representa {pct(s["terminal_weight"])} del DCF publicado. El VAN económico de {money(s["npv_economic"])} resta el aporte de activos de {money(s["assets_in_kind"])} al VAN de caja sin terminal. Los fondos primarios de {money(s["primary"])} se presentan aparte y su estado es {model["status"]}.')
         st.markdown('##### Sensibilidad publicada · precio y tasa de descuento')
         st.caption('Nueve resultados de la matriz nativa de 03 Supuestos. Explora la sensibilidad del DCF manteniendo el resto del caso; no son escenarios completos recalculados aquí.')
@@ -116,7 +121,7 @@ def overview(model):
         fig=go.Figure(go.Heatmap(z=z,x=[f'{v:.2f}x'.replace('.',',') for v in sens.columns],y=sens.index.tolist(),text=labels,texttemplate='%{text}',colorscale=[[0,'#EDF3F6'],[.5,'#7DBBB3'],[1,NAVY]],colorbar=dict(title='MM '+currency_code()),hovertemplate='Precio %{x}<br>Tasa %{y:.0%}<br>%{text}<extra></extra>'))
         fig.update_xaxes(title_text='Multiplicador de precio');fig.update_yaxes(title_text='Tasa de descuento',tickmode='array',tickvals=sens.index.tolist(),ticktext=[pct(v) for v in sens.index],autorange='reversed');plot(fig,'sensitivity',320)
         if not model['pending'].empty:
-            with st.expander('Condiciones del caso pendientes de respaldo',expanded=True):
+            with st.expander('Condiciones del caso pendientes de respaldo',expanded=False):
                 st.caption('Estados tomados de 00 Evaluación. La conciliación matemática del modelo no acredita presupuestos ni contratos.')
                 st.dataframe(model['pending'],hide_index=True,use_container_width=True)
         source_note('00 Evaluación','00 Datos de entrada','01 Resumen','03 Supuestos','04 Resultados y flujo')
@@ -287,17 +292,18 @@ def render_valuation(refresh_nonce=0):
         s=model['scalars']
         st.html('<header class="valuation-hero"><div><span>SUB BLOQUE 4 · VALORIZACIÓN</span><h2>Valor, inversión y viabilidad del negocio</h2><p>Del caso publicado a sus fundamentos: flujos, operación, caja y activos de las turbinas de 10 y 80 kW.</p></div>'
             '<div class="valuation-badges"><b>'+html.escape(model['scenario'])+'</b><b>Producción '+html.escape(model['production'])+'</b><b>Aporte: '+html.escape(model['status'])+'</b></div></header>')
-        st.caption(f'Revisión referencial de la fuente: {s["valuation_date"]} · Consultado: {model["fetched_at"]} · Hora de Santiago · Proyección {int(s["first_year"])}–{int(s["first_year"])+9}')
-        st.caption('Fuente en USD nominales · Visualización '+currency_code()+(f' a {exchange_rate():,.2f} CLP/USD' if currency_code()=='CLP' else '')+f' · Tipo de cambio del modelo: {s["model_fx"]:,.2f} CLP/USD. La conversión visual no modifica precios ni supuestos de la fuente.')
-        st.caption('Actualización automática cada 60 segundos y mediante Actualizar todo. Se consulta exclusivamente el documento de valorización; el caso activo se modifica en la planilla original.')
-        st.link_button('Abrir modelo de valorización · 00–09',SOURCE+'html')
+        with st.expander('Fuente, moneda y año de detalle',expanded=False):
+            st.caption(f'Revisión referencial de la fuente: {s["valuation_date"]} · Consultado: {model["fetched_at"]} · Hora de Santiago · Proyección {int(s["first_year"])}–{int(s["first_year"])+9}')
+            st.caption('Fuente en USD nominales · Visualización '+currency_code()+(f' a {exchange_rate():,.2f} CLP/USD' if currency_code()=='CLP' else '')+f' · Tipo de cambio del modelo: {s["model_fx"]:,.2f} CLP/USD. La conversión visual no modifica precios ni supuestos de la fuente.')
+            st.caption('Actualización automática cada 60 segundos y mediante Actualizar todo. Se consulta exclusivamente el documento de valorización; el caso activo se modifica en la planilla original.')
+            st.link_button('Abrir modelo de valorización · 00–09',SOURCE+'html')
+            year_options=model['annual'].loc[model['annual']['Año modelo'].gt(0),'Año'].tolist()
+            year_key='option4_valuation_year'
+            if year_key in st.session_state and st.session_state[year_key] not in year_options:st.session_state[year_key]=year_options[0]
+            year=st.selectbox('Año operativo para los detalles',year_options,key=year_key,help='Actualiza resultados por turbina, balance y OPEX. La valorización DCF y las curvas completas conservan el horizonte de diez años.')
         issues=model['checks'][~model['checks']['Estado'].eq('Conciliado')]
         if not issues.empty:st.warning(f'La publicación tiene {len(issues)} controles por revisar. Consulta Supuestos y trazabilidad para localizar las diferencias.')
         if not model['formula_errors'].empty:st.error('Hay errores de fórmula en la publicación. Revísalos en Supuestos y trazabilidad.')
-        year_options=model['annual'].loc[model['annual']['Año modelo'].gt(0),'Año'].tolist()
-        year_key='option4_valuation_year'
-        if year_key in st.session_state and st.session_state[year_key] not in year_options:st.session_state[year_key]=year_options[0]
-        year=st.selectbox('Año operativo para los detalles',year_options,key=year_key,help='Actualiza resultados por turbina, balance y OPEX. La valorización DCF y las curvas completas conservan el horizonte de diez años.')
         tabs=st.tabs(['Resumen y valorización','Inversión y socios','Resultados y operación','Caja y cobros','OPEX y activos','Supuestos y trazabilidad'])
         with tabs[0]:overview(model)
         with tabs[1]:investment(model)

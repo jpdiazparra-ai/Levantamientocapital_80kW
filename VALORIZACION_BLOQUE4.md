@@ -49,3 +49,9 @@ El resumen mantiene sus cuatro KPI publicados y añade estas vistas:
 - **Laboratorio DCF:** tasa de descuento y crecimiento perpetuo editables, inclusión/exclusión del terminal y restauración de los supuestos publicados. Conserva los FCFF de años 0–10 y el FCFF normalizado publicado del año 11. La tasa modifica el descuento y el crecimiento solo el denominador de Gordon: no recalcula el flujo normalizado ni los resultados operativos. Exige r > g para usar terminal. Incluye mapa de sensibilidad y detalle de descuento anual.
 
 Las variaciones del laboratorio se comparan con una base reconstruida usando los mismos importes CSV, que pueden estar redondeados. Los datos faltantes se conservan sin cálculo. `valuation_finance.py` contiene las fórmulas puras; `valuation_interactive.py`, los controles y gráficos. La conversión de moneda afecta la presentación, no los cálculos en USD de la fuente. Los controles conservan sus selecciones al actualizar.
+
+## Presentación como reporte ejecutivo
+
+La vista utiliza una paleta de azul pizarra, blanco y acentos verde azulado. Los KPI se agrupan en bandas compactas; los indicadores derivados tienen menor jerarquía que los resultados publicados. La fuente, moneda y año de detalle están en un panel plegable. Los importes exactos y notas se mantienen visibles.
+
+La economía unitaria usa barras horizontales apiladas con precio de referencia; ventas y EBITDA se presentan en paneles alineados con escalas monetarias identificadas. Los mapas de sensibilidad muestran celdas separadas y valores rotulados. El diseño adapta los KPI a dos columnas en pantallas estrechas y conserva filtros, fórmulas y criterios de conciliación.

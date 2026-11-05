@@ -1,12 +1,13 @@
 """Interactive executive financial views, isolated from the published source model."""
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
 from display_currency import currency_code
 from valuation_finance import financial_diagnostics,unit_economics,mix_analysis,reprice_dcf,projection_diagnostics,divide,complete_sum
 
-NAVY,TEAL,GOLD,ORANGE='#183448','#0F766E','#B99847','#B65A27'
+NAVY,TEAL,GOLD,ORANGE='#315E7D','#3B8F96','#9DAFC0','#B36A52'
 
 
 def multiple(value):return 'Sin cálculo' if pd.isna(value) else f'{value:.2f}x'.replace('.',',')
@@ -14,12 +15,12 @@ def years(value):return 'No recuperado / sin cálculo' if pd.isna(value) else f'
 
 
 def diagnostics_panel(model):
-    from valuation_view import kpis,pct,context
+    from valuation_view import kpis,pct,context,section
     d=financial_diagnostics(model)
     kpis([('DCF / ventas · año 1',multiple(d['DCF/Ventas año 1']),'Múltiplo del modelo, no un comparable de mercado'),
         ('DCF / EBITDA · año 1',multiple(d['DCF/EBITDA año 1']),'Se calcula solo con EBITDA positivo'),
         ('Índice de rentabilidad económico',multiple(d['Índice de rentabilidad económico']),'VP de entradas / VP de salidas económicas · sin terminal'),
-        ('Payback económico descontado',years(d['Payback económico descontado']),'Interpolación anual; incluye activos en especie')])
+        ('Payback económico descontado',years(d['Payback económico descontado']),'Interpolación anual; incluye activos en especie')],secondary=True)
     context('Cómo leer los indicadores',f'Precio previo negociado / DCF: {pct(d["Precio previo / DCF"])}. Spread entre tasa y crecimiento terminal: {d["Spread tasa − crecimiento"]*100:.1f} puntos porcentuales. Payback económico simple: {years(d["Payback económico simple"])}. El índice de rentabilidad compara entradas y salidas descontadas; no es el retorno del inversionista ni incorpora la venta secundaria.')
     with st.expander('Definiciones de rentabilidad y alcance'):
         st.markdown('**DCF/ventas y DCF/EBITDA:** cocientes del valor publicado entre ventas y EBITDA del primer año operativo. No se denominan EV/múltiplos de mercado porque aquí se utiliza el DCF de caja del modelo. '
@@ -29,9 +30,9 @@ def diagnostics_panel(model):
 
 
 def unit_panel(model):
-    from valuation_view import kpis,money,pct,count,plot,displayed,financial_table,context
-    st.markdown('##### Economía por turbina · margen, contribución y escala')
-    st.caption('Cambia el año, los productos y la base de comparación. Los precios y costos promedio provienen de los importes anuales y las entregas publicadas; el margen de contribución descuenta fabricación y OPEX específico, antes del OPEX común.')
+    from valuation_view import kpis,money,pct,count,plot,displayed,financial_table,context,section
+    section('02 / ECONOMÍA UNITARIA','Margen, contribución y escala')
+    st.caption('Compara el precio con fabricación, OPEX específico y contribución. La tabla conserva el detalle por equipo; el gráfico permite normalizar por kW.')
     options=model['annual'].loc[model['annual']['Año modelo'].gt(0),'Año'].tolist()
     key='option4_valuation_unit_year'
     if key not in st.session_state or st.session_state[key] not in options:
@@ -55,10 +56,10 @@ def unit_panel(model):
         fig=go.Figure()
         for field,label,color in [('Fabricación / equipo','Fabricación',NAVY),('OPEX específico / equipo','OPEX específico',GOLD),('Contribución / equipo','Contribución',TEAL)]:
             values=selected[field]/divisor
-            fig.add_trace(go.Bar(x=selected['Turbina'],y=displayed(values),name=label,marker_color=[ORANGE if v<0 else color for v in values],customdata=[money(v) for v in values],hovertemplate='%{x}<br>%{customdata}<extra>%{fullData.name}</extra>'))
+            fig.add_trace(go.Bar(y=selected['Turbina'],x=displayed(values),orientation='h',width=.42,name=label,marker_color=[ORANGE if v<0 else color for v in values],customdata=[money(v) for v in values],hovertemplate='%{y}<br>%{customdata}<extra>%{fullData.name}</extra>'))
         prices=selected['Precio / equipo']/divisor
-        fig.add_trace(go.Scatter(x=selected['Turbina'],y=displayed(prices),name='Precio promedio',mode='markers',marker=dict(symbol='diamond',size=12,color='#526578'),customdata=[money(v) for v in prices],hovertemplate='%{x}<br>%{customdata}<extra>Precio</extra>'))
-        fig.update_layout(title='Precio, costo y contribución · '+year,barmode='relative');fig.update_yaxes(title_text=currency_code()+('/kW' if basis=='Por kW' else '/equipo'));plot(fig,'summary_unit_chart',410)
+        fig.add_trace(go.Scatter(y=selected['Turbina'],x=displayed(prices),name='Precio promedio',mode='markers+text',text=[money(v,True) for v in prices],textposition='top center',textfont=dict(size=12,color=NAVY),marker=dict(symbol='diamond',size=9,color=NAVY,line=dict(color='white',width=1)),customdata=[money(v) for v in prices],hovertemplate='%{y}<br>%{customdata}<extra>Precio</extra>'))
+        fig.update_layout(title='Del precio a la contribución · '+year,barmode='relative');fig.update_xaxes(title_text=currency_code()+('/kW' if basis=='Por kW' else '/equipo'),rangemode='tozero');fig.update_yaxes(autorange='reversed',showgrid=False);plot(fig,'summary_unit_chart',280)
         matrix=[]
         metrics=[('Equipos entregados','Entregas','equipos','count'),('Precio de venta promedio','Precio / equipo',currency_code()+'/equipo','money'),('Fabricación media','Fabricación / equipo',currency_code()+'/equipo','money'),('Margen bruto por equipo','Margen bruto / equipo',currency_code()+'/equipo','money'),('Margen bruto','Margen bruto %','%','percent'),('OPEX específico por equipo','OPEX específico / equipo',currency_code()+'/equipo','money'),('Contribución antes de OPEX común','Contribución / equipo',currency_code()+'/equipo','money'),('Margen de contribución','Margen contribución %','%','percent')]
         for label,field,unit,kind in metrics:
@@ -67,11 +68,11 @@ def unit_panel(model):
                 value=product[field];record['Turbina de '+product['Turbina']]=money(value) if kind=='money' else pct(value) if kind=='percent' else count(value)
             matrix.append(record)
         table=pd.DataFrame(matrix);display_columns=['Indicador',*[c for c in table if c.startswith('Turbina')],'Unidad']
-        st.dataframe(table[display_columns],hide_index=True,use_container_width=True,row_height=45,column_config={'Indicador':st.column_config.TextColumn(width=310),'Unidad':st.column_config.TextColumn(width=130)})
+        st.dataframe(table[display_columns],hide_index=True,use_container_width=True,row_height=36,height=330,column_config={'Indicador':st.column_config.TextColumn(width=310),'Unidad':st.column_config.TextColumn(width=130)})
         with st.expander('Detalle numérico y conciliación de productos'):
             financial_table(selected.drop(columns='Potencia kW'),['Ventas','Fabricación total','OPEX específico total','Contribución total','Precio / equipo','Fabricación / equipo','Margen bruto / equipo','OPEX específico / equipo','Contribución / equipo'],['Margen bruto %','Margen contribución %'])
             st.caption(('Contribución de ambos productos menos OPEX común frente al EBITDA publicado: '+money(complete_sum(data['Contribución total'])-row['opex_common'])+' frente a '+money(row['ebitda'])+'. Una diferencia material requiere revisar partidas no asignadas o adicionales de terceros.').replace('$', r'\$'))
-    st.markdown('##### Equilibrio operativo · laboratorio del mix completo')
+    section('03 / ESCALA OPERATIVA','Equilibrio y sensibilidad del mix')
     st.caption('Aproximación de EBITDA a precios, fabricación y OPEX específico unitarios constantes del año elegido. El OPEX común permanece fijo. Este laboratorio usa ambos productos y es independiente del filtro del comparativo anterior.')
     total_units=complete_sum(data['Entregas']);share=divide(float(data.loc[data['Potencia kW'].eq(80),'Entregas'].iloc[0]),total_units)
     if st.session_state.get('option4_valuation_mix_year') != year:
@@ -90,8 +91,8 @@ def unit_panel(model):
 
 
 def projection_panel(model):
-    from valuation_view import kpis,money,pct,count,plot,displayed,context
-    st.markdown('##### Proyección operativa y financiera · horizonte seleccionable')
+    from valuation_view import kpis,money,pct,count,plot,displayed,context,section
+    section('02 / PROYECCIÓN','Operación, resultados y caja')
     a=model['annual'];operating=a[a['Año modelo'].gt(0)];options=operating['Año'].tolist()
     key='option4_valuation_summary_range'
     if key in st.session_state and any(v not in options for v in st.session_state[key]):del st.session_state[key]
@@ -101,8 +102,11 @@ def projection_panel(model):
     metric=st.radio('Vista de la proyección',['Ventas y EBITDA','Flujo libre y caja','Entregas y capacidad'],horizontal=True,key='option4_valuation_summary_metric')
     fig=go.Figure()
     if metric=='Ventas y EBITDA':
-        for field,label,color in [('sales','Ventas',NAVY),('ebitda','EBITDA',GOLD)]:fig.add_trace(go.Bar(x=frame['Año'],y=displayed(frame[field])/1e6,name=label,marker_color=color,customdata=[money(v) for v in frame[field]],hovertemplate='%{x}<br>%{customdata}<extra>%{fullData.name}</extra>'))
-        fig.update_layout(barmode='group');fig.update_yaxes(title_text='Millones de '+currency_code())
+        fig=make_subplots(rows=1,cols=2,subplot_titles=('Ingresos por ventas','EBITDA operativo'),horizontal_spacing=.13)
+        for col,field,label,color in [(1,'sales','Ventas',NAVY),(2,'ebitda','EBITDA',TEAL)]:
+            fig.add_trace(go.Bar(x=frame['Año'],y=displayed(frame[field])/1e6,name=label,marker_color=color,text=[money(v,True) for v in frame[field]],textposition='outside',cliponaxis=False,textfont=dict(size=11),customdata=[money(v) for v in frame[field]],hovertemplate='%{x}<br>%{customdata}<extra>%{fullData.name}</extra>'),row=1,col=col)
+        fig.update_yaxes(title_text='MM '+currency_code(),rangemode='tozero');fig.update_layout(showlegend=False)
+        fig.update_annotations(font=dict(size=13,color=NAVY))
     elif metric=='Flujo libre y caja':
         fig.add_trace(go.Bar(x=frame['Año'],y=displayed(frame['fcff'])/1e6,name='Flujo libre anual',marker_color=TEAL))
         fig.add_trace(go.Scatter(x=frame['Año'],y=displayed(frame['cash_free'])/1e6,name='Caja libre al cierre',mode='lines+markers',line=dict(color=NAVY,width=3)))
@@ -111,7 +115,7 @@ def projection_panel(model):
         for field,label,color in [('units_80','Entregas 80 kW',GOLD),('units_10','Entregas 10 kW',NAVY)]:fig.add_trace(go.Bar(x=frame['Año'],y=frame[field],name=label,marker_color=color))
         fig.add_trace(go.Scatter(x=frame['Año'],y=frame['capacity'],name='Capacidad propia',mode='lines+markers',line=dict(color=TEAL,dash='dash')))
         fig.update_layout(barmode='stack');fig.update_yaxes(title_text='Equipos por año')
-    fig.update_layout(title=metric+' · '+first+'–'+last);fig.update_xaxes(type='category',tickmode='array',tickvals=frame['Año']);plot(fig,'summary_projection',410)
+    fig.update_layout(title=metric+' · '+first+'–'+last);fig.update_xaxes(type='category',tickmode='array',tickvals=frame['Año']);plot(fig,'summary_projection',330)
     context('Ratios del período',f'Crecimiento compuesto de ventas (CAGR): {pct(d["cagr"])}. Conversión FCFF/EBITDA acumulado: {pct(d["cash_conversion"])}. Entregas que requieren ampliar o externalizar: {pct(d["external_share"])}. La conversión de caja incorpora capital de trabajo, anticipos, IVA y CAPEX; no representa margen de utilidad.')
     metrics=[('Demanda 80 kW','demand_80','count'),('Demanda 10 kW','demand_10','count'),('Capacidad propia','capacity','count'),('Entregas 80 kW','units_80','count'),('Entregas 10 kW','units_10','count'),('Equipos a ampliar / externalizar','external','count'),('Demanda sin atender','_unserved','count'),('Sobrecosto de terceros','_external_cost','money'),('Ventas','sales','money'),('EBITDA','ebitda','money'),('Margen EBITDA','ebitda_margin','pct'),('Flujo libre','fcff','money'),('CAPEX pagado por FW','capex','money'),('Caja libre al cierre','cash_free','money')]
     frame['_unserved']=(frame['demand_80']+frame['demand_10']-frame['units_total']).clip(lower=0)
@@ -121,13 +125,13 @@ def projection_panel(model):
         record={'Indicador':label,'Unidad':'equipos' if kind=='count' else '%' if kind=='pct' else currency_code()}
         for _,row in frame.iterrows():record[row['Año']]=count(row[field]) if kind=='count' else pct(row[field]) if kind=='pct' else money(row[field])
         matrix.append(record)
-    st.dataframe(pd.DataFrame(matrix),hide_index=True,use_container_width=True,row_height=42,height=620,column_config={'Indicador':st.column_config.TextColumn(width=270),'Unidad':st.column_config.TextColumn(width=85)})
+    st.dataframe(pd.DataFrame(matrix),hide_index=True,use_container_width=True,row_height=34,height=535,column_config={'Indicador':st.column_config.TextColumn(width=270),'Unidad':st.column_config.TextColumn(width=85)})
     st.caption('La demanda no atendida se deriva de demanda total menos entregas, sin valores negativos. Los sobrecostos externos corresponden a las filas específicas de 07. Los saldos de caja son cierres, no flujos acumulables.')
 
 
 def dcf_lab(model):
-    from valuation_view import kpis,money,pct,plot,displayed,financial_table,context
-    st.markdown('##### Laboratorio DCF · descuento y perpetuidad')
+    from valuation_view import kpis,money,pct,plot,displayed,financial_table,context,section
+    section('02 / VALORIZACIÓN','Laboratorio de descuento y perpetuidad')
     st.caption('Simulación analítica local. Conserva los FCFF publicados de Año 0 a Año 10 y el flujo normalizado del Año 11. La tasa cambia el descuento; g cambia únicamente el denominador de Gordon. No recalcula ventas, impuestos, capacidad ni el crecimiento de los flujos operativos.')
     s=model['scalars']
     for key,value in [('option4_valuation_lab_rate',float(s['rate']*100)),('option4_valuation_lab_growth',float(s['growth']*100)),('option4_valuation_lab_terminal',True)]:
@@ -156,10 +160,10 @@ def dcf_lab(model):
                 row.append(displayed(value)/1e6);text.append(money(value,True) if pd.notna(value) else 'r ≤ g')
             values.append(row);labels.append(text)
         fig=go.Figure(go.Heatmap(x=growths,y=rates,z=values,text=labels,texttemplate='%{text}',colorscale=[[0,'#EDF3F6'],[.5,'#7DBBB3'],[1,NAVY]],colorbar=dict(title='MM '+currency_code()),hovertemplate='g %{x:.1%}<br>r %{y:.1%}<br>%{text}<extra></extra>'))
-        fig.update_xaxes(title_text='g · FCF normalizado de Año 11 fijo',tickvals=growths,ticktext=[pct(v) for v in growths]);fig.update_yaxes(title_text='Tasa de descuento r',tickvals=rates,ticktext=[pct(v) for v in rates],autorange='reversed');plot(fig,'summary_lab_heatmap',390)
+        fig.update_xaxes(title_text='g · FCF normalizado de Año 11 fijo',tickvals=growths,ticktext=[pct(v) for v in growths]);fig.update_yaxes(title_text='Tasa de descuento r',tickvals=rates,ticktext=[pct(v) for v in rates],autorange='reversed');fig.update_traces(xgap=5,ygap=5,textfont=dict(size=13));plot(fig,'summary_lab_heatmap',330)
     else:
         fig=go.Figure(go.Scatter(x=rates,y=[displayed(reprice_dcf(model,r,growth,False)['dcf'])/1e6 for r in rates],mode='lines+markers',line=dict(color=NAVY,width=3)))
-        fig.update_xaxes(title_text='Tasa de descuento',tickformat='.0%');fig.update_yaxes(title_text='VAN de caja sin terminal · MM '+currency_code());plot(fig,'summary_lab_no_terminal',350)
+        fig.update_xaxes(title_text='Tasa de descuento',tickformat='.0%');fig.update_yaxes(title_text='VAN de caja sin terminal · MM '+currency_code());plot(fig,'summary_lab_no_terminal',300)
     with st.expander('Detalle de descuento y fórmulas del laboratorio'):
         financial_table(result['periods'],['Flujo publicado USD','VP explícito USD'])
         st.markdown('**VAN explícito:** Σ FCFFₜ / (1+r)ᵗ, incluyendo Año 0. **Terminal:** FCFF normalizado publicado de Año 11 / (r−g). **DCF:** VAN explícito + terminal / (1+r)¹⁰. '
