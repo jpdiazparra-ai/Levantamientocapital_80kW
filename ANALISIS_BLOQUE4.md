@@ -111,3 +111,6 @@ Para cada turbina individual existe Descargar informe completo de la turbina · 
 
 
 Los cuatro KPI del análisis comercial individual responden al alcance Total/Comercial: monto, costo por kW, cobertura y concentración se calculan sobre las mismas partidas que los gráficos y el informe general. En Comercial se muestra aparte la referencia de la turbina completa y el monto excluido, sin usarla como base de los KPI. Los porcentajes del proyecto del detalle mantienen su denominador completo para preservar la trazabilidad.
+
+
+El Sub bloque 4 incorpora Valorización y viabilidad financiera con el nuevo documento 00–09. Su cobertura, criterios, conciliaciones y actualización están documentados en [VALORIZACION_BLOQUE4.md](VALORIZACION_BLOQUE4.md).

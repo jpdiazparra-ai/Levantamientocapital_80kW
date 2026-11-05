@@ -18,6 +18,7 @@ from timeline_scroll import timeline_document
 from capital_charts import render_capital_comparison, render_calendar, render_responsible_funds
 from display_currency import amount, currency_code, currency_label, currency_number_format, currency_column_config, currency_export, convert_workbook, exchange_rate
 from commercial_analysis import render_commercial_analysis
+from valuation_view import render_valuation
 
 SOURCE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQOSK1DE0sEuK5Cl-bIahOjtdP6qsBobzqSlekorQCY9gRpwhRDzHYxh9c-Q-mKoQ/pub'
 SHEETS = {'Resumen': '295125200', 'Plan': '1622224524', 'Costos': '1070657893', 'Revision': '735160527', 'Desembolsos': '614082465'}
@@ -26,6 +27,7 @@ VIEWS = [
     ('capital', 'SUB BLOQUE 1', 'Capital, desembolsos y costo comercial', 'Compara presupuesto y caja pendiente, revisa los desembolsos por hito y analiza el costo comercial por sistema y paquete.'),
     ('technical', 'SUB BLOQUE 2', 'Avance técnico, hitos y plazos', 'Sigue el avance de hitos y actividades, compara fechas base y previstas e identifica atrasos, dependencias y evidencia de cierre.'),
     ('pmo', 'SUB BLOQUE 3', 'Control de costos y validación PMO', 'Revisa presupuestos aprobados, registros conciliados e inconsistencias para priorizar las acciones de control.'),
+    ('valuation', 'SUB BLOQUE 4', 'Valorización y viabilidad financiera', 'Revisa el DCF, la inversión propuesta, los resultados, la caja y sus supuestos desde las pestañas 00–09.'),
 ]
 
 
@@ -620,12 +622,15 @@ def pmo_view(tasks):
 def render_analysis_option(refresh_nonce, render_navigation):
     with st.container(key='analysis_option'):
         st.html('<style>'+Path(__file__).with_name('assets').joinpath('analysis_option.css').read_text()+'</style>')
-        st.html('<header class="option-head"><span>BLOQUE 4 · PILOTOS 10 kW Y 80 kW</span><h1>Control integral del proyecto</h1><p>Analiza el capital de cada piloto, sigue el avance de sus hitos y revisa los costos pendientes de validación.</p></header>')
+        st.html('<header class="option-head"><span>BLOQUE 4 · TURBINAS 10 kW Y 80 kW</span><h1>Control integral del proyecto</h1><p>Analiza el capital de cada turbina, sigue sus hitos y evalúa costos, valorización y caja.</p></header>')
         def choose(value):st.session_state['option4_view']=value
-        render_navigation(VIEWS,st.session_state.get('option4_view'),choose,'option4_subnav',heading='Elige el análisis que necesitas',description='Consulta capital y costo comercial, seguimiento técnico o validación de costos.',variant='secondary')
+        render_navigation(VIEWS,st.session_state.get('option4_view'),choose,'option4_subnav',heading='Elige el análisis que necesitas',description='Consulta capital, avance técnico, control de costos o valorización financiera.',variant='secondary')
         view=st.session_state.get('option4_view')
         if view is None:
-            st.info('Selecciona una vista para analizar capital y costo comercial, seguir el avance técnico o revisar la validación de costos.')
+            st.info('Selecciona una vista para revisar capital, avance técnico, costos o valorización financiera.')
+            return
+        if view == 'valuation':
+            render_valuation(refresh_nonce)
             return
         try:
             with st.spinner('Consultando el documento de análisis…'):

@@ -2,7 +2,7 @@
 
 Dashboard Streamlit para validación tecnológica, CAPEX y ejecución, valor financiero y análisis alternativo del proyecto eólico.
 
-El **Bloque 4 · Control integral del proyecto** usa el documento publicado de control del proyecto y contiene capital y desembolsos, hitos técnicos y control PMO. Separa importes de referencia, por validar y validados. El cronograma incluye filtros por hito, sistema, paquete y estado, orden cronológico, fin previsto actual, línea de hoy y desplazamiento continuo con encabezados fijos.
+El **Bloque 4 · Control integral del proyecto** usa el documento publicado de control del proyecto y contiene capital y desembolsos, hitos técnicos, control PMO y valorización financiera. La valorización consulta de forma independiente su documento publicado de pestañas 00–09. Separa importes de referencia, por validar y validados. El cronograma incluye filtros por hito, sistema, paquete y estado, orden cronológico, fin previsto actual, línea de hoy y desplazamiento continuo con encabezados fijos.
 
 ## Ejecutar local
 
@@ -28,4 +28,4 @@ El panel lateral muestra la versión del código en ejecución. `dashboard_runti
 
 El entorno virtual, las credenciales y el historial PMO local no se publican. La aplicación permite comenzar sin un archivo de historial y lo crea al guardar el primer corte.
 
-El Bloque 4 orienta la lectura en tres vistas: **Capital, desembolsos y costo comercial**, **Avance técnico, hitos y plazos**, y **Control de costos y validación PMO**.
+El Bloque 4 orienta la lectura en cuatro vistas: **Capital, desembolsos y costo comercial**, **Avance técnico, hitos y plazos**, **Control de costos y validación PMO**, y **Valorización y viabilidad financiera**. Esta última reúne seis pestañas de análisis, lectura íntegra de las once hojas 00–09 y catorce conciliaciones propias; sus criterios están en [VALORIZACION_BLOQUE4.md](VALORIZACION_BLOQUE4.md).
