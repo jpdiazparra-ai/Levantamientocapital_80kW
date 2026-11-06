@@ -23,6 +23,9 @@ def diagnostics_panel(model):
         ('Índice de rentabilidad económico',multiple(d['Índice de rentabilidad económico']),'VP de entradas / VP de salidas económicas · sin terminal'),
         ('Payback económico descontado',years(d['Payback económico descontado']),'Interpolación anual; incluye activos en especie')],secondary=True)
     context('Cómo leer los indicadores',f'Precio previo negociado / DCF: {pct(d["Precio previo / DCF"])}. Spread entre tasa y crecimiento terminal: {d["Spread tasa − crecimiento"]*100:.1f} puntos porcentuales. Payback económico simple: {years(d["Payback económico simple"])}. El índice de rentabilidad compara entradas y salidas descontadas; no es el retorno del inversionista ni incorpora la venta secundaria.')
+
+
+def diagnostics_definitions():
     with st.expander('Definiciones de rentabilidad y alcance'):
         st.markdown('**DCF/ventas y DCF/EBITDA:** cocientes del valor publicado entre ventas y EBITDA del primer año operativo. No se denominan EV/múltiplos de mercado porque aquí se utiliza el DCF de caja del modelo. '
             '**Índice económico:** valor presente de flujos económicos positivos dividido por el valor presente absoluto de los negativos, usando la tasa publicada y sin terminal. '
@@ -133,7 +136,7 @@ def projection_panel(model):
 
 def dcf_lab(model):
     from valuation_view import kpis,money,pct,plot,displayed,financial_table,context,section
-    section('02 / VALORIZACIÓN','Laboratorio de descuento y perpetuidad')
+    section('02 / ESCENARIOS','Escenarios de tasa y valor terminal')
     st.caption('Simulación analítica local. Conserva los FCFF publicados de Año 0 a Año 10 y el flujo normalizado del Año 11. La tasa cambia el descuento; g cambia únicamente el denominador de Gordon. No recalcula ventas, impuestos, capacidad ni el crecimiento de los flujos operativos.')
     s=model['scalars']
     for key,value in [('option4_valuation_lab_rate',float(s['rate']*100)),('option4_valuation_lab_growth',float(s['growth']*100)),('option4_valuation_lab_terminal',True)]:

@@ -9,7 +9,7 @@ import streamlit as st
 
 from display_currency import amount, currency_code, exchange_rate
 from valuation_data import load_valuation, SOURCE, SHEETS, number
-from valuation_interactive import diagnostics_panel, unit_panel, projection_panel, dcf_lab
+from valuation_interactive import diagnostics_panel, diagnostics_definitions, unit_panel, projection_panel, dcf_lab
 from valuation_report import report_payload
 
 NAVY,TEAL,GOLD,ORANGE,MUTED='#315E7D','#3B8F96','#9DAFC0','#B36A52','#627588'
@@ -96,31 +96,35 @@ def overview(model):
             st.download_button('Descargar PDF ejecutivo',data=pdf,file_name='Turbina_80kW_Informe_tecnico_financiero_'+currency_code()+'.pdf',mime='application/pdf',key='option4_valuation_executive_pdf',on_click='ignore',use_container_width=True,help='Informe de cinco páginas: alcance técnico, valoración a diez años, operación a cinco años, fuentes y costos de 80 kW por sistema y línea desde el subbloque 1.')
         except Exception as exc:
             st.button('PDF no disponible',disabled=True,key='option4_valuation_executive_pdf_unavailable',help='No se pudo preparar el informe: '+str(exc))
-    st.caption('Valor operativo, retorno económico y precio negociado del caso publicado. Importes en '+currency_code()+' · condiciones y supuestos disponibles en trazabilidad.')
+    st.caption('Resumen del caso publicado · '+currency_code()+'. Valor operativo, retorno económico y precio negociado; explora sus fundamentos en las vistas de análisis.')
     kpis([('DCF antes de capital nuevo',money(s['dcf']),f'Tasa {pct(s["rate"])} · crecimiento terminal {pct(s["growth"])}'),
         ('VAN económico sin terminal',money(s['npv_economic']),'Incluye el costo económico de los activos en especie'),
         ('TIR económica sin terminal',pct(s['irr_economic']),'Tasa publicada en 00 Evaluación · sin perpetuidad'),
         ('Precio previo negociado',money(s['pre_money']),'Precio implícito de la operación propuesta; separado del DCF')])
-    sections=st.tabs(['Diagnóstico financiero','Economía por turbina','Proyección y caja','Laboratorio DCF'])
+    sections=st.tabs(['Valorización y retorno','Economía por turbina','Proyección financiera','Escenarios de valorización'])
     with sections[0]:
-        diagnostics_panel(model)
-        left,right=st.columns([1.2,1],gap='large')
-        with left:
-            st.markdown('##### De los flujos explícitos al DCF')
-            st.caption('El arranque consume caja en Año 0; el terminal se descuenta desde el final del año 10. El aporte de capital nuevo no integra este valor.')
-            pv_future=a.loc[a['Año modelo'].gt(0),'pv_fcff'].sum(min_count=1)
-            terminal_pv=s['terminal_value']/(1+s['rate'])**10 if s['rate']>s['growth'] else float('nan')
-            values=[pv_future,a.iloc[0]['fcff'],terminal_pv,s['dcf']]
-            fig=go.Figure(go.Waterfall(x=['VP flujos años 1–10','Caja de arranque','VP del terminal','DCF publicado'],y=[displayed(v)/1e6 for v in values],measure=['relative','relative','relative','total'],text=[money(v,True) for v in values],textposition='outside',connector=dict(line=dict(color='#C8D3DB')),increasing=dict(marker_color=TEAL),decreasing=dict(marker_color=ORANGE),totals=dict(marker_color=NAVY)))
-            fig.update_yaxes(title_text='Millones de '+currency_code());plot(fig,'dcf_bridge',300)
-        with right:
-            st.markdown('##### DCF y valores de negociación')
-            st.caption('El precio previo más el aporte primario determina el precio posterior implícito. La compra secundaria remunera a fundadores y no ingresa a FW.')
-            names=['Precio previo negociado','Precio posterior negociado','DCF antes de fondos nuevos']
-            vals=[s['pre_money'],s['post_money'],s['dcf']]
-            fig=go.Figure(go.Bar(y=names,x=[displayed(v)/1e6 for v in vals],orientation='h',marker_color=[GOLD,GOLD,NAVY],text=[money(v,True) for v in vals],textposition='outside',cliponaxis=False))
-            fig.update_xaxes(title_text='Millones de '+currency_code());fig.update_yaxes(autorange='reversed');plot(fig,'deal_values',300)
+        section('02 / VALORIZACIÓN','Del flujo de caja al valor del proyecto')
+        st.caption('Parte de los flujos y su valor presente; compara el DCF con la negociación y revisa después los indicadores de rentabilidad y sensibilidad.')
+        with st.container(key='option4_valuation_value_charts'):
+            left,right=st.columns([1.2,1],gap='large')
+            with left:
+                st.markdown('##### Cómo se construye el valor DCF')
+                st.caption('El arranque consume caja en Año 0; el terminal se descuenta desde el final del año 10. El aporte de capital nuevo no integra este valor.')
+                pv_future=a.loc[a['Año modelo'].gt(0),'pv_fcff'].sum(min_count=1)
+                terminal_pv=s['terminal_value']/(1+s['rate'])**10 if s['rate']>s['growth'] else float('nan')
+                values=[pv_future,a.iloc[0]['fcff'],terminal_pv,s['dcf']]
+                fig=go.Figure(go.Waterfall(x=['VP flujos años 1–10','Caja de arranque','VP del terminal','DCF publicado'],y=[displayed(v)/1e6 for v in values],measure=['relative','relative','relative','total'],text=[money(v,True) for v in values],textposition='outside',connector=dict(line=dict(color='#C8D3DB')),increasing=dict(marker_color=TEAL),decreasing=dict(marker_color=ORANGE),totals=dict(marker_color=NAVY)))
+                fig.update_yaxes(title_text='Millones de '+currency_code());plot(fig,'dcf_bridge',300)
+            with right:
+                st.markdown('##### DCF y precio negociado')
+                st.caption('El precio previo más el aporte primario determina el precio posterior implícito. La compra secundaria remunera a fundadores y no ingresa a FW.')
+                names=['Precio previo negociado','Precio posterior negociado','DCF antes de fondos nuevos']
+                vals=[s['pre_money'],s['post_money'],s['dcf']]
+                fig=go.Figure(go.Bar(y=names,x=[displayed(v)/1e6 for v in vals],orientation='h',marker_color=[GOLD,GOLD,NAVY],text=[money(v,True) for v in vals],textposition='outside',cliponaxis=False))
+                fig.update_xaxes(title_text='Millones de '+currency_code());fig.update_yaxes(autorange='reversed');plot(fig,'deal_values',300)
         context('Lectura del valor',f'El terminal representa {pct(s["terminal_weight"])} del DCF publicado. El VAN económico de {money(s["npv_economic"])} resta el aporte de activos de {money(s["assets_in_kind"])} al VAN de caja sin terminal. Los fondos primarios de {money(s["primary"])} se presentan aparte y su estado es {model["status"]}.')
+        st.markdown('##### Indicadores complementarios de rentabilidad')
+        diagnostics_panel(model)
         st.markdown('##### Sensibilidad publicada · precio y tasa de descuento')
         st.caption('Nueve resultados de la matriz nativa de 03 Supuestos. Explora la sensibilidad del DCF manteniendo el resto del caso; no son escenarios completos recalculados aquí.')
         sens=model['sensitivity'].pivot(index='Tasa',columns='Precio x',values='DCF USD').sort_index()
@@ -132,6 +136,7 @@ def overview(model):
             with st.expander('Condiciones del caso pendientes de respaldo',expanded=False):
                 st.caption('Estados tomados de 00 Evaluación. La conciliación matemática del modelo no acredita presupuestos ni contratos.')
                 st.dataframe(model['pending'],hide_index=True,use_container_width=True)
+        diagnostics_definitions()
         source_note('00 Evaluación','00 Datos de entrada','01 Resumen','03 Supuestos','04 Resultados y flujo')
     with sections[1]:unit_panel(model)
     with sections[2]:projection_panel(model)

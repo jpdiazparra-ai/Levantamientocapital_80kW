@@ -52,3 +52,4 @@
 .st-key-option4_valuation .deal-report tbody tr:nth-child(even){background:#FAFCFD;}
 .st-key-option4_valuation .deal-report table{min-width:470px;}
 @media(max-width:1250px){.st-key-option4_valuation_investment [data-testid="stHorizontalBlock"]{flex-direction:column;gap:12px;}.st-key-option4_valuation_investment [data-testid="stColumn"]{width:100%!important;flex:1 1 100%!important;min-width:0!important;}}
+@media(max-width:1200px){.st-key-option4_valuation_value_charts [data-testid="stHorizontalBlock"]{flex-direction:column;gap:14px;}.st-key-option4_valuation_value_charts [data-testid="stColumn"]{width:100%!important;flex:1 1 100%!important;min-width:0!important;}}
