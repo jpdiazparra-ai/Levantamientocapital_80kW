@@ -25,6 +25,8 @@ class ExecutiveReportTests(unittest.TestCase):
         self.assertEqual(clp.money(1000),'$925.000')
         self.assertEqual(usd.pct(.741),clp.pct(.741))
         self.assertEqual(usd.money(float('nan')),'Sin dato')
+        self.assertEqual(usd.cost_money(925000),'US$ 1.000,00')
+        self.assertEqual(clp.cost_money(925000),'$925.000')
 
     def test_investment_bullets_identify_consolidated_not_sponsor_returns(self):
         scalars=dict(dcf=1000,npv_economic=500,irr_economic=.4,rate=.2,growth=.03,
@@ -59,7 +61,7 @@ class ExecutiveReportTests(unittest.TestCase):
         self.assertNotAlmostEqual(summary['margin'],.3)
         self.assertEqual(summary['fcff'],15)
 
-    def test_report_has_exactly_four_pages_in_each_currency(self):
+    def test_report_has_exactly_five_pages_in_each_currency(self):
         scalars={key:100. for key in ['dcf','npv_cash','npv_economic','pre_money','post_money','primary','secondary',
             'assets_in_kind','preop','spares','cash_y0','cash_target','advance_days','economic_investment',
             'cash_required','target_funding','historical_wc','sales_y1','ebitda_y1','fcff_y1','model_fx']}
@@ -73,9 +75,12 @@ class ExecutiveReportTests(unittest.TestCase):
             fetched_at='06-11-2026 10:00',checks=pd.DataFrame({'Estado':['Conciliado']}),pending=pd.DataFrame())
         technical=parse_technical([['ID','Hito objetivo','Actividad / entregable','Sistema'],['A533','Producto 80 kW','Mástil según plano','Mecánica']])
         for currency in ['USD','CLP']:
-            data=build_executive_pdf(model,technical,currency,925)
+            from valuation_costs import cost_report_data
+            cost_data=cost_report_data([['ID','Hito objetivo','Sistema','Paquete / línea','Criterio'],['A533','Producto 80 kW','Mecánica','Mástil','HH']],
+                [['ID','Hito objetivo','Costo para producto','Comercial anterior','Presupuesto vigente','Cantidad'],['A533','Producto 80 kW','Aplica','100','125','2']])
+            data=build_executive_pdf(model,technical,currency,925,cost_data=cost_data)
             self.assertTrue(data.startswith(b'%PDF'))
-            self.assertEqual(len(re.findall(rb'/Type /Page\b',data)),4)
+            self.assertEqual(len(re.findall(rb'/Type /Page\b',data)),5)
 
 
 if __name__=='__main__':unittest.main()

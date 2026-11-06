@@ -15,6 +15,7 @@ from reportlab.platypus import Paragraph, TableStyle, LongTable
 from reportlab.pdfgen.canvas import Canvas
 from commercial_report import _fonts
 from valuation_data import SOURCE as FINANCIAL_SOURCE
+from valuation_costs import load_cost_report
 from valuation_finance import unit_economics, financial_diagnostics, projection_diagnostics, divide, complete_sum
 
 PROJECT_SOURCE='https://docs.google.com/spreadsheets/d/e/2PACX-1vQOSK1DE0sEuK5Cl-bIahOjtdP6qsBobzqSlekorQCY9gRpwhRDzHYxh9c-Q-mKoQ/pub'
@@ -46,12 +47,14 @@ def decimal(value,digits=1):
 
 class Report:
     def __init__(self,model,currency,fx):
-        self.model=model;self.currency=currency;self.fx=fx if currency=='CLP' else 1
+        self.model=model;self.currency=currency;self.exchange_rate=fx;self.fx=fx if currency=='CLP' else 1
         self.body=ParagraphStyle('body',fontName=FONT,fontSize=8.2,leading=11.4,textColor=colors.HexColor(INK),spaceAfter=0)
     def money(self,value,compact=False):
         if pd.isna(value):return 'Sin dato'
         value=value*self.fx;unit=1e6 if compact and abs(value)>=1e6 else 1e3 if compact and abs(value)>=1e3 else 1
         return ('US$ ' if self.currency=='USD' else '$')+decimal(value/unit,1 if unit>1 else 2 if self.currency=='USD' else 0)+(' MM' if unit==1e6 else ' mil' if unit==1e3 else '')
+    def cost_money(self,value,compact=False):
+        return self.money(value/self.exchange_rate,compact)
     def pct(self,value):return decimal(value*100)+'%' if pd.notna(value) else 'Sin dato'
     def p(self,text,size=8.2,color=INK,bold=False):
         style=ParagraphStyle('p',parent=self.body,fontName=BOLD if bold else FONT,fontSize=size,leading=size*1.36,textColor=colors.HexColor(color))
@@ -216,18 +219,56 @@ def assumptions_page(c,r,fx):
     r.footer(c,4)
 
 
-def build_executive_pdf(model,technical,currency='USD',fx=925.):
+def cost_page(c,r,data):
+    totals=data['totals'];systems=data['systems'];lines=data['lines'];cm=totals['Comercial anterior'];budget=totals['Presupuesto vigente']
+    r.header(c,'05','80 kW · estructura técnica de costos','Bloque 4 / Subbloque 1 · Alcance Total · Costos: Hito objetivo 80 kW y Costo para producto = Aplica · '+r.currency)
+    r.kpis(c,H-111,[('Subtotal comercial informado',r.cost_money(cm,True),r.cost_money(cm/80)+' / kW nominal'),('Presupuesto vigente',r.cost_money(budget,True),'Mismo universo de partidas Aplica'),('Variación Ppto. / comercial',r.pct(totals['Variación %']/100),'(Presupuesto − comercial) / comercial'),('HH informadas',decimal(totals['HH'],0)+' HH',str(totals['HH pendientes'])+' partidas HH sin cantidad')])
+    def amount(value):return r.cost_money(value)
+    def share(value):return r.pct(divide(value,cm))
+    def variation(commercial,current):
+        return r.pct((current-commercial)/commercial) if pd.notna(commercial) and pd.notna(current) and commercial!=0 else 'Sin cálculo'
+    def draw(y,rows,widths):
+        t=r.table(rows,widths,6.9);t.setStyle(TableStyle([('TOPPADDING',(0,0),(-1,-1),3.5),('BOTTOMPADDING',(0,0),(-1,-1),3.5),('BACKGROUND',(0,-1),(-1,-1),colors.HexColor(PALE)),('LINEABOVE',(0,-1),(-1,-1),.6,colors.HexColor(LINE))]))
+        _,height=t.wrap(CW,H);t.drawOn(c,M,y-height);return y-height
+    y=H-193
+    r.para(c,M,y,CW,'COMPOSICIÓN POR SISTEMA · '+str(totals['Sistemas'])+' SISTEMAS / '+str(totals['Líneas'])+' LÍNEAS',8,BLUE,True)
+    rows=[['Sistema','Comercial anterior','Ppto. vigente','Var. %','% total','HH inf.','Datos¹','Comercial / kW']]
+    for _,s in systems.iterrows():
+        v=s['Monto comercial · CLP'];b=s['Monto no comercial · CLP']
+        rows.append([s['Sistema'],amount(v),amount(b),variation(v,b),share(v),decimal(s['HH'],0),str(int(s['Partidas informadas']))+'/'+str(int(s['Actividades'])),amount(v/80)])
+    rows.append(['TOTAL APLICA',amount(cm),amount(budget),variation(cm,budget),share(cm),decimal(totals['HH'],0),str(totals['Informadas'])+'/'+str(totals['Partidas']),amount(cm/80)])
+    y=draw(y-15,rows,[180,108,108,50,50,51,55,CW-602])-15
+    shown=lines.head(6);rest=lines.iloc[6:]
+    r.para(c,M,y,CW,'PRINCIPALES LÍNEAS / PAQUETES · ORDEN POR MONTO COMERCIAL',8,BLUE,True)
+    rows=[['Sistema / línea','Comercial anterior','Ppto. vigente','Var. %','% total','HH inf.','Partidas']]
+    for _,line in shown.iterrows():
+        rows.append([str(line['Sistema'])+' / '+str(line['Línea']),amount(line['Comercial']),amount(line['Presupuesto']),variation(line['Comercial'],line['Presupuesto']),share(line['Comercial']),decimal(line['HH'],0),str(int(line['Partidas']))])
+    if len(rest):
+        v=rest['Comercial'].sum(min_count=1);b=rest['Presupuesto'].sum(min_count=1)
+        rows.append(['Otras '+str(len(rest))+' líneas (agregado)',amount(v),amount(b),variation(v,b),share(v),decimal(rest['HH'].sum(min_count=1),0),str(int(rest['Partidas'].sum()))])
+    rows.append(['TOTAL APLICA',amount(cm),amount(budget),variation(cm,budget),share(cm),decimal(totals['HH'],0),str(totals['Partidas'])])
+    y=draw(y-15,rows,[265,118,118,58,58,65,CW-682])-8
+    coverage=divide(totals['Informadas'],totals['Partidas'])
+    note='¹ Datos = partidas con monto comercial / partidas Aplica. Cobertura '+r.pct(coverage)+'; '+str(totals['Partidas']-totals['Informadas'])+' sin monto. HH suma solo cantidades con criterio HH; no suma insumos. Var. compara importes informados, no sobrecostos validados.'
+    y=r.para(c,M,y,CW,note,6.7,MUTED)-4
+    r.para(c,M,y,CW,'Fuente: Plan + Costos · Comercial anterior y Presupuesto vigente, sin filtros locales. Total incluye fundaciones y montaje. Base de partidas distinta del costo de fabricación proyectado de la hoja 2. Costos consultados: '+data.get('fetched_at','según fuente de preparación')+'.',6.7,MUTED)
+    r.footer(c,5)
+
+
+def build_executive_pdf(model,technical,currency='USD',fx=925.,cost_data=None):
+    if cost_data is None:raise ValueError('Falta el desglose de costos de 80 kW para preparar las cinco páginas.')
     if currency not in ('USD','CLP') or not math.isfinite(fx) or fx<=0:raise ValueError('Moneda o tipo de cambio inválidos para el informe.')
     _fonts();r=Report(model,currency,fx);out=BytesIO();c=Canvas(out,pagesize=(W,H));c.setTitle('Turbina 80 kW · Memorando técnico y financiero');c.setAuthor('FW Axial Energy · Control integral del proyecto')
-    # Exactly four designed pages; no overflowing appendix or hidden truncation.
-    for render in [lambda:technical_page(c,r,technical),lambda:finance_page(c,r),lambda:projection_page(c,r),lambda:assumptions_page(c,r,fx)]:
+    # Exactly five designed pages; only the fifth uses the CLP-native cost baseline.
+    for render in [lambda:technical_page(c,r,technical),lambda:finance_page(c,r),lambda:projection_page(c,r),lambda:assumptions_page(c,r,fx),lambda:cost_page(c,r,cost_data)]:
         render();c.showPage()
     c.save()
     return out.getvalue()
 
 
 @st.cache_data(ttl=60,max_entries=4,show_spinner=False)
-def report_payload(model,currency,fx,layout_version=2):
-    """Versioned cache: v2 exports exactly four designed pages."""
+def report_payload(model,currency,fx,layout_version=3):
+    """Versioned cache: v3 adds the 80 kW cost breakdown as page five."""
     technical=load_technical(model['fetched_at'])
-    return build_executive_pdf(model,technical,currency,fx)
+    cost_data=load_cost_report(model['fetched_at'])
+    return build_executive_pdf(model,technical,currency,fx,cost_data=cost_data)

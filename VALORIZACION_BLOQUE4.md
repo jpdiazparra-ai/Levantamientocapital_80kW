@@ -66,19 +66,28 @@ El estado Propuesta no acredita fondos. La compra secundaria se mantiene fuera d
 
 ## PDF ejecutivo para comité financiero
 
-A la derecha de **Valor indicativo y fundamentos del caso** se descarga un PDF vectorial en A4 horizontal de **exactamente cuatro páginas**:
+A la derecha de **Valor indicativo y fundamentos del caso** se descarga un PDF vectorial en A4 horizontal de **exactamente cinco páginas**:
 
 1. Alcance técnico documentado de la turbina de 80 kW, con referencias por ID a Plan.
 2. Tesis financiera: DCF a diez años más terminal; VAN y TIR económicos a diez años sin terminal; activos fijos aportados como valor inicial y CAPEX pagado por FW acumulado en diez años. Una banda independiente resume ventas, EBITDA, margen ponderado y FCFF de los primeros cinco años. La economía por turbina conserva el primer año operativo como referencia explícita.
 3. Proyección anual completa a diez años y clasificación del capital inicial.
 4. Cifras exactas, supuestos, condiciones pendientes y enlaces a las fuentes.
+5. Estructura técnica de costos de 80 kW, usando Plan y Costos del subbloque 1: sistemas, principales líneas, montos, variaciones, HH y cobertura de datos.
 
 El margen EBITDA quinquenal es **suma de EBITDA / suma de ventas**; no es un promedio simple ni el margen del primer año. Ventas, EBITDA y FCFF son acumulados del período; activos fijos iniciales no se suman por año. Los horizontes se identifican en títulos y notas y siguen el calendario publicado del modelo. La TIR no se atribuye al socio ni a la turbina de 80 kW de forma aislada.
 
-Se eliminan las páginas técnicas extensas desde la quinta en adelante. Las descripciones resumidas de la página 1 remiten al texto completo de Plan mediante sus IDs y el enlace de la página 4. La composición fija no añade anexos automáticos. Las pruebas verifican cuatro páginas tanto en CLP como en USD.
+Se eliminan los anexos técnicos extensos; la quinta página es exclusivamente el nuevo resumen de costos. Las descripciones resumidas de la página 1 remiten al texto completo de Plan mediante sus IDs y el enlace de la página 4. La composición fija no añade anexos automáticos. Las pruebas verifican cinco páginas tanto en CLP como en USD y conservación del contenido de las cuatro primeras.
 
 El informe sigue la moneda y tipo de cambio de presentación y usa el caso publicado, sin exportar las simulaciones locales del laboratorio. Distingue fabricación y contribución por equipo de EBITDA, VAN económico de VAN de caja y activos fijos en especie de inventario/preoperacionales. Los puntos financieros se generan con los datos vigentes, incluidos márgenes negativos cuando existen.
 
 La fuente técnica se consulta de forma independiente en Plan, sin cruce obligatorio con Costos. No se extrapola una ficha de 10 kW a 80 kW ni se presenta una norma citada como certificación obtenida. Estado de la operación, fecha de consulta y fuentes acompañan al reporte.
 
-`valuation_report.py` construye las cuatro páginas con ReportLab. La caché versionada dura 60 segundos y la descarga usa `on_click='ignore'` para conservar la vista y filtros. Si no puede prepararse el informe, solo el botón queda deshabilitado con una explicación; el análisis financiero sigue disponible.
+`valuation_report.py` construye las cinco páginas con ReportLab. La caché versionada dura 60 segundos y la descarga usa `on_click='ignore'` para conservar la vista y filtros. Si no puede prepararse el informe, solo el botón queda deshabilitado con una explicación; el análisis financiero sigue disponible.
+
+### Página 5: costos de la turbina de 80 kW
+
+`valuation_costs.py` consulta Plan y Costos y reutiliza las reglas comerciales del subbloque 1. Se selecciona **Hito objetivo de Costos = 80 kW** y **Costo para producto = Aplica**; la vista es **Total**, incluidas fundaciones y montaje. Las dimensiones Sistema/Línea y el criterio HH proceden del mismo cruce por ID que usa el panel; Cantidad procede de Costos. Los IDs duplicados y las partidas elegibles sin correspondencia en Plan impiden exportar un agregado incompleto.
+
+La tabla de sistemas concilia con el subtotal directo de Costos. La tabla de líneas muestra las seis de mayor Comercial anterior y agrega las restantes, conservando el total. Se incluyen Presupuesto vigente, variación `(presupuesto − comercial) / comercial`, participación comercial, costo por kW, HH informadas y cobertura de registros. Los vacíos se mantienen como faltantes; HH no suma insumos y señala cantidades pendientes. Una variación de importes informados no se presenta como sobrecosto validado.
+
+Esta fuente es **CLP nativa**, a diferencia del modelo de valorización, que es USD nativo. Los importes de la página 5 se convierten una sola vez con el tipo de cambio de visualización. La base de partidas no reemplaza ni se incorpora automáticamente al costo de fabricación proyectado de la página 2. Se identifica su fecha de consulta por separado. La caché del PDF pasa a versión 3 para invalidar descargas anteriores de cuatro páginas.
