@@ -5,6 +5,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 from display_currency import currency_code
+from valuation_lcoe import lcoe_panel
 from valuation_finance import financial_diagnostics,unit_economics,mix_analysis,reprice_dcf,projection_diagnostics,divide,complete_sum
 
 NAVY,TEAL,GOLD,ORANGE='#315E7D','#3B8F96','#9DAFC0','#B36A52'
@@ -72,7 +73,8 @@ def unit_panel(model):
         with st.expander('Detalle numérico y conciliación de productos'):
             financial_table(selected.drop(columns='Potencia kW'),['Ventas','Fabricación total','OPEX específico total','Contribución total','Precio / equipo','Fabricación / equipo','Margen bruto / equipo','OPEX específico / equipo','Contribución / equipo'],['Margen bruto %','Margen contribución %'])
             st.caption(('Contribución de ambos productos menos OPEX común frente al EBITDA publicado: '+money(complete_sum(data['Contribución total'])-row['opex_common'])+' frente a '+money(row['ebitda'])+'. Una diferencia material requiere revisar partidas no asignadas o adicionales de terceros.').replace('$', r'\$'))
-    section('03 / ESCALA OPERATIVA','Equilibrio y sensibilidad del mix')
+    lcoe_panel(model,year,selected)
+    section('04 / ESCALA OPERATIVA','Equilibrio y sensibilidad del mix')
     st.caption('Aproximación de EBITDA a precios, fabricación y OPEX específico unitarios constantes del año elegido. El OPEX común permanece fijo. Este laboratorio usa ambos productos y es independiente del filtro del comparativo anterior.')
     total_units=complete_sum(data['Entregas']);share=divide(float(data.loc[data['Potencia kW'].eq(80),'Entregas'].iloc[0]),total_units)
     if st.session_state.get('option4_valuation_mix_year') != year:

@@ -6,7 +6,7 @@ import sys
 from threading import RLock
 
 APP_RELEASE = '2026.10.30.2'
-_MODULES = ('display_currency', 'timeline_scroll', 'capital_charts', 'commercial_report', 'commercial_comparison', 'commercial_analysis', 'valuation_data', 'valuation_finance', 'valuation_interactive', 'valuation_costs', 'valuation_report', 'valuation_view', 'analysis_option')
+_MODULES = ('display_currency', 'timeline_scroll', 'capital_charts', 'commercial_report', 'commercial_comparison', 'commercial_analysis', 'valuation_data', 'valuation_finance', 'lcoe_finance', 'valuation_lcoe', 'valuation_interactive', 'valuation_costs', 'valuation_report', 'valuation_view', 'analysis_option')
 _ROOT = Path(__file__).resolve().parent
 _reload_lock = RLock()
 _loaded_revision = None
