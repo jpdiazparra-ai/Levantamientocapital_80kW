@@ -11,7 +11,7 @@ import streamlit as st
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import Paragraph, Table, TableStyle, SimpleDocTemplate, PageBreak, Spacer, LongTable
+from reportlab.platypus import Paragraph, TableStyle, LongTable
 from reportlab.pdfgen.canvas import Canvas
 from commercial_report import _fonts
 from valuation_data import SOURCE as FINANCIAL_SOURCE
@@ -87,15 +87,15 @@ class Report:
             self.para(c,x+10,y-(30 if dense else 24),width-20,value,10.5 if dense else 14,INK,True)
             self.para(c,x+10,y-(51 if dense else 45),width-20,note,6.2 if dense else 6.4,MUTED)
         return y-box-12
-    def bullets(self,c,x,y,width,items,size=8.2):
+    def bullets(self,c,x,y,width,items,size=8.2,gap=7):
         for title,text in items:
             c.setFillColor(colors.HexColor(TEAL));c.circle(x+2,y-5,2,fill=1,stroke=0)
-            y=self.para(c,x+12,y,width-12,title+' — '+text,size)-7
+            y=self.para(c,x+12,y,width-12,title+' — '+text,size)-gap
         return y
 
 
 def technical_page(c,r,technical):
-    r.header(c,'01','Turbina de 80 kW · alcance documentado','Ingeniería e integración industrial | Síntesis técnica de Plan y respaldo íntegro por ID en el anexo')
+    r.header(c,'01','Turbina de 80 kW · alcance documentado','Ingeniería e integración industrial | Síntesis técnica de Plan · detalle por ID disponible en la fuente')
     y=H-111
     r.kpis(c,y,[('Potencia identificada','80 kW','Denominación del proyecto; no ensayo de potencia'),('Sistemas en Plan',str(technical['Sistema'].nunique()),'Alcance técnico y de ejecución'),('Actividades trazables',str(len(technical)),'Hitos que contienen 80 kW'),('Configuración','V80','Especificaciones sujetas a planos y validación')])
     y-=83;left=440;right=CW-left-22;xright=M+left+22
@@ -107,9 +107,9 @@ def technical_page(c,r,technical):
         for ident in ids:
             if ident in byid.index:
                 text=str(byid.loc[ident,'Actividad / entregable']);limit=230 if ident=='A521' else 170 if ident=='A526' else 185 if len(ids)==1 else 100
-                if len(text)>limit:text=text[:limit].rsplit(' ',1)[0]+'… (texto íntegro en anexo)'
+                if len(text)>limit:text=text[:limit].rsplit(' ',1)[0]+'… (ver texto íntegro en Plan)'
                 descriptions.append(ident+': '+text)
-        rows.append([label,' '.join(descriptions) if descriptions else 'Sin especificación disponible para los IDs de referencia; revisar anexo.'])
+        rows.append([label,' '.join(descriptions) if descriptions else 'Sin especificación disponible para los IDs de referencia; revisar Plan.'])
     r.draw_table(c,M,y,rows,[110,left-110],7.1)
     yr=H-194
     r.para(c,xright,yr,right,'CADENA FUNCIONAL',9,BLUE,True);yr-=21
@@ -123,12 +123,20 @@ def technical_page(c,r,technical):
     r.footer(c,1)
 
 
+def five_year_summary(model):
+    frame=model['annual'].loc[model['annual']['Año modelo'].gt(0)].iloc[:5]
+    if frame.empty:raise ValueError('No hay años operativos para el resumen financiero.')
+    result=projection_diagnostics(frame)
+    result.update(start=frame.iloc[0]['Año'],end=frame.iloc[-1]['Año'],years=len(frame))
+    return result
+
+
 def financial_bullets(model,products,r):
-    s=model['scalars'];a=model['annual'];first=a.iloc[1];p=products.set_index('Potencia kW');d=financial_diagnostics(model)
+    s=model['scalars'];a=model['annual'];first=a.iloc[1];p=products.set_index('Potencia kW');d=financial_diagnostics(model);five=five_year_summary(model)
     return [
-      ('Valor y retorno económico',f'DCF {r.money(s["dcf"],True)}; VAN económico sin terminal {r.money(s["npv_economic"],True)} y TIR económica {r.pct(s["irr_economic"])}. Son resultados consolidados de 10 y 80 kW, no la TIR del socio ni de un equipo aislado.'),
-      ('Economía unitaria 80 kW',f'Fabricación media {r.money(p.at[80,"Fabricación / equipo"])}; margen bruto {r.pct(p.at[80,"Margen bruto %"])}; contribución {r.money(p.at[80,"Contribución / equipo"])} por equipo antes de OPEX común. La contribución 10 kW es {r.money(p.at[10,"Contribución / equipo"])}; revisar la sostenibilidad del mix. No es EBITDA por turbina.'),
-      ('Conversión de caja',f'FCFF año 1 {r.money(first["fcff"],True)} y EBITDA {r.money(first["ebitda"],True)}; conversión {decimal(divide(first["fcff"],first["ebitda"]),2)}x. La caja incorpora anticipos ({r.pct(s["advance_rate"])}, {decimal(s["advance_days"],0)} días), capital de trabajo, IVA y CAPEX; no es flujo distribuible garantizado.'),
+      ('Valor y retorno económico',f'DCF a diez años + terminal {r.money(s["dcf"],True)}; VAN económico sin terminal {r.money(s["npv_economic"],True)} y TIR económica {r.pct(s["irr_economic"])}. VAN/TIR usan diez años sin terminal; resultados consolidados de 10 y 80 kW, no la TIR del socio ni de un equipo aislado.'),
+      ('Economía unitaria 80 kW · '+first['Año'],f'Fabricación media {r.money(p.at[80,"Fabricación / equipo"])}; margen bruto {r.pct(p.at[80,"Margen bruto %"])}; contribución {r.money(p.at[80,"Contribución / equipo"])} por equipo antes de OPEX común. La contribución 10 kW es {r.money(p.at[10,"Contribución / equipo"])}; revisar la sostenibilidad del mix. No es EBITDA por turbina.'),
+      ('Operación '+five['start']+'–'+five['end'],f'EBITDA acumulado {r.money(five["ebitda"],True)}; margen ponderado {r.pct(five["margin"])}. Conversión FCFF/EBITDA {decimal(five["cash_conversion"],2)}x; la caja incorpora anticipos ({r.pct(s["advance_rate"])}, {decimal(s["advance_days"],0)} días), CT, IVA y CAPEX.'),
       ('Inversión y negociación',f'Aporte primario {r.money(s["primary"],True)} por participación final {r.pct(s["investor_share"])}; compra secundaria {r.money(s["secondary"],True)}. Precio previo {r.money(s["pre_money"],True)}, separado del DCF; estado {model["status"]}.'),
       ('Capital y liquidez',f'Activos fijos aportados {r.money(s["assets_in_kind"],True)}; preoperacionales {r.money(s["preop"],True)} e inventario inicial {r.money(s["spares"],True)}. Caja inicial {r.money(s["cash_y0"],True)} frente a reserva {r.money(s["cash_target"],True)}.'),
       ('Sensibilidad y condiciones',f'Tasa {r.pct(s["rate"])} y crecimiento terminal {r.pct(s["growth"])}; el terminal pesa {r.pct(s["terminal_weight"])} del DCF. Payback económico descontado {decimal(d["Payback económico descontado"],2)} años. Revisar soporte comercial, técnico y condiciones pendientes; no constituye recomendación de inversión.'),
@@ -138,7 +146,14 @@ def financial_bullets(model,products,r):
 def finance_page(c,r):
     model=r.model;s=model['scalars'];a=model['annual'];first=a.iloc[1];products,gap=unit_economics(model,first['Año'])
     r.header(c,'02','Indicadores clave · tesis financiera','Caso consolidado 10 + 80 kW | Horizonte '+a.iloc[1]['Año']+'–'+a.iloc[-1]['Año']+' | Año unitario de referencia: '+first['Año']+' | Cifras en '+r.currency)
-    y=r.kpis(c,H-111,[('DCF antes de capital nuevo',r.money(s['dcf'],True),'Valor indicativo del modelo'),('VAN económico sin terminal',r.money(s['npv_economic'],True),'Incluye activos en especie'),('TIR económica sin terminal',r.pct(s['irr_economic']),'Flujo económico del proyecto'),('Margen EBITDA · año 1',r.pct(s['ebitda_margin_y1']),'Consolidado, no por equipo'),('Activos fijos aportados',r.money(s['assets_in_kind'],True),'CAPEX económico en especie'),('CAPEX FW · diez años',r.money(complete_sum(a.iloc[1:]['capex']),True),'Pagado por FW · fila publicada')])
+    five=five_year_summary(model)
+    y=r.kpis(c,H-111,[('DCF · diez años + terminal',r.money(s['dcf'],True),'Valor indicativo consolidado'),('VAN económico · diez años',r.money(s['npv_economic'],True),'Sin terminal; incluye especie'),('TIR económica · diez años',r.pct(s['irr_economic']),'Sin terminal; no TIR del socio'),('Activos fijos aportados',r.money(s['assets_in_kind'],True),'Valor inicial; no anual'),('CAPEX FW · diez años',r.money(complete_sum(a.iloc[1:]['capex']),True),'Pagado por FW, acumulado'),('Peso terminal / DCF',r.pct(s['terminal_weight']),'DCF completo; no flujo anual')])
+    r.para(c,M,y,CW,'OPERACIÓN · '+five['start']+'–'+five['end']+' / '+str(five['years'])+' AÑOS',8,BLUE,True)
+    width=CW/4;top=y-17
+    for i,(label,value) in enumerate([('Ventas acumuladas',r.money(five['sales'],True)),('EBITDA acumulado',r.money(five['ebitda'],True)),('Margen EBITDA ponderado',r.pct(five['margin'])),('FCFF acumulado',r.money(five['fcff'],True))]):
+        x=M+i*width;c.setFillColor(colors.HexColor(PALE));c.rect(x,top-42,width-2,42,fill=1,stroke=0)
+        r.para(c,x+9,top-5,width-18,label,7,MUTED,True);r.para(c,x+9,top-21,width-18,value,11,INK,True)
+    y=top-53
     rows=[['Economía por equipo · '+first['Año'],'10 kW','80 kW']]
     fields=[('Entregas','Entregas','n'),('Precio de venta','Precio / equipo','m'),('Fabricación media','Fabricación / equipo','m'),('Margen bruto','Margen bruto %','p'),('OPEX específico','OPEX específico / equipo','m'),('Contribución pre-OPEX común','Contribución / equipo','m')]
     for label,field,kind in fields:
@@ -151,60 +166,68 @@ def finance_page(c,r):
     top=y-29;maximum=max([abs(v) for _,v,_ in vals]+[1])
     for label,value,color in vals:
         r.para(c,x,top,width,label+' · '+r.money(value,True),8,INK,True)
-        c.setFillColor(colors.HexColor(color));c.rect(x,top-28,width*max(value,0)/maximum,12,fill=1,stroke=0);top-=49
+        c.setFillColor(colors.HexColor(color));c.rect(x,top-28,width*max(value,0)/maximum,12,fill=1,stroke=0);top-=40
     r.para(c,x,top+1,width,'VAN económico = VAN de caja explícito menos activos aportados. El capital nuevo se mantiene fuera del DCF.',7.3,MUTED)
-    y-=173;r.line(c,y+6)
+    y-=146;r.line(c,y+6)
     left_items=financial_bullets(model,products,r)
-    r.bullets(c,M,y-8,CW,left_items,8)
+    r.bullets(c,M,y-5,CW,left_items,7.3,gap=4)
     r.footer(c,2)
+
+
+def projection_page(c,r):
+    s=r.model['scalars'];a=r.model['annual'];operating=a[a['Año modelo'].gt(0)]
+    r.header(c,'03','Proyección financiera y capital','Horizonte completo '+operating.iloc[0]['Año']+'–'+operating.iloc[-1]['Año']+' | Importes en '+r.currency+' | Flujos anuales y saldos al cierre')
+    rows=[['Indicador · '+r.currency,*operating['Año'].tolist()]]
+    for field,label,kind in [('sales','Ventas','m'),('ebitda','EBITDA','m'),('ebitda_margin','Margen EBITDA','p'),('fcff','FCFF','m'),('capex','CAPEX pagado por FW','m'),('cash_free','Caja libre al cierre','m'),('advances','Anticipos pendientes','m'),('units_80','Entregas 80 kW','n'),('units_10','Entregas 10 kW','n'),('external','Ampliar / externalizar','n')]:
+        rows.append([label,*[(r.money(v,True) if kind=='m' else r.pct(v) if kind=='p' else decimal(v,0)) for v in operating[field]]])
+    y=r.draw_table(c,M,H-112,rows,[112]+[(CW-112)/len(operating)]*len(operating),6.5)-12
+    y=r.para(c,M,y,CW,'Flujos se suman; caja y anticipos son saldos al cierre. El margen EBITDA de cada año no se suma ni se promedia de forma simple. CAPEX pagado por FW no incluye nuevamente los activos fijos aportados.',7.2,MUTED)-12
+    rows=[['Capital, patrimonio y liquidez','Importe','Criterio / período']]
+    for key,label,note in [('assets_in_kind','Activos fijos iniciales / especie','Valor inicial; no salida de caja nueva'),('preop','Gastos preoperacionales','Iniciales; separados del CAPEX fijo'),('spares','Inventario inicial de repuestos','Inicial; no CAPEX fijo'),('economic_investment','Inversión económica inicial','Activos + preoperacionales + inventario inicial'),('cash_required','Uso de caja de arranque','Año 0, neto de anticipos'),('target_funding','Aporte para conservar caja objetivo','Arranque + reserva objetivo'),('historical_wc','CT histórico, referencia','Excluido de inversión inicial; evita duplicación')]:rows.append([label,r.money(s[key]),note])
+    y=r.draw_table(c,M,y,rows,[230,180,CW-410],7)-10
+    r.para(c,M,y,CW,'CAPEX pagado por FW en diez años: '+r.money(complete_sum(operating['capex']))+'. La inversión económica inicial incluye conceptos que no son CAPEX contable.',7.2,MUTED)
+    r.footer(c,3)
+
+
+def assumptions_page(c,r,fx):
+    m=r.model;s=m['scalars'];a=m['annual'];first=a.iloc[1]['Año'];period=a.iloc[1]['Año']+'–'+a.iloc[-1]['Año']
+    r.header(c,'04','Cifras exactas, supuestos y fuentes','Valorización a diez años · operación a cinco años · economía unitaria del primer año | Caso publicado, sin ajustes del laboratorio')
+    left=(CW-20)/2;rightx=M+left+20
+    exact=[['Indicador financiero','Importe / tasa']]
+    for key,label in [('dcf','DCF 10 años + terminal'),('npv_cash','VAN caja · 10 años, sin terminal'),('npv_economic','VAN económico · 10 años, sin terminal'),('sales_y1','Ventas · '+first),('ebitda_y1','EBITDA · '+first),('fcff_y1','FCFF · '+first)]:exact.append([label,r.money(s[key])])
+    exact.append(['TIR económica · 10 años, sin terminal',r.pct(s['irr_economic'])])
+    bottom_left=r.draw_table(c,M,H-112,exact,[left*.57,left*.43],7.1)
+    rows=[['Supuesto / operación','Valor publicado']]
+    for label,value in [('Tasa / crecimiento terminal',r.pct(s['rate'])+' / '+r.pct(s['growth'])),('Anticipo / días de entrega',r.pct(s['advance_rate'])+' / '+decimal(s['advance_days'],0)+' días'),('Producción / escenario',m['production']+' / '+m['scenario']),('Inversionista / accionistas actuales',r.pct(s['investor_share'])+' / '+r.pct(s['founder_share'])),('Precio previo / posterior',r.money(s['pre_money'],True)+' / '+r.money(s['post_money'],True)),('TC interno / TC de presentación',decimal(s['model_fx'],2)+' / '+decimal(fx,2)+' CLP/USD')]:rows.append([label,value])
+    bottom_right=r.draw_table(c,rightx,H-112,rows,[left*.55,left*.45],7.1)
+    y=min(bottom_left,bottom_right)-19
+    if not m['pending'].empty:
+        r.para(c,M,y,left,'CONDICIONES PENDIENTES PUBLICADAS',8,BLUE,True)
+        pending=m['pending'].iloc[:8]
+        rows=[['Condición','Estado']]+pending.iloc[:,:2].astype(str).values.tolist()
+        end=r.draw_table(c,M,y-15,rows,[left*.58,left*.42],6.8)
+        if len(m['pending'])>8:r.para(c,M,end-6,left,str(len(m['pending'])-8)+' condiciones adicionales en la trazabilidad del panel.',7,MUTED)
+    r.para(c,rightx,y,left,'CRITERIOS DE LECTURA',8,BLUE,True)
+    r.bullets(c,rightx,y-18,left,[('Horizontes','DCF: '+period+' más terminal. VAN y TIR económicos: diez años sin terminal; incluyen activos aportados y no equivalen al retorno del socio.'),('Operación','Resumen de los cinco primeros años. Margen ponderado = suma de EBITDA / suma de ventas; ventas, EBITDA y FCFF son flujos acumulados.'),('Economía unitaria','Referencia '+first+': fabricación y OPEX específico / entregas; contribución antes del OPEX común. No es EBITDA por equipo.'),('Trazabilidad','Los detalles técnicos por ID se consultan en Plan. No se estima AEP, LCOE o DSCR sin los datos necesarios.')],7.1)
+    counts='; '.join(str(n)+' '+status.lower() for status,n in m['checks']['Estado'].value_counts().items())
+    r.para(c,M,66,CW,'Conciliaciones: '+counts+'. Verifican consistencia matemática, no validez contractual ni desempeño certificado.',7,MUTED)
+    p=Paragraph('Fuentes: <link href="'+FINANCIAL_SOURCE+'html" color="'+BLUE+'">Modelo financiero · 00–09</link> | <link href="'+PROJECT_SOURCE+'html" color="'+BLUE+'">Plan · especificaciones y actividades 80 kW por ID</link>.',r.body)
+    _,height=p.wrap(CW,40);p.drawOn(c,M,41-height)
+    r.footer(c,4)
 
 
 def build_executive_pdf(model,technical,currency='USD',fx=925.):
     if currency not in ('USD','CLP') or not math.isfinite(fx) or fx<=0:raise ValueError('Moneda o tipo de cambio inválidos para el informe.')
     _fonts();r=Report(model,currency,fx);out=BytesIO();c=Canvas(out,pagesize=(W,H));c.setTitle('Turbina 80 kW · Memorando técnico y financiero');c.setAuthor('FW Axial Energy · Control integral del proyecto')
-    technical_page(c,r,technical);c.showPage();finance_page(c,r);c.showPage()
-    # Appendices use the same canvas, with automatic pagination and repeated headers.
-    story=[];s=model['scalars'];a=model['annual'];operating=a[a['Año modelo'].gt(0)]
-    story.append(r.p('ANEXO A / PROYECCIÓN FINANCIERA Y CAPITAL',13,BLUE,True));story.append(Spacer(1,10))
-    rows=[['Indicador · '+currency,*operating['Año'].tolist()]]
-    for field,label,kind in [('sales','Ventas','m'),('ebitda','EBITDA','m'),('ebitda_margin','Margen EBITDA','p'),('fcff','FCFF','m'),('capex','CAPEX pagado por FW','m'),('cash_free','Caja libre al cierre','m'),('advances','Anticipos pendientes','m'),('units_80','Entregas 80 kW','n'),('units_10','Entregas 10 kW','n'),('external','Ampliar / externalizar','n')]:
-        rows.append([label,*[(r.money(v,True) if kind=='m' else r.pct(v) if kind=='p' else decimal(v,0)) for v in operating[field]]])
-    story.append(r.table(rows,[112]+[(CW-112)/10]*10,6.5));story.append(Spacer(1,12))
-    story.append(r.p('Flujos se suman; caja y anticipos son saldos al cierre. CAPEX pagado por FW sigue la fila publicada de 04; no se suma nuevamente el aporte de activos en especie.',7.5,MUTED));story.append(Spacer(1,12))
-    rows=[['Capital, patrimonio y liquidez','Importe / indicador','Criterio']]
-    for key,label,note in [('assets_in_kind','Activos fijos iniciales / especie','CAPEX económico aportado; no salida de caja nueva'),('preop','Gastos preoperacionales','Separados del CAPEX fijo'),('spares','Inventario inicial de repuestos','Inventario; no CAPEX fijo'),('economic_investment','Inversión económica inicial','Activos + preoperacionales + inventario inicial'),('cash_required','Uso de caja de arranque','Neto de anticipos; separado de inversión económica'),('target_funding','Aporte para conservar caja objetivo','Uso neto de caja + reserva objetivo'),('historical_wc','CT histórico, referencia','Excluido de la inversión inicial para evitar duplicación')]:rows.append([label,r.money(s[key]),note])
-    story.append(r.table(rows,[230,180,CW-410],7));story.append(Spacer(1,10))
-    later=complete_sum(operating['capex']);story.append(r.p('CAPEX pagado por FW durante los diez años: '+r.money(later)+'. La clasificación de inversión económica inicial no equivale íntegramente a CAPEX contable.',7.5,MUTED))
-    story.append(PageBreak());story.append(r.p('ANEXO B / SUPUESTOS, OPERACIÓN Y TRAZABILIDAD',13,BLUE,True));story.append(Spacer(1,10))
-    exact=[['Indicador financiero','Importe / tasa','Alcance']]
-    for key,label,note in [('dcf','DCF antes de capital nuevo','Consolidado; incluye terminal'),('npv_cash','VAN de caja sin terminal','Flujos explícitos del proyecto'),('npv_economic','VAN económico sin terminal','Resta activos aportados al VAN de caja'),('sales_y1','Ventas año 1','Negocio 10 + 80 kW'),('ebitda_y1','EBITDA año 1','Después de OPEX común y específico'),('fcff_y1','FCFF año 1','Incluye CT, anticipos, IVA y CAPEX')]:exact.append([label,r.money(s[key]),note])
-    exact.append(['TIR económica sin terminal',r.pct(s['irr_economic']),'Retorno económico; no TIR del socio'])
-    story.append(r.table(exact,[205,245,CW-450],7.5));story.append(Spacer(1,12))
-    rows=[['Variable','Valor','Lectura']]
-    for label,value,note in [('Tasa / g terminal',r.pct(s['rate'])+' / '+r.pct(s['growth']),'Descuento y perpetuidad del caso publicado'),('Anticipo / días de entrega',r.pct(s['advance_rate'])+' / '+decimal(s['advance_days'],0),'Condiciones que inciden en caja y capital de trabajo'),('Producción / escenario',model['production']+' / '+model['scenario'],'Caso activo publicado; no simulación local del panel'),('Participación inversionista / actuales',r.pct(s['investor_share'])+' / '+r.pct(s['founder_share']),'Reparto agregado; no infiere asignación individual'),('Precio previo / posterior',r.money(s['pre_money'])+' / '+r.money(s['post_money']),'Valor de negociación, separado del DCF'),('Tipo de cambio modelo',decimal(s['model_fx'],2)+' CLP/USD','Se conserva en la conciliación de la fuente'),('Tipo de cambio presentación',decimal(fx,2)+' CLP/USD','Solo conversión visual cuando se elige CLP')]:rows.append([label,value,note])
-    story.append(r.table(rows,[205,245,CW-450],7.5));story.append(Spacer(1,10))
-    if not model['pending'].empty:
-        story.append(r.p('Condiciones pendientes publicadas',10,BLUE,True));story.append(Spacer(1,6));story.append(r.table([model['pending'].columns.tolist(),*model['pending'].astype(str).values.tolist()],[CW/len(model['pending'].columns)]*len(model['pending'].columns),7))
-    story.append(Spacer(1,10));story.append(r.p('Controles de conciliación: '+'; '.join(str(n)+' '+status.lower() for status,n in model['checks']['Estado'].value_counts().items())+'. Las conciliaciones verifican consistencia matemática, no validez contractual, desempeño certificado ni condiciones de mercado.',7.5,MUTED))
-    story.append(Spacer(1,8));story.append(Paragraph('Modelo financiero: <link href="'+FINANCIAL_SOURCE+'html" color="'+BLUE+'">pestañas 00–09</link>. Alcance técnico: <link href="'+PROJECT_SOURCE+'html" color="'+BLUE+'">Plan · Hito objetivo 80 kW</link>.',r.body))
-    story.append(Spacer(1,8));story.append(r.p('Método: fabricación por equipo y OPEX específico derivan de importes anuales / entregas; la contribución descuenta ambos antes del OPEX común. El payback descuenta el flujo económico, sin terminal, e interpola años. La TIR es la publicada sin terminal y no equivale a una TIR del capital del socio. No se estima LCOE, AEP, DSCR ni rentabilidad exclusiva de 80 kW sin los datos necesarios.',7.5,MUTED))
-    story.append(PageBreak());story.append(r.p('ANEXO C / ALCANCE TÉCNICO ÍNTEGRO POR ID',13,BLUE,True));story.append(Spacer(1,8))
-    story.append(r.p('Se incluyen todas las actividades cuyo Hito objetivo contiene 80 kW, incluso referencias, actividades integradas y exclusiones que constan en Plan. Son alcances publicados, no certificados de ejecución. No se aplican filtros comerciales ni se suman cantidades de criterios diferentes.',7.5,MUTED));story.append(Spacer(1,8))
-    rows=[['ID / hito','Sistema / línea','Actividad y especificación íntegra','Aceptación / riesgo publicado']]
-    for _,row in technical.iterrows():
-        rows.append([str(row.get('ID',''))+' · '+str(row.get('Hito objetivo',''))+' | Criterio: '+(str(row.get('criterio','')) or 'Sin informar')+' | Cantidad: '+(str(row.get('Unidades','')) or 'Sin informar'),str(row.get('Sistema',''))+' / '+str(row.get('Paquete / línea','')),str(row.get('Actividad / entregable','')),str(row.get('Evidencia / aceptación',''))+' | Riesgo: '+(str(row.get('Riesgo clave','')) or 'Sin informar')])
-    story.append(r.table(rows,[77,140,350,CW-567],7.1))
-    # A custom canvas factory preserves pages 1–2 while Platypus lays out annexes.
-    class ExistingCanvas:
-        def __new__(cls,*args,**kwargs):return c
-    doc=SimpleDocTemplate(out,pagesize=(W,H),leftMargin=M,rightMargin=M,topMargin=43,bottomMargin=39,title='Turbina 80 kW · Memorando técnico y financiero')
-    def appendix_header(canvas,document):
-        r.para(canvas,M,H-17,CW,'FW AXIAL ENERGY / RESPALDO DEL CASO PUBLICADO',7.5,BLUE,True);r.footer(canvas,canvas.getPageNumber())
-    doc.build(story,onFirstPage=appendix_header,onLaterPages=appendix_header,canvasmaker=ExistingCanvas)
+    # Exactly four designed pages; no overflowing appendix or hidden truncation.
+    for render in [lambda:technical_page(c,r,technical),lambda:finance_page(c,r),lambda:projection_page(c,r),lambda:assumptions_page(c,r,fx)]:
+        render();c.showPage()
+    c.save()
     return out.getvalue()
 
 
 @st.cache_data(ttl=60,max_entries=4,show_spinner=False)
-def report_payload(model,currency,fx):
+def report_payload(model,currency,fx,layout_version=2):
+    """Versioned cache: v2 exports exactly four designed pages."""
     technical=load_technical(model['fetched_at'])
     return build_executive_pdf(model,technical,currency,fx)

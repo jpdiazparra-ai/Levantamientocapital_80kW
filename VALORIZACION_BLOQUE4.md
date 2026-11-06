@@ -66,10 +66,19 @@ El estado Propuesta no acredita fondos. La compra secundaria se mantiene fuera d
 
 ## PDF ejecutivo para comité financiero
 
-A la derecha de **Valor indicativo y fundamentos del caso** se descarga un PDF vectorial en A4 horizontal, sin navegador ni captura de pantalla. Incluye dos láminas ejecutivas: alcance documentado de la turbina de 80 kW y síntesis financiera del negocio consolidado 10 + 80 kW. Los anexos conservan la proyección a diez años, inversión y CAPEX, valores financieros exactos, supuestos, condiciones pendientes y el texto íntegro de las actividades de Plan con Hito objetivo 80 kW, en orden natural de ID.
+A la derecha de **Valor indicativo y fundamentos del caso** se descarga un PDF vectorial en A4 horizontal de **exactamente cuatro páginas**:
 
-El informe sigue la moneda CLP/USD y el tipo de cambio de presentación. Utiliza el primer año operativo como referencia de economía unitaria y el caso publicado para TIR, VAN y DCF; no exporta los ajustes del laboratorio como si fueran resultados de la fuente. Distingue fabricación y contribución por equipo de EBITDA, VAN económico de VAN de caja, activos fijos en especie de CAPEX pagado por FW e inventario/preoperacionales. Las conclusiones se generan con los datos del caso, incluidos márgenes negativos cuando existen.
+1. Alcance técnico documentado de la turbina de 80 kW, con referencias por ID a Plan.
+2. Tesis financiera: DCF a diez años más terminal; VAN y TIR económicos a diez años sin terminal; activos fijos aportados como valor inicial y CAPEX pagado por FW acumulado en diez años. Una banda independiente resume ventas, EBITDA, margen ponderado y FCFF de los primeros cinco años. La economía por turbina conserva el primer año operativo como referencia explícita.
+3. Proyección anual completa a diez años y clasificación del capital inicial.
+4. Cifras exactas, supuestos, condiciones pendientes y enlaces a las fuentes.
 
-La información técnica se consulta de forma independiente en Plan del documento de control del proyecto, sin cruce obligatorio de IDs con Costos. Las descripciones son alcances publicados: no se extrapola una ficha o curva de 10 kW a 80 kW, ni se presenta una norma citada en una partida como certificación obtenida. Las especificaciones resumidas remiten al anexo completo por ID. El estado de la operación, fecha de consulta y fuentes acompañan al informe.
+El margen EBITDA quinquenal es **suma de EBITDA / suma de ventas**; no es un promedio simple ni el margen del primer año. Ventas, EBITDA y FCFF son acumulados del período; activos fijos iniciales no se suman por año. Los horizontes se identifican en títulos y notas y siguen el calendario publicado del modelo. La TIR no se atribuye al socio ni a la turbina de 80 kW de forma aislada.
 
-`valuation_report.py` construye las láminas, gráficos y anexos con ReportLab. La caché dura 60 segundos; la descarga usa `on_click='ignore'` para conservar la vista y filtros. Si la fuente técnica no permite preparar el informe, solo el botón queda deshabilitado con una explicación y el análisis financiero sigue disponible.
+Se eliminan las páginas técnicas extensas desde la quinta en adelante. Las descripciones resumidas de la página 1 remiten al texto completo de Plan mediante sus IDs y el enlace de la página 4. La composición fija no añade anexos automáticos. Las pruebas verifican cuatro páginas tanto en CLP como en USD.
+
+El informe sigue la moneda y tipo de cambio de presentación y usa el caso publicado, sin exportar las simulaciones locales del laboratorio. Distingue fabricación y contribución por equipo de EBITDA, VAN económico de VAN de caja y activos fijos en especie de inventario/preoperacionales. Los puntos financieros se generan con los datos vigentes, incluidos márgenes negativos cuando existen.
+
+La fuente técnica se consulta de forma independiente en Plan, sin cruce obligatorio con Costos. No se extrapola una ficha de 10 kW a 80 kW ni se presenta una norma citada como certificación obtenida. Estado de la operación, fecha de consulta y fuentes acompañan al reporte.
+
+`valuation_report.py` construye las cuatro páginas con ReportLab. La caché versionada dura 60 segundos y la descarga usa `on_click='ignore'` para conservar la vista y filtros. Si no puede prepararse el informe, solo el botón queda deshabilitado con una explicación; el análisis financiero sigue disponible.

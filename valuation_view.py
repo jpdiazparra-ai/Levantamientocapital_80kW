@@ -93,7 +93,7 @@ def overview(model):
     with download:
         try:
             pdf=report_payload(model,currency_code(),exchange_rate())
-            st.download_button('Descargar PDF ejecutivo',data=pdf,file_name='Turbina_80kW_Informe_tecnico_financiero_'+currency_code()+'.pdf',mime='application/pdf',key='option4_valuation_executive_pdf',on_click='ignore',use_container_width=True,help='Dos láminas ejecutivas y anexos completos: características documentadas de 80 kW, indicadores consolidados, costos, márgenes, inversión y fuentes.')
+            st.download_button('Descargar PDF ejecutivo',data=pdf,file_name='Turbina_80kW_Informe_tecnico_financiero_'+currency_code()+'.pdf',mime='application/pdf',key='option4_valuation_executive_pdf',on_click='ignore',use_container_width=True,help='Informe de cuatro páginas: turbina 80 kW, valoración a diez años, operación de los primeros cinco años, economía unitaria del primer año y fuentes.')
         except Exception as exc:
             st.button('PDF no disponible',disabled=True,key='option4_valuation_executive_pdf_unavailable',help='No se pudo preparar el informe: '+str(exc))
     st.caption('Valor operativo, retorno económico y precio negociado del caso publicado. Importes en '+currency_code()+' · condiciones y supuestos disponibles en trazabilidad.')

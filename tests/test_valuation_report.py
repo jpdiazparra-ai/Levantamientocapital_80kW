@@ -1,7 +1,8 @@
 """PDF data scope and conversion remain independent of Streamlit session state."""
 import unittest
+import re
 import pandas as pd
-from valuation_report import Report, parse_technical, financial_bullets
+from valuation_report import Report, parse_technical, financial_bullets, five_year_summary, build_executive_pdf
 from valuation_finance import unit_economics
 
 
@@ -31,7 +32,7 @@ class ExecutiveReportTests(unittest.TestCase):
             assets_in_kind=100,preop=20,spares=30,cash_y0=200,cash_target=100,
             advance_rate=.5,advance_days=60,terminal_weight=.2)
         initial=dict.fromkeys(['cost_10','cost_80','cogs','external_cost_10','external_cost_80',
-            'units_10','units_80','sales_10','sales_80','opex_10','opex_80','sales','ebitda','fcff','economic_cf'],0)
+            'units_10','units_80','sales_10','sales_80','opex_10','opex_80','sales','ebitda','fcff','economic_cf','cash_free','external','units_total'],0)
         first=dict(initial,Año='2029',**{'Año modelo':1,'sales':300,'ebitda':190,'fcff':150,
             'economic_cf':150,'cost_10':30,'cost_80':50,'cogs':80,'units_10':2,'units_80':4,
             'sales_10':100,'sales_80':200,'opex_10':10,'opex_80':10})
@@ -43,6 +44,38 @@ class ExecutiveReportTests(unittest.TestCase):
         self.assertIn('no la TIR del socio',text)
         self.assertIn('No es EBITDA por turbina',text)
         self.assertIn('Fabricación media US$ 12,50',text)
+
+    def test_five_year_summary_uses_weighted_margin_and_excludes_later_years(self):
+        frame=pd.DataFrame({'Año':['Año 0',*[str(2029+i) for i in range(10)]],
+            'Año modelo':list(range(11)),'sales':[0,100,200,300,400,500,100000,100000,100000,100000,100000],
+            'ebitda':[0,10,40,90,160,250,90000,90000,90000,90000,90000],
+            'fcff':[0,1,2,3,4,5,99999,99999,99999,99999,99999],
+            'cash_free':[0]+[7]*10,'external':[0]*11,'units_total':[0]+[1]*10})
+        summary=five_year_summary({'annual':frame})
+        self.assertEqual((summary['start'],summary['end'],summary['years']),('2029','2033',5))
+        self.assertEqual(summary['sales'],1500)
+        self.assertEqual(summary['ebitda'],550)
+        self.assertAlmostEqual(summary['margin'],550/1500)
+        self.assertNotAlmostEqual(summary['margin'],.3)
+        self.assertEqual(summary['fcff'],15)
+
+    def test_report_has_exactly_four_pages_in_each_currency(self):
+        scalars={key:100. for key in ['dcf','npv_cash','npv_economic','pre_money','post_money','primary','secondary',
+            'assets_in_kind','preop','spares','cash_y0','cash_target','advance_days','economic_investment',
+            'cash_required','target_funding','historical_wc','sales_y1','ebitda_y1','fcff_y1','model_fx']}
+        scalars.update(rate=.2,growth=.03,irr_economic=.4,advance_rate=.5,terminal_weight=.2,investor_share=.75,founder_share=.25)
+        annual=pd.DataFrame([dict(Año='Año 0' if i==0 else str(2028+i),**{
+            'Año modelo':i,'sales':300,'sales_10':100,'sales_80':200,'ebitda':190,'ebitda_margin':190/300,
+            'fcff':150,'economic_cf':-100 if i==0 else 150,'cost_10':30,'cost_80':50,'cogs':80,
+            'external_cost_10':0,'external_cost_80':0,'units_10':2,'units_80':4,'opex_10':10,'opex_80':10,
+            'cash_free':200,'external':0,'units_total':6,'capex':0,'advances':0}) for i in range(11)])
+        model=dict(scalars=scalars,annual=annual,status='Propuesta',scenario='Base',production='Comercial',
+            fetched_at='06-11-2026 10:00',checks=pd.DataFrame({'Estado':['Conciliado']}),pending=pd.DataFrame())
+        technical=parse_technical([['ID','Hito objetivo','Actividad / entregable','Sistema'],['A533','Producto 80 kW','Mástil según plano','Mecánica']])
+        for currency in ['USD','CLP']:
+            data=build_executive_pdf(model,technical,currency,925)
+            self.assertTrue(data.startswith(b'%PDF'))
+            self.assertEqual(len(re.findall(rb'/Type /Page\b',data)),4)
 
 
 if __name__=='__main__':unittest.main()
