@@ -10,6 +10,7 @@ import streamlit as st
 from display_currency import amount, currency_code, exchange_rate
 from valuation_data import load_valuation, SOURCE, SHEETS, number
 from valuation_interactive import diagnostics_panel, unit_panel, projection_panel, dcf_lab
+from valuation_report import report_payload
 
 NAVY,TEAL,GOLD,ORANGE,MUTED='#315E7D','#3B8F96','#9DAFC0','#B36A52','#627588'
 
@@ -87,7 +88,14 @@ def annual_bars(a,fields,key,title):
 
 def overview(model):
     s,a=model['scalars'],model['annual']
-    section('01 / RESUMEN EJECUTIVO','Valor indicativo y fundamentos del caso')
+    title,download=st.columns([4.8,1.2],vertical_alignment='center')
+    with title:section('01 / RESUMEN EJECUTIVO','Valor indicativo y fundamentos del caso')
+    with download:
+        try:
+            pdf=report_payload(model,currency_code(),exchange_rate())
+            st.download_button('Descargar PDF ejecutivo',data=pdf,file_name='Turbina_80kW_Informe_tecnico_financiero_'+currency_code()+'.pdf',mime='application/pdf',key='option4_valuation_executive_pdf',on_click='ignore',use_container_width=True,help='Dos láminas ejecutivas y anexos completos: características documentadas de 80 kW, indicadores consolidados, costos, márgenes, inversión y fuentes.')
+        except Exception as exc:
+            st.button('PDF no disponible',disabled=True,key='option4_valuation_executive_pdf_unavailable',help='No se pudo preparar el informe: '+str(exc))
     st.caption('Valor operativo, retorno económico y precio negociado del caso publicado. Importes en '+currency_code()+' · condiciones y supuestos disponibles en trazabilidad.')
     kpis([('DCF antes de capital nuevo',money(s['dcf']),f'Tasa {pct(s["rate"])} · crecimiento terminal {pct(s["growth"])}'),
         ('VAN económico sin terminal',money(s['npv_economic']),'Incluye el costo económico de los activos en especie'),
