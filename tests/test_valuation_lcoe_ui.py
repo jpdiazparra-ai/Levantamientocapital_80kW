@@ -1,4 +1,5 @@
 import unittest
+import json
 from streamlit.testing.v1 import AppTest
 
 SCRIPT='''
@@ -47,6 +48,26 @@ class InteractiveLcoeTests(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertTrue(app.warning)
         self.assertFalse(any('default value' in w.value for w in app.warning))
+
+    def test_grouped_editable_format_and_80kw_charts_follow_the_selection(self):
+        app=AppTest.from_string(SCRIPT,default_timeout=30).run()
+        self.assertFalse(app.exception)
+        editor=next(df for df in app.dataframe if 'Otros CAPEX instalados' in df.value)
+        config=json.loads(editor.proto.columns)
+        self.assertEqual(config['CAPEX equipo']['type_config']['format'],'localized')
+        self.assertEqual(config['O&M variable / kWh']['type_config']['format'],'localized')
+        self.assertGreaterEqual(config['CAPEX equipo']['width'],220)
+        self.assertEqual(app.selectbox(key='option4_lcoe_technical_product').value,'80 kW')
+        titles=lambda:[json.loads(fig.proto.spec).get('layout',{}).get('title',{}).get('text','') for fig in app.get('plotly_chart')]
+        self.assertIn('Generación del escenario · 80 kW',titles())
+        self.assertIn('Costos anuales del escenario · 80 kW',titles())
+        self.assertIn('Costo nivelado acumulado · 80 kW',titles())
+        app.selectbox(key='option4_lcoe_technical_product').set_value('10 kW').run()
+        self.assertFalse(app.exception)
+        self.assertIn('Generación del escenario · 10 kW',titles())
+        app.slider(key='option4_lcoe_factor').set_value(45.).run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.selectbox(key='option4_lcoe_technical_product').value,'10 kW')
 
 
 if __name__=='__main__':unittest.main()

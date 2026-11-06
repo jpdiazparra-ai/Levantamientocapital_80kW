@@ -30,3 +30,17 @@ def levelized_cost(capacity_kw,capacity_factor,capex,fixed_om,variable_om,years,
     return {'lcoe':pv_cost/pv_energy,'energy_y1':float(energy[1]),'pv_energy':pv_energy,'pv_costs':pv_cost,
         'annual_om_y1':float(fixed[1]+variable[1]),'components':pv,
         'lcoe_components':{key:value/pv_energy for key,value in pv.items()},'flows':flows}
+
+
+def lcoe_profiles(result):
+    """Annual operating curves and cumulative discounted cost per delivered kWh."""
+    frame=result['flows'].copy()
+    frame['Energía anual MWh']=frame['Energía neta kWh']/1000
+    frame['Energía acumulada MWh']=frame['Energía anual MWh'].cumsum()
+    frame['O&M anual']=frame['O&M fijo']+frame['O&M variable']
+    frame['Reposición y retiro']=frame['Reposición']+frame['Retiro']
+    frame['Costo operativo anual']=frame['O&M anual']+frame['Reposición y retiro']
+    frame['VP costos acumulados']=frame['VP costos'].cumsum()
+    frame['VP energía acumulada kWh']=frame['VP energía kWh'].cumsum()
+    frame['LCOE acumulado']=frame['VP costos acumulados']/frame['VP energía acumulada kWh'].where(frame['VP energía acumulada kWh'].gt(0))
+    return frame

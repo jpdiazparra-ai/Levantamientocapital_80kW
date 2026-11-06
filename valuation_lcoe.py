@@ -3,10 +3,11 @@ import math
 import hashlib
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
 from display_currency import currency_code,exchange_rate
-from lcoe_finance import levelized_cost
+from lcoe_finance import levelized_cost,lcoe_profiles
 
 SOURCE='https://www.nlr.gov/pv/lcoe-calculator/documentation'
 FIELDS=['CAPEX equipo','Otros CAPEX instalados','O&M fijo anual','O&M variable / kWh']
@@ -62,11 +63,13 @@ def lcoe_panel(model,year,products):
     st.caption('Otros CAPEX: fundación, montaje, transporte, conexión y permisos que no estén incluidos en el equipo. O&M fijo: costo anual del sitio; variable: costo por kWh neto. Los valores iniciales de cero son supuestos pendientes de completar.')
     prefix='option4_lcoe_editor_'+hashlib.sha1(context_key.encode()).hexdigest()[:10]
     editor_key=prefix+'_'+currency_code()+'_'+str(exchange_rate())+'_'+'_'.join(frame['Turbina'])
-    config={'Turbina':st.column_config.TextColumn(width=100)}
+    config={'Turbina':st.column_config.TextColumn('Turbina',width=110,pinned=True)}
+    labels={'CAPEX equipo':'Equipo · '+currency_code(),'Otros CAPEX instalados':'Instalación / otros CAPEX · '+currency_code(),'O&M fijo anual':'O&M fijo anual · '+currency_code(),'O&M variable / kWh':'O&M variable · '+currency_code()+'/kWh'}
+    help_text={'CAPEX equipo':'Inversión en el equipo. Referencia de compra o fabricación; editable sin cambiar la fuente.','Otros CAPEX instalados':'Fundación, montaje, transporte y conexión que no estén incluidos en el equipo.','O&M fijo anual':'Operación y mantenimiento anual del propietario, independiente del OPEX corporativo.','O&M variable / kWh':'Costo de operación por kWh neto generado, con cuatro decimales de precisión.'}
     for field in FIELDS:
         variable=field=='O&M variable / kWh'
-        config[field]=st.column_config.NumberColumn(field+' · '+currency_code() if not variable else 'O&M variable · '+currency_code()+'/kWh',min_value=0.,step=.0001 if variable else .01,format='%.4f' if variable else '%.2f',width=190)
-    edited=st.data_editor(frame,hide_index=True,use_container_width=True,num_rows='fixed',disabled=['Turbina'],column_config=config,key=editor_key,row_height=40)
+        config[field]=st.column_config.NumberColumn(labels[field],min_value=0.,step=.0001 if variable else .01,format='localized',width=260 if field=='Otros CAPEX instalados' else 220,help=help_text[field])
+    edited=st.data_editor(frame,hide_index=True,use_container_width=True,num_rows='fixed',disabled=['Turbina'],column_config=config,key=editor_key,row_height=52)
     # Store only actual user edits, in native USD. A refreshed source still updates unedited defaults.
     for i,row in edited.iterrows():
         cap=str(int(products.iloc[i]['Potencia kW']))
@@ -122,6 +125,7 @@ def lcoe_panel(model,year,products):
         values=[levelized_cost(**{**entry['args'],'capacity_factor':v})['lcoe'] for v in factors]
         fig.add_trace(go.Scatter(x=[v*100 for v in factors],y=[displayed(v) for v in values],mode='lines+markers',name=entry['name'],line=dict(color=color,width=2.5),customdata=[lcoe_text(v) for v in values],hovertemplate='Factor neto %{x:.1f}%<br>%{customdata} / kWh<extra>%{fullData.name}</extra>'))
     fig.add_vline(x=factor*100,line_dash='dot',line_color='#8296A7');fig.update_layout(title='Sensibilidad del LCOE al factor de planta neto');fig.update_xaxes(title_text='Factor de planta neto (%)');fig.update_yaxes(title_text=currency_code()+'/kWh',rangemode='tozero',tickformat='.3f' if currency_code()=='USD' else '.1f');plot(fig,'lcoe_sensitivity',290)
+    technical_profiles(results)
     context('Alcance del resultado','LCOE indicativo, antes de impuestos y en moneda constante de '+str(year)+'. Usa energía neta: no se restan pérdidas ni disponibilidad nuevamente. Instalación y costos de sitio no cotizados, O&M supuesto y reposiciones de cero hacen que el escenario sea preliminar. El OPEX específico del fabricante no se utiliza como mantenimiento del activo. Los resultados pertenecen únicamente a este escenario de generación.')
     with st.expander('Fórmula, referencias y flujos anuales LCOE'):
         st.latex(r'\mathrm{LCOE}=\frac{CAPEX_0+\sum_{t=1}^{N}\frac{O\&M_t+Reposicion_t+Retiro_t}{(1+r)^t}}{\sum_{t=1}^{N}\frac{P\,8760\,FP_{neto}\,(1-d)^{t-1}}{(1+r)^t}}')
@@ -130,7 +134,46 @@ def lcoe_panel(model,year,products):
         financial_table(reference,['Precio / equipo','Fabricación / equipo','OPEX específico / equipo'])
         st.caption('Referencias por equipo del modelo comercial. El OPEX específico es del fabricante; se presenta para trazabilidad y no como O&M del propietario.')
         names=[entry['name'] for entry in results];key='option4_lcoe_flow_product'
-        if key in st.session_state and st.session_state[key] not in names:st.session_state[key]=names[0]
-        name=st.selectbox('Turbina del flujo anual LCOE',names,key=key)
+        if key in st.session_state and st.session_state[key] not in names:del st.session_state[key]
+        name=st.selectbox('Turbina del flujo anual LCOE',names,index=names.index('80 kW') if '80 kW' in names else 0,key=key)
         chosen=next(entry for entry in results if entry['name']==name)
         financial_table(chosen['result']['flows'],['CAPEX inicial','O&M fijo','O&M variable','Reposición','Retiro','Costo total','VP costos'])
+
+
+def technical_profiles(results):
+    from valuation_view import money,pct,plot,displayed
+    st.markdown('##### Seguimiento técnico · generación, costos y horizonte')
+    names=[entry['name'] for entry in results];key='option4_lcoe_technical_product'
+    if key in st.session_state and st.session_state[key] not in names:del st.session_state[key]
+    preferred=names.index('80 kW') if '80 kW' in names else 0
+    name=st.selectbox('Turbina de los gráficos técnicos LCOE',names,index=preferred,key=key)
+    entry=next(item for item in results if item['name']==name);args=entry['args'];result=entry['result']
+    profile=lcoe_profiles(result);annual=profile[profile['Año'].gt(0)]
+    st.caption('Turbina de '+name+' · factor neto '+pct(args['capacity_factor'])+' · vida '+str(args['years'])+' años · tasa real '+pct(args['rate'])+'. Las curvas se actualizan con la tabla editable y los supuestos avanzados.')
+    views=st.tabs(['Generación neta','O&M y reposiciones','LCOE por horizonte'])
+    with views[0]:
+        fig=make_subplots(rows=2,cols=1,shared_xaxes=True,vertical_spacing=.18,
+            subplot_titles=('Producción neta por año','Producción neta acumulada'))
+        for row,field,label,color in [(1,'Energía anual MWh','Energía anual','#315E7D'),(2,'Energía acumulada MWh','Energía acumulada','#3B8F96')]:
+            fig.add_trace(go.Scatter(x=annual['Año'],y=annual[field],name=label,mode='lines+markers',line=dict(color=color,width=2.5),marker=dict(size=5),hovertemplate='Año %{x}<br>%{y:,.2f} MWh<extra>%{fullData.name}</extra>'),row=row,col=1)
+        fig.update_annotations(font=dict(size=12,color='#203E58'))
+        fig.update_yaxes(title_text='MWh/año',rangemode='tozero',tickformat=',.1f',row=1,col=1);fig.update_yaxes(title_text='MWh acumulados',rangemode='tozero',tickformat=',.0f',row=2,col=1)
+        fig.update_xaxes(title_text='Año operativo',row=2,col=1);fig.update_xaxes(dtick=max(1,int(args['years']//6)),tickformat='d')
+        fig.update_layout(title='Generación del escenario · '+name,showlegend=False);plot(fig,'lcoe_energy_profile',360)
+        st.caption('Energía neta = potencia × 8760 × factor neto, con la degradación anual ingresada. La curva acumulada suma energía física, sin descuento financiero.')
+    with views[1]:
+        fig=go.Figure()
+        for field,label,color,dash in [('O&M anual','O&M fijo + variable','#315E7D','solid'),('Reposición y retiro','Reposición + retiro','#AD6551','dot'),('Costo operativo anual','Costo anual total','#3B8F96','dash')]:
+            fig.add_trace(go.Scatter(x=annual['Año'],y=displayed(annual[field]),name=label,mode='lines+markers',line=dict(color=color,width=2.5,dash=dash),marker=dict(size=5),customdata=[money(v) for v in annual[field]],hovertemplate='Año %{x}<br>%{customdata}<extra>%{fullData.name}</extra>'))
+        if args['replacement_cost']>0:fig.add_vline(x=args['replacement_year'],line_dash='dot',line_color='#AD6551')
+        fig.update_layout(title='Costos anuales del escenario · '+name)
+        fig.update_xaxes(title_text='Año operativo',dtick=max(1,int(args['years']//6)),tickformat='d');fig.update_yaxes(title_text=currency_code()+'/año',rangemode='tozero',tickformat=',.0f')
+        plot(fig,'lcoe_cost_profile',310)
+        st.caption('Importes reales de cada año antes de descuento. El CAPEX inicial de '+money(args['capex']).replace('$',r'\$')+' se desembolsa en año 0 y se incluye en el LCOE, separado de estas curvas operativas.')
+    with views[2]:
+        fig=go.Figure(go.Scatter(x=annual['Año'],y=displayed(annual['LCOE acumulado']),name='Costo nivelado hasta cada año',mode='lines+markers',line=dict(color='#315E7D',width=2.5),marker=dict(size=5),customdata=[lcoe_text(v) for v in annual['LCOE acumulado']],hovertemplate='Hasta año %{x}<br>%{customdata} / kWh<extra></extra>'))
+        fig.add_hline(y=displayed(result['lcoe']),line_dash='dot',line_color='#3B8F96')
+        fig.update_layout(title='Costo nivelado acumulado · '+name)
+        fig.update_xaxes(title_text='Horizonte acumulado · años',dtick=max(1,int(args['years']//6)),tickformat='d');fig.update_yaxes(title_text=currency_code()+'/kWh',rangemode='tozero',tickformat='.3f' if currency_code()=='USD' else '.1f')
+        plot(fig,'lcoe_horizon_profile',310)
+        st.caption('Cada punto divide los costos descontados desde año 0 hasta ese año entre la energía descontada del mismo período. El punto final coincide con el LCOE total de la tabla; la línea punteada marca ese valor de vida completa.')

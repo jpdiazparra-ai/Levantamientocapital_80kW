@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from lcoe_finance import levelized_cost
+from lcoe_finance import levelized_cost,lcoe_profiles
 
 
 class LevelizedCostTests(unittest.TestCase):
@@ -45,6 +45,20 @@ class LevelizedCostTests(unittest.TestCase):
         clp=levelized_cost(**{**args,'capex':args['capex']*925,'fixed_om':args['fixed_om']*925,'variable_om':args['variable_om']*925})
         self.assertAlmostEqual(clp['lcoe'],usd['lcoe']*925)
         self.assertAlmostEqual(clp['pv_energy'],usd['pv_energy'])
+
+    def test_technical_profiles_reconcile_to_energy_costs_and_final_lcoe(self):
+        r=levelized_cost(**{**self.args(),'degradation':.01,'replacement_cost':20000,'replacement_year':10,'decommission_cost':10000})
+        original=r['flows'].copy(deep=True);p=lcoe_profiles(r)
+        self.assertTrue(original.equals(r['flows']))
+        self.assertTrue(np.isnan(p.iloc[0]['LCOE acumulado']))
+        self.assertAlmostEqual(p.iloc[-1]['LCOE acumulado'],r['lcoe'])
+        self.assertAlmostEqual(p.iloc[-1]['Energía acumulada MWh'],original['Energía neta kWh'].sum()/1000)
+        self.assertEqual(p.iloc[0]['Costo operativo anual'],0)
+        self.assertEqual(p.loc[p['Año'].eq(10),'Reposición y retiro'].iloc[0],20000)
+        self.assertEqual(p.iloc[-1]['Reposición y retiro'],10000)
+        self.assertLess(p.iloc[-1]['Energía anual MWh'],p.iloc[1]['Energía anual MWh'])
+        expected=(original.iloc[0]['VP costos']+original.iloc[1]['VP costos'])/original.iloc[1]['VP energía kWh']
+        self.assertAlmostEqual(p.iloc[1]['LCOE acumulado'],expected)
 
 
 if __name__=='__main__':unittest.main()

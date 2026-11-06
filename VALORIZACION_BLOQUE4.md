@@ -103,3 +103,15 @@ Los supuestos iniciales **ilustrativos**, no extraídos de una ficha certificada
 La tabla de resultados presenta CAPEX, O&M, energía anual, VP de costos/energía, contribución de cada componente al LCOE y total por kWh y MWh. El gráfico muestra sensibilidad al factor de planta y el detalle anual permite auditar cada flujo. Fórmula de costos/energía descontados: [documentación NLR/NREL](https://www.nlr.gov/pv/lcoe-calculator/documentation); se utiliza el principio financiero general, sin importar supuestos fotovoltaicos ni parámetros técnicos de otra turbina.
 
 `valuation_lcoe.py` conserva las ediciones como USD nativos por año, referencia y potencia. La conversión CLP/USD, los cambios de tipo de cambio y los filtros no alteran el escenario guardado. Se puede restaurar la tabla del contexto actual. Los cambios de vida útil mantienen válida la reposición; entradas incompletas, factor cero y costos no finitos no producen un LCOE. La simulación es independiente del DCF publicado y del PDF de cinco páginas.
+
+### Tabla y seguimiento técnico LCOE
+
+La tabla de supuestos utiliza formato numérico localizado con separadores de miles, columnas monetarias más amplias y filas de 52 px. La identificación de turbina queda fijada al desplazar la tabla horizontalmente. Los importes siguen siendo numéricos editables; el formato de presentación no altera los valores del escenario ni su conversión de moneda.
+
+Después de la sensibilidad al factor de planta se incorporan tres vistas de líneas, con 80 kW como selección inicial cuando está disponible:
+
+- **Generación neta:** producción anual y acumulada en paneles alineados; acumulación de energía física, sin descuento.
+- **O&M y reposiciones:** O&M anual, reposición/retiro y total operativo por año. El CAPEX del año 0 se identifica por separado y sigue incluido en el LCOE.
+- **LCOE por horizonte:** VP acumulado de costos desde año 0 dividido por VP acumulado de energía hasta cada año. Su último punto concilia con el LCOE de vida completa.
+
+`lcoe_profiles` deriva las curvas de los mismos flujos del cálculo, sin modificar sus entradas. Todos los gráficos responden a factor neto, vida útil, tasa, degradación, O&M y eventos de reposición/retiro. El selector permite revisar otras turbinas del comparativo y conserva una selección válida al interactuar. Los valores cero en los eventos producen curvas planas; la generación depende del factor y degradación ingresados, no de una curva de viento certificada.
