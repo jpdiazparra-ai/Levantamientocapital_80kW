@@ -20,7 +20,7 @@ Usa esta carpeta como servicio independiente en Render.
 - `buildCommand`: `pip install -r requirements.txt`
 - `startCommand`: `streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true`
 
-El botón **Actualizar todo** recarga las fuentes y conserva la vista y los filtros activos.
+La plataforma inicia en **USD**. El botón **Actualizar todo** recarga las fuentes, restablece **USD** y conserva la vista y los filtros activos. La selección de moneda también se aplica a los PDF descargables.
 
 El panel lateral muestra la versión del código en ejecución. `dashboard_runtime.py` comprueba los archivos del Bloque 2 y recarga sus módulos cuando cambia el código, para que una sesión activa no conserve funciones anteriores después de actualizar el repositorio. Las recargas ordinarias de datos conservan los selectores.
 

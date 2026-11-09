@@ -27748,6 +27748,7 @@ if st.session_state.get("gantt_project_source_version") != GANTT_PROJECT_SOURCE_
         load_project_gantt_data.clear()
     st.session_state["gantt_project_source_version"] = GANTT_PROJECT_SOURCE_VERSION
 def _refresh_dashboard_data() -> None:
+    st.session_state["option4_currency"] = "USD"
     for key in (
         "inputs_gantt_etapa",
         "inputs_gantt_fase",
@@ -27780,12 +27781,12 @@ def _refresh_dashboard_data() -> None:
 
 st.sidebar.button(
     "🔁 Actualizar todo",
-    help="Recarga todas las fuentes y recalcula el dashboard conservando la vista y los filtros seleccionados.",
+    help="Recarga todas las fuentes y vuelve a USD, conservando la vista y los filtros seleccionados.",
     on_click=_refresh_dashboard_data,
 )
 st.sidebar.radio(
     "Moneda · Ingeniería de Proyecto y Evaluación Financiera",
-    ["CLP", "USD"], horizontal=True, key="option4_currency",
+    ["USD", "CLP"], horizontal=True, key="option4_currency",
     help="Convierte los importes del Bloque 2 con el tipo de cambio CLP/USD indicado en este panel.",
 )
 

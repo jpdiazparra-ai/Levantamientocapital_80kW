@@ -23,7 +23,7 @@ DISPLAY_MONEY_COLUMNS = TASK_MONEY_COLUMNS | CASH_MONEY_COLUMNS | {
 
 
 def currency_code():
-    return 'USD' if st.session_state.get('option4_currency', 'CLP') == 'USD' else 'CLP'
+    return 'USD' if st.session_state.get('option4_currency', 'USD') == 'USD' else 'CLP'
 
 
 def exchange_rate():
