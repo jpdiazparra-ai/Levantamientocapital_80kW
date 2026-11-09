@@ -1,0 +1,55 @@
+,,,,,,,
+,,Ingreso de inversionista y destino de fondos,,,,,
+,,,,,,,
+,,,,,,,
+,,Condiciones de la operación,,,,,
+,,,,,,,
+,,Pago total del inversionista,,3.000.000,USD,,"Propuesta Jonathan, 13-10-2026. Montos aproximados."
+,,Aporte de capital a FW,,3.000.000,USD,,
+,,Compra de acciones a fundadores,,–,USD,,
+,,Participación final del inversionista,,"85,0%",,,
+,,Mes de desembolso (1–12),,7,mes,,Mes 7: inicio de gastos; ajustar a la fecha real.
+,,Año del modelo para desembolso,,0,año,,Calendario indicativo; ajustar a la fecha real del cierre.
+,,Estado de la operación,,Propuesta,,,
+,,Caja objetivo después del arranque,,1.000.000,USD,,
+,,,,,,,
+,,,,,,,
+,,Precio y participación accionaria,,,,,
+,,,,,,,
+,,Valor patrimonial post inversión implícito,,3.529.412,USD,,
+,,Valor patrimonial previo implícito,,529.412,USD,,
+,,Participación por emisión de acciones nuevas,,"85,0%",,,Emisión primaria: el dinero entra a FW.
+,,Participación adquirida a fundadores,,"0,0%",,,Venta secundaria: el dinero va a los fundadores.
+,,Participación final accionistas actuales,,"15,0%",,,Accionistas actuales agregados; reparto individual pendiente.
+,,Fracción vendida de acciones antiguas,,"0,0%",,,Participaciones calculadas con igual precio por acción.
+,,,,,,,
+,,,,,,,
+,,,,,,,
+,,,,,,,
+,,Aplicación de los fondos en FW,,,,,
+,,,,,,,
+,,Capital de caja aportado a FW,,3.000.000,USD,,
+,,Consumo neto de caja en año 0,,2.888.925,USD,,
+,,Caja libre al cierre del año 0,,111.075,USD,,"Incluye aporte proyectado y, si existe, puente teórico."
+,,Financiamiento puente / adicional requerido,,–,USD,,Déficit pendiente según fecha del aporte. No es aporte firmado.
+,,Financiamiento total para lograr la caja objetivo,,3.888.925,USD,,Monto neto requerido para el cierre del año 0.
+,,Brecha de caja objetivo tras aporte y puente,,888.925,USD,,Brecha residual al cierre del año 0. El puente se informa por separado.
+,,Pago a fundadores fuera de FW,,–,USD,,
+,,Patrimonio contable al cierre del año 0,,2.475.688,USD,,
+,,,,,,,
+,,,,,,,
+,,Valorización del modelo y precio negociado,,,,,
+,,,,,,,
+,,DCF patrimonial antes del aporte,,10.565.289,USD,,
+,,Valor previo implícito en negociación,,529.412,USD,,
+,,Diferencia negociación menos DCF,,(10.035.877),USD,,
+,,Precio negociado / DCF,,"5,0%",,,
+,,,,,,,
+,,,,,,,
+,,Criterios de lectura,,,,,
+,,,,,,,
+,,Pago directo a accionistas vendedores fuera de la caja de FW.,,,,,
+,,El puente calculado es una necesidad de financiamiento. Se incorpora como capital teórico sin asignar acciones.,,,,,
+,,El aporte primario aumenta caja y capital; no aumenta EBITDA ni VAN operativo.,,,,,
+,,La operación se proyecta aun en estado Propuesta; los fondos no están acreditados.,,,,,
+,,Los activos aportados por el socio se conservan; no se infiere quién recibe esas acciones.,,,,,

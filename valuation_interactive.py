@@ -134,18 +134,18 @@ def projection_panel(model):
     st.caption('La demanda no atendida se deriva de demanda total menos entregas, sin valores negativos. Los sobrecostos externos corresponden a las filas específicas de 07. Los saldos de caja son cierres, no flujos acumulables.')
 
 
-def dcf_lab(model):
+def dcf_lab(model,key_prefix='option4_valuation'):
     from valuation_view import kpis,money,pct,plot,displayed,financial_table,context,section
     section('02 / ESCENARIOS','Escenarios de tasa y valor terminal')
     st.caption('Simulación analítica local. Conserva los FCFF publicados de Año 0 a Año 10 y el flujo normalizado del Año 11. La tasa cambia el descuento; g cambia únicamente el denominador de Gordon. No recalcula ventas, impuestos, capacidad ni el crecimiento de los flujos operativos.')
     s=model['scalars']
-    for key,value in [('option4_valuation_lab_rate',float(s['rate']*100)),('option4_valuation_lab_growth',float(s['growth']*100)),('option4_valuation_lab_terminal',True)]:
+    for key,value in [(key_prefix+'_lab_rate',float(s['rate']*100)),(key_prefix+'_lab_growth',float(s['growth']*100)),(key_prefix+'_lab_terminal',True)]:
         if key not in st.session_state:st.session_state[key]=value
     left,middle,right=st.columns(3)
-    with left:rate_input=st.number_input('Tasa de descuento del laboratorio (%)',min_value=.1,max_value=1000.,value=None,step=.5,key='option4_valuation_lab_rate')
-    with right:terminal=st.checkbox('Incluir valor terminal',key='option4_valuation_lab_terminal')
-    with middle:growth_input=st.number_input('Crecimiento perpetuo del laboratorio (%)',min_value=-10.,max_value=100.,value=None,step=.1,key='option4_valuation_lab_growth',disabled=not terminal)
-    st.button('Restaurar tasa y crecimiento publicados',key='option4_valuation_lab_restore',on_click=_restore_lab,args=(s['rate']*100,s['growth']*100))
+    with left:rate_input=st.number_input('Tasa de descuento del laboratorio (%)',min_value=.1,max_value=1000.,value=None,step=.5,key=key_prefix+'_lab_rate')
+    with right:terminal=st.checkbox('Incluir valor terminal',key=key_prefix+'_lab_terminal')
+    with middle:growth_input=st.number_input('Crecimiento perpetuo del laboratorio (%)',min_value=-10.,max_value=100.,value=None,step=.1,key=key_prefix+'_lab_growth',disabled=not terminal)
+    st.button('Restaurar tasa y crecimiento publicados',key=key_prefix+'_lab_restore',on_click=_restore_lab,args=(s['rate']*100,s['growth']*100,key_prefix))
     if rate_input is None or (terminal and growth_input is None):
         st.info('Completa la tasa y el crecimiento para calcular la sensibilidad.');return
     rate=rate_input/100;growth=(growth_input if growth_input is not None else 0)/100
@@ -176,7 +176,7 @@ def dcf_lab(model):
     context('Estado de los datos',f'La simulación no modifica la planilla ni los KPI publicados. Se mantienen los supuestos y condiciones pendientes del caso {model["scenario"]}; el estado del aporte sigue siendo {model["status"]}.')
 
 
-def _restore_lab(rate,growth):
-    st.session_state['option4_valuation_lab_rate']=rate
-    st.session_state['option4_valuation_lab_growth']=growth
-    st.session_state['option4_valuation_lab_terminal']=True
+def _restore_lab(rate,growth,key_prefix='option4_valuation'):
+    st.session_state[key_prefix+'_lab_rate']=rate
+    st.session_state[key_prefix+'_lab_growth']=growth
+    st.session_state[key_prefix+'_lab_terminal']=True

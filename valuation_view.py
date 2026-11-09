@@ -227,11 +227,11 @@ def operating(model,year):
     with right:
         st.markdown('##### Entregas y capacidad propia')
         fig=go.Figure()
-        for cap,color in [(10,NAVY),(80,GOLD)]:fig.add_trace(go.Bar(name=f'Turbina de {cap} kW',x=periods['Año'],y=periods[f'units_{cap}'],marker_color=color))
+        for cap,color in [(cap, NAVY if cap==10 else GOLD) for cap in model.get('products',(10,80))]:fig.add_trace(go.Bar(name=f'Turbina de {cap} kW',x=periods['Año'],y=periods[f'units_{cap}'],marker_color=color))
         fig.add_trace(go.Scatter(name='Capacidad propia',x=periods['Año'],y=periods['capacity'],mode='lines+markers',line=dict(color=TEAL,width=3,dash='dash')))
         fig.update_layout(barmode='stack');fig.update_xaxes(type='category',tickmode='array',tickvals=periods['Año'].tolist());fig.update_yaxes(title_text='Equipos por año');plot(fig,'capacity')
     products=[]
-    for cap in (10,80):
+    for cap in model.get('products',(10,80)):
         units=row[f'units_{cap}'];rev=row[f'sales_{cap}'];cost=row[f'cost_{cap}'];specific=row[f'opex_{cap}']
         products.append({'Turbina':f'{cap} kW','Entregas':units,'Ventas':rev,'Precio promedio':rev/units if units>0 else float('nan'),'Fabricación / equipo':cost/units if units>0 else float('nan'),'Margen bruto / equipo':(rev-cost)/units if units>0 else float('nan'),'Margen bruto %':(rev-cost)/rev if rev>0 else float('nan'),'OPEX específico / equipo':specific/units if units>0 else float('nan'),'Contribución / equipo':(rev-cost-specific)/units if units>0 else float('nan')})
     st.markdown('##### Economía técnica por turbina · '+year)
@@ -243,16 +243,17 @@ def operating(model,year):
     source_note('04 Resultados y flujo','07 Ventas y producción','08 Gastos operativos')
 
 
-def cash_view(model,year):
+def cash_view(model,year,key_prefix='option4_valuation'):
     s,a=model['scalars'],model['annual'];row=a[a['Año'].eq(year)].iloc[0]
     st.subheader('Caja, cobros y obligaciones de entrega')
     st.caption('La caja después del aporte depende de que la operación propuesta se concrete. Los anticipos financian la operación y representan equipos pendientes de entrega; no son utilidad ni capital aportado.')
     kpis([('Caja libre al cierre · '+year,money(row['cash_free']),'Excluye reserva de caja operativa'),('Anticipos pendientes · '+year,money(row['advances']),'Obligación de entregar equipos'),('Necesidad de caja inicial sin aporte',money(s['cash_required']),'Incluye el efecto de IVA del arranque'),('Puente adicional del caso',money(s['bridge']),'Según aporte y calendario publicados')])
     m=model['monthly'].copy();m['Caja antes de aportes (derivada)']=m['Flujo neto USD'].cumsum()
     choices=['Arranque y primer año','Horizonte DCF completo',*[str(v) for v in sorted(m['Fecha'].dt.year.unique())]]
-    if 'option4_valuation_cash_window' in st.session_state and st.session_state['option4_valuation_cash_window'] not in choices:
-        st.session_state['option4_valuation_cash_window']=choices[0]
-    window=st.selectbox('Ventana de caja mensual',choices,key='option4_valuation_cash_window')
+    key=key_prefix+'_cash_window'
+    if key in st.session_state and st.session_state[key] not in choices:
+        st.session_state[key]=choices[0]
+    window=st.selectbox('Ventana de caja mensual',choices,key=key)
     if window==choices[0]:selection=m[m['Año modelo'].le(1)]
     elif window==choices[1]:selection=m[~m['Apoyo terminal']]
     else:selection=m[m['Fecha'].dt.year.eq(int(window))]
@@ -273,11 +274,12 @@ def cash_view(model,year):
     source_note('05 Balance y cobros','06 Caja mensual','04 Resultados y flujo')
 
 
-def cost_assets(model,year):
+def cost_assets(model,year,key_prefix='option4_valuation'):
     s=model['scalars'];opex=model['opex'][model['opex']['Año'].eq(year)].copy();assets=model['assets'].copy()
     st.subheader('OPEX, activos aportados y arranque')
     st.caption('El OPEX incorpora cada partida y ajuste una sola vez. Los activos en especie no consumen caja de FW. El capital de trabajo histórico es una referencia separada del cálculo operativo.')
-    kpis([('OPEX del año '+year,money(opex['USD'].sum(min_count=1)),'Detalle más ajustes de regalía, repuestos y empleador'),('Activos aportados en especie',money(s['assets_in_kind']),'Asignación provisional publicada · no efectivo'),('Preoperacionales y repuestos',money(s['preop']+s['spares']),'Salida inicial de FW antes del IVA'),('CT histórico · solo referencia',money(s['historical_wc']),'No se suma nuevamente al flujo')])
+    inventory_label='Preoperacionales e inventario' if model.get('products')==(80,) else 'Preoperacionales y repuestos'
+    kpis([('OPEX del año '+year,money(opex['USD'].sum(min_count=1)),'Detalle más ajustes de regalía, repuestos y empleador'),('Activos aportados en especie',money(s['assets_in_kind']),'Asignación provisional publicada · no efectivo'),(inventory_label,money(s['preop']+s['spares']),'Salida inicial de FW antes del IVA'),('CT histórico · solo referencia',money(s['historical_wc']),'No se suma nuevamente al flujo')])
     left,right=st.columns(2,gap='large')
     with left:
         agg=opex.groupby('Área')['USD'].sum(min_count=1).sort_values()
@@ -285,19 +287,20 @@ def cost_assets(model,year):
         fig.update_layout(title='OPEX por área · '+year);fig.update_xaxes(title_text='Millones de '+currency_code());plot(fig,'opex_area',450)
     with right:
         amounts=[s['assets_in_kind'],s['preop'],s['spares']]
-        fig=go.Figure(go.Pie(labels=['Activos en especie','Preoperacionales','Repuestos iniciales'],values=amounts,hole=.65,marker=dict(colors=[NAVY,GOLD,TEAL]),textinfo='percent',customdata=[money(v) for v in amounts],hovertemplate='%{label}<br>%{customdata}<extra></extra>'))
+        fig=go.Figure(go.Pie(labels=['Activos en especie','Preoperacionales','Inventario inicial' if model.get('products')==(80,) else 'Repuestos iniciales'],values=amounts,hole=.65,marker=dict(colors=[NAVY,GOLD,TEAL]),textinfo='percent',customdata=[money(v) for v in amounts],hovertemplate='%{label}<br>%{customdata}<extra></extra>'))
         fig.update_layout(title='Inversión económica inicial · sin IVA ni CT histórico',annotations=[dict(x=.5,y=.5,text='<b>'+money(s['economic_investment'],True)+'</b>',showarrow=False,font=dict(size=17,color=NAVY))]);plot(fig,'initial_investment',450)
     opex_tab,assets_tab=st.tabs(['Presupuesto operativo','Inventario de activos y arranque'])
     with opex_tab:
         st.caption('Las tarifas y presupuestos CLP de 08 se convierten con el tipo de cambio del modelo para conciliar con el OPEX en USD; los ajustes de filas 65–67 ya están en USD. La visualización usa la moneda elegida en el panel.')
         statuses=sorted(opex['Estado'].dropna().unique())
-        if 'option4_valuation_opex_status' in st.session_state:
-            st.session_state['option4_valuation_opex_status']=[value for value in st.session_state['option4_valuation_opex_status'] if value in statuses]
-        selected=st.multiselect('Estado del presupuesto OPEX',statuses,key='option4_valuation_opex_status',placeholder='Todos los estados publicados')
+        key=key_prefix+'_opex_status'
+        if key in st.session_state:
+            st.session_state[key]=[value for value in st.session_state[key] if value in statuses]
+        selected=st.multiselect('Estado del presupuesto OPEX',statuses,key=key,placeholder='Todos los estados publicados')
         if selected:opex=opex[opex['Estado'].isin(selected)]
         financial_table(opex[['ID','Área','Concepto','Destino','USD','Estado','Fuente']].rename(columns={'USD':'Presupuesto'}),['Presupuesto'])
     with assets_tab:
-        include_reference=st.checkbox('Incluir referencias históricas de capital de trabajo',key='option4_valuation_include_wc')
+        include_reference=st.checkbox('Incluir referencias históricas de capital de trabajo',key=key_prefix+'_include_wc')
         if not include_reference:assets=assets[~assets['Naturaleza'].eq('Capital de trabajo')]
         st.caption('Se utiliza Costo aplicado USD (columna P), que concilia el aporte de activos de la planilla. Los costos unitarios y el presupuesto previo son referencias distintas. La asignación por activo requiere respaldo según el modelo.')
         financial_table(assets[['ID','Área','Activo / alcance','Naturaleza','Asignación','Cantidad','Costo aplicado USD','Vida útil','Origen / estado','Fuente']],['Costo aplicado USD'])
@@ -353,7 +356,7 @@ def render_valuation(refresh_nonce=0):
             st.markdown('[Abrir documento fuente de valorización]('+SOURCE+'html)')
             return
         s=model['scalars']
-        st.html('<header class="valuation-hero"><div><span>SUB BLOQUE 4 · VALORIZACIÓN</span><h2>Valor, inversión y viabilidad del negocio</h2><p>Del caso publicado a sus fundamentos: flujos, operación, caja y activos de las turbinas de 10 y 80 kW.</p></div>'
+        st.html('<header class="valuation-hero"><div><span>SUB BLOQUE 4 · NEGOCIO CONJUNTO</span><h2>Valor del Negocio · 10 y 80 kW</h2><p>Del caso publicado a sus fundamentos: flujos, operación, caja y activos de las turbinas de 10 y 80 kW.</p></div>'
             '<div class="valuation-badges"><b>'+html.escape(model['scenario'])+'</b><b>Producción '+html.escape(model['production'])+'</b><b>Aporte: '+html.escape(model['status'])+'</b></div></header>')
         with st.expander('Fuente, moneda y año de detalle',expanded=False):
             st.caption(f'Revisión referencial de la fuente: {s["valuation_date"]} · Consultado: {model["fetched_at"]} · Hora de Santiago · Proyección {int(s["first_year"])}–{int(s["first_year"])+9}')

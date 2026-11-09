@@ -221,7 +221,7 @@ def assumptions_page(c,r,fx):
 
 def cost_page(c,r,data):
     totals=data['totals'];systems=data['systems'];lines=data['lines'];cm=totals['Comercial anterior'];budget=totals['Presupuesto vigente']
-    r.header(c,'05','80 kW · estructura técnica de costos','Bloque 4 / Subbloque 1 · Alcance Total · Costos: Hito objetivo 80 kW y Costo para producto = Aplica · '+r.currency)
+    r.header(c,'05','80 kW · estructura técnica de costos','Bloque 2 / Subbloque 1 · Alcance Total · Costos: Hito objetivo 80 kW y Costo para producto = Aplica · '+r.currency)
     r.kpis(c,H-111,[('Subtotal comercial informado',r.cost_money(cm,True),r.cost_money(cm/80)+' / kW nominal'),('Presupuesto vigente',r.cost_money(budget,True),'Mismo universo de partidas Aplica'),('Variación Ppto. / comercial',r.pct(totals['Variación %']/100),'(Presupuesto − comercial) / comercial'),('HH informadas',decimal(totals['HH'],0)+' HH',str(totals['HH pendientes'])+' partidas HH sin cantidad')])
     def amount(value):return r.cost_money(value)
     def share(value):return r.pct(divide(value,cm))

@@ -191,7 +191,7 @@ def render_dashboard_primary_navigation(
         '<path d="M4 19h16M5 15l5-5 4 2 6-8M15 4h5v5"/>',
     ]
     tags_by_value = {
-        "estado_actual": ["Desarrollo técnico", "Validación"],
+        "estado_actual": ["Ingeniería", "Madurez tecnológica"],
         "escalamiento": ["Financiamiento", "Ejecución"],
         "valorizacion": ["Proyecciones", "Valorización"],
         "capital_brecha": ["Necesidades de capital", "Brecha TRL 9"],
@@ -202,7 +202,7 @@ def render_dashboard_primary_navigation(
         "control_fondos": ["Necesidades de capital", "Brecha TRL 9"],
         "vista_integrada": ["Cronograma", "Industrialización"],
         "control_cost": ["Seguimiento PMO", "Control de costos"],
-        "opcion_analisis": ["Pilotos 10 kW y 80 kW", "Capital · Plazos · Costos"],
+        "opcion_analisis": ["Gestión del proyecto", "Capital · Ejecución · Valor"],
         "costo_ejecutado": ["Inversión ejecutada"],
         "capacidades_externas": ["Capacidades complementarias"],
         "know_how_fw": ["Conocimiento técnico"],
@@ -26539,7 +26539,7 @@ def render_inputs_estado_actual_dashboard():
     render_dashboard_primary_navigation(
         [(value, f"SUB BLOQUE {index + 1}", title, estado_descriptions[value]) for index, (value, title) in enumerate(estado_subblocks)],
         st.session_state.get(estado_subblock_key), _set_estado_subblock, "inputs_estado_subnav",
-        heading="Validación tecnológica", description="Selecciona la dimensión del activo tecnológico que quieres revisar.",
+        heading="Ingeniería y Validación Tecnológica", description="Revisa el desarrollo, la evidencia y la inversión incorporada en el activo tecnológico.",
         variant="secondary",
     )
 
@@ -27784,9 +27784,9 @@ st.sidebar.button(
     on_click=_refresh_dashboard_data,
 )
 st.sidebar.radio(
-    "Moneda de visualización · Bloque 4",
+    "Moneda · Ingeniería de Proyecto y Evaluación Financiera",
     ["CLP", "USD"], horizontal=True, key="option4_currency",
-    help="Convierte los importes del Bloque 4 con el tipo de cambio CLP/USD indicado en este panel.",
+    help="Convierte los importes del Bloque 2 con el tipo de cambio CLP/USD indicado en este panel.",
 )
 
 # =========================
@@ -27825,7 +27825,7 @@ global_fx_value = st.sidebar.number_input(
 fx_used = global_fx_value if np.isfinite(global_fx_value) and global_fx_value > 0 else fx_base
 st.session_state["option4_fx_rate"] = float(fx_used)
 if st.session_state.get("option4_currency") == "USD":
-    st.sidebar.caption(f"Bloque 4 en USD · 1 USD = {fx_used:,.2f} CLP")
+    st.sidebar.caption(f"Bloque 2 en USD · 1 USD = {fx_used:,.2f} CLP")
 df_capex = df_capex_base.copy()
 if np.isfinite(fx_used) and fx_used > 0:
     df_capex["Monto_CLP"] = df_capex["Monto_USD"] * fx_used
@@ -31038,14 +31038,16 @@ def render_input_thousands_hint(value: float | int, prefix: str = ""):
 # NAVEGACIÓN PRINCIPAL
 # =========================
 input_cards = [
-    ("estado_actual", "01 · Validación Tecnológica"),
-    ("escalamiento", "02 · CAPEX y Ejecución"),
-    ("valorizacion", "03 · Valor Financiero"),
-    ("opcion_analisis", "04 · Control integral del proyecto"),
+    ("estado_actual", "01 · Ingeniería y Validación Tecnológica"),
+    ("opcion_analisis", "02 · Ingeniería de Proyecto y Evaluación Financiera"),
 ]
 BLOQUE3_ONLY_MODE = os.environ.get("BLOQUE3_ONLY") == "1"
 CAPEX10_BLOQUE3_ONLY_MODE = os.environ.get("CAPEX10_BLOQUE3_ONLY") == "1"
 FOCUSED_ACCESS_MODE = BLOQUE3_ONLY_MODE or CAPEX10_BLOQUE3_ONLY_MODE
+
+# An open session may still point to one of the removed primary areas.
+if not FOCUSED_ACCESS_MODE and st.session_state.get('inputs_bloque_sel') not in (None,'estado_actual','opcion_analisis'):
+    st.session_state['inputs_bloque_sel'] = None
 
 if st.session_state.get("inputs_nav_empty_default_version") != INPUT_NAV_EMPTY_DEFAULT_VERSION:
     st.session_state["inputs_bloque_sel"] = None
@@ -31274,10 +31276,8 @@ if FOCUSED_ACCESS_MODE:
 else:
     render_dashboard_primary_navigation(
         [
-            ("estado_actual", "BLOQUE 1", "Validación Tecnológica", "Estado de la tecnología, evidencia del piloto y brechas para su validación."),
-            ("escalamiento", "BLOQUE 2", "CAPEX y Ejecución", "Necesidades de capital, hitos de ejecución y ruta de industrialización del proyecto."),
-            ("valorizacion", "BLOQUE 3", "Valor Financiero", "Proyecciones comerciales, flujos e indicadores para evaluar la creación de valor."),
-            ("opcion_analisis", "BLOQUE 4", "Control integral del proyecto", "Capital y costo comercial, avance técnico y validación de costos de los pilotos de 10 kW y 80 kW."),
+            ("estado_actual", "BLOQUE 1", "Ingeniería y Validación Tecnológica", "Desarrollo del activo tecnológico, evidencia del piloto e inversión ejecutada para sustentar la madurez de la tecnología."),
+            ("opcion_analisis", "BLOQUE 2", "Ingeniería de Proyecto y Evaluación Financiera", "Estrategia de capital, ejecución técnica, control de costos y casos de inversión de las turbinas de 10 y 80 kW."),
         ],
         st.session_state.get("inputs_bloque_sel"), _set_inputs_bloque, "inputs_nav",
     )
@@ -31299,7 +31299,7 @@ if selected_input_block:
 
 input_block_copy = {
     "estado_actual": (
-        "01 · Validación Tecnológica",
+        "01 · Ingeniería y Validación Tecnológica",
         "Aquí consolidaremos el diagnóstico base del proyecto: situación actual, hitos alcanzados, brechas técnicas y supuestos iniciales del modelo.",
     ),
     "escalamiento": (
@@ -31332,7 +31332,7 @@ if CAPEX10_BLOQUE3_ONLY_MODE:
             "EERR consolidado, flujos operacionales e indicadores de evaluación para el escalamiento comercial.",
         ),
     ]
-    focused_cards.append(("opcion_analisis", "BLOQUE 4", "Control integral del proyecto", "Capital y costo comercial, avance técnico y validación de costos de los pilotos de 10 kW y 80 kW."))
+    focused_cards.append(("opcion_analisis", "BLOQUE 2", "Ingeniería de Proyecto y Evaluación Financiera", "Estrategia de capital, ejecución técnica, control de costos y casos de inversión de las turbinas de 10 y 80 kW."))
     render_dashboard_primary_navigation(
         focused_cards, st.session_state.get("focused_access_section"),
         _set_focused_access_section, "focused_access_section",

@@ -1,0 +1,1141 @@
+{
+  "missing_dates": 0,
+  "undated_total": null,
+  "overdue_count": 0,
+  "validated": null,
+  "pending": 385707150.0,
+  "total": 385707150.0,
+  "source_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQOSK1DE0sEuK5Cl-bIahOjtdP6qsBobzqSlekorQCY9gRpwhRDzHYxh9c-Q-mKoQ/pub",
+  "fetched_at": "09-11-2026 10:48:44",
+  "cutoff": "2026-10-28 00:00:00",
+  "monthly": [
+    {
+      "_month": "2026-12-01T00:00:00.000",
+      "Pendiente validado CLP": null,
+      "Referencia por validar CLP": 18000000.0,
+      "Total CLP": 18000000.0
+    },
+    {
+      "_month": "2027-03-01T00:00:00.000",
+      "Pendiente validado CLP": null,
+      "Referencia por validar CLP": 1000000.0,
+      "Total CLP": 1000000.0
+    },
+    {
+      "_month": "2027-04-01T00:00:00.000",
+      "Pendiente validado CLP": null,
+      "Referencia por validar CLP": 156457150.0,
+      "Total CLP": 156457150.0
+    },
+    {
+      "_month": "2027-05-01T00:00:00.000",
+      "Pendiente validado CLP": null,
+      "Referencia por validar CLP": 1000000.0,
+      "Total CLP": 1000000.0
+    },
+    {
+      "_month": "2027-06-01T00:00:00.000",
+      "Pendiente validado CLP": null,
+      "Referencia por validar CLP": 26000000.0,
+      "Total CLP": 26000000.0
+    },
+    {
+      "_month": "2027-07-01T00:00:00.000",
+      "Pendiente validado CLP": null,
+      "Referencia por validar CLP": 8650000.0,
+      "Total CLP": 8650000.0
+    },
+    {
+      "_month": "2027-08-01T00:00:00.000",
+      "Pendiente validado CLP": null,
+      "Referencia por validar CLP": 124650000.0,
+      "Total CLP": 124650000.0
+    },
+    {
+      "_month": "2027-09-01T00:00:00.000",
+      "Pendiente validado CLP": null,
+      "Referencia por validar CLP": 33650000.0,
+      "Total CLP": 33650000.0
+    },
+    {
+      "_month": "2027-10-01T00:00:00.000",
+      "Pendiente validado CLP": null,
+      "Referencia por validar CLP": 8650000.0,
+      "Total CLP": 8650000.0
+    },
+    {
+      "_month": "2027-11-01T00:00:00.000",
+      "Pendiente validado CLP": null,
+      "Referencia por validar CLP": 7650000.0,
+      "Total CLP": 7650000.0
+    }
+  ],
+  "costs": {
+    "totals": {
+      "HH": 2401.0,
+      "HH pendientes": 6,
+      "Comercial anterior": 86483822.0,
+      "Presupuesto vigente": 110368881.0,
+      "Partidas": 102,
+      "Informadas": 81,
+      "Líneas": 58,
+      "Sistemas": 6,
+      "Variación %": 27.61795032601589
+    },
+    "fetched_at": "09-11-2026 10:48:45",
+    "systems": [
+      {
+        "Sistema": "Eléctrico y control",
+        "Monto comercial · CLP": 33653156.0,
+        "Monto no comercial · CLP": 37121156.0,
+        "Partidas informadas": 8,
+        "Actividades": 13,
+        "HH": 28.0,
+        "Participación %": 38.9126604511,
+        "Cobertura %": 61.5384615385
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Monto comercial · CLP": 26126862.0,
+        "Monto no comercial · CLP": 33230618.0,
+        "Partidas informadas": 27,
+        "Actividades": 32,
+        "HH": 16.0,
+        "Participación %": 30.2101149045,
+        "Cobertura %": 84.375
+      },
+      {
+        "Sistema": "Aspas FRP",
+        "Monto comercial · CLP": 15510000.0,
+        "Monto no comercial · CLP": 24872000.0,
+        "Partidas informadas": 21,
+        "Actividades": 27,
+        "HH": 2336.0,
+        "Participación %": 17.9339900126,
+        "Cobertura %": 77.7777777778
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Monto comercial · CLP": 7500137.0,
+        "Monto no comercial · CLP": 10368107.0,
+        "Partidas informadas": 16,
+        "Actividades": 18,
+        "HH": 10.0,
+        "Participación %": 8.6723005836,
+        "Cobertura %": 88.8888888889
+      },
+      {
+        "Sistema": "Montaje y Logistica",
+        "Monto comercial · CLP": 2166667.0,
+        "Monto no comercial · CLP": 3250000.0,
+        "Partidas informadas": 6,
+        "Actividades": 9,
+        "HH": 8.0,
+        "Participación %": 2.5052859019,
+        "Cobertura %": 66.6666666667
+      },
+      {
+        "Sistema": "Ingeniería y desarrollo",
+        "Monto comercial · CLP": 1527000.0,
+        "Monto no comercial · CLP": 1527000.0,
+        "Partidas informadas": 3,
+        "Actividades": 3,
+        "HH": 3.0,
+        "Participación %": 1.7656481463,
+        "Cobertura %": 100.0
+      }
+    ],
+    "lines": [
+      {
+        "Sistema": "Eléctrico y control",
+        "Línea": "Generador y conversión de potencia",
+        "Comercial": 14000000.0,
+        "Presupuesto": 15120000.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Aspas FRP",
+        "Línea": "Fabricación Aspa",
+        "Comercial": 13580700.0,
+        "Presupuesto": 22132000.0,
+        "HH": 2198.0,
+        "HH pendientes": 4,
+        "Partidas": 16,
+        "Informadas": 12
+      },
+      {
+        "Sistema": "Eléctrico y control",
+        "Línea": "Conversión de potencia",
+        "Comercial": 12200000.0,
+        "Presupuesto": 13248000.0,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 2,
+        "Informadas": 2
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Línea": "Vigas",
+        "Comercial": 6527050.0,
+        "Presupuesto": 7930853.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 4,
+        "Informadas": 4
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Línea": "Apoyo rotor-mástil",
+        "Comercial": 5697600.0,
+        "Presupuesto": 7172000.0,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 7,
+        "Informadas": 7
+      },
+      {
+        "Sistema": "Eléctrico y control",
+        "Línea": "Cableado y canalizaciones",
+        "Comercial": 4400000.0,
+        "Presupuesto": 5500000.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Mano de obra de moldajes y armaduras",
+        "Comercial": 4000000.0,
+        "Presupuesto": 4000000.0,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Línea": "Caja Multiplicadora",
+        "Comercial": 3600000.0,
+        "Presupuesto": 4500000.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Línea": "Mastil",
+        "Comercial": 3400000.0,
+        "Presupuesto": 5000000.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 2,
+        "Informadas": 2
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Línea": "Columna central portavigas",
+        "Comercial": 2910480.0,
+        "Presupuesto": 3638100.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 3,
+        "Informadas": 3
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Línea": "Cardán",
+        "Comercial": 2000000.0,
+        "Presupuesto": 2500000.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Eléctrico y control",
+        "Línea": "Logística e inspección en origen",
+        "Comercial": 1902726.0,
+        "Presupuesto": 1902726.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Línea": "Freno Mecánico",
+        "Comercial": 1607732.0,
+        "Presupuesto": 2009665.0,
+        "HH": 3.0,
+        "HH pendientes": 0,
+        "Partidas": 8,
+        "Informadas": 7
+      },
+      {
+        "Sistema": "Ingeniería y desarrollo",
+        "Línea": "Comisionamiento",
+        "Comercial": 1500000.0,
+        "Presupuesto": 1500000.0,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Montaje y Logistica",
+        "Línea": "Izaje y equipos de acceso",
+        "Comercial": 1200000.0,
+        "Presupuesto": 1500000.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Aspas FRP",
+        "Línea": "Moldes y útiles",
+        "Comercial": 968000.0,
+        "Presupuesto": 1336000.0,
+        "HH": 48.0,
+        "HH pendientes": 0,
+        "Partidas": 2,
+        "Informadas": 2
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Caseta técnica",
+        "Comercial": 960000.0,
+        "Presupuesto": 1200000.0,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Aspas FRP",
+        "Línea": "Conector Aspa-Viga",
+        "Comercial": 821700.0,
+        "Presupuesto": 1179000.0,
+        "HH": 72.0,
+        "HH pendientes": 0,
+        "Partidas": 4,
+        "Informadas": 4
+      },
+      {
+        "Sistema": "Eléctrico y control",
+        "Línea": "Desconsolidación de carga",
+        "Comercial": 757352.0,
+        "Presupuesto": 757352.0,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Placas y bridas de conexión",
+        "Comercial": 679173.0,
+        "Presupuesto": 848966.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 2,
+        "Informadas": 2
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Armaduras y materiales de fundación",
+        "Comercial": 678384.0,
+        "Presupuesto": 847980.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 2,
+        "Informadas": 2
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Mano de obra de hormigonado y curado",
+        "Comercial": 400000.0,
+        "Presupuesto": 1500000.0,
+        "HH": 3.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Montaje y Logistica",
+        "Línea": "Transporte de componentes",
+        "Comercial": 360000.0,
+        "Presupuesto": 450000.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Eléctrico y control",
+        "Línea": "Transporte aeropuerto–taller",
+        "Comercial": 343078.0,
+        "Presupuesto": 343078.0,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Línea": "Conectores Universales desde Eje - Cardán - Caja M.",
+        "Comercial": 320000.0,
+        "Presupuesto": 400000.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Suministro de hormigón",
+        "Comercial": 238952.0,
+        "Presupuesto": 298690.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 2,
+        "Informadas": 2
+      },
+      {
+        "Sistema": "Montaje y Logistica",
+        "Línea": "Equipos de acceso",
+        "Comercial": 200000.0,
+        "Presupuesto": 250000.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Construcción integral de fundación",
+        "Comercial": 160000.0,
+        "Presupuesto": 200000.0,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Nivelación e interfaz mástil–fundación",
+        "Comercial": 160000.0,
+        "Presupuesto": 600000.0,
+        "HH": 3.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Inspección y control de obra civil",
+        "Comercial": 160000.0,
+        "Presupuesto": 200000.0,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Montaje y Logistica",
+        "Línea": "Embalaje y despacho",
+        "Comercial": 160000.0,
+        "Presupuesto": 200000.0,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Montaje y Logistica",
+        "Línea": "Manipulación y logística interna",
+        "Comercial": 160000.0,
+        "Presupuesto": 200000.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Aspas FRP",
+        "Línea": "Consumibles de fabricación",
+        "Comercial": 120000.0,
+        "Presupuesto": null,
+        "HH": null,
+        "HH pendientes": 1,
+        "Partidas": 2,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Montaje y Logistica",
+        "Línea": "Maniobras de izaje",
+        "Comercial": 86667.0,
+        "Presupuesto": 650000.0,
+        "HH": 6.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Línea": "Sistema de transmisión",
+        "Comercial": 64000.0,
+        "Presupuesto": 80000.0,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Eléctrico y control",
+        "Línea": "Integración de tableros",
+        "Comercial": 50000.0,
+        "Presupuesto": 250000.0,
+        "HH": 5.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Tuercas y arandelas de anclaje",
+        "Comercial": 40800.0,
+        "Presupuesto": 612000.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Aspas FRP",
+        "Línea": "Tapas Aspas",
+        "Comercial": 19600.0,
+        "Presupuesto": 225000.0,
+        "HH": 18.0,
+        "HH pendientes": 0,
+        "Partidas": 2,
+        "Informadas": 2
+      },
+      {
+        "Sistema": "Ingeniería y desarrollo",
+        "Línea": "Ingeniería de fabricación por unidad",
+        "Comercial": 14000.0,
+        "Presupuesto": 14000.0,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Ingeniería y desarrollo",
+        "Línea": "Documentación de entrega",
+        "Comercial": 13000.0,
+        "Presupuesto": 13000.0,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Rellenos y compactación",
+        "Comercial": 10400.0,
+        "Presupuesto": 13000.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Ductos embebidos en fundación",
+        "Comercial": 10105.0,
+        "Presupuesto": 12631.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Pernos de anclaje",
+        "Comercial": 2323.0,
+        "Presupuesto": 34840.0,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 1
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Línea": "Fabricación mecánica",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Excavación y preparación de base",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Línea": "Protección superficial",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Línea": "Ensamblaje en taller",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 8.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Eléctrico y control",
+        "Línea": "Seguro y almacenamiento",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Eléctrico y control",
+        "Línea": "Conciliación de IVA de importación",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Mecánica y transmisión",
+        "Línea": "Control de fabricación",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Aspas FRP",
+        "Línea": "Control de calidad",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": null,
+        "HH pendientes": 1,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Eléctrico y control",
+        "Línea": "Instrumentación y seguridad",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 10.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Eléctrico y control",
+        "Línea": "Configuración de control",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 5.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Eléctrico y control",
+        "Línea": "Pruebas y puesta en marcha",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 5.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Fundaciones y anclajes",
+        "Línea": "Replanteo y movimiento de tierras",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Montaje y Logistica",
+        "Línea": "Cuadrilla de montaje",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 1.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Montaje y Logistica",
+        "Línea": "Movilización de personal",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      },
+      {
+        "Sistema": "Montaje y Logistica",
+        "Línea": "Herramientas y consumibles",
+        "Comercial": null,
+        "Presupuesto": null,
+        "HH": 0.0,
+        "HH pendientes": 0,
+        "Partidas": 1,
+        "Informadas": 0
+      }
+    ],
+    "scope": [
+      {
+        "ID": "A520",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A521",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A522",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A523",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A525",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A526",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A527",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A528",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A533",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A545",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A546",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A547",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A548",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A562",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A579",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A580",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A581",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A582",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A583",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A587",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A588",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A589",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A590",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A593",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A594",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A524",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A595",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A596",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A597",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A529",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A530",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A531",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A532",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A534",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A535",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A536",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A537",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A538",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A539",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A540",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A541",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A542",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A543",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A544",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A598",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A599",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A549",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A550",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A551",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A552",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A553",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A554",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A555",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A556",
+        "Registros conciliados": "Pendiente"
+      },
+      {
+        "ID": "A557",
+        "Registros conciliados": "Pendiente"
+      },
+      {
+        "ID": "A558",
+        "Registros conciliados": "Pendiente"
+      },
+      {
+        "ID": "A559",
+        "Registros conciliados": "Pendiente"
+      },
+      {
+        "ID": "A560",
+        "Registros conciliados": "Pendiente"
+      },
+      {
+        "ID": "A561",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A565",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A566",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A567",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A568",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A569",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A570",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A571",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A572",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A573",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A574",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A575",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A576",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A577",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A578",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A584",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A585",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A586",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A600",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A601",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A602",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A603",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A604",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A605",
+        "Registros conciliados": "Pendiente"
+      },
+      {
+        "ID": "A606",
+        "Registros conciliados": "Pendiente"
+      },
+      {
+        "ID": "A607",
+        "Registros conciliados": "Pendiente"
+      },
+      {
+        "ID": "A608",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A609",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A610",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A611",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A612",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A613",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A614",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A615",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A616",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A617",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A618",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A619",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A620",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A621",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A622",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A623",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A624",
+        "Registros conciliados": "Validado"
+      },
+      {
+        "ID": "A628",
+        "Registros conciliados": "Validado"
+      }
+    ]
+  }
+}

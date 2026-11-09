@@ -1,0 +1,67 @@
+,,,,,,,,,,,,,,,,,,,,,
+,,Presupuesto operativo · aerogenerador 80 kW,,,,,,,,,,,,,,Escenario,Base,,,,
+,,"Estructura fija, costos por entrega y conectividad por flota. Presupuesto neto de IVA en CLP.",,,,,,,,,,,,,,,,,,,
+,,Dotación en JCE (jornadas completas equivalentes). La tarifa del año 1 y el reajuste anual son editables.,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,OPEX año 1,  638.147.480 ,CLP/año,Dotación base (JCE),"7,0",,Nómina año 1 (CLP),277.800.000,,Partidas por cotizar o validar,,15,,,,,,,,
+,,OPEX año 1,697.429,USD/año,Celdas amarillas editables. Las cantidades por entrega y flota se calculan desde Ventas.,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,ID,Área,Concepto,Comportamiento,JCE / cantidad,Tarifa neta CLP,Meses / períodos,2029,2030,2031,2032,2033,2034,2035,2036,2037,2038,Origen,Estado,Criterio de presupuesto
+,,OP-01,Dotación,Gerente de proyecto 80 kW,Estructura,"1,0",5.150.000,12,61.800.000,64.890.000,68.134.500,71.541.225,75.118.286,78.874.201,82.817.911,86.958.806,91.306.746,95.872.084,"V10, fila 11",Presupuesto recibido,"Responsable de contratos, plazos, presupuesto, riesgos e interfaces cliente–ingeniería–operaciones."
+,,OP-31,Dotación,Gerente de Operaciones,Estructura,"1,0",4.200.000,12,50.400.000,52.920.000,55.566.000,58.344.300,61.261.515,64.324.591,67.540.820,70.917.861,74.463.754,78.186.942,Supuesto de presupuesto V14,Presupuesto provisional,"Capacidad, taller, subcontratación, compras críticas, logística y coordinación de terreno."
+,,OP-32,Dotación,Gerente de Ingeniería,Estructura,"1,0",4.500.000,12,54.000.000,56.700.000,59.535.000,62.511.750,65.637.338,68.919.204,72.365.165,75.983.423,79.782.594,83.771.724,Supuesto de presupuesto V14,Presupuesto provisional,"Autoridad de diseño, control de cambios, integración mecánica y eléctrica, liberación técnica y soporte de fallas."
+,,OP-33,Dotación,Coordinación de Calidad y Seguridad,Estructura,"0,5",2.300.000,12,13.800.000,14.490.000,15.214.500,15.975.225,16.773.986,17.612.686,18.493.320,19.417.986,20.388.885,21.408.329,Supuesto de presupuesto V14,Presupuesto provisional,"Dedicación inicial de 0,5 JCE. Inspección de proveedores, trazabilidad, calidad y seguridad en planta y terreno."
+,,OP-34,Dotación,Planificación y Abastecimiento,Estructura,"0,5",1.900.000,12,11.400.000,11.970.000,12.568.500,13.196.925,13.856.771,14.549.610,15.277.090,16.040.945,16.842.992,17.685.142,Supuesto de presupuesto V14,Presupuesto provisional,"Dedicación inicial de 0,5 JCE. Plan de producción, órdenes de compra, inventario y seguimiento de proveedores."
+,,OP-02,Dotación,Administración y Finanzas,Estructura,"1,0",2.600.000,12,31.200.000,32.760.000,34.398.000,36.117.900,37.923.795,39.819.985,41.810.984,43.901.533,46.096.610,48.401.440,"V10, fila 12",Presupuesto recibido,"Tesorería, control financiero, pagos y gestión administrativa de contratos."
+,,OP-03,Dotación,Desarrollo Comercial y Ventas,Estructura,"1,0",3.200.000,12,38.400.000,40.320.000,42.336.000,44.452.800,46.675.440,49.009.212,51.459.673,54.032.656,56.734.289,59.571.003,"V10, fila 13",Presupuesto recibido,"Prospección, propuestas, relación comercial y negociación. El gerente de proyecto ejecuta los contratos adjudicados."
+,,OP-04,Dotación,Asistencia administrativa,Estructura,"1,0",1.400.000,12,16.800.000,17.640.000,18.522.000,19.448.100,20.420.505,21.441.530,22.513.607,23.639.287,24.821.251,26.062.314,"V10, fila 14",Presupuesto recibido,"Soporte documental, facturación y coordinación administrativa."
+,,OP-05,Servicios profesionales,Contabilidad y remuneraciones,Estructura,1,200.000,12,2.400.000,2.520.000,2.646.000,2.778.300,2.917.215,3.063.076,3.216.230,3.377.041,3.545.893,3.723.188,"V10, fila 16",Presupuesto recibido,"Contabilidad mensual, remuneraciones y declaraciones recurrentes"
+,,OP-06,Servicios profesionales,Asesoría legal corporativa,Estructura,1,350.000,12,4.200.000,4.410.000,4.630.500,4.862.025,5.105.126,5.360.383,5.628.402,5.909.822,6.205.313,6.515.579,"V10, fila 17",Presupuesto recibido,"Contratos, actas, materias societarias y apoyo comercial general"
+,,OP-07,Servicios profesionales,Auditoría y asesoría tributaria,Estructura,1,-,12,-,-,-,-,-,-,-,-,-,-,"V10, fila 18",Por cotizar,Provisión mensual equivalente para revisión anual y apoyo tributario
+,,OP-08,Servicios profesionales,Software y licencias corporativas,Estructura,1,500.000,12,6.000.000,6.300.000,6.615.000,6.945.750,7.293.038,7.657.689,8.040.574,8.442.603,8.864.733,9.307.969,"V10, fila 19",Presupuesto recibido,"ERP/contabilidad, productividad, almacenamiento, CRM y ciberseguridad básica"
+,,OP-09,Servicios profesionales,Seguros corporativos,Estructura,1,800.000,12,9.600.000,10.080.000,10.584.000,11.113.200,11.668.860,12.252.303,12.864.918,13.508.164,14.183.572,14.892.751,"V10, fila 20",Presupuesto recibido,"RC empresa, oficina y coberturas generales; excluye seguros específicos de obra/producto"
+,,OP-10,Infraestructura administrativa,Oficina y gastos comunes,Estructura,1,1.200.000,12,14.400.000,15.120.000,15.876.000,16.669.800,17.503.290,18.378.455,19.297.377,20.262.246,21.275.358,22.339.126,"V10, fila 22",Presupuesto recibido,Recinto administrativo. Incluir solo si corresponde a un costo separado de la planta.
+,,OP-11,Infraestructura administrativa,Servicios básicos e internet,Estructura,1,450.000,12,5.400.000,5.670.000,5.953.500,6.251.175,6.563.734,6.891.920,7.236.516,7.598.342,7.978.259,8.377.172,"V10, fila 23",Presupuesto recibido,"Electricidad administrativa, telefonía e internet"
+,,OP-12,Infraestructura administrativa,Insumos y gastos de oficina,Estructura,1,100.000,12,1.200.000,1.260.000,1.323.000,1.389.150,1.458.608,1.531.538,1.608.115,1.688.521,1.772.947,1.861.594,"V10, fila 24",Presupuesto recibido,"Papelería, impresión, mensajería y consumibles administrativos"
+,,OP-13,Comercial y representación,"Viajes, traslados y representación",Estructura,1,1.500.000,12,18.000.000,18.900.000,19.845.000,20.837.250,21.879.113,22.973.068,24.121.722,25.327.808,26.594.198,27.923.908,"V10, fila 26",Presupuesto recibido,"Visitas comerciales, reuniones, peajes y alojamiento corporativo"
+,,OP-14,Comercial y representación,Marketing corporativo y comunicaciones,Estructura,1,700.000,12,8.400.000,8.820.000,9.261.000,9.724.050,10.210.253,10.720.765,11.256.803,11.819.644,12.410.626,13.031.157,"V10, fila 27",Presupuesto recibido,"Material comercial, web, eventos y comunicaciones institucionales"
+,,OP-15,Otros corporativos,Gastos bancarios y notariales,Estructura,1,250.000,12,3.000.000,3.150.000,3.307.500,3.472.875,3.646.519,3.828.845,4.020.287,4.221.301,4.432.366,4.653.985,"V10, fila 29",Presupuesto recibido,"Comisiones, documentos, firmas y trámites generales"
+,,OP-16,Otros corporativos,"Directorio, gobierno y reporting",Estructura,1,-,12,-,-,-,-,-,-,-,-,-,-,"V10, fila 30",No aplica,Directorio sin honorarios presupuestados. Incorporar monto si se acuerda remuneración.
+,,OP-17,Software técnico,Licencias recurrentes de ingeniería,Estructura,1,200.000,12,2.400.000,2.520.000,2.646.000,2.778.300,2.917.215,3.063.076,3.216.230,3.377.041,3.545.893,3.723.188,Presupuesto de trabajo 06-10-2026,Estimado,"CAD, simulación y documentación técnica. Excluye la implementación inicial de herramientas digitales."
+,,OP-27,Seguros producto,Póliza anual de producto,Estructura,1,2.400.000,12,28.800.000,30.240.000,31.752.000,33.339.600,35.006.580,36.756.909,38.594.754,40.524.492,42.550.717,44.678.253,Presupuesto de trabajo 06-10-2026,Estimado,Cobertura de producto y obligaciones de instalación. Validar separación de la póliza corporativa.
+,,OP-29,Operación planta,Servicios y consumibles de planta,Estructura,1,1.500.000,12,18.000.000,18.900.000,19.845.000,20.837.250,21.879.113,22.973.068,24.121.722,25.327.808,26.594.198,27.923.908,Presupuesto de trabajo 06-10-2026,Estimado,"Electricidad, servicios y consumibles recurrentes. Excluye arriendo, materiales unitarios y reposición de la reserva de repuestos."
+,,OP-30,Operación planta,Arriendo de planta industrial,Estructura,1,2.400.000,12,28.800.000,30.240.000,31.752.000,33.339.600,35.006.580,36.756.909,38.594.754,40.524.492,42.550.717,44.678.253,Presupuesto de trabajo 06-10-2026,Por definir,Canon mensual por nave industrial. Los servicios de planta se presupuestan en la partida anterior.
+,,OP-36,Operación planta,Mantención preventiva de planta,Estructura,1,-,12,-,-,-,-,-,-,-,-,-,-,Supuesto de presupuesto V14,Por cotizar,Servicios ordinarios de equipos de taller. Cero hasta cotizar y verificar alcance de contratos.
+,,OP-19,Ensayos y calidad,Inspección y pruebas de entrega,Por entrega,100,50.000,1,5.000.000,5.250.000,5.512.500,5.788.125,6.077.531,6.381.408,6.700.478,7.035.502,7.387.277,7.756.641,Presupuesto de trabajo 06-10-2026,Estimado,Inspección recurrente de unidades. Verificar que el FAT/SAT del contrato de fabricación esté incluido una sola vez.
+,,OP-25,Logística,Transporte y entrega a cliente,Por entrega,100,1.500.000,1,150.000.000,157.500.000,165.375.000,173.643.750,182.325.938,191.442.234,201.014.346,211.065.063,221.618.317,232.699.232,Presupuesto de trabajo 06-10-2026,Estimado,Flete al sitio y permisos de transporte según oferta. Separar grúas y montaje si corresponden al alcance de puesta en servicio.
+,,OP-35,Integración en sitio,Montaje y puesta en servicio por entrega,Por entrega,100,-,1,-,-,-,-,-,-,-,-,-,-,Supuesto de presupuesto V14,Por cotizar,"Tarifa neta pendiente. Incluye cuadrilla, izaje y SAT comercial solo cuando FW los contrata por separado."
+,,OP-23,Posventa,Provisión presupuestaria de garantía,Por entrega,100,240.000,1,24.000.000,25.200.000,26.460.000,27.783.000,29.172.150,30.630.758,32.162.295,33.770.410,35.458.931,37.231.877,Presupuesto de trabajo 06-10-2026,Estimado,"Visitas, HH y repuestos cubiertos por garantía según contrato. Excluye repuestos de mantención de planta."
+,,OP-21,Monitoreo,Conectividad y monitoreo de flota,Por flota,100,8.000,12,9.600.000,10.080.000,10.584.000,11.113.200,11.668.860,12.252.303,12.864.918,13.508.164,14.183.572,14.892.751,Presupuesto de trabajo 06-10-2026,Estimado,Costo mensual por unidad cubierta. La duración del servicio define las cohortes activas.
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,OPEX total en CLP,,,,,,,638.147.480,670.054.854,703.557.597,738.735.477,775.672.250,814.455.863,855.178.656,897.937.589,942.834.468,989.976.192,,,
+,,Estructura operativa en CLP,,,,,,,449.547.480,472.024.854,495.626.097,520.407.402,546.427.772,573.749.160,"602436618,2","632558449,1","664186371,6","697395690,1",,,
+,,Entrega y flota en CLP,,,,,,,188.600.000,198.030.000,207.931.500,218.328.075,229.244.479,240.706.703,252.742.038,265.379.140,278.648.097,292.580.502,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,OPEX ANUAL APLICADO AL RESULTADO Y A LA CAJA,,,,,,,,,,,,,,,,,,,
+,,Partida,Unidad,Año 0,2029,2030,2031,2032,2033,2034,2035,2036,2037,2038,,,,,,,
+,,OPEX total,USD,-,697.429,732.300,768.915,807.361,847.729,890.116,934.621,981.353,1.030.420,1.081.941,,,,,,,
+,,Estructura operativa,USD,-,491.309,515.874,541.668,568.751,597.189,627.048,658.401,691.321,725.887,762.181,,,,,,,
+,,Costos por entrega y flota,USD,-,206.120,216.426,227.248,238.610,250.540,263.067,276.221,290.032,304.533,319.760,,,,,,,
+,,Nómina y cargas incluidas en estructura,USD,-,303.607,318.787,334.726,351.463,369.036,387.487,406.862,427.205,448.565,470.993,,,,,,,
+,,Costos vinculados a entregas,USD,-,195.628,205.410,215.680,226.464,237.788,249.677,262.161,275.269,289.032,303.484,,,,,,,
+,,Conectividad vinculada a flota,USD,-,10.492,11.016,11.567,12.146,12.753,13.390,14.060,14.763,15.501,16.276,,,,,,,
+,,"Las gerencias, licencias recurrentes, seguros anuales y planta se presupuestan como estructura.",,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,Caja mensual distribuye los costos por entrega según el calendario de unidades. Los costos de flota usan el promedio mensual del año.,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,"La regalía, la reposición de repuestos de planta y las cargas patronales adicionales forman parte de la estructura.",,,,,,,,,,,,,,,,,,,
+,,Ajustes incluidos en estructura (USD),,,,,,,,,,,,,,,,,,,
+,,Regalía / licencia (USD),,,,,,,-,-,-,-,-,-,0,0,0,0,,,
+,,Reposición de repuestos de planta (USD),,,,,,,23.112,24.268,25.481,26.755,28.093,29.497,"30972,29045","32520,90497","34146,95022","35854,29773",,,
+,,Carga empleador adicional (USD),,,,,,,-,-,-,-,-,-,0,0,0,0,,,

@@ -1,0 +1,163 @@
+,,,,,,,,,,,,,,,,,,,,,
+,,"Desarrollo industrial, activos y arranque · 80 kW",,,,,,,,,,,,,,Escenario,Base,,,,
+,,Los hitos de desarrollo se detallan en filas 149–162. Las celdas amarillas permiten modificar el presupuesto.,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,Montos de inversión y depreciación en USD; la columna Q muestra la conversión a CLP.,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,Inversión económica de arranque,USD,4.089.273,,,"Activos aportados, desarrollo y arranque, e inventario inicial.",,,,,,,,,,,,,,
+,,Activos fijos iniciales,USD,1.500.000,,,Detalle reconciliado al aporte objetivo. Asignación proporcional provisional; validar por activo.,,,,,,,,,,,,,,
+,,Desarrollo y gastos preoperacionales,USD,2.024.313,,,"Planificación, prototipo, ensayos y arranque. Detalle por responsable y entregable en filas 149–162.",,,,,,,,,,,,,,
+,,Inventario inicial total,USD,564.960,,,,,,,,,,,,,,,,,
+,,Capital de trabajo histórico (solo referencia),USD,625.000,,,"Referencia histórica. No se suma a caja: inventario, proveedores y caja mínima se calculan en Operación.",,,,,,,,,,,,,,
+,,Stock inicial de producción,USD,333.840,,,"Generadores, inversores y control para fabricar equipos. Se integra al inventario de producción.",,,,,,,,,,,,,,
+,,Reserva inicial de repuestos de planta,USD,231.120,,,Reserva de repuestos. Se repone mediante OPEX. El alcance está pendiente de costeo detallado.,,,,,,,,,,,,,,
+,,Aporte en especie del socio,USD,1.500.000,,,"Valor según el presupuesto del modelo. No implica efectivo, venta ni deuda.",,,,,,,,,,,,,,
+,,Desembolso inicial de FW,USD,2.589.273,,,Preoperacionales e inventario inicial. La variación posterior de capital de trabajo se calcula en Ventas.,,,,,,,,,,,,,,
+,,Hitos y presupuesto de desarrollo en filas 149–162.,,,,,,,,,,,,,,,,,,,
+,,ID,Área,Activo / alcance,Naturaleza,Ámbito del activo,Cantidad,Unitario USD,Flete %,Arancel %,Instalación %,Contingencia %,Vida útil,Instalado USD,Costo aplicado USD,CLP aplicado,Base depreciable,Gasto inicial,Origen / estado,Presupuesto previo USD,Factor de asignación
+,,CAP-001,Planificación,"Planificación, ingeniería básica y preparación industrial",Preoperacional,Desarrollo y arranque,1,500.000,-,-,-,-,0,  500.000 ,  500.000 ,  457.500.000 ,  - ,  500.000 ,Desglose V14 del presupuesto de V13 en filas 151–153.,500.000,"1,000x"
+,,CAP-002,Desarrollo,"Ingeniería de detalle, prototipo y validación 80 kW",Preoperacional,Desarrollo y arranque,1,1.500.000,-,-,-,-,0,  1.500.000 ,  1.500.000 ,  1.372.500.000 ,  - ,  1.500.000 ,Desglose V14 del presupuesto de V13 en filas 154–157.,1.500.000,"1,000x"
+,,CAP-003,Habilitación,Permisos y habilitación inicial de planta,Preoperacional,Desarrollo y arranque,1,5.000,-,-,-,-,0,  5.000 ,  5.000 ,  4.575.000 ,  - ,  5.000 ,"Presupuesto V13. Confirmar trámite, alcance y cotización.",5.000,"1,000x"
+,,CAP-004,Infraestructura,Habilitación nave industrial,Activo fijo,Infraestructura de planta,1,35.000,-,-,-,-,15,  35.000 ,  37.011 ,  33.865.076 ,  33.310 ,  - ,V10 fila 8. RFQ por m²,35.000,"1,057x"
+,,CAP-005,Infraestructura,Patio de maniobras y área de pruebas,Activo fijo,Infraestructura de planta,1,5.000,-,-,-,-,15,  5.000 ,  5.287 ,  4.837.868 ,  4.759 ,  - ,V10 fila 9. Topografía y suelo,5.000,"1,057x"
+,,CAP-006,Infraestructura,Red eléctrica y subestación,Activo fijo,Infraestructura de planta,1,-,"5,0%","2,0%","15,0%","15,0%",15,  - ,  - ,  - ,  - ,  - ,V10 fila 10. Balance de cargas,-,"1,057x"
+,,CAP-007,Infraestructura,"Ventilación, extracción y control ambiental",Activo fijo,Infraestructura de planta,1,20.000,"5,0%","2,0%","15,0%","20,0%",12,  24.610 ,  31.229 ,  28.574.383 ,  28.106 ,  - ,V10 fila 11. Ingeniería HSE,29.532,"1,057x"
+,,CAP-008,Infraestructura,Protección contra incendio y emergencia,Activo fijo,Infraestructura de planta,1,95.000,-,-,"15,0%","15,0%",12,  109.250 ,  132.856 ,  121.563.528 ,  119.571 ,  - ,V10 fila 12. Proyecto especialista,125.638,"1,057x"
+,,CAP-009,Infraestructura,Aire comprimido y servicios,Activo fijo,Infraestructura de planta,1,25.000,"10,0%","6,0%","12,0%","15,0%",10,  32.480 ,  39.498 ,  36.140.809 ,  35.548 ,  - ,V10 fila 13. RFQ capacidad,37.352,"1,057x"
+,,CAP-010,Izaje y logística,Puente grúa principal,Activo fijo,Infraestructura de planta,1,-,"12,0%","6,0%","20,0%","25,0%",20,  - ,  - ,  - ,  - ,  - ,V10 fila 14. Validar masa 80 kW,-,"1,057x"
+,,CAP-011,Izaje y logística,Puentes grúa auxiliares,Activo fijo,Infraestructura de planta,2,75.000,"12,0%","6,0%","20,0%","20,0%",20,  212.400 ,  269.525 ,  246.615.158 ,  242.572 ,  - ,V10 fila 15. Layout,254.880,"1,057x"
+,,CAP-012,Izaje y logística,Grúa horquilla,Activo fijo,Infraestructura de planta,1,-,"10,0%","6,0%","8,0%","15,0%",10,  - ,  - ,  - ,  - ,  - ,V10 fila 16. RFQ,-,"1,057x"
+,,CAP-013,Izaje y logística,Carros y cunas para palas/subconjuntos,Activo fijo,Infraestructura de planta,1,35.000,-,-,"12,0%","20,0%",8,  39.200 ,  49.743 ,  45.514.662 ,  44.769 ,  - ,V10 fila 17. Diseño propio,47.040,"1,057x"
+,,CAP-014,Izaje y logística,Camión pluma de apoyo,Activo fijo,Infraestructura de planta,1,-,-,-,"5,0%","20,0%",8,  - ,  - ,  - ,  - ,  - ,V10 fila 18. Evaluar arriendo,-,"1,057x"
+,,CAP-015,Metalmecánica,Corte láser fibra CNC,Activo fijo,Infraestructura de planta,1,45.000,"10,0%","6,0%","15,0%","20,0%",10,  60.030 ,  76.175 ,  69.700.131 ,  68.558 ,  - ,V10 fila 19. Make-or-buy,72.036,"1,057x"
+,,CAP-016,Metalmecánica,Plegadora CNC,Activo fijo,Infraestructura de planta,1,45.000,"10,0%","6,0%","15,0%","20,0%",12,  60.030 ,  76.175 ,  69.700.131 ,  68.558 ,  - ,V10 fila 20. Especificar piezas,72.036,"1,057x"
+,,CAP-017,Metalmecánica,Roladora de placas y perfiles,Activo fijo,Infraestructura de planta,1,55.000,"10,0%","6,0%","15,0%","20,0%",12,  73.370 ,  93.103 ,  85.189.050 ,  83.793 ,  - ,V10 fila 21. Especificar piezas,88.044,"1,057x"
+,,CAP-018,Metalmecánica,Centro mecanizado CNC,Activo fijo,Infraestructura de planta,1,25.000,"10,0%","6,0%","15,0%","20,0%",10,  33.350 ,  42.319 ,  38.722.295 ,  38.088 ,  - ,V10 fila 22. Make-or-buy,40.020,"1,057x"
+,,CAP-019,Metalmecánica,Torno CNC,Activo fijo,Infraestructura de planta,1,18.000,"10,0%","6,0%","15,0%","20,0%",10,  24.012 ,  30.470 ,  27.880.053 ,  27.423 ,  - ,V10 fila 23. Make-or-buy,28.814,"1,057x"
+,,CAP-020,Metalmecánica,Celdas MIG/TIG y extracción localizada,Activo fijo,Infraestructura de planta,4,18.000,"5,0%","2,0%","12,0%","15,0%",8,  86.285 ,  104.929 ,  96.009.928 ,  94.436 ,  - ,V10 fila 24. WPS/PQR,99.228,"1,057x"
+,,CAP-021,Metalmecánica,Posicionadores y mesas modulares,Activo fijo,Infraestructura de planta,1,20.000,"5,0%","2,0%","12,0%","20,0%",8,  23.968 ,  30.414 ,  27.828.965 ,  27.373 ,  - ,V10 fila 25. Diseño por producto,28.762,"1,057x"
+,,CAP-022,Metalmecánica,Cabina granallado/arenado,Activo fijo,Infraestructura de planta,1,15.000,"10,0%","6,0%","18,0%","20,0%",10,  20.532 ,  26.054 ,  23.839.465 ,  23.449 ,  - ,V10 fila 26. Evaluar tercerizar,24.638,"1,057x"
+,,CAP-023,Metalmecánica,Cabina pintura y preparación superficial,Activo fijo,Infraestructura de planta,1,18.000,"8,0%","3,0%","18,0%","20,0%",10,  23.576 ,  29.917 ,  27.374.283 ,  26.926 ,  - ,V10 fila 27. Ingeniería HSE,28.292,"1,057x"
+,,,,,,,,,,,,,,,,,,,,,
+,,CAP-025,Compuestos,Moldes maestros palas 14 m – 80 kW,Activo fijo,Equipo dedicado,3,50.000,-,-,"12,0%","25,0%",6,  168.000 ,  222.066 ,  203.190.455 ,  199.859 ,  - ,V10 fila 29. Ingeniería de molde,210.000,"1,057x"
+,,CAP-026,Compuestos,Sistema infusión al vacío,Activo fijo,Infraestructura de planta,1,20.000,"10,0%","6,0%","12,0%","20,0%",8,  25.984 ,  32.972 ,  30.169.719 ,  29.675 ,  - ,V10 fila 30. Dimensionar simultaneidad,31.181,"1,057x"
+,,CAP-027,Compuestos,Horno/cámara de curado 16 m,Activo fijo,Equipo dedicado,1,5.000,"8,0%","3,0%","20,0%","25,0%",12,  6.660 ,  8.803 ,  8.055.050 ,  7.923 ,  - ,V10 fila 31. Decisión tecnológica,8.325,"1,057x"
+,,CAP-028,Compuestos,Área corte de tejidos y kits,Activo fijo,Infraestructura de planta,1,5.000,"5,0%","2,0%","12,0%","20,0%",8,  5.992 ,  7.604 ,  6.957.241 ,  6.843 ,  - ,V10 fila 32. Layout limpio,7.190,"1,057x"
+,,CAP-029,Compuestos,Control polvo y terminación,Activo fijo,Infraestructura de planta,1,5.000,"5,0%","2,0%","15,0%","20,0%",10,  6.153 ,  7.807 ,  7.143.596 ,  7.026 ,  - ,V10 fila 33. Ingeniería HSE,7.383,"1,057x"
+,,,,,,,,,,,,,,,,,,,,,
+,,CAP-031,Ensamble,Fixtures rotor 80 kW,Activo fijo,Equipo dedicado,1,-,-,-,"12,0%","25,0%",10,  - ,  - ,  - ,  - ,  - ,V10 fila 35. Masa final requerida,-,"1,057x"
+,,CAP-032,Ensamble,Herramientas torque y tensionado,Activo fijo,Infraestructura de planta,1,5.000,"5,0%","2,0%","8,0%","15,0%",6,  5.778 ,  7.026 ,  6.429.236 ,  6.324 ,  - ,V10 fila 36. Plan calibración,6.645,"1,057x"
+,,CAP-033,Ensamble,Balanceo de rotor / subconjuntos,Activo fijo,Infraestructura de planta,1,5.000,"10,0%","6,0%","15,0%","25,0%",10,  6.670 ,  8.817 ,  8.067.145 ,  7.935 ,  - ,V10 fila 37. Definir arquitectura,8.338,"1,057x"
+,,CAP-034,Eléctrica,Banco de pruebas para generador axial de 80 kW,Activo fijo,Infraestructura de planta,1,10.000,"10,0%","6,0%","18,0%","25,0%",10,  13.688 ,  18.093 ,  16.555.184 ,  16.284 ,  - ,V10 fila 38. Especificación eléctrica,17.110,"1,057x"
+,,CAP-035,Eléctrica,"Banco convertidores, MPPT y protecciones",Activo fijo,Infraestructura de planta,1,5.000,"8,0%","3,0%","18,0%","25,0%",8,  6.549 ,  8.657 ,  7.920.799 ,  7.791 ,  - ,V10 fila 39. Protocolos FAT,8.186,"1,057x"
+,,CAP-036,Eléctrica,Taller tableros y cableado,Activo fijo,Infraestructura de planta,1,5.000,"5,0%","2,0%","12,0%","15,0%",8,  5.992 ,  7.287 ,  6.667.356 ,  6.558 ,  - ,V10 fila 40. Alcance make-or-buy,6.891,"1,057x"
+,,CAP-037,Calidad,Metrología dimensional,Activo fijo,Infraestructura de planta,1,-,"8,0%","3,0%","12,0%","20,0%",7,  - ,  - ,  - ,  - ,  - ,V10 fila 41. Tolerancias finales,-,"1,057x"
+,,CAP-038,Calidad,NDT y laboratorio materiales,Activo fijo,Infraestructura de planta,1,-,"5,0%","2,0%","12,0%","20,0%",8,  - ,  - ,  - ,  - ,  - ,V10 fila 42. Plan ITP/QCP,-,"1,057x"
+,,CAP-039,Calidad,Banco estructural palas hasta 14 m,Activo fijo,Infraestructura de planta,1,25.000,"8,0%","3,0%","20,0%","25,0%",15,  33.300 ,  44.017 ,  40.275.251 ,  39.615 ,  - ,V10 fila 43. Ingeniería especializada,41.625,"1,057x"
+,,CAP-040,Calidad,"DAQ, sensores y calibración",Activo fijo,Infraestructura de planta,1,-,"8,0%","3,0%","12,0%","20,0%",7,  - ,  - ,  - ,  - ,  - ,V10 fila 44. Arquitectura de datos,-,"1,057x"
+,,CAP-041,Digital,Implementación inicial de ERP/MES/PLM y trazabilidad,Activo fijo,Infraestructura de planta,1,15.000,"3,0%",-,"15,0%","20,0%",5,  17.768 ,  22.546 ,  20.629.637 ,  20.291 ,  - ,V10 fila 45. Definir licencias,21.321,"1,057x"
+,,CAP-042,Digital,Red industrial y ciberseguridad,Activo fijo,Infraestructura de planta,1,5.000,"5,0%","2,0%","12,0%","20,0%",6,  5.992 ,  7.604 ,  6.957.241 ,  6.843 ,  - ,V10 fila 46. Arquitectura OT,7.190,"1,057x"
+,,CAP-043,Arranque,Herramientas durables de planta y equipos auxiliares,Activo fijo,Infraestructura de planta,1,15.000,"5,0%","2,0%","8,0%","20,0%",4,  17.334 ,  21.996 ,  20.126.305 ,  19.796 ,  - ,Importe heredado. Confirmar separación de EPP y consumibles incluidos en OPEX.,20.801,"1,057x"
+,,CAP-044,Arranque,Puesta en marcha industrial y capacitación inicial,Preoperacional,Desarrollo y arranque,1,15.000,"3,0%",-,-,"25,0%",0,  15.450 ,  19.313 ,  17.670.938 ,  - ,  19.313 ,V10 fila 48. Plan comisionamiento,19.313,"1,000x"
+,,INV-001,Arranque,Stock de producción: 10 generadores de flujo axial de 80 kW,Inventario producción,Inventario inicial,1,160.000,"5,0%","2,0%",-,"20,0%",0,  171.200 ,  205.440 ,  187.977.600 ,  - ,  - ,V10 fila 49. Lista OEM,205.440,"1,000x"
+,,INV-002,Arranque,Stock de producción: 10 inversores para la línea de 80 kW,Inventario producción,Inventario inicial,1,65.000,"5,0%","2,0%",-,"20,0%",0,  69.550 ,  83.460 ,  76.365.900 ,  - ,  - ,V10 fila 49. Lista OEM,83.460,"1,000x"
+,,INV-003,Arranque,Stock de producción: controladores y equipamiento eléctrico de integración,Inventario producción,Inventario inicial,1,35.000,"5,0%","2,0%",-,"20,0%",0,  37.450 ,  44.940 ,  41.120.100 ,  - ,  - ,V10 fila 49. Lista OEM,44.940,"1,000x"
+,,INV-004,Arranque,"Reserva de repuestos de planta 80 kW: acoples, sensores, protecciones, cableado y consumibles críticos de fibra, resinas y adhesivos.",Inventario repuestos,Inventario inicial,1,180.000,"5,0%","2,0%",-,"20,0%",0,  192.600 ,  231.120 ,  211.474.800 ,  - ,  - ,V10 fila 49. Lista OEM,231.120,"1,000x"
+,,CAP-046,Arranque,Capital de trabajo histórico de referencia,Capital de trabajo,Referencia histórica,1,625.000,-,-,-,-,0,  625.000 ,  625.000 ,  571.875.000 ,  - ,  - ,V10 fila 50. Modelar ciclo caja,625.000,"1,000x"
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,Partida,Unidad,Año 0,2029,2030,2031,2032,2033,2034,2035,2036,2037,2038,,,,,,,
+,,Depreciación de la inversión inicial,,,,,,,,,,,,,,,,,,,
+,,CAP-001 Planificación e ingeniería básica,,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,"CAP-002 Desarrollo, prototipo y validación",,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,CAP-003 Permisos y habilitación inicial,,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,CAP-004 Habilitación nave industrial,,-,2.221,2.221,2.221,2.221,2.221,2.221,2.221,2.221,2.221,2.221,,,,,,,
+,,CAP-005 Patio de maniobras y área de pruebas,,-,317,317,317,317,317,317,317,317,317,317,,,,,,,
+,,CAP-006 Red eléctrica y subestación,,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,"CAP-007 Ventilación, extracción y control ambiental",,-,2.342,2.342,2.342,2.342,2.342,2.342,2.342,2.342,2.342,2.342,,,,,,,
+,,CAP-008 Protección contra incendio y emergencia,,-,9.964,9.964,9.964,9.964,9.964,9.964,9.964,9.964,9.964,9.964,,,,,,,
+,,CAP-009 Aire comprimido y servicios,,-,3.555,3.555,3.555,3.555,3.555,3.555,3.555,3.555,3.555,3.555,,,,,,,
+,,CAP-010 Puente grúa principal,,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,CAP-011 Puentes grúa auxiliares,,-,12.129,12.129,12.129,12.129,12.129,12.129,12.129,12.129,12.129,12.129,,,,,,,
+,,CAP-012 Grúa horquilla,,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,CAP-013 Carros y cunas para palas/subconjuntos,,-,5.596,5.596,5.596,5.596,5.596,5.596,5.596,5.596,-,-,,,,,,,
+,,CAP-014 Camión pluma de apoyo,,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,CAP-015 Corte láser fibra CNC,,-,6.856,6.856,6.856,6.856,6.856,6.856,6.856,6.856,6.856,6.856,,,,,,,
+,,CAP-016 Plegadora CNC,,-,5.713,5.713,5.713,5.713,5.713,5.713,5.713,5.713,5.713,5.713,,,,,,,
+,,CAP-017 Roladora de placas y perfiles,,-,6.983,6.983,6.983,6.983,6.983,6.983,6.983,6.983,6.983,6.983,,,,,,,
+,,CAP-018 Centro mecanizado CNC,,-,3.809,3.809,3.809,3.809,3.809,3.809,3.809,3.809,3.809,3.809,,,,,,,
+,,CAP-019 Torno CNC,,-,2.742,2.742,2.742,2.742,2.742,2.742,2.742,2.742,2.742,2.742,,,,,,,
+,,CAP-020 Celdas MIG/TIG y extracción localizada,,-,11.804,11.804,11.804,11.804,11.804,11.804,11.804,11.804,-,-,,,,,,,
+,,CAP-021 Posicionadores y mesas modulares,,-,3.422,3.422,3.422,3.422,3.422,3.422,3.422,3.422,-,-,,,,,,,
+,,CAP-022 Cabina granallado/arenado,,-,2.345,2.345,2.345,2.345,2.345,2.345,2.345,2.345,2.345,2.345,,,,,,,
+,,CAP-023 Cabina pintura y preparación superficial,,-,2.693,2.693,2.693,2.693,2.693,2.693,2.693,2.693,2.693,2.693,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,CAP-025 Moldes maestros palas 14 m – 80 kW,,-,33.310,33.310,33.310,33.310,33.310,33.310,-,-,-,-,,,,,,,
+,,CAP-026 Sistema infusión al vacío,,-,3.709,3.709,3.709,3.709,3.709,3.709,3.709,3.709,-,-,,,,,,,
+,,CAP-027 Horno/cámara de curado 16 m,,-,660,660,660,660,660,660,660,660,660,660,,,,,,,
+,,CAP-028 Área corte de tejidos y kits,,-,855,855,855,855,855,855,855,855,-,-,,,,,,,
+,,CAP-029 Control polvo y terminación,,-,703,703,703,703,703,703,703,703,703,703,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,CAP-031 Fixtures rotor 80 kW,,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,CAP-032 Herramientas torque y tensionado,,-,1.054,1.054,1.054,1.054,1.054,1.054,-,-,-,-,,,,,,,
+,,CAP-033 Balanceo de rotor / subconjuntos,,-,793,793,793,793,793,793,793,793,793,793,,,,,,,
+,,CAP-034 Banco de pruebas generador axial de 80 kW,,-,1.628,1.628,1.628,1.628,1.628,1.628,1.628,1.628,1.628,1.628,,,,,,,
+,,"CAP-035 Banco convertidores, MPPT y protecciones",,-,974,974,974,974,974,974,974,974,-,-,,,,,,,
+,,CAP-036 Taller tableros y cableado,,-,820,820,820,820,820,820,820,820,-,-,,,,,,,
+,,CAP-037 Metrología dimensional,,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,CAP-038 NDT y laboratorio materiales,,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,CAP-039 Banco estructural palas hasta 14 m,,-,2.641,2.641,2.641,2.641,2.641,2.641,2.641,2.641,2.641,2.641,,,,,,,
+,,"CAP-040 DAQ, sensores y calibración",,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,CAP-041 Implementación inicial digital y trazabilidad,,-,4.058,4.058,4.058,4.058,4.058,-,-,-,-,-,,,,,,,
+,,CAP-042 Red industrial y ciberseguridad,,-,1.141,1.141,1.141,1.141,1.141,1.141,-,-,-,-,,,,,,,
+,,CAP-043 Herramientas durables y equipos auxiliares,,-,4.949,4.949,4.949,4.949,-,-,-,-,-,-,,,,,,,
+,,CAP-044 Puesta en marcha industrial y capacitación,,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,INV-004 Reserva inicial de repuestos de planta,,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,CAP-046 Capital de trabajo inicial,,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,Depreciación inicial total,USD,-,139.786,139.786,139.786,139.786,134.837,130.779,95.274,95.274,68.094,68.094,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,Inversión posterior y depreciación,,,,,,,,,,,,,,,,,,,
+,,CAPEX sostenimiento,USD,-,-,-,-,-,445.898,459.275,473.054,487.245,501.862,516.918,,,,,,,
+,,CAPEX expansión,USD,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,CAPEX posterior total,USD,-,-,-,-,-,445.898,459.275,473.054,487.245,501.862,516.918,,,,,,,
+,,Depreciación sostenimiento,USD,-,-,-,-,-,-,26.754,54.310,82.694,111.928,142.040,,,,,,,
+,,Depreciación expansión,USD,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,Depreciación total,USD,-,139.786,139.786,139.786,139.786,134.837,157.532,149.585,177.968,180.022,210.134,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,Costo de activos acumulado,USD,1.500.000,1.500.000,1.500.000,1.500.000,1.500.000,1.945.898,2.405.174,2.878.227,3.365.472,3.867.335,4.384.253,,,,,,,
+,,Depreciación acumulada,USD,-,139.786,279.572,419.358,559.144,693.981,851.513,1.001.098,1.179.065,1.359.087,1.569.221,,,,,,,
+,,Valor contable de activos,USD,1.500.000,1.360.214,1.220.428,1.080.642,940.856,1.251.918,1.553.661,1.877.130,2.186.407,2.508.247,2.815.032,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,Depreciación de activos conciliados por vida individual. Nuevas inversiones se deprecian desde año siguiente.,,,,,,,,,,,,,,,,,,,
+,,Distribución provisional del aporte en especie. Los gastos de desarrollo se tratan como preoperacionales en el modelo.,,,,,,,,,,,,,,,,,,,
+,,La reserva de repuestos se mantiene como saldo. El stock de fabricación se incorpora al capital de trabajo.,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,Depreciación tributaria estimada USD,,-,139.786,139.786,139.786,139.786,134.837,157.532,149.585,177.968,180.022,210.134,,,,,,,
+,,Depreciación tributaria alternativa USD,,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,Usar depreciación alternativa (1 sí / 0 no),,-,-,-,-,-,-,-,-,-,-,-,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,Base tributaria provisional igual a la contable. En fila 145 activa el importe alternativo de la fila 144.,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,PRESUPUESTO PREOPERACIONAL POR HITO,,,,,,,,,,,,,,,,,,,
+,,Fase,Responsable,Hito y entregable,,,,USD base,Límite de alcance,,,,,,,,,,,,
+,,Preparación,Gerencia de Proyecto,Dirección del desarrollo y control de hitos,,,,140.000,"Plan, presupuesto, riesgos y coordinación de proveedores durante el año 0.",,,,,,,,,,,,
+,,Preparación,Gerencia de Ingeniería,Ingeniería básica y definición del sistema,,,,220.000,"Requisitos, arquitectura, cargas de diseño, rotor y definición de interfaces.",,,,,,,,,,,,
+,,Preparación,Gerencia de Operaciones,"Preparación industrial, abastecimiento y calidad",,,,140.000,"Estrategia fabricar/comprar, proveedores, proceso, plan de inspección y seguridad.",,,,,,,,,,,,
+,,Desarrollo,Gerencia de Ingeniería,Ingeniería de detalle e integración,,,,430.000,"Planos de estructura y rotor, generador axial, potencia, control, protecciones y revisión de diseño.",,,,,,,,,,,,
+,,Desarrollo,Gerencia de Operaciones,Fabricación y ensamble del prototipo,,,,580.000,"Componentes, mano de obra y consumibles del prototipo de validación. Excluye stock y unidades comerciales.",,,,,,,,,,,,
+,,Validación,Calidad e Ingeniería,Ensayos de prototipo y validación FAT/SAT,,,,300.000,"Instrumentación de ensayo, pruebas mecánicas y eléctricas, frenado, seguridad y verificación en sitio.",,,,,,,,,,,,
+,,Liberación,Proyecto y Operaciones,Industrialización y liberación de la serie,,,,190.000,"Correcciones finales, documentación de fabricación, manuales y transferencia a operación.",,,,,,,,,,,,
+,,Desarrollo base incluido en CAP-001 y CAP-002,,,,,,2.000.000,,,,,,,,,,,,,
+,,Permisos y puesta en marcha base,,,,,,20.000,,,,,,,,,,,,,
+,,Gasto preoperacional aplicado al flujo,,,,,,2.024.313,,,,,,,,,,,,,
+,,Distribución provisional de USD 2.000.000 heredados de V13. CAP-001 y CAP-002 toman estos importes una sola vez.,,,,,,,,,,,,,,,,,,,
+,,El equipo de desarrollo del año 0 se presupuesta aquí. La dotación recurrente del año 1 en adelante está en 08 Gastos operativos.,,,,,,,,,,,,,,,,,,,
+,,"El registro de activos separa aporte del socio, desembolsos de FW y stock inicial. Cotizar el alcance de cada hito.",,,,,,,,,,,,,,,,,,,
