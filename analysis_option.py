@@ -647,7 +647,6 @@ def render_source_context(cutoff,fetched_at):
 def render_analysis_option(refresh_nonce, render_navigation):
     with st.container(key='analysis_option'):
         st.html('<style>'+Path(__file__).with_name('assets').joinpath('analysis_option.css').read_text()+'</style>')
-        st.html('<header class="option-head"><span>BLOQUE 2 · TURBINAS 10 kW Y 80 kW</span><h1>Ingeniería de Proyecto y Evaluación Financiera</h1><p>Conecta la estrategia de capital, la ejecución técnica y el control de costos con el valor y la viabilidad del negocio.</p></header>')
         def choose(value):st.session_state['option4_view']=value
         render_navigation(VIEWS,st.session_state.get('option4_view'),choose,'option4_subnav',heading='Del capital a la creación de valor',description='Explora las cinco dimensiones de decisión: capital, ejecución, control, negocio conjunto e inversión exclusiva de 80 kW.',variant='secondary')
         view=st.session_state.get('option4_view')
