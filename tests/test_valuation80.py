@@ -13,9 +13,10 @@ from streamlit.testing.v1 import AppTest
 from valuation80_data import SOURCE, SHEETS, parse_model80, load_valuation80, parse_components80
 from valuation_data import Sheet
 from valuation80_report import build_report80, report80_data, ExecutiveReport80
-from valuation80_view import MAIN_TABS, unit_products
+from valuation80_view import MAIN_TABS, unit_products, summary_lcoe80
 from valuation_finance import reprice_dcf
-from valuation80_project import project_calendar80
+from valuation80_project import project_calendar80, calendar_plot_data80
+from valuation80_unit import unit_cost_inputs80, commercial_unit80, sale_prices80
 
 FIXTURE = Path(__file__).parent/'fixtures'/'valuation80'
 
@@ -40,6 +41,127 @@ def project_data():
 
 
 class Model80Tests(unittest.TestCase):
+    def test_renamed_price_row_is_read_without_relabeling_it_as_a_cost(self):
+        m=model()
+        rows=list(csv.reader(StringIO((FIXTURE.parent/'valuation80_unit_price_renamed.csv').read_text())))
+        m['raw']['07 Ventas y producción']=rows
+        data=unit_cost_inputs80(m)
+        self.assertEqual(data['with_margin'],90239)
+        self.assertTrue(data['final_is_price'])
+        self.assertEqual(data['references']['with_margin'],'07!E83')
+        self.assertEqual(data['before_margin'],72191.32)
+        self.assertEqual(data['margin'],.2)
+        # Moving rows must not break readings or their provenance.
+        m['raw']['07 Ventas y producción']=[[]]+rows
+        self.assertEqual(unit_cost_inputs80(m)['with_margin'],90239)
+        self.assertEqual(unit_cost_inputs80(m)['references']['with_margin'],'07!E84')
+        rows[82][2]='Concepto desconocido'
+        self.assertTrue(pd.isna(unit_cost_inputs80(m)['with_margin']))
+
+    def test_calendar_includes_both_80kw_milestones_outside_cash_months(self):
+        data=project_data()
+        original=data['monthly'].copy(deep=True)
+        data['milestones']=pd.DataFrame({'Paquete / línea':['Hito Piloto 80 kW','Hito Producto 80 kW','Hito Producto 10 kW'],
+            'Fin previsto actual':pd.to_datetime(['2027-06-30','2027-12-31','2028-02-01'])})
+        chart,markers=calendar_plot_data80(data)
+        self.assertEqual(len(markers),2)
+        self.assertEqual(chart['_month'].max(),pd.Timestamp('2027-12-01'))
+        self.assertEqual(chart['Total CLP'].sum(),original['Total CLP'].sum())
+        pd.testing.assert_frame_equal(data['monthly'],original)
+        self.assertTrue(chart.loc[chart['_month'].eq('2027-12-01'),'Total CLP'].isna().all())
+
+    def test_usd_price_is_not_divided_by_sidebar_fx(self):
+        m=model()
+        m['raw']['00 Datos de entrada']=list(csv.reader(StringIO((FIXTURE.parent/'valuation80_inputs_usd.csv').read_text())))
+        for fx in [925.,980.,1000.]:
+            prices=sale_prices80(m,fx)
+            self.assertEqual(prices['net'],89690)
+            self.assertEqual(prices['net_kw'],1121.125)
+            self.assertAlmostEqual(prices['gross'],106731.1)
+            self.assertEqual(summary_lcoe80(m,.35,fx)['capex'],89690)
+        sheet=Sheet('00 Datos de entrada',m['raw']['00 Datos de entrada'])
+        row=sheet.find('Precio de venta inicial','B')
+        m['raw']['00 Datos de entrada'][row-1][4]=''
+        with self.assertRaisesRegex(ValueError,'USD o CLP'):sale_prices80(m,980.)
+
+    def test_sale_prices_use_source_vat_power_and_sidebar_fx(self):
+        m=model()
+        sheet=Sheet('00 Datos de entrada',m['raw']['00 Datos de entrada'])
+        m['raw']['00 Datos de entrada'][sheet.find('Precio de venta inicial','B')-1][2]='83.850.325'
+        result=sale_prices80(m,925)
+        self.assertEqual(result['net'],90649)
+        self.assertEqual(result['net_kw'],1133.1125)
+        self.assertEqual(result['vat_rate'],.19)
+        self.assertAlmostEqual(result['gross'],107872.31)
+        self.assertAlmostEqual(result['gross_kw'],1348.403875)
+        self.assertAlmostEqual(sale_prices80(m,1000)['gross']*1000,result['gross']*925)
+        assumptions=Sheet('03 Supuestos',m['raw']['03 Supuestos'])
+        m['raw']['03 Supuestos'][assumptions.find('IVA referencial')-1][4]='0%'
+        self.assertEqual(sale_prices80(m,925)['gross'],90649)
+
+    def test_sidebar_fx_reconciles_unit_price_margin_and_lcoe(self):
+        m=model()
+        sheet=Sheet('00 Datos de entrada',m['raw']['00 Datos de entrada'])
+        row=sheet.find('Precio de venta inicial','B')
+        m['raw']['00 Datos de entrada'][row-1][2]='83.850.325'
+        before=m['evaluation']['unit'].copy(deep=True)
+        unit=commercial_unit80(m,925)
+        self.assertEqual(unit['Precio de venta'],90649)
+        self.assertEqual(unit['Margen bruto por equipo'],90649-unit['Fabricación media por equipo entregado'])
+        self.assertEqual(unit['Contribución antes de estructura operativa'],unit['Margen bruto por equipo']-unit['Costo de entrega y flota por equipo'])
+        self.assertEqual(summary_lcoe80(m,.35,925)['capex'],90649)
+        self.assertEqual(commercial_unit80(m,1000)['Precio de venta'],83850.325)
+        self.assertAlmostEqual(commercial_unit80(m,915)['Precio de venta'],91639.69945355)
+        pd.testing.assert_frame_equal(before,m['evaluation']['unit'])
+
+    def test_unit_cost_cells_preserve_margin_opex_and_published_total(self):
+        m=model()
+        m['raw']['07 Ventas y producción']=list(csv.reader(StringIO((FIXTURE.parent/'valuation80_unit_costs.csv').read_text())))
+        result=unit_cost_inputs80(m)
+        self.assertEqual(result['base'],72095)
+        self.assertEqual(result['opex'],4956.8)
+        self.assertEqual(result['margin'],.15)
+        self.assertEqual(result['before_margin'],77051.8)
+        self.assertEqual(result['with_margin'],90649)
+        self.assertAlmostEqual(result['margin_amount'],13597.2)
+        # The displayed final price is the published rounded value, never rebuilt.
+        self.assertNotEqual(result['with_margin'],result['before_margin']/(1-result['margin']))
+
+    def test_absent_unit_cost_inputs_remain_missing(self):
+        result=unit_cost_inputs80(model())
+        self.assertTrue(pd.isna(result['opex']))
+        self.assertTrue(pd.isna(result['before_margin']))
+        self.assertTrue(pd.isna(result['with_margin']))
+
+    def test_pdf_preserves_selected_lcoe_and_rejects_impossible_factor(self):
+        import valuation80_report
+        original=valuation80_report.lcoe_page80
+        captured=[]
+        def page(c,r,m,factor,result):
+            captured.append((r.currency,r.fx,factor,result))
+            return original(c,r,m,factor,result)
+        with patch.object(valuation80_report,'lcoe_page80',page):
+            for currency in ['USD','CLP']:
+                for factor in [.33,.35]:
+                    build_report80(model(),currency,925.,project_data=project_data(),capacity_factor=factor)
+        for currency,fx,factor,result in captured:
+            self.assertEqual(fx,925 if currency=='CLP' else 1)
+            expected=summary_lcoe80(model(),factor,925)
+            self.assertEqual(result['lcoe'],expected['lcoe'])
+            self.assertEqual(result['energy_y1'],80*8760*factor)
+        with self.assertRaises(ValueError):
+            build_report80(model(),project_data=project_data(),capacity_factor=3.35)
+
+    def test_summary_lcoe_changes_only_energy_when_factor_changes(self):
+        a=summary_lcoe80(model(),.3);b=summary_lcoe80(model(),.6)
+        self.assertEqual(a['capex'],158470)
+        self.assertAlmostEqual(a['fixed_om'],3169.4)
+        self.assertEqual(a['energy_y1'],210240)
+        self.assertEqual(b['energy_y1'],420480)
+        self.assertAlmostEqual(a['lcoe']/2,b['lcoe'])
+        self.assertEqual(a['pv_costs'],b['pv_costs'])
+        with self.assertRaises(ValueError):summary_lcoe80(model(),0)
+
     def test_current_system_names_in_07_do_not_require_aspas_or_contingency(self):
         raw=snapshot()
         rows=list(csv.reader(StringIO((FIXTURE.parent/'valuation80_operations_systems.csv').read_text())))
@@ -155,12 +277,12 @@ class Model80Tests(unittest.TestCase):
         self.assertEqual({params['gid'] for _,params in calls},set(SHEETS.values()))
         load_valuation80.clear()
 
-    def test_pdf_has_six_pages_and_builder_does_not_read_network(self):
+    def test_pdf_has_seven_pages_and_builder_does_not_read_network(self):
         with patch('requests.get',side_effect=AssertionError('Unexpected external source')):
             for currency in ['USD','CLP']:
                 pdf=build_report80(model(),currency,925.,project_data=project_data())
                 self.assertTrue(pdf.startswith(b'%PDF'))
-                self.assertEqual(len(re.findall(rb'/Type\s*/Page\b',pdf)),6)
+                self.assertEqual(len(re.findall(rb'/Type\s*/Page\b',pdf)),7)
                 self.assertNotIn(b'/Subtype /Image',pdf)
                 self.assertIn(b'/Subtype /Link',pdf)
         with self.assertRaises(ValueError):build_report80(model(),'USD',0)
@@ -194,11 +316,12 @@ class Model80Tests(unittest.TestCase):
             return table(self,rows,widths,size,header)
         with patch.object(ExecutiveReport80,'header',capture_header),patch.object(ExecutiveReport80,'kpis',capture_kpis),patch.object(ExecutiveReport80,'table',capture_table):
             build_report80(model(),project_data=project_data())
-        self.assertEqual(len(headers),6)
+        self.assertEqual(len(headers),7)
         self.assertIn('trayectoria operativa',headers[2])
         self.assertIn('economía unitaria',headers[3])
         self.assertIn('calendario de desembolsos',headers[4])
         self.assertIn('detalle de gastos operativos',headers[5])
+        self.assertIn('costo nivelado de la energía',headers[6])
         self.assertNotIn('Caja validada',calendar_kpis)
         self.assertEqual(calendar_columns,['Mes de necesidad','Caja por validar','Total mensual'])
         expected=model()['opex'].loc[lambda d:d['Año'].eq('2029'),'ID'].tolist()
@@ -254,11 +377,57 @@ project['monthly']['_month']=pd.to_datetime(project['monthly']['_month'])
 project['cutoff']=pd.Timestamp(project['cutoff'])
 for field in ['systems','lines','scope']:project['costs'][field]=pd.DataFrame(project['costs'][field])
 valuation80_report.load_project80=lambda revision:project
+valuation80_view.load_cost_report=lambda revision:project['costs']
 valuation80_view.render_valuation80(1)
 '''.replace('__FIXTURE__',repr(str(FIXTURE.resolve())))
 
 
 class UI80Tests(unittest.TestCase):
+    def test_renamed_07_price_is_visible_and_distinct_from_input_sale_price(self):
+        script=SCRIPT.replace('valuation80_view.render_valuation80(1)',
+            "model['raw']['07 Ventas y producción']=list(csv.reader(StringIO((root.parent/'valuation80_unit_price_renamed.csv').read_text())))\nvaluation80_view.unit_cost_overview80(model)")
+        app=AppTest.from_string(script,default_timeout=30).run()
+        self.assertFalse(app.exception)
+        text=' '.join(item.proto.body for item in app.get('html'))
+        self.assertIn('Precio calculado · hoja 07',text)
+        self.assertIn('US$ 90.239,00',text)
+        self.assertIn('US$ 1.127,99',text)
+        self.assertNotIn('Sin informar',text)
+        self.assertIn('Precio de venta · sin IVA',text)
+
+    def test_unit_cost_cards_convert_project_clp_once_and_preserve_sheet_units(self):
+        script=SCRIPT.replace('valuation80_view.render_valuation80(1)','valuation80_view.unit_cost_overview80(model)')
+        app=AppTest.from_string(script,default_timeout=30).run()
+        self.assertFalse(app.exception)
+        text=re.sub(r'<[^>]+>','',' '.join(element.proto.body for element in app.get('html')))
+        self.assertIn('US$ 93.496,02',text)
+        self.assertIn('US$ 1.168,70 / kW',text)
+        self.assertIn('81/102 partidas con monto',text)
+        app.session_state['option4_currency']='CLP';app.run()
+        text=re.sub(r'<[^>]+>','',' '.join(element.proto.body for element in app.get('html')))
+        self.assertIn('$86.483.822',text)
+        self.assertIn('$1.081.048 / kW',text)
+        self.assertFalse(app.exception)
+
+    def test_pdf_uses_active_slider_factor_and_invalidates_cached_scenario(self):
+        import valuation80_report
+        original=valuation80_report.build_report80
+        factors=[]
+        def capture(*args,**kwargs):
+            factors.append(kwargs['capacity_factor'])
+            return original(*args,**kwargs)
+        script=SCRIPT.replace('valuation80_view.render_valuation80(1)','valuation80_view.overview80(model)')
+        valuation80_report.report80_payload.clear()
+        with patch.object(valuation80_report,'build_report80',capture):
+            app=AppTest.from_string(script,default_timeout=30).run()
+            self.assertFalse(app.exception)
+            app.slider(key='option4_valuation80_summary_lcoe_factor').set_value(33).run()
+            self.assertFalse(app.exception)
+            app.slider(key='option4_valuation80_summary_lcoe_factor').set_value(35).run()
+            self.assertFalse(app.exception)
+        self.assertEqual(factors,[.35,.33])
+        valuation80_report.report80_payload.clear()
+
     def test_missing_project_source_only_disables_the_complete_pdf(self):
         script=SCRIPT.replace('valuation80_report.load_project80=lambda revision:project',
             "def unavailable(revision):raise RuntimeError('Costos no disponible')\nvaluation80_report.load_project80=unavailable\nvaluation80_report.report80_payload.clear()")
@@ -279,9 +448,29 @@ class UI80Tests(unittest.TestCase):
         self.assertIn('ECONOMÍA UNITARIA Y RESPALDOS',text)
         self.assertIn('PRIMEROS CINCO AÑOS',text)
         self.assertFalse(app.number_input)
-        self.assertFalse(app.slider)
+        self.assertEqual(len(app.slider),1)
+        self.assertEqual(app.slider[0].key,'option4_valuation80_summary_lcoe_factor')
+        self.assertEqual(app.slider[0].value,35)
         app.session_state['option4_currency']='CLP';app.run()
         self.assertFalse(app.exception)
+
+    def test_summary_lcoe_factor_recalculates_and_survives_currency_and_refresh(self):
+        script=SCRIPT.replace('valuation80_view.render_valuation80(1)','valuation80_view.overview80(model)')
+        app=AppTest.from_string(script,default_timeout=30).run()
+        import json
+        def point():
+            spec=next(json.loads(fig.proto.spec) for fig in app.get('plotly_chart') if 'Factor de planta neto (%)' in fig.proto.spec)
+            return spec['data'][1]['y'][0]
+        first=point()
+        app.slider(key='option4_valuation80_summary_lcoe_factor').set_value(60).run()
+        self.assertFalse(app.exception)
+        self.assertAlmostEqual(point(),first*.35/.6)
+        app.session_state['option4_currency']='CLP';app.run()
+        self.assertAlmostEqual(point(),first*.35/.6*925)
+        self.assertEqual(app.slider[0].value,60)
+        app.run()
+        self.assertEqual(app.slider[0].value,60)
+        self.assertFalse(app.number_input)
 
     def test_all_tabs_currency_year_and_scenarios_are_independent(self):
         app=AppTest.from_string(SCRIPT,default_timeout=30).run()

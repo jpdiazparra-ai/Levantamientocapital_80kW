@@ -1,45 +1,86 @@
 # Bloque 2 · Subbloque 5 · Caso de Inversión · 80 kW
 
-Fuente única: [Valorización FW V14 · 80 kW](https://docs.google.com/spreadsheets/d/e/2PACX-1vRtQHrMkPa0wA7KpcUf_foYsbIpmh4gC4UuppPkWWIpFGPPhs3lxtRmzwB8D21sXw/pubhtml).
+El caso financiero exclusivo de 80 kW se consulta en [Valorización FW V14](https://docs.google.com/spreadsheets/d/e/2PACX-1vRtQHrMkPa0wA7KpcUf_foYsbIpmh4gC4UuppPkWWIpFGPPhs3lxtRmzwB8D21sXw/pubhtml). La aplicación lee la publicación actual y conserva la trazabilidad de las cifras; las capturas de pruebas nunca se usan como fuente del dashboard.
 
-Se conserva el diseño ejecutivo del subbloque 4: paleta azul pizarra y verde azulado, bandas KPI, barras, cascadas, donuts y mapas de sensibilidad. La navegación responde a los contenidos de la nueva fuente: **Evaluación 80 kW** (00 Evaluación), **Datos y supuestos** (00 Datos de entrada y 03), **Inversión y socios** (02), **Resultados y caja** (04–06), **Ventas y fabricación** (07), **Gastos operativos** (08), **Activos y desarrollo** (09) y **Controles y fuentes** (10 y trazabilidad). Todos los productos, escenarios y resultados corresponden al negocio exclusivo de 80 kW publicado en esta fuente; no se filtra ni extrapola el caso conjunto.
+## Navegación y fuentes
 
-La evaluación ejecutiva es una sola vista continua, sin pestañas internas. Respeta las cuatro áreas de 00: resultados y valorización, arranque e inversión, economía unitaria y respaldos, y proyección de los primeros cinco años. Incluye gráficos de ventas–EBITDA, comparación VAN/DCF, aplicación de fondos, reserva objetivo, etapas de contribución unitaria, ventas/EBITDA quinquenales, flujo/caja, capacidad y anticipos/CAPEX. Las cifras por equipo y la tabla quinquenal se leen directamente de 00 para conservar sus redondeos; no se sustituyen por cocientes ni por un recorte reconstruido de otras hojas. Los gráficos que necesitan fabricación y OPEX detallados identifican su origen complementario en 04.
+Las ocho pestañas siguen la estructura del archivo: Evaluación 80 kW (00), Datos y supuestos (00 Datos de entrada y 03), Inversión y socios (02), Resultados y caja (04–06), Ventas y fabricación (07), Gastos operativos (08), Activos y desarrollo (09) y Controles y fuentes (10). La publicación tiene once hojas y no contiene 01 Resumen. No se extrapola el caso conjunto de 10 y 80 kW.
 
-El resumen distingue recuperación de caja descontada en años completos (publicada en 00) de recuperación económica interpolada (derivada). Expone la proporción del flujo del año 1 atribuible al aumento de anticipos, la fecha del aporte y los tres estados de respaldo de 00. Los acumulados quinquenales y el margen EBITDA ponderado se identifican como derivados. El escenario DCF queda en Datos y supuestos; economía detallada, LCOE y sensibilidad de volumen quedan en Ventas y fabricación.
+La evaluación es una vista continua con resultados y valorización, arranque e inversión, economía unitaria y proyección quinquenal. Las cifras financieras publicadas y sus redondeos se conservan en sus tablas originales. Datos y supuestos muestra primero Escenarios de tasa y valor terminal, después Sensibilidad publicada · precio y tasa, ambos visibles antes de las tablas.
 
-## Lectura y actualización
+La caché de lectura dura 60 segundos e incluye la URL, los identificadores y el nonce de actualización. Los controles usan el prefijo independiente `option4_valuation80`. Moneda y tipo de cambio se comparten con el bloque 2; la moneda inicial es USD y el TC inicial es 980 CLP/USD, editable manualmente. Actualizar todo restablece USD.
 
-Se consultan once pestañas: 00 Evaluación, 00 Datos de entrada, 02 Inversión y socios, 03 Supuestos, 04 Resultados y flujo, 05 Balance y cobros, 06 Caja mensual, 07 Ventas y producción, 08 Gastos operativos, 09 Activos y arranque y 10 Controles. La nueva publicación no contiene 01 Resumen.
+## Monedas y economía unitaria
 
-La caché de 60 segundos incluye URL, identificadores y nonce de actualización. La vista se carga antes de Plan/Costos de los subbloques 1–3 y no depende del modelo conjunto del subbloque 4. Los controles usan el prefijo independiente `option4_valuation80`; cambiar de vista no comparte los escenarios DCF, LCOE, filtros OPEX ni ventana mensual. Moneda y tipo de cambio de presentación pertenecen al bloque 2.
+Los resultados del modelo son USD nominales. Para presentarlos en CLP se multiplica una sola vez por el TC del panel. Las tarifas OPEX de origen CLP se convierten primero con el TC interno del archivo para conciliar la salida USD. Vacíos permanecen faltantes; guiones contables explícitos representan cero.
 
-La fuente publica USD nominales. CLP se obtiene multiplicando una vez por el tipo de cambio de presentación. Las tarifas OPEX de origen CLP se convierten primero con el TC interno del modelo para conciliar su salida USD. Vacíos y no disponibles permanecen faltantes; guiones contables explícitos representan cero. Se conserva la columna mensual reservada H para evitar desplazar ventas, OPEX y caja. Año 0 y años operativos 1–10 comprenden 132 meses; el año de apoyo terminal queda fuera de la ventana DCF predeterminada.
+`valuation80_unit.py` interpreta la moneda del precio inicial de 00 Datos de entrada: busca USD o CLP en D/E de la fila. USD se usa directamente; CLP se divide por el TC del panel. Se conservan los multiplicadores de precio del escenario y adicional de 03. Si no hay moneda reconocida, no se infiere por la magnitud del valor. El lector de la tabla distingue un valor auxiliar numérico en D de la unidad publicada en E.
 
-## Análisis
+La economía unitaria reúne costos y precios en un recuadro con columnas Por equipo y Por kW, junto al LCOE en columnas de igual ancho. Incluye:
 
-- DCF y VAN se distinguen del precio negociado, del capital primario y del pago secundario. La TIR económica de 00 Evaluación incorpora activos en especie y se refiere al proyecto, no al retorno del accionista. El laboratorio DCF conserva los flujos publicados y el flujo terminal normalizado; exige tasa mayor que g para Gordon.
-- La economía unitaria divide ingresos, costo total de fabricación y entrega/flota por entregas. La estructura de 08 permanece fija y separada. La contribución no se denomina EBITDA por equipo. El laboratorio de volumen mantiene precios y costos unitarios del año elegido, aproxima flota proporcional y no recalcula CT, anticipos, IVA, impuestos, CAPEX ni capacidad de terceros.
-- LCOE conserva metodología, gráficos y controles avanzados del subbloque 4 con parámetros independientes. Los valores iniciales son ilustrativos y no una ficha certificada de la turbina. El OPEX del fabricante no se usa como O&M del propietario.
-- La proyección permite elegir período y mostrar ventas/EBITDA, flujos/caja o entregas/capacidad. Los flujos se acumulan, la caja es el saldo final y el margen ponderado es Σ EBITDA / Σ ventas.
-- Inventario inicial se separa en stock de producción y reserva de repuestos. El registro conserva IDs CAP e INV. El CT histórico queda como referencia, sin incorporarlo de nuevo al flujo.
-- Componentes de fabricación conservan contingencia y saldo por desglosar. Son referencias base, distintas del costo con margen proveedor y de los costos anuales reajustados.
-- El desarrollo por hito muestra fase, responsable, entregable, presupuesto y alcance. La distribución base ya integra CAP-001/CAP-002; no se suma de nuevo a preoperacionales. Los importes aplicados pueden incluir permisos, puesta en marcha y ajustes.
+- Costo informado del Producto 80 kW: Comercial anterior de las partidas Aplica del subbloque 1, con fundaciones y montaje, y cobertura de registros. Costo por kW = subtotal / 80.
+- Costo base más OPEX unitario de 07; inicialmente E78 + E82.
+- Valor con margen de 07: se reconocen las etiquetas anteriores y los alias Precio Venta / Precio de venta. La lectura sigue las etiquetas y conserva la referencia si las filas cambian de posición. Un precio se identifica como Precio calculado · hoja 07, separado del precio inicial de 00. Etiquetas desconocidas, ambiguas y valores ausentes quedan sin informar.
+- Margen del proveedor publicado en D de su fila, definido sobre precio; no se confunde con margen bruto sobre ventas.
+- Precio de venta por equipo y por kW, sin IVA y con el IVA referencial de 03 Supuestos. Potencia base: 80 kW.
 
-## Validación y PDF
+Si el precio neto y el valor con margen coinciden dentro de 0,005 USD, se muestran juntos con una nota; si difieren, permanecen separados. El gráfico compara costo base, costo más OPEX y el valor final publicado; no repite una barra adicional de precio de venta. Los importes completos no se suman entre sí. Las fuentes y criterios quedan en un desplegable.
 
-Se realizan 19 controles independientes de completitud, VAN reconstruido, DCF, terminal Gordon, activos, inversión, participaciones, inventarios, balance, EBITDA, fabricación, OPEX, flujo mensual/anual, aporte recibido y brecha de caja objetivo. Las tolerancias reconocen redondeo CSV y aparecen con su unidad. La fuente original publica 46 controles adicionales; sus estados y ubicaciones se conservan, incluidos pendientes y n.a. Se muestran errores de fórmula y lectura completa de cada pestaña con descarga CSV.
+Esta conciliación unitaria respeta la moneda de origen y no reconstruye los flujos ni el DCF publicados. El primer quinquenio procede de 00; el detalle anual conserva diez años de 04–06. Los acumulados suman flujos, los cierres de caja son saldos y el margen ponderado es suma EBITDA / suma ventas.
 
-El botón PDF descarga la versión 4 del informe, con seis páginas: resultados y valorización, arranque e inversión, trayectoria operativa y caja, economía unitaria y costos, **calendario de desembolsos** y **detalle de gastos operativos**. La cabecera editorial, tarjetas KPI, tablas y notas mantienen la paleta azul pizarra y verde azulado, con ocre para caja por validar. El tamaño de los importes se adapta al ancho para conservar la legibilidad en CLP y USD.
+## LCOE del propietario
 
-Incluye once gráficos vectoriales: comparación VAN/DCF/precio, componentes del DCF en valor presente, liquidez de arranque, participación accionaria, calendario de desembolsos, ventas/EBITDA quinquenales, flujo anual/caja, economía por equipo, costos informados por sistema, OPEX por comportamiento y concentración por área. Las barras muestran montos o cantidades; los gráficos temporales identifican millones de la moneda activa y años calendario.
+`valuation80_lcoe.py` comparte el cálculo entre pantalla y PDF. El panel compacto permite modificar únicamente el factor de planta neto (1–100 %, inicial 35 %). Una sesión antigua en 30 % migra una vez a 35 %; los cambios manuales posteriores se conservan. El laboratorio avanzado de Ventas y fabricación mantiene controles independientes.
 
-El primer quinquenio y los indicadores de precio, fabricación y contribución por equipo siguen leyendo 00; la tabla anual mantiene diez años desde 04–06. Se distinguen recuperación de caja, TIR económica y obligaciones por anticipos. El detalle de componentes y los respaldos anteriores de 00 se reemplazan por datos de **Estrategia de Capital y Costos**: sistemas, principales paquetes/líneas, Comercial anterior, Presupuesto vigente, cobertura y conciliación. Se reutiliza `valuation_costs.py`: Hito objetivo de Costos = 80 kW, Costo para producto = Aplica, alcance Total con fundaciones y montaje. Los vacíos se mantienen faltantes. Se indica el número de partidas sin monto y de registros conciliados; un importe publicado no se convierte automáticamente en costo real conciliado.
+- Potencia: 80 kW. Energía anual = 80 × 8.760 × FP; el FP ya incorpora disponibilidad y pérdidas.
+- CAPEX de referencia: precio neto por equipo, leído en la moneda publicada y con los multiplicadores de precio activos.
+- O&M anual ilustrativo: 2 % de ese precio; no es el OPEX de la empresa fabricante.
+- Vida útil: 20 años. Tasa de descuento real: 8 %. Son hipótesis visibles, independientes del DCF y no confirmadas por el archivo.
+- LCOE = valor presente de costos / valor presente de energía. CAPEX al inicio; energía y O&M al cierre de cada año.
+- Sin degradación, O&M variable, crecimiento real del O&M, reposiciones, retiro, impuestos ni valor residual. Costos de sitio no incluidos en el precio quedan por completar: es un resultado indicativo.
 
-`valuation80_project.py` consulta el mismo lector del subbloque 1 y filtra Plan por Proyecto 80 kW para el calendario. Conserva saldos No pagado/Parcial con inclusión activa, agrupa vencidos al mes de corte, separa validada/por validar, conserva hitos de Plan y declara saldos sin fecha fuera del calendario. El alcance de caja es el proyecto completo de 80 kW; no se restringe a las partidas comerciales Aplica. Su calendario de desarrollo no se suma al flujo operativo del modelo financiero ni la base de partidas reemplaza el costo de fabricación proyectado.
+El panel muestra generación, LCOE por kWh y MWh y sensibilidad al FP. La descarga incorpora el FP activo, que forma parte de la clave de caché.
 
-Plan y Costos son CLP nativos: el PDF divide una vez por el TC visual para USD y conserva CLP para esa moneda. El caso financiero permanece USD nativo. Se identifican consultas y enlaces de ambas fuentes. Si la fuente de costos o caja falla, se deshabilita únicamente la descarga completa con una explicación; el análisis financiero sigue visible. La caché y el botón incluyen la versión de diseño para descartar descargas anteriores.
+## Análisis financiero y controles
 
-La captura de prueba de `tests/fixtures/valuation80` corresponde a la publicación consultada el 09-11-2026. Se usa solo en pruebas; la aplicación siempre consulta la publicación actual. Las pruebas cubren cálculos, alineación de la columna mensual vacía, origen y refresco de caché, PDF, moneda, años, escenarios y aislamiento de controles.
+Se distinguen DCF/VAN, precio negociado, aporte primario y pago secundario. La TIR económica incorpora activos aportados y corresponde al proyecto. La recuperación descontada publicada es de caja en años completos; los anticipos son obligaciones de entrega. El laboratorio DCF conserva flujos y terminal normalizado y requiere tasa mayor que crecimiento para Gordon.
 
-La página final de controles fue reemplazada por Gastos operativos del primer año publicado (08). Incluye estructura, entrega/flota, dos gráficos y las 33 partidas/ajustes en dos columnas, con ID, concepto, importe y estado. Las tarifas de origen CLP se convierten con el TC interno del modelo y luego se presentan en la moneda activa, una sola vez. Los ajustes USD se incluyen una vez. El calendario ocupa la penúltima página; elimina el KPI y la columna de Caja validada, conservando los importes del total mensual y la distinción de series del gráfico cuando existen montos validados.
+La columna mensual reservada H se conserva para no desplazar los datos. Año 0 y años operativos 1–10 comprenden 132 meses; el apoyo terminal queda fuera de la ventana DCF predeterminada. El laboratorio de volumen no recalcula CT, anticipos, IVA, impuestos, CAPEX ni disponibilidad de fabricación externa.
+
+Inventario inicial separa stock de producción y repuestos de planta. El desarrollo base ya integra CAP-001/CAP-002 y no se suma nuevamente a preoperacionales. CT histórico permanece como referencia. Los detalles de fabricación mantienen saldos por desglosar y no acreditan presupuestos completos.
+
+Se realizan 19 conciliaciones independientes: completitud, VAN/DCF, terminal, activos, operación societaria, inventarios, balance, EBITDA, fabricación, OPEX, flujo mensual/anual, aporte recibido y brecha de reserva. Las tolerancias identifican su unidad y reconocen redondeos. Los 46 controles originales de 10, sus pendientes y n.a., sus referencias y los errores de fórmula permanecen visibles. Una conciliación no acredita disponibilidad de capital, contratos ni validación técnica.
+
+## PDF ejecutivo
+
+El diseño 11 genera siete páginas vectoriales:
+
+1. Resultados y valorización, con dos criterios técnicos de evaluación financiera.
+2. Arranque e inversión.
+3. Trayectoria operativa y caja.
+4. Economía unitaria y costos: precios por equipo/kW, sin/con IVA, gráfico de 07 y evidencia de costos del subbloque 1.
+5. Calendario de desembolsos de 80 kW.
+6. Gastos operativos: estructura, entrega/flota, gráficos y partidas del primer año.
+7. LCOE: escenario activo, curva de sensibilidad, valor presente, aportes al costo nivelado, fórmula, fuentes y supuestos.
+
+El calendario usa `valuation80_project.py`, el mismo lector del subbloque 1 y el proyecto de 80 kW de Plan. Conserva saldos No pagado/Parcial incluidos, agrupa vencidos en el mes de corte y declara los saldos sin fecha. No restringe la caja a las partidas comerciales Aplica ni la suma al flujo operativo financiero. El KPI y la tabla no muestran Caja validada, pero el gráfico conserva esa serie cuando hay importes.
+
+Solo se muestran Hito Piloto 80 kW y Hito Producto 80 kW, con nombre y Fin previsto actual de Plan en recuadros independientes. El eje continuo se extiende hasta el último hito, incluso sin desembolso ese mes; no se crean montos ni se alteran los totales. Los recuadros se separan aunque ambos hitos caigan en un mismo mes.
+
+Los costos comerciales reutilizan `valuation_costs.py`: Hito objetivo de Costos = 80 kW, Costo para producto = Aplica, alcance Total. Se muestran sistemas, principales paquetes/líneas, Comercial anterior, Presupuesto vigente, cobertura y conciliación. Estas bases no reemplazan ni se suman al costo de fabricación del archivo financiero. Plan/Costos son CLP nativos: se dividen una vez por el TC del panel para USD y se conservan para CLP.
+
+Si falla la fuente de costos/caja, solo se deshabilita la descarga completa con una explicación; el caso financiero sigue disponible. El diseño, moneda, TC y FP forman parte de los argumentos del reporte para evitar PDFs de otro escenario.
+
+## Presentación de capital y ejecución técnica
+
+Los hitos técnicos tienen tarjetas compactas, con tonos arena para 10 kW y gris azulado para 80 kW. Referencias y notas se agrupan en fuentes y criterios. Cronograma técnico contiene sus filtros, resumen y gráfico en un recuadro separado del detalle; inicia en Premontaje 10 kW, estados En curso/Pendiente y nivel Actividades, sin impedir cambios manuales.
+
+Los cuatro KPI de capital están dentro de Calendario de desembolsos; se retiró el panel Análisis de capital. El gráfico mensual conserva los cinco hitos con 20 % menos altura y KPI aproximadamente 35 % más compactos. Los criterios quedan agrupados en un desplegable. Moneda/corte aparecen en una línea; consulta, actualización y enlace de origen están en Fuente y actualización.
+
+Fondos por responsable combina barras ordenadas, tabla lateral de validada/por validar/participación y mayor asignación, con agrupación por entidad o persona. Los importes abreviados conservan su detalle completo. Se retiraron los desplegables Criterios de comparación de presupuesto y caja, Trazabilidad de partidas · Costos y Cómo interpretar el costo comercial.
+
+El análisis comercial elimina Base comercial histórica y mejora el donut y el desglose por sistema: colores vinculados, columnas de importe/participación y cobertura de partidas por sistema. Los faltantes se mantienen visibles y no se convierten en cero. Los controles Total/Comercial siguen delimitando KPI, gráficos, tablas e informes.
+
+## Verificación
+
+Las capturas públicas en `tests/fixtures` cubren la estructura original, la transición de CLP a USD y el cambio de etiqueta a Precio Venta. Se prueban cálculos, lectura de columnas, monedas, fechas de hitos, conciliaciones, PDF, FP, invalidación de caché e independencia de controles. Se complementa con AppTest y revisión visual local del PDF y del dashboard. Comando: `.venv/bin/python -m unittest discover -s tests -q`.

@@ -268,14 +268,13 @@ def render_capital_dimensions(tasks, cash):
 
 def capital_view(tasks, cash, cutoff):
     render_milestone_overview(tasks, cash=cash)
-    st.caption('Visión general por hito y análisis del capital de ambos proyectos.')
     if tasks.empty:
         st.info('No hay actividades para la selección.')
         return
     selected = cash[cash['ID actividad'].isin(tasks['ID'])].copy()
-    with st.container(border=True, key='option4_analysis_overview'):
-        st.subheader('Análisis de capital')
-        st.caption('Resume el presupuesto informado y los saldos pendientes de cubrir. Distingue la referencia presupuestaria de la caja validada y de los importes que aún requieren revisión.')
+    with st.container(border=True, key='option4_analysis_calendar'):
+        st.subheader('Calendario de desembolsos')
+        st.caption('Programa mensual de caja y fechas previstas de los hitos del proyecto.')
         reference = tasks['Presupuesto referencia'].sum(min_count=1)
         pending = selected['Referencia por validar CLP'].sum(min_count=1)
         valid = selected['Pendiente validado CLP'].sum(min_count=1)
@@ -290,21 +289,17 @@ def capital_view(tasks, cash, cutoff):
             f'<strong>{html.escape(value)}</strong><small>{html.escape(note)}</small></article>'
             for label, value, note, kind in summary_items
         )
-        st.html('<div class="option-capital-totals">' + summary_html + '</div>'
-            '<div class="option-capital-rule"><span aria-hidden="true">i</span>'
-            '<p>La caja por validar forma parte del programa. <b>No se suma nuevamente a la caja pendiente de cubrir.</b></p></div>')
-        with st.expander('Criterio de cálculo y redondeo'):
-            st.caption('La caja proviene de Costos: saldos No pagado o Parcial con inclusión activa. La brecha requiere caja disponible e ingresos confirmados.')
-            st.caption('Los totales se suman desde las partidas publicadas; pueden diferir algunos pesos del resumen por redondeo. Un importe sin validar no equivale a cero.')
-    with st.container(border=True, key='option4_analysis_calendar'):
-        st.subheader('Calendario de desembolsos')
-        st.caption('Muestra cuándo se necesita caja y en qué meses se concentran los desembolsos previstos. Relaciona los montos mensuales con las fechas de los hitos para revisar la secuencia de financiamiento y ejecución.')
+        st.html('<div class="option-capital-totals">' + summary_html + '</div>')
         selected['_month']=selected['_date'].dt.to_period('M').dt.to_timestamp()
         first_month=cutoff.to_period('M').to_timestamp()
         selected['_month']=selected['_month'].mask(selected['_month'].lt(first_month),first_month)
         monthly=selected.dropna(subset=['_month']).groupby('_month')[['Pendiente validado CLP','Referencia por validar CLP']].sum(min_count=1).reset_index()
-        render_calendar(monthly, milestones=explicit_milestone_rows(tasks))
-        st.caption('Los vencimientos anteriores al corte se agrupan en el mes de corte, como en la planilla. Los aportes en especie no equivalen a caja.')
+        render_calendar(monthly, milestones=explicit_milestone_rows(tasks), criteria=[
+            'La caja por validar forma parte del programa; no se suma nuevamente a la caja pendiente de cubrir.',
+            'Fuente: Costos, saldos No pagado o Parcial con inclusión activa. La brecha requiere caja disponible e ingresos confirmados.',
+            'Los totales se suman desde las partidas publicadas y pueden diferir por redondeo. Un importe sin validar no equivale a cero.',
+            'Los vencimientos anteriores al corte se agrupan en el mes de corte. Los aportes en especie no equivalen a caja.'
+        ])
         with st.expander('Detalle de saldos de caja y validación · Costos'):
             st.dataframe(selected[['ID actividad','Concepto / cuota','Fecha FC / desembolso','Estado de pago','Saldo pendiente CLP','Validación del saldo','Caja programada CLP','Pendiente validado CLP','Referencia por validar CLP','Alerta caja','Respaldo / observaciones']].rename(columns={'Concepto / cuota':'Actividad / entregable'}),hide_index=True,use_container_width=True,column_config=currency_column_config(selected))
         with st.expander('Calendario mensual · selección activa'):
@@ -380,97 +375,111 @@ def timeline_tooltip(row, level, mode):
 
 
 def render_technical_timeline(tasks):
-    st.caption('Sigue las fechas y el avance de las actividades que componen cada hito. Explora por sistema y paquete, filtra por estado y compara la previsión actual con la línea base para localizar cambios en el cronograma.')
-    with st.container(border=True, key='option4_timeline_controls'):
-        hito_key = 'option4_timeline_hitos'
-        hito_options = sorted(tasks['Hito objetivo'].dropna().loc[lambda value: value.ne('')].unique())
-        if hito_key in st.session_state:
+    with st.container(key='option4_timeline_panel'):
+        st.subheader('Cronograma técnico')
+        st.caption('Sigue las fechas y el avance de las actividades que componen cada hito. Explora por sistema y paquete, filtra por estado y compara la previsión actual con la línea base para localizar cambios en el cronograma.')
+        with st.container(border=True, key='option4_timeline_controls'):
+            hito_key = 'option4_timeline_hitos'
+            state_key = 'option4_timeline_states'
+            level_key = 'option4_timeline_level'
+            hito_options = sorted(tasks['Hito objetivo'].dropna().loc[lambda value: value.ne('')].unique())
+            default_hitos = [value for value in hito_options if re.sub(r'[^a-z0-9]', '', value.casefold()) == 'premontaje10kw']
+            if not st.session_state.get('option4_timeline_compact_defaults_v1'):
+                st.session_state[hito_key] = default_hitos
+                st.session_state[state_key] = ['En curso', 'Pendiente']
+                st.session_state[level_key] = 'Actividades'
+                st.session_state['option4_timeline_compact_defaults_v1'] = True
+            st.session_state.setdefault(hito_key, default_hitos)
+            st.session_state.setdefault(state_key, ['En curso', 'Pendiente'])
+            st.session_state.setdefault(level_key, 'Actividades')
             st.session_state[hito_key] = [value for value in st.session_state[hito_key] if value in hito_options]
-        selected_hitos = st.multiselect('Hito objetivo del cronograma', hito_options, key=hito_key,
-            placeholder='Todos los hitos', help='Selecciona uno o varios hitos. Sistemas y paquetes se ajustan a esta selección.')
-        hito_scope = tasks[tasks['Hito objetivo'].isin(selected_hitos)].copy() if selected_hitos else tasks.copy()
-        system_col, package_col = st.columns(2)
-        with system_col:
-            systems = sorted(hito_scope['Sistema'].dropna().loc[lambda x: x.ne('')].unique())
-            system = _timeline_select('Sistema del cronograma', ['Todos los sistemas', *systems], 'option4_timeline_system')
-        scope = hito_scope[hito_scope['Sistema'].eq(system)].copy() if system != 'Todos los sistemas' else hito_scope.copy()
-        with package_col:
-            packages = sorted(scope['Paquete / línea'].dropna().loc[lambda x: x.ne('')].unique())
-            package = _timeline_select('Paquete / línea del cronograma', ['Todos los paquetes', *packages], 'option4_timeline_package')
-        if package != 'Todos los paquetes':
-            scope = scope[scope['Paquete / línea'].eq(package)].copy()
-        states = ['Completado', 'En curso', 'Pendiente']
-        state_key = 'option4_timeline_states'
-        if state_key not in st.session_state:
-            st.session_state[state_key] = states.copy()
-        selected_states = st.multiselect('Estado de las actividades del cronograma', states, key=state_key,
-            placeholder='Selecciona uno o varios estados', help='Filtra las actividades antes de resumir sistemas o paquetes. Estos controles afectan al cronograma y a su detalle.')
-        scope = scope[scope['Estado por avance'].isin(selected_states)].copy()
-        level_col, date_col = st.columns(2)
-        with level_col:
-            level = st.radio('Nivel de detalle', ['Sistemas', 'Paquetes / líneas', 'Actividades'], horizontal=True, key='option4_timeline_level')
-        with date_col:
-            if not st.session_state.get('option4_forecast_finish_default_v1'):
-                st.session_state['option4_dates'] = 'Previsión actual'
-                st.session_state['option4_forecast_finish_default_v1'] = True
-            mode = st.radio('Fechas del cronograma', ['Previsión actual', 'Base'], horizontal=True, key='option4_dates',
-                help='La previsión actual termina cada barra en Fin previsto actual. Base permite comparar con Fin base.')
-        if level == 'Actividades':
-            ids = scope.sort_values(['Inicio base', 'Fin base', 'ID'])['ID'].tolist()
-            if 'option4_timeline_ids' in st.session_state:
-                st.session_state['option4_timeline_ids'] = [value for value in st.session_state['option4_timeline_ids'] if value in ids]
-            names = scope.set_index('ID')['Actividad / entregable'].to_dict()
-            chosen = st.multiselect('Actividades del cronograma', ids, key='option4_timeline_ids', format_func=lambda value: f'{value} · {names.get(value, value)}', placeholder='Todas las actividades de la selección')
-            if chosen:
-                scope = scope[scope['ID'].isin(chosen)].copy()
-        compare_col, order_col = st.columns(2)
-        with compare_col:
-            compare_base = st.checkbox('Comparar con línea base', value=True, disabled=mode == 'Base', key='option4_timeline_baseline')
-        with order_col:
-            if not st.session_state.get('option4_timeline_chronological_default_v1'):
-                st.session_state['option4_timeline_sort'] = 'Fecha de inicio'
-                st.session_state['option4_timeline_chronological_default_v1'] = True
-            order = st.selectbox('Orden de lectura', ['Fecha de inicio', 'Fecha de término', 'Sistema y paquete'], key='option4_timeline_sort')
-        end = 'Fin base' if mode == 'Base' else 'Fin previsto actual'
-        rows = build_timeline_rows(scope, end, level)
-        if rows.empty:
-            st.info('No hay actividades con los estados y fechas seleccionados. Ajusta los filtros del cronograma.')
-            return
-        if order != 'Sistema y paquete':
-            rows = rows.sort_values(['_start', '_end', '_label'] if order == 'Fecha de inicio' else ['_end', '_start', '_label'], kind='stable')
+            hito_col, state_col = st.columns(2)
+            with hito_col:
+                selected_hitos = st.multiselect('Hito objetivo del cronograma', hito_options, key=hito_key,
+                    placeholder='Todos los hitos', help='Selecciona uno o varios hitos. Sistemas y paquetes se ajustan a esta selección.')
+            with state_col:
+                selected_states = st.multiselect('Estado de las actividades del cronograma', ['Completado', 'En curso', 'Pendiente'], key=state_key,
+                    placeholder='Selecciona uno o varios estados', help='Filtra las actividades antes de resumir sistemas o paquetes. Estos controles afectan al cronograma y a su detalle.')
+            hito_scope = tasks[tasks['Hito objetivo'].isin(selected_hitos)].copy() if selected_hitos else tasks.copy()
+            system_col, package_col = st.columns(2)
+            with system_col:
+                systems = sorted(hito_scope['Sistema'].dropna().loc[lambda x: x.ne('')].unique())
+                system = _timeline_select('Sistema del cronograma', ['Todos los sistemas', *systems], 'option4_timeline_system')
+            scope = hito_scope[hito_scope['Sistema'].eq(system)].copy() if system != 'Todos los sistemas' else hito_scope.copy()
+            with package_col:
+                packages = sorted(scope['Paquete / línea'].dropna().loc[lambda x: x.ne('')].unique())
+                package = _timeline_select('Paquete / línea del cronograma', ['Todos los paquetes', *packages], 'option4_timeline_package')
+            if package != 'Todos los paquetes':
+                scope = scope[scope['Paquete / línea'].eq(package)].copy()
+            scope = scope[scope['Estado por avance'].isin(selected_states)].copy()
+            level_col, date_col, compare_col = st.columns([1.4, 1.1, 1])
+            with level_col:
+                level = st.radio('Nivel de detalle', ['Sistemas', 'Paquetes / líneas', 'Actividades'], horizontal=True, key=level_key)
+            with date_col:
+                if not st.session_state.get('option4_forecast_finish_default_v1'):
+                    st.session_state['option4_dates'] = 'Previsión actual'
+                    st.session_state['option4_forecast_finish_default_v1'] = True
+                mode = st.radio('Fechas del cronograma', ['Previsión actual', 'Base'], horizontal=True, key='option4_dates',
+                    help='La previsión actual termina cada barra en Fin previsto actual. Base permite comparar con Fin base.')
+            with compare_col:
+                st.markdown('<div class="option-timeline-compare-label">Referencia de fechas</div>', unsafe_allow_html=True)
+                compare_base = st.checkbox('Comparar con línea base', value=True, disabled=mode == 'Base', key='option4_timeline_baseline')
+            activity_col, order_col = st.columns(2)
+            with activity_col:
+                if level == 'Actividades':
+                    ids = scope.sort_values(['Inicio base', 'Fin base', 'ID'])['ID'].tolist()
+                    if 'option4_timeline_ids' in st.session_state:
+                        st.session_state['option4_timeline_ids'] = [value for value in st.session_state['option4_timeline_ids'] if value in ids]
+                    names = scope.set_index('ID')['Actividad / entregable'].to_dict()
+                    chosen = st.multiselect('Actividades del cronograma', ids, key='option4_timeline_ids', format_func=lambda value: f'{value} · {names.get(value, value)}', placeholder='Todas las actividades de la selección')
+                    if chosen:
+                        scope = scope[scope['ID'].isin(chosen)].copy()
+            with order_col:
+                if not st.session_state.get('option4_timeline_chronological_default_v1'):
+                    st.session_state['option4_timeline_sort'] = 'Fecha de inicio'
+                    st.session_state['option4_timeline_chronological_default_v1'] = True
+                order = st.selectbox('Orden de lectura', ['Fecha de inicio', 'Fecha de término', 'Sistema y paquete'], key='option4_timeline_sort')
+            end = 'Fin base' if mode == 'Base' else 'Fin previsto actual'
+            rows = build_timeline_rows(scope, end, level)
+            if rows.empty:
+                st.info('No hay actividades con los estados y fechas seleccionados. Ajusta los filtros del cronograma.')
+                return
+            if order != 'Sistema y paquete':
+                rows = rows.sort_values(['_start', '_end', '_label'] if order == 'Fecha de inicio' else ['_end', '_start', '_label'], kind='stable')
 
-    scheduled_count = len(rows) if level == 'Actividades' else int(rows['Actividades'].sum())
-    shown = rows.copy()
-    overview_progress = weighted_progress(scope)
-    progress_label = 'Sin referencia' if pd.isna(overview_progress) else f'{overview_progress:.1f}%'.replace('.', ',')
-    state_colors = {'Completado':'#15803D', 'En curso':'#D97706', 'Pendiente':'#64748B'}
-    badges = ''.join(
-        f'<span class="option-state-badge"><i style="background:{color}"></i>{name}<b>{int(scope["Estado por avance"].eq(name).sum())}</b></span>'
-        for name, color in state_colors.items()
-    )
-    hito_label = ' + '.join(selected_hitos) if selected_hitos else 'Todos los hitos'
-    st.html(
-        '<div class="option-timeline-context"><div><span class="option-timeline-eyebrow">RUTA DE EJECUCIÓN</span><strong>'
-        + html.escape(hito_label + ' → ' + system + ' → ' + package) + '</strong>'
-        f'<span>{level} · {mode} · {len(rows)} filas · cronograma completo</span></div>'
-        f'<div class="option-state-legend">{badges}</div></div>'
-        '<div class="option-timeline-summary">'
-        f'<div><span>Actividades seleccionadas</span><b>{len(scope)}</b></div>'
-        f'<div><span>Avance físico ponderado</span><b>{progress_label}</b></div>'
-        f'<div><span>Con atraso previsto</span><b>{int(scope["_delay"].gt(0).sum())}</b></div>'
-        f'<div><span>Actividades con fechas</span><b>{scheduled_count} / {len(scope)}</b></div></div>'
-    )
-    shown['_tooltip'] = shown.apply(lambda row: timeline_tooltip(row, level, mode), axis=1)
-    document, panel_height = timeline_document(shown, level, mode, compare_base)
-    components.html(document, height=panel_height, scrolling=False)
-    st.caption('Color: estado por avance · Porcentaje al final de cada barra: avance físico ponderado del grupo.' if level != 'Actividades' else 'Color: estado por avance · Porcentaje al final de cada barra: avance físico de la actividad.')
-    if mode == 'Previsión actual' and compare_base:
-        st.caption('Línea punteada debajo de la barra: plazo base. La barra de color termina en Fin previsto actual.')
-    if scheduled_count < len(scope):
-        st.caption(f'{len(scope) - scheduled_count} actividades no se dibujan por fechas incompletas o un fin anterior al inicio. Puedes revisarlas en el detalle de fechas.')
-    if level != 'Actividades':
-        st.caption('Cada barra resume el intervalo entre la primera y la última fecha del grupo; puede incluir períodos sin actividad. El estado y el avance del grupo se ponderan por presupuesto de referencia.')
-    st.caption('Los rombos identifican actividades de un solo día. Fin real conserva el cierre efectivo; la previsión técnica se mantiene separada de las fechas de desembolso.')
+        scheduled_count = len(rows) if level == 'Actividades' else int(rows['Actividades'].sum())
+        shown = rows.copy()
+        overview_progress = weighted_progress(scope)
+        progress_label = 'Sin referencia' if pd.isna(overview_progress) else f'{overview_progress:.1f}%'.replace('.', ',')
+        state_colors = {'Completado':'#15803D', 'En curso':'#D97706', 'Pendiente':'#64748B'}
+        badges = ''.join(
+            f'<span class="option-state-badge"><i style="background:{color}"></i>{name}<b>{int(scope["Estado por avance"].eq(name).sum())}</b></span>'
+            for name, color in state_colors.items()
+        )
+        hito_label = ' + '.join(selected_hitos) if selected_hitos else 'Todos los hitos'
+        st.html(
+            '<div class="option-timeline-context"><div><span class="option-timeline-eyebrow">RUTA DE EJECUCIÓN</span><strong>'
+            + html.escape(hito_label + ' → ' + system + ' → ' + package) + '</strong>'
+            f'<span>{level} · {mode} · {len(rows)} filas · cronograma completo</span></div>'
+            f'<div class="option-state-legend">{badges}</div></div>'
+            '<div class="option-timeline-summary">'
+            f'<div><span>Actividades seleccionadas</span><b>{len(scope)}</b></div>'
+            f'<div><span>Avance físico ponderado</span><b>{progress_label}</b></div>'
+            f'<div><span>Con atraso previsto</span><b>{int(scope["_delay"].gt(0).sum())}</b></div>'
+            f'<div><span>Actividades con fechas</span><b>{scheduled_count} / {len(scope)}</b></div></div>'
+        )
+        shown['_tooltip'] = shown.apply(lambda row: timeline_tooltip(row, level, mode), axis=1)
+        document, panel_height = timeline_document(shown, level, mode, compare_base)
+        components.html(document, height=panel_height, scrolling=False)
+        if scheduled_count < len(scope):
+            st.caption(f'{len(scope) - scheduled_count} actividades no se dibujan por fechas incompletas o un fin anterior al inicio. Puedes revisarlas en el detalle de fechas.')
+        with st.expander('Cómo leer el cronograma'):
+            st.caption('Color: estado por avance. El porcentaje muestra el avance físico de la actividad.' if level == 'Actividades' else 'Color: estado por avance. El porcentaje muestra el avance físico ponderado del grupo.')
+            if mode == 'Previsión actual' and compare_base:
+                st.caption('La línea punteada muestra la línea base y la barra de color termina en Fin previsto actual.')
+            if level != 'Actividades':
+                st.caption('Cada barra resume el intervalo entre la primera y la última fecha del grupo; puede incluir períodos sin actividad. Estado y avance se ponderan por presupuesto de referencia.')
+            st.caption('Los rombos identifican actividades de un solo día. Fin real conserva el cierre efectivo; la previsión técnica es independiente de las fechas de desembolso.')
     detail = scope.copy()
     columns = ['Hito objetivo', 'Sistema', 'Paquete / línea', 'ID', 'Actividad / entregable', 'Estado por avance', 'Presupuesto vigente', '_progress', 'Inicio base', 'Fin base', 'Fin previsto actual', 'Fin real', '_delay']
     detail_order = ['Inicio base', end, 'ID'] if order == 'Fecha de inicio' else [end, 'Inicio base', 'ID'] if order == 'Fecha de término' else ['Sistema', 'Paquete / línea', 'Inicio base', 'ID']
@@ -552,13 +561,13 @@ def render_milestone_overview(tasks, cash=None):
             f'<div class="option-milestone-track" role="img" aria-label="Avance: {progress_label}"><i style="width:{percentage:.2f}%"></i></div>'
             f'<div class="option-milestone-stats"><span><b>{completed} / {len(group)}</b> terminadas</span>'
             f'<span class="{"has-delay" if delayed else ""}"><b>{delayed}</b> con atraso previsto</span></div>'
-            f'<div class="option-milestone-finish"><span title="Fin previsto actual de las filas con Hito en Paquete / línea">Fin previsto actual</span><b>{finish_label}</b><small>{html.escape(source_label)}</small></div>'
+            f'<div class="option-milestone-finish" title="{html.escape(source_label, quote=True)}"><span>Fin previsto actual</span><b>{finish_label}</b></div>'
             '</article>'
         )
-    grid_class = 'option-milestone-grid option-capital-milestones' if cash is not None else 'option-milestone-grid'
+    grid_class = 'option-milestone-grid option-capital-milestones' if cash is not None else 'option-milestone-grid option-technical-milestones'
     st.html(f'<div class="{grid_class}">' + ''.join(cards) + '</div>')
-    st.caption('Nombre y fin previsto: filas de Plan que contienen Hito en Paquete / línea. El avance ponderado, los importes y los conteos resumen las actividades asignadas a cada hito.')
-    with st.expander('Filas Hito que determinan las tarjetas y sus fechas'):
+    with st.expander('Criterios y fuentes de los hitos'):
+        st.caption('Nombre y fin previsto: marcadores Hito de Plan. El avance ponderado y los conteos resumen las actividades asignadas a cada hito.')
         st.caption('Solo se consideran los marcadores Hito de Paquete / línea. Si hay varios para el mismo Hito objetivo, la fecha corresponde al último de esos marcadores.')
         if finish_sources:
             st.dataframe(pd.DataFrame(finish_sources), hide_index=True, use_container_width=True,
@@ -570,7 +579,6 @@ def render_milestone_overview(tasks, cash=None):
 
 def technical_view(tasks):
     render_milestone_overview(tasks)
-    st.subheader('Cronograma técnico')
     render_technical_timeline(tasks)
     st.subheader('Top 10 · desvío previsto')
     st.caption('Identifica las diez actividades con mayor diferencia entre el fin previsto actual y el fin de la línea base. Este ranking ayuda a priorizar la revisión de plazos; mide desvío previsto, no el atraso real de cierre.')
@@ -620,6 +628,21 @@ def pmo_view(tasks):
     st.download_button('Descargar análisis PMO',data=currency_export(tasks.drop(columns=[c for c in tasks if c.startswith('_')])).to_csv(index=False).encode('utf-8-sig'),file_name='opcion_analisis_pmo.csv',mime='text/csv',key='option4_download')
 
 
+def render_source_context(cutoff,fetched_at):
+    rate=f'{exchange_rate():,.2f}'.replace(',','X').replace('.',',').replace('X','.')
+    with st.container(key='option4_source_context'):
+        context_col,source_col=st.columns([3,1])
+        with context_col:
+            st.html('<div class="option-source-strip"><b>'+currency_code()+'</b><span>1 USD = '+rate+' CLP</span>'
+                '<span>Corte '+cutoff.strftime('%d-%m-%Y')+'</span></div>')
+        with source_col:
+            with st.popover('Fuente y actualización',use_container_width=True):
+                st.markdown('**Consulta:** '+fetched_at+' · Santiago')
+                st.markdown('**Corte del documento:** '+cutoff.strftime('%d-%m-%Y'))
+                st.caption('Actualización cada 60 segundos mientras esta vista está abierta. Los montos provienen de Costos; las fechas y actividades, de Plan.')
+                st.link_button('Abrir documento fuente',SOURCE+'?output=csv')
+
+
 @st.fragment(run_every=60)
 def render_analysis_option(refresh_nonce, render_navigation):
     with st.container(key='analysis_option'):
@@ -644,12 +667,9 @@ def render_analysis_option(refresh_nonce, render_navigation):
             st.error(f'No se pudo cargar el documento de análisis: {exc}')
             return
         tasks, cash = convert_workbook(tasks, cash, number)
-        st.caption('Moneda: '+currency_code() + (f' · Conversión: 1 USD = {exchange_rate():,.2f} CLP' if currency_code() == 'USD' else ' · Importes publicados en pesos chilenos'))
-        st.caption(f'Corte del documento: {cutoff:%d-%m-%Y} · Consultado: {fetched_at} · Hora de Santiago')
-        st.caption('Actualización automática cada 60 segundos mientras esta vista está abierta. Los importes se leen de la publicación de Costos.')
-        st.markdown(f'[Abrir documento fuente]({SOURCE}?output=csv)')
         title=next(item[2] for item in VIEWS if item[0]==view)
         st.subheader(title)
+        render_source_context(cutoff,fetched_at)
         scoped=tasks.copy() if view in ('technical', 'capital') else filters(tasks,view)
         if scoped.empty:
             st.info('No hay actividades para la selección.')

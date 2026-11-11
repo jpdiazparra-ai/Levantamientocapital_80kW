@@ -7,6 +7,21 @@ from valuation_costs import load_cost_report, SOURCE
 CASH_FIELDS=['Pendiente validado CLP','Referencia por validar CLP']
 
 
+def calendar_plot_data80(data):
+    """Continuous monthly axis through both explicit 80 kW milestone dates."""
+    markers=data.get('milestones',pd.DataFrame(columns=['Paquete / línea','Fin previsto actual'])).copy()
+    markers=markers.loc[markers['Paquete / línea'].fillna('').str.contains(
+        r'\bhito\s+(?:piloto|producto)\s+80\s*kw\b',case=False,regex=True)]
+    markers['Fin previsto actual']=pd.to_datetime(markers['Fin previsto actual'])
+    markers=markers.groupby('Paquete / línea',as_index=False)['Fin previsto actual'].max().sort_values('Fin previsto actual')
+    monthly=data['monthly'].copy()
+    bounds=list(monthly['_month'])+list(markers['Fin previsto actual'].dropna())
+    if bounds:
+        months=pd.date_range(min(bounds).to_period('M').to_timestamp(),max(bounds).to_period('M').to_timestamp(),freq='MS')
+        monthly=monthly.set_index('_month').reindex(months).rename_axis('_month').reset_index()
+    return monthly,markers
+
+
 def project_calendar80(tasks,cash,cutoff):
     """Same calendar rules as capital_view, scoped to the 80 kW project in Plan."""
     if tasks['ID'].duplicated().any() or cash['ID actividad'].duplicated().any():
@@ -20,7 +35,8 @@ def project_calendar80(tasks,cash,cutoff):
     monthly=selected.dropna(subset=['_month']).groupby('_month')[CASH_FIELDS].sum(min_count=1).reset_index()
     monthly['Total CLP']=monthly[CASH_FIELDS].sum(axis=1,min_count=1)
     unknown=selected.loc[selected['_date'].isna()]
-    markers=scope.loc[scope['Paquete / línea'].fillna('').str.contains('Hito',case=False),['Paquete / línea','Fin previsto actual']].dropna(subset=['Fin previsto actual']).drop_duplicates()
+    markers=scope.loc[scope['Paquete / línea'].fillna('').str.contains(
+        r'\bhito\s+(?:piloto|producto)\s+80\s*kw\b',case=False,regex=True),['Paquete / línea','Fin previsto actual']].drop_duplicates()
     return dict(monthly=monthly,cash=selected,cutoff=pd.Timestamp(cutoff),
         missing_dates=len(unknown),undated_total=unknown[CASH_FIELDS].sum(axis=1,min_count=1).sum(min_count=1),
         overdue_count=int(selected['_date'].lt(first_month).sum()),

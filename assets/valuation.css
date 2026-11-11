@@ -53,3 +53,23 @@
 .st-key-option4_valuation .deal-report table{min-width:470px;}
 @media(max-width:1250px){.st-key-option4_valuation_investment [data-testid="stHorizontalBlock"]{flex-direction:column;gap:12px;}.st-key-option4_valuation_investment [data-testid="stColumn"]{width:100%!important;flex:1 1 100%!important;min-width:0!important;}}
 @media(max-width:1200px){.st-key-option4_valuation_value_charts [data-testid="stHorizontalBlock"]{flex-direction:column;gap:14px;}.st-key-option4_valuation_value_charts [data-testid="stColumn"]{width:100%!important;flex:1 1 100%!important;min-width:0!important;}}
+
+/* Unified unit economics: one comparison panel instead of repeated KPI strips. */
+.st-key-option4_valuation .unit-economics-card{border:1px solid #DCE5ED;border-radius:8px;overflow:hidden;margin:2px 0 18px;background:#FFF;color:#203E58;}
+.st-key-option4_valuation .unit-economics-card header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px;background:#F3F7FA;}
+.st-key-option4_valuation .unit-economics-card h4{font-size:16px;font-weight:700;margin:0;padding:0;color:#203E58;}
+.st-key-option4_valuation .unit-economics-card header p{font-size:11px;color:#627588;margin:4px 0 0;}
+.st-key-option4_valuation .unit-economics-card header span{font-size:11px;color:#315E7D;white-space:nowrap;}
+.st-key-option4_valuation .unit-economics-card header b{display:block;text-align:right;font-size:19px;margin-top:3px;}
+.st-key-option4_valuation .unit-economics-scroll{overflow-x:auto;}
+.st-key-option4_valuation .unit-economics-card table{width:100%;border-collapse:collapse;min-width:470px;}
+.st-key-option4_valuation .unit-economics-card thead th{font-size:10px;font-weight:600;color:#627588;background:#FAFCFD;text-align:right;padding:9px 16px;}
+.st-key-option4_valuation .unit-economics-card thead th:first-child{text-align:left;}
+.st-key-option4_valuation .unit-economics-card tbody th{width:43%;text-align:left;font-size:12px;font-weight:600;padding:15px 16px;border-top:1px solid #E5EDF3;}
+.st-key-option4_valuation .unit-economics-card small{display:block;font-size:10px;font-weight:400;color:#627588;margin-top:4px;line-height:1.45;}
+.st-key-option4_valuation .unit-economics-card td{font-size:18px;font-weight:650;text-align:right;white-space:nowrap;padding:15px 16px;border-top:1px solid #E5EDF3;font-variant-numeric:tabular-nums;letter-spacing:-.3px;}
+.st-key-option4_valuation .unit-economics-card td small{display:inline;font-size:10px;}
+.st-key-option4_valuation .unit-economics-card tr.net{background:#EFF7F6;}
+.st-key-option4_valuation .unit-economics-card tr.net td{color:#276F73;}
+.st-key-option4_valuation .unit-economics-card tr.gross{background:#F8FAFC;}
+@media(max-width:700px){.st-key-option4_valuation .unit-economics-card td{font-size:15px;padding:12px 10px;}.st-key-option4_valuation .unit-economics-card tbody th{padding:12px 10px;}}

@@ -102,7 +102,6 @@ def render_capital_comparison(summary,dimension,key):
             else:st.html(f'<div class="option-finance-chart-empty" style="height:{cash.layout.height}px">No hay importes de caja informados.</div>')
             footer = 'Sin importes de caja validada informados en esta selección.' if summary['Caja validada'].isna().all() else 'La validación se muestra por separado de los importes pendientes de revisar.'
             st.html('<div class="option-finance-comparison-footer">'+html.escape(footer)+'</div>')
-    st.caption('Ambos gráficos usan la misma escala. ' + ('Los ejes se expresan en miles de USD.' if currency_code() == 'USD' else 'MM = millones de pesos chilenos.') + ' Los valores vacíos no se interpretan como cero.')
 
 
 def add_calendar_milestones(fig, visible, milestones):
@@ -133,16 +132,17 @@ def add_calendar_milestones(fig, visible, milestones):
         fig.add_shape(type='line', x0=date, x1=date, xref='x', y0=0, y1=1, yref='paper',
             line=dict(color=color, width=1.4, dash='dot'), layer='above')
         fig.add_annotation(x=date, xref='x', y=1.02, yref='paper',
-            yshift=level*58, xanchor='center', yanchor='bottom',
+            yshift=level*44, xanchor='center', yanchor='bottom',
             text=f'<b>{label}</b><br>{date:%d-%m-%Y}', showarrow=False,
-            bordercolor=color, borderwidth=1, borderpad=6, bgcolor='#FFFFFF',
+            bordercolor=color, borderwidth=1, borderpad=4, bgcolor='#FFFFFF',
             font=dict(family='Arial, sans-serif',size=10,color=color), align='center',
             hovertext=f'{html.escape(str(row["ID"]))} · Fin previsto actual de Plan')
     padding = pd.Timedelta(days=max(18, span*.055))
     fig.update_xaxes(range=[first-padding,last+padding],tickmode='array',tickvals=dates.tolist(),
         ticktext=[MONTHS[value.month-1]+'<br>'+str(value.year) for value in dates])
-    top = 92 + max_level*58
-    fig.update_layout(height=420+top-50,margin=dict(l=12,r=25,t=top,b=65))
+    original_height = 420+92+max_level*58-50
+    top = 72 + max_level*44
+    fig.update_layout(height=round(original_height*.8),margin=dict(l=12,r=25,t=top,b=52))
 
 
 def calendar_figure(monthly, milestones=None):
@@ -158,8 +158,8 @@ def calendar_figure(monthly, milestones=None):
         fig.add_scatter(x=visible['_month'],y=total/chart_scale(),mode='text',
             text=[amount(value,True) for value in total],textposition='top center',
             textfont=dict(size=10,color='#0F2435'),hoverinfo='skip',showlegend=False,cliponaxis=False)
-        figure_style(fig,height=420,horizontal=False)
-        fig.update_layout(barmode='stack',bargap=.35,margin=dict(l=12,r=25,t=50,b=65))
+        figure_style(fig,height=336,horizontal=False)
+        fig.update_layout(barmode='stack',bargap=.35,margin=dict(l=12,r=25,t=40,b=52))
         fig.update_yaxes(range=[0,max(1,float(total.max())/chart_scale()*1.23)])
         fig.update_xaxes(tickmode='array',tickvals=visible['_month'].tolist(),
             ticktext=[MONTHS[value.month-1]+'<br>'+str(value.year) for value in visible['_month']],tickangle=0)
@@ -167,7 +167,7 @@ def calendar_figure(monthly, milestones=None):
     return fig,visible,total
 
 
-def render_calendar(monthly, milestones=None):
+def render_calendar(monthly, milestones=None, criteria=()):
     fig,visible,total=calendar_figure(monthly, milestones)
     with st.container(border=False,key='capital_calendar_panel'):
         header('Caja mes a mes',amount(total.sum(min_count=1)),
@@ -175,51 +175,72 @@ def render_calendar(monthly, milestones=None):
         st.html('<div class="option-finance-legend"><span><i style="background:'+VALID+'"></i>Validada</span><span><i style="background:'+PENDING+'"></i>Por validar</span></div>')
         if fig.data:
             render(fig,'cash')
-            peak=total.idxmax();month=visible.loc[peak,'_month']
-            st.caption(f'Mayor necesidad mensual: {MONTHS[month.month-1]} {month.year} · {amount(total.loc[peak])}. Los importes escritos sobre las barras son los totales del mes.')
         else:st.info('La selección no tiene desembolsos calendarizados con montos informados.')
-        if monthly['Pendiente validado CLP'].isna().all():st.caption('No hay importes validados informados; las barras ámbar corresponden a montos por validar.')
-        if milestones is not None and not milestones.empty:
-            st.caption('Líneas verticales: hitos de Paquete / línea. Los recuadros muestran su Fin previsto actual en Plan y respetan los filtros de la selección.')
+        with st.expander('Criterios y fuentes del calendario'):
+            if fig.data:
+                peak=total.idxmax();month=visible.loc[peak,'_month']
+                st.markdown(f'**Mayor necesidad mensual:** {MONTHS[month.month-1]} {month.year} · **{amount(total.loc[peak])}**.')
+            st.caption('Las cifras sobre las barras corresponden al total mensual de caja validada y por validar.')
+            if monthly['Pendiente validado CLP'].isna().all():
+                st.caption('No hay importes validados informados; las barras ámbar corresponden a montos por validar.')
+            if milestones is not None and not milestones.empty:
+                st.caption('Líneas verticales: hitos de Paquete / línea. Los recuadros muestran su Fin previsto actual en Plan y respetan los filtros de la selección.')
+            for note in criteria:st.caption(note)
 
 
 def render_responsible_funds(tasks,cash,summary_function):
     with st.container(border=True, key='option4_analysis_responsible'):
         st.subheader('Fondos por responsable')
-        st.caption('Relaciona la caja pendiente con la entidad o persona responsable de cada actividad. Cambia la agrupación para revisar la distribución de los montos y coordinar su seguimiento.')
+        st.caption('Distribución de caja validada y por validar según la asignación de Plan.')
         field=st.radio('Agrupar responsables por',['Entidad responsable','Responsable persona'],horizontal=True,key='option4_capital_responsible_field')
         scope=tasks.copy()
         scope[field]=scope[field].fillna('').astype(str).str.strip().replace('','Sin responsable asignado')
         summary=summary_function(scope,cash,field)
         summary['_total']=summary[['Caja validada','Caja por validar']].sum(axis=1,min_count=1)
         summary=summary.sort_values('_total',ascending=False,na_position='last')
-        labels=summary[field].tolist()
+        known=summary[summary['_total'].notna()].copy()
+        labels=known[field].tolist()
+        total=summary['_total'].sum(min_count=1)
         fig=go.Figure()
         for value,color in [('Caja validada',VALID),('Caja por validar',PENDING)]:
-            known=summary[summary[value].notna()]
-            if not known.empty:
-                fig.add_bar(x=known[value]/chart_scale(),y=known[field],orientation='h',name=value,
-                    marker=dict(color=color,cornerradius=4),width=.42,
-                    customdata=[[amount(money),wrap(label)] for money,label in zip(known[value],known[field])],
+            available=known[known[value].notna()]
+            if not available.empty:
+                fig.add_bar(x=available[value]/chart_scale(),y=available[field],orientation='h',name=value,
+                    marker=dict(color=color,cornerradius=4),width=.46,
+                    customdata=[[amount(value),wrap(label)] for value,label in zip(available[value],available[field])],
                     hovertemplate='<b>%{customdata[1]}</b><br>'+value+': %{customdata[0]}<extra></extra>')
-        known=summary[summary['_total'].notna()]
         if fig.data:
             fig.add_scatter(x=known['_total']/chart_scale(),y=known[field],mode='text',
                 text=[amount(value,True) for value in known['_total']],textposition='middle right',
                 hoverinfo='skip',cliponaxis=False,textfont=dict(size=11,color='#0F2435'))
             limit=max(1,float(known['_total'].max())/chart_scale()*1.3)
-            figure_style(fig,height=max(300,110+len(summary)*46),limit=limit)
-            fig.update_layout(barmode='stack')
+            height=max(290,100+len(known)*48)
+            figure_style(fig,height=height,limit=limit)
+            fig.update_layout(barmode='stack',margin=dict(l=12,r=95,t=15,b=45))
             fig.update_xaxes(title=chart_units()+' · caja pendiente')
-            fig.update_yaxes(categoryorder='array',categoryarray=labels,autorange='reversed')
-            with st.container(border=False,key='capital_responsible_panel'):
-                header('Asignación de caja pendiente',amount(summary['_total'].sum(min_count=1)),
-                    'Responsable de la actividad según Plan')
-                st.html('<div class="option-finance-legend"><span><i style="background:'+VALID+'"></i>Validada</span><span><i style="background:'+PENDING+'"></i>Por validar</span></div>')
-                render(fig,'capital_responsible')
+            fig.update_yaxes(categoryorder='array',categoryarray=labels,autorange='reversed',
+                tickmode='array',tickvals=labels,ticktext=[wrap(label) for label in labels])
+            header('Asignación de caja pendiente',amount(total),'Responsable de la actividad según Plan')
+            st.html('<div class="option-finance-legend"><span><i style="background:'+VALID+'"></i>Validada</span><span><i style="background:'+PENDING+'"></i>Por validar</span></div>')
+            chart_col,detail_col=st.columns([1.5,1],gap='large')
+            with chart_col:render(fig,'capital_responsible')
+            with detail_col:
+                leader=known.iloc[0]
+                share=f'{leader["_total"]/total*100:.1f}%'.replace('.',',') if pd.notna(total) and total>0 else 'Sin base'
+                st.html('<div class="option-responsible-insight"><span>MAYOR ASIGNACIÓN DE CAJA</span><strong>'
+                    +html.escape(str(leader[field]))+'</strong><b>'+share+'</b><small>del total informado · '+html.escape(amount(leader['_total']))+'</small></div>')
+                detail=pd.DataFrame({'Responsable':summary[field],
+                    'Validada':[amount(value,True) if pd.notna(value) else '—' for value in summary['Caja validada']],
+                    'Por validar':[amount(value,True) if pd.notna(value) else '—' for value in summary['Caja por validar']],
+                    'Participación':[f'{value/total*100:.1f}%'.replace('.',',') if pd.notna(value) and pd.notna(total) and total>0 else '—' for value in summary['_total']]})
+                st.dataframe(detail,hide_index=True,use_container_width=True,height=max(200,min(430,40+len(detail)*36)),
+                    column_config={'Responsable':st.column_config.TextColumn(width=110),
+                        'Validada':st.column_config.TextColumn(width=110,help='Importe abreviado. El detalle conserva los montos completos y su estado.'),
+                        'Por validar':st.column_config.TextColumn(width=125,help='Importe abreviado pendiente de validar. Sin dato se muestra como guion.'),
+                        'Participación':st.column_config.TextColumn(width=80)})
         else:st.info('No hay fondos informados para los responsables de esta selección.')
-        st.caption('Esta distribución identifica al responsable de la actividad; no confirma quién aportará el financiamiento.')
-        with st.expander('Detalle de fondos por responsable'):
+        with st.expander('Detalle y criterios de fondos por responsable'):
+            st.caption('Esta distribución identifica al responsable de la actividad; no confirma quién aportará el financiamiento.')
             st.dataframe(summary.drop(columns='_total'),hide_index=True,use_container_width=True,column_config=currency_column_config(summary))
             st.download_button('Descargar fondos por responsable',currency_export(summary.drop(columns='_total')).to_csv(index=False).encode('utf-8-sig'),
                 file_name='fondos_por_responsable.csv',mime='text/csv',key='option4_responsible_download')

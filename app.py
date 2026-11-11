@@ -27814,12 +27814,12 @@ if bootstrap_data_error:
     st.stop()
 
 capex_total_usd_base = float(df_capex_base["Monto_USD"].sum() or 0.0) if "Monto_USD" in df_capex_base.columns else 0.0
-fx_base = 925.0
+fx_base = 980.0
 global_fx_value = st.sidebar.number_input(
     "Tipo de cambio",
     min_value=100.0,
     max_value=5000.0,
-    value=925.0,
+    value=fx_base,
     step=10.0,
     help="Valor base global CLP/USD. Se usa como referencia inicial para los cálculos y parámetros ligados al dólar.",
 )
@@ -29058,7 +29058,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
         st.plotly_chart(fig_val, use_container_width=True)
 
     df_model, model_map = get_valorizacion_model_map(df_valorizacion)
-    fx_default = float(fx_used) if np.isfinite(fx_used) and fx_used > 0 else parse_model_number(model_map.get("fxclpusd", 925))
+    fx_default = float(fx_used) if np.isfinite(fx_used) and fx_used > 0 else parse_model_number(model_map.get("fxclpusd", 980))
     total_base_knowhow_clp, _, _, _ = get_valor_activo_tecnologico_construido(refresh_nonce=data_refresh_nonce)
     pre_money_actual_default = total_base_knowhow_clp / fx_default if fx_default > 0 and total_base_knowhow_clp > 0 else 0.0
     try:
@@ -29073,7 +29073,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
     captura_default = parse_model_percent(model_map.get("capturadelvalorpotencialpostpiloto", "100%"))
     ronda_pct_default = parse_model_percent(model_map.get("participacionobjetivoparanuevosinversionistas", "70%"))
     widget_defaults = {
-        "fx": int(round(fx_default or 925)),
+        "fx": int(round(fx_default or 980)),
         "pre_money": int(round(pre_money_actual_default)),
         "inv_clp": int(round(inversion_clp_default)),
         "investment_currency": "USD",

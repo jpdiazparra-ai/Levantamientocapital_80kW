@@ -127,7 +127,6 @@ def render_commercial_comparison(project_scopes):
     cards += [f'<article><span>VARIACIÓN DEL MONTO TOTAL</span><strong>{_pct(changes, True)}</strong><p>80 kW respecto de 10 kW</p><small>Diferencia: {html.escape(amount(totals[80]-totals[10]))}</small></article>',
         f'<article class="normalized"><span>VARIACIÓN DEL COSTO POR kW</span><strong>{_pct(unit_changes, True)}</strong><p>Costos divididos por 80 y 10 kW</p><small>Negativo: menor costo informado por kW</small></article>']
     st.html('<div class="option-comparison-kpis">'+''.join(cards)+'</div>')
-    st.caption('Los indicadores y gráficos siguen la selección actual. Los montos son parciales cuando faltan registros; una reducción por kW no demuestra ahorro validado si la cobertura o el alcance técnico difieren.')
     by_line = level == 'Por línea'
     labels = [row['Paquete / línea']+' · '+row['Sistema'] if by_line else row['Sistema'] for _, row in frame.iterrows()]
     wrapped = ['<br>'.join(textwrap.wrap(label, 34)) for label in labels]
@@ -160,7 +159,6 @@ def render_commercial_comparison(project_scopes):
     else:
         st.info('No hay una base comercial positiva de 10 kW y monto de 80 kW para calcular variaciones por kW en esta selección.')
     st.markdown('##### Matriz técnica y económica')
-    st.caption('Los porcentajes de participación se refieren al total de cada turbina dentro del alcance Total/Comercial, y permanecen estables al filtrar sistemas o líneas. pp = puntos porcentuales. Sin cálculo indica que no existe una base positiva de 10 kW o falta un monto.')
     dims = ['Sistema','Paquete / línea'] if by_line else ['Sistema']
     columns = [*dims,'Comparabilidad','Comercial 10','Comercial 80','Diferencia comercial','Variación total %','Costo/kW 10','Costo/kW 80','Variación por kW %','Presupuesto 10','Presupuesto 80','HH 10','HH 80','HH/kW 10','HH/kW 80','HH pendientes 10','HH pendientes 80','Partidas 10','Partidas 80','Informadas 10','Informadas 80','Cobertura % 10','Cobertura % 80','Participación % 10','Participación % 80','Cambio participación · pp']
     money = ['Comercial 10','Comercial 80','Diferencia comercial','Costo/kW 10','Costo/kW 80','Presupuesto 10','Presupuesto 80']
@@ -173,6 +171,8 @@ def render_commercial_comparison(project_scopes):
     configs['Comparabilidad'] = st.column_config.TextColumn(width=190)
     st.dataframe(style,hide_index=True,use_container_width=True,height=min(650,38+len(frame)*36),column_config=configs)
     with st.expander('Criterios de comparación y lectura técnica'):
+        st.caption('Los indicadores y gráficos siguen la selección actual. Los montos son parciales cuando faltan registros; una reducción por kW no demuestra ahorro validado si la cobertura o el alcance técnico difieren.')
+        st.caption('Los porcentajes de participación se refieren al total de cada turbina dentro del alcance Total/Comercial, y permanecen estables al filtrar sistemas o líneas. pp = puntos porcentuales. Sin cálculo indica que no existe una base positiva de 10 kW o falta un monto.')
         st.markdown('**Base:** Comercial anterior y Presupuesto vigente de Costos, solo Costo para producto = Aplica, asignadas por Hito objetivo de 10/80 kW. '
             '**Variación:** (80 − 10) / 10 × 100, tanto en monto total como en costo/kW; una base cero, negativa o faltante queda sin cálculo. '
             '**HH:** Cantidad de Costos solo para criterio HH; los insumos no se suman como horas. '

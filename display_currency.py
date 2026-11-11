@@ -27,7 +27,7 @@ def currency_code():
 
 
 def exchange_rate():
-    rate = float(st.session_state.get('option4_fx_rate', 925.0))
+    rate = float(st.session_state.get('option4_fx_rate', 980.0))
     if not math.isfinite(rate) or rate <= 0:
         raise ValueError('El tipo de cambio CLP/USD debe ser mayor que cero.')
     return rate

@@ -178,37 +178,40 @@ def commercial_donut(summary, project, total):
         other = positive.iloc[6:]['Monto comercial · CLP'].sum()
         positive = pd.concat([positive.iloc[:6], pd.DataFrame({'Sistema': ['Otros sistemas'], 'Monto comercial · CLP': [other]})], ignore_index=True)
     fig = go.Figure(go.Pie(labels=positive['Sistema'], values=positive['Monto comercial · CLP'],
-        hole=.69, sort=False, direction='clockwise', rotation=90,
-        text=[f'{value/total:.1%}'.replace('.', ',') if value/total >= .04 else '' for value in positive['Monto comercial · CLP']],
-        textinfo='text', textposition='inside', textfont=dict(size=14, color='#FFFFFF'),
+        hole=.64, sort=False, direction='clockwise', rotation=90,
+        text=[f'{value/total:.1%}'.replace('.', ',') if value/total >= .10 else '' for value in positive['Monto comercial · CLP']],
+        textinfo='text', textposition='inside', textfont=dict(size=13, color='#FFFFFF'),
         marker=dict(colors=COLORS, line=dict(color='#FFFFFF', width=3)),
         customdata=[amount(value) for value in positive['Monto comercial · CLP']],
-        hovertemplate='<b>%{label}</b><br>%{customdata} '+currency_code()+'<br>%{percent:.1%} del subtotal<extra></extra>'))
-    fig.update_layout(height=340, margin=dict(l=14, r=14, t=20, b=20), showlegend=False,
+        hovertemplate='<b>%{label}</b><br>%{customdata}<br>%{percent:.1%} del subtotal informado<extra></extra>'))
+    fig.update_layout(height=320, margin=dict(l=8, r=8, t=12, b=12), showlegend=False,
         paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Arial, sans-serif', color='#0F2435'),
         hoverlabel=dict(bgcolor='#FFFFFF', bordercolor='#D8E3EB', font=dict(size=12, color='#0F2435')),
-        annotations=[dict(x=.5, y=.53, text='<b>'+amount(total, True)+'</b>', showarrow=False, font=dict(size=27, color='#0F2435')),
-                     dict(x=.5, y=.42, text='COMERCIAL INFORMADO', showarrow=False, font=dict(size=10, color='#64748B'))])
+        annotations=[dict(x=.5, y=.53, text='<b>'+amount(total, True)+'</b>', showarrow=False, font=dict(size=23, color='#0F2435')),
+                     dict(x=.5, y=.42, text='SUBTOTAL INFORMADO', showarrow=False, font=dict(size=10, color='#64748B'))])
     return fig, positive
 
 
 def commercial_system_ranking(summary, total, wedges):
-    """Use the donut's colors while keeping every system's exact amount visible."""
-    colors = dict(zip(wedges['Sistema'], COLORS))
-    rows = []
-    known = summary[summary['Monto comercial · CLP'].notna()]
-    for _, row in known.iterrows():
-        value = row['Monto comercial · CLP']
-        share = value / total * 100 if total > 0 else float('nan')
-        label = f'{share:.1f}%'.replace('.', ',') if pd.notna(share) else '—'
-        width = min(100, max(0, share)) if pd.notna(share) else 0
-        color = colors.get(row['Sistema'], COLORS[-1])
+    """Exact amounts, shares and coverage aligned with the distribution colors."""
+    colors=dict(zip(wedges['Sistema'],COLORS))
+    rows=[]
+    for rank,(_,row) in enumerate(summary.iterrows(),1):
+        value=row['Monto comercial · CLP']
+        share=value/total*100 if pd.notna(value) and pd.notna(total) and total>0 else float('nan')
+        label=f'{share:.1f}%'.replace('.',',') if pd.notna(share) else '—'
+        width=min(100,max(0,share)) if pd.notna(share) else 0
+        color=colors.get(row['Sistema'],COLORS[-1])
+        known=int(row['Partidas informadas']);count=int(row['Actividades'])
         rows.append('<div class="option-commercial-system">'
-            f'<div class="option-commercial-system-label"><i style="background:{color}"></i><b>{html.escape(str(row["Sistema"]))}</b>'
-            f'<small>{int(row["Partidas informadas"])} partidas con monto</small></div>'
-            f'<div class="option-commercial-system-value"><b>{amount(value)}</b><span>{label}</span></div>'
+            f'<div class="option-commercial-system-label"><i style="background:{color}" aria-hidden="true"></i>'
+            f'<b>{html.escape(str(row["Sistema"]))}</b><small>{known} / {count} partidas informadas</small></div>'
+            f'<b class="option-commercial-system-amount">{html.escape(amount(value))}</b>'
+            f'<span class="option-commercial-system-share">{label}</span>'
             f'<div class="option-commercial-system-track"><i style="width:{width:.3f}%;background:{color}"></i></div></div>')
-    return '<div class="option-commercial-ranking"><div class="option-commercial-ranking-head"><b>Composición del costo por sistema</b><span>MONTO '+currency_code()+' / PARTICIPACIÓN</span></div>'+''.join(rows)+'</div>'
+    return ('<div class="option-commercial-ranking"><div class="option-commercial-ranking-head">'
+        '<b>Composición del costo por sistema</b><span>Importe · '+currency_code()+'</span><span>Participación</span></div>'
+        +''.join(rows)+'</div>')
 
 
 def commercial_group_details(scope, dimension, group, include_missing=False):
@@ -338,8 +341,6 @@ def render_commercial_analysis(tasks):
         if 'Costo para producto' not in tasks:
             st.info('Falta Costo para producto en Costos para identificar las partidas aplicables al análisis comercial.')
             return
-        st.html('<div class="option-commercial-note"><b>Base comercial histórica</b><span>Los valores representan las partidas informadas en “Comercial anterior”. '
-            'Un subtotal con cobertura parcial no determina el costo completo de la turbina ni un precio de venta actualizado.</span></div>')
         projects = list(tasks['Proyecto'].dropna().unique())
         projects.sort(key=lambda name: (0 if re.search(r'10\s*k[wW]', name) else 1, name))
         if not projects:
@@ -403,17 +404,17 @@ def render_commercial_analysis(tasks):
                 f'<span class="option-commercial-source">Alcance: {mode} · Costos · Comercial anterior</span></div>'
                 '<div class="option-commercial-executive-kpis">'
                 f'<article class="primary"><span>Monto comercial · Alcance {mode} · {currency_code()}</span><strong>{amount(total)}</strong><small>Costos · Hito objetivo {capacity if capacity else ""} kW · Aplica</small></article>'
-                f'<article><span>{unit_label} · {currency_code()}/kW</span><strong>{unit}</strong><small>Potencia nominal: {capacity if capacity else "sin informar"} kW · base histórica</small></article>'
+                f'<article><span>{unit_label} · {currency_code()}/kW</span><strong>{unit}</strong><small>Potencia nominal: {capacity if capacity else "sin informar"} kW</small></article>'
                 f'<article><span>Cobertura del alcance {mode}</span><strong>{coverage:.1f}%</strong><small>{known} de {count} partidas · {count-known} sin monto</small>'
                 f'<div class="option-commercial-coverage-track"><i style="width:{coverage:.3f}%"></i></div></article>'
                 f'<article><span>Concentración en {concentration_count} sistemas</span><strong>{concentration_label}</strong><small>{funded_systems} sistemas con monto informado</small></article></div>')
-            st.caption(f'Gráfico y desglose · Vista {mode} · Monto del alcance: {amount(total)}. Los cuatro KPI, gráficos, tablas e informe general respetan el alcance seleccionado. La referencia de la turbina completa se conserva en el detalle de participaciones del proyecto.')
             donut_col, detail_col = st.columns([.85, 1.3], gap='large')
-            with donut_col:
+            with donut_col, st.container(key=f'option4_commercial_distribution_{index}'):
+                st.html('<div class="option-commercial-distribution-head"><b>Participación por sistema</b><span>Distribución del subtotal informado</span></div>')
                 if can_draw:
                     fig, wedges = commercial_donut(summary, project, total)
                     st.plotly_chart(fig, use_container_width=True, config={'displaylogo': False}, key=f'option4_commercial_donut_{index}')
-                    st.html('<div class="option-commercial-chart-note">Participación sobre el subtotal informado · Detalle completo a la derecha</div>')
+                    st.html('<div class="option-commercial-chart-note">Pasa el cursor sobre cada segmento para ver el sistema y su importe</div>')
                 else:
                     reason = 'Sin partidas aplicables al producto' if not count else 'Sin montos comerciales informados' if not known else 'Sin distribución positiva' if nonnegative else 'Hay ajustes negativos en la fuente'
                     st.html('<div class="option-commercial-empty"><div>—</div><b>'+reason+'</b><span>Consulta el detalle de partidas. El donut requiere montos no negativos y un subtotal positivo.</span></div>')
@@ -428,7 +429,7 @@ def render_commercial_analysis(tasks):
                 else:
                     st.info('El proyecto no tiene partidas clasificadas como Aplica en Costo para producto de Costos.')
             if can_draw:
-                st.html('<div class="option-commercial-insight"><span>LECTURA EJECUTIVA</span>'
+                st.html('<div class="option-commercial-insight"><span>CONCENTRACIÓN DEL COSTO</span>'
                     f'<p>Los {concentration_count} sistemas de mayor monto concentran <b>{concentration_label}</b> del subtotal. '
                     f'La cobertura es de <b>{coverage:.1f}% de los registros</b>; '
                     + ('el costo completo de la turbina sigue pendiente de completar.' if known < count else 'todas las actividades seleccionadas tienen monto informado.') + '</p></div>')
@@ -458,25 +459,3 @@ def render_commercial_analysis(tasks):
                     _summary_table(summary, 'Sistema', scope, f'option4_commercial_system_{index}', project_scope=project_scope, report_context={'project': commercial_project_label(project), 'mode': mode})
                 with milestone_tab:
                     _summary_table(commercial_breakdown(scope, 'Hito objetivo'), 'Hito objetivo', scope, f'option4_commercial_milestone_{index}', project_scope=project_scope, report_context={'project': commercial_project_label(project), 'mode': mode})
-            with st.expander('Trazabilidad de partidas · Costos'):
-                fields = DETAIL_FIELDS
-                detail = commercial_participations(scope, project_scope).assign(**{'Unidades': commercial_quantities(scope), 'Costo por unidad · CLP': commercial_unit_cost(scope)})
-                detail = detail.reindex(columns=fields).sort_values(COMMERCIAL, ascending=False, na_position='last', kind='stable')
-                detail = detail.rename(columns={'Unidades': 'Cantidad'})
-                detail['Variación %'] = commercial_budget_variation(detail)
-                st.dataframe(detail.style.format({**{field: amount for field in [COMMERCIAL, 'Presupuesto vigente', 'Costo por unidad · CLP'] if field in detail},
-                        '% del paquete': lambda value: f'{value:.2f}%'.replace('.', ','),
-                        '% del proyecto': lambda value: f'{value:.2f}%'.replace('.', ','),
-                        'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar')
-                        .set_properties(subset=[COMMERCIAL], **{'background-color': '#FFF1ED', 'color': '#9F3A28'}),
-                    hide_index=True, use_container_width=True, row_height=72, height=350,
-                    column_config=commercial_detail_columns())
-                st.download_button('Descargar análisis comercial · CSV', currency_export(detail).to_csv(index=False).encode('utf-8-sig'),
-                    file_name=f'costo_comercial_{index}.csv', mime='text/csv', key=f'option4_commercial_download_{index}')
-        with st.expander('Cómo interpretar el costo comercial'):
-            st.markdown('El subtotal suma **Comercial anterior** una sola vez por ID de actividad, vinculado desde **Costos** a **Plan**. '
-                'Se incluyen únicamente las partidas con **Costo para producto = Aplica** en Costos. Las filas Aprobado, No aplica o sin clasificación se excluyen de los importes, conteos, gráficos y descargas comerciales. '
-                'La cobertura mide registros con monto respecto de las actividades seleccionadas; no mide cuánto presupuesto está cubierto. '
-                'Los ceros explícitos cuentan como informados y los vacíos se conservan como faltantes. '
-                'El donut distribuye el subtotal informado por sistema. El indicador por kW divide ese mismo subtotal por la potencia nominal del proyecto; '
-                'con información parcial también es parcial. Estos montos se presentan separados de la caja pendiente y no se suman al calendario de desembolsos.')
