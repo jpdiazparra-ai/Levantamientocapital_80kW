@@ -5,8 +5,8 @@ from pathlib import Path
 import sys
 from threading import RLock
 
-APP_RELEASE = '2026.11.11.1'
-_MODULES = ('display_currency', 'timeline_scroll', 'capital_charts', 'commercial_report', 'commercial_comparison', 'commercial_analysis', 'valuation_data', 'valuation_finance', 'lcoe_finance', 'valuation_lcoe', 'valuation_interactive', 'valuation_costs', 'valuation_report', 'valuation_view', 'valuation80_data', 'valuation80_project', 'valuation80_unit', 'valuation80_lcoe', 'valuation80_report', 'valuation80_view', 'analysis_option')
+APP_RELEASE = '2026.11.13.1'
+_MODULES = ('display_currency', 'timeline_scroll', 'capital_charts', 'commercial_report', 'commercial_comparison', 'commercial_analysis', 'valuation_data', 'valuation_finance', 'lcoe_finance', 'valuation_lcoe', 'valuation_interactive', 'valuation_costs', 'valuation_report', 'valuation_view', 'valuation80_data', 'valuation80_project', 'valuation80_unit', 'valuation80_lcoe', 'valuation80_report', 'market_analytics', 'market_pdf', 'market_study', 'valuation80_view', 'valuation10_data', 'valuation10_costs', 'valuation10_project', 'valuation10_unit', 'valuation10_lcoe', 'valuation10_report', 'valuation10_view', 'analysis_option')
 _ROOT = Path(__file__).resolve().parent
 _reload_lock = RLock()
 _loaded_revision = None

@@ -18,7 +18,7 @@ from timeline_scroll import timeline_document
 from capital_charts import render_capital_comparison, render_calendar, render_responsible_funds
 from display_currency import amount, currency_code, currency_label, currency_number_format, currency_column_config, currency_export, convert_workbook, exchange_rate
 from commercial_analysis import render_commercial_analysis
-from valuation_view import render_valuation
+from valuation10_view import render_valuation10
 from valuation80_view import render_valuation80
 
 SOURCE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQOSK1DE0sEuK5Cl-bIahOjtdP6qsBobzqSlekorQCY9gRpwhRDzHYxh9c-Q-mKoQ/pub'
@@ -28,7 +28,7 @@ VIEWS = [
     ('capital', 'SUB BLOQUE 1', 'Estrategia de Capital y Costos', 'Dimensiona el presupuesto y la caja pendiente, programa los desembolsos y revisa el costo comercial por sistema y paquete.'),
     ('technical', 'SUB BLOQUE 2', 'Ejecución Técnica y Ruta de Hitos', 'Sigue el avance de ingeniería, los hitos y el cronograma; identifica desvíos, dependencias y evidencia de cierre.'),
     ('pmo', 'SUB BLOQUE 3', 'Gobernanza de Costos y Control PMO', 'Evalúa aprobaciones, conciliación y trazabilidad de los costos para priorizar las decisiones de control del proyecto.'),
-    ('valuation', 'SUB BLOQUE 4', 'Valor del Negocio · 10 y 80 kW', 'Evalúa el negocio conjunto: DCF, inversión y socios, resultados, caja y supuestos de las turbinas de 10 y 80 kW.'),
+    ('valuation', 'SUB BLOQUE 4', 'Caso de Inversión · 10 kW', 'Examina el caso exclusivo de 10 kW: valorización, inversión y socios, fabricación, operación y caja.'),
     ('valuation80', 'SUB BLOQUE 5', 'Caso de Inversión · 80 kW', 'Examina la rentabilidad del caso exclusivo de 80 kW, su inversión, fabricación, desarrollo industrial y necesidades de caja.'),
 ]
 
@@ -654,7 +654,7 @@ def render_analysis_option(refresh_nonce, render_navigation):
             st.info('Selecciona una vista para revisar capital, avance técnico, costos o valorización financiera.')
             return
         if view == 'valuation':
-            render_valuation(refresh_nonce)
+            render_valuation10(refresh_nonce)
             return
         if view == 'valuation80':
             render_valuation80(refresh_nonce)

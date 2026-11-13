@@ -14,13 +14,14 @@ from valuation_interactive import diagnostics_panel, diagnostics_definitions, dc
 from valuation_lcoe import lcoe_panel, lcoe_text
 from valuation80_lcoe import summary_lcoe80
 from valuation80_unit import unit_cost_inputs80, commercial_unit80, sale_prices80
+from market_study import render_market_study
 from valuation_costs import load_cost_report
 from valuation_view import (NAVY, TEAL, GOLD, ORANGE, kpis, context, section, plot, money, pct, count,
     displayed, financial_table, annual_bars, investment_details, operating, cash_view)
 
 PREFIX = 'option4_valuation80'
 MAIN_TABS = ['Evaluación 80 kW','Datos y supuestos','Inversión y socios','Resultados y caja',
-    'Ventas y fabricación','Gastos operativos','Activos y desarrollo','Controles y fuentes']
+    'Ventas y fabricación','Gastos operativos','Activos y desarrollo','Controles y fuentes','Estudio de mercado']
 
 
 def summary_factor80():
@@ -209,7 +210,7 @@ def evaluation_table(frame):
         column_config={'Concepto':st.column_config.TextColumn(width='large'),'Fuente':st.column_config.TextColumn(width='large')})
 
 
-def overview80(model):
+def overview80(model, refresh_nonce=0):
     s,a,e=model['scalars'],model['annual'],model['evaluation']
     section('00 / EVALUACIÓN','El caso de 80 kW en una mirada')
     st.caption('Resultados y valorización · arranque e inversión · economía unitaria y respaldos · primeros cinco años. Cifras publicadas en 00 Evaluación.')
@@ -295,7 +296,17 @@ def overview80(model):
         with right:
             summary_lcoe_panel80(model)
         st.caption('Entregas del primer año: '+count(u['Equipos entregados'])+' equipos. Los precios y el LCOE respetan la moneda de origen; CLP usa el TC del panel izquierdo; los flujos y el DCF conservan la proyección publicada.')
-        with st.expander('Valores publicados de 00 · economía unitaria'):evaluation_table(e['unit'])
+        with st.expander('Costo comercial de la turbina de 80 kW'):
+            from analysis_option import load_workbook, number
+            from commercial_analysis import render_commercial_analysis
+            from display_currency import convert_workbook
+            try:
+                tasks, cash, _, _ = load_workbook(refresh_nonce)
+            except Exception as exc:
+                st.error('No se pudo cargar la fuente de costos: '+str(exc))
+            else:
+                tasks, _ = convert_workbook(tasks, cash, number)
+                render_commercial_analysis(tasks, fixed_project='Turbina de 80 kW', embedded=True)
     with st.container(border=True):
         section('04 / PRIMEROS CINCO AÑOS','Trayectoria comercial, rentabilidad y caja')
         p=e['projection'];sales=complete_sum(p['sales']);ebitda=complete_sum(p['ebitda'])
@@ -466,7 +477,7 @@ def render_valuation80(refresh_nonce=0):
         if not issues.empty:st.warning(f'{len(issues)} conciliaciones requieren revisión; consulta Controles y fuentes.')
         if not model['formula_errors'].empty:st.error('La fuente contiene errores de fórmula; revisa su ubicación en trazabilidad.')
         tabs=st.tabs(MAIN_TABS)
-        with tabs[0]:overview80(model)
+        with tabs[0]:overview80(model, refresh_nonce)
         with tabs[1]:inputs80(model)
         with tabs[2]:investment_details(model)
         with tabs[3]:
@@ -480,3 +491,5 @@ def render_valuation80(refresh_nonce=0):
         with tabs[5]:opex80(model,year)
         with tabs[6]:assets80(model)
         with tabs[7]:audit80(model)
+
+        with tabs[8]:render_market_study(refresh_nonce)

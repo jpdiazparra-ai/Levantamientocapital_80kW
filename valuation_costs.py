@@ -24,7 +24,7 @@ def _table(rows):
     return frame.rename(columns={c:'Criterio' for c in frame if c.casefold()=='criterio'})
 
 
-def cost_report_data(plan_rows,cost_rows):
+def cost_report_data(plan_rows,cost_rows,capacity_kw=80):
     # Reuse the app parser, including its missing-value convention for accounting dashes.
     from analysis_option import number
     plan,costs=_table(plan_rows),_table(cost_rows)
@@ -36,12 +36,12 @@ def cost_report_data(plan_rows,cost_rows):
     tasks['_cost_hito_objetivo']=tasks.ID.map(costs.set_index('ID')['Hito objetivo'])
     for c in [COMMERCIAL,'Presupuesto vigente']:
         tasks[c]=tasks[c].map(number)
-    selected=commercial_product_scope(commercial_project_rows(tasks,'Turbina de 80 kW'))
+    selected=commercial_product_scope(commercial_project_rows(tasks,f'Turbina de {capacity_kw} kW'))
     # An eligible Costos ID must never disappear because its Plan row is absent.
-    eligible=costs[costs['Costo para producto'].fillna('').str.strip().str.casefold().eq('aplica') & costs['Hito objetivo'].fillna('').str.contains(r'(?<!\d)80\s*kw\b',case=False,regex=True)]
+    eligible=costs[costs['Costo para producto'].fillna('').str.strip().str.casefold().eq('aplica') & costs['Hito objetivo'].fillna('').str.contains(rf'(?<!\d){capacity_kw}\s*kw\b',case=False,regex=True)]
     missing=set(eligible.ID)-set(selected.ID)
-    if missing:raise ValueError('Partidas Aplica de 80 kW sin correspondencia en Plan: '+', '.join(sorted(missing)))
-    if selected.empty:raise ValueError('No hay partidas Aplica de 80 kW para el desglose de costos.')
+    if missing:raise ValueError(f'Partidas Aplica de {capacity_kw} kW sin correspondencia en Plan: '+', '.join(sorted(missing)))
+    if selected.empty:raise ValueError(f'No hay partidas Aplica de {capacity_kw} kW para el desglose de costos.')
     for field in ['Sistema','Paquete / línea']:
         selected[field]=selected[field].fillna('').replace('','Sin clasificar')
     systems=commercial_breakdown(selected,'Sistema')
@@ -57,13 +57,13 @@ def cost_report_data(plan_rows,cost_rows):
 
 
 @st.cache_data(ttl=60,max_entries=4,show_spinner=False)
-def load_cost_report(revision):
+def load_cost_report(revision,capacity_kw=80):
     def fetch(item):
         name,gid=item
         response=requests.get(SOURCE,params={'output':'csv','gid':gid,'_cb':revision},headers={'Cache-Control':'no-cache'},timeout=(8,30))
         response.raise_for_status()
         return name,list(csv.reader(StringIO(response.content.decode('utf-8-sig'))))
     with ThreadPoolExecutor(max_workers=2) as pool:raw=dict(pool.map(fetch,SHEETS.items()))
-    result=cost_report_data(raw['Plan'],raw['Costos'])
+    result=cost_report_data(raw['Plan'],raw['Costos'],capacity_kw=capacity_kw)
     result['fetched_at']=datetime.now(ZoneInfo('America/Santiago')).strftime('%d-%m-%Y %H:%M:%S')
     return result

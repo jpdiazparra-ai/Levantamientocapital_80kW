@@ -369,8 +369,13 @@ root=Path(__FIXTURE__)
 model=parse_model80({f.stem:list(csv.reader(StringIO(f.read_text(encoding='utf-8-sig')))) for f in root.glob('*.csv')})
 model['fetched_at']='09-11-2026 10:00:00'
 valuation80_view.load_valuation80=lambda nonce:model
+
 import json
 import pandas as pd
+import market_study
+market_snapshot=json.loads(market_study.SNAPSHOT.read_text())
+market_snapshot['live']=False
+market_study.load_market_study=lambda revision:market_snapshot
 project=json.loads((root.parent/'project80.json').read_text())
 project['monthly']=pd.DataFrame(project['monthly'])
 project['monthly']['_month']=pd.to_datetime(project['monthly']['_month'])
@@ -378,6 +383,16 @@ project['cutoff']=pd.Timestamp(project['cutoff'])
 for field in ['systems','lines','scope']:project['costs'][field]=pd.DataFrame(project['costs'][field])
 valuation80_report.load_project80=lambda revision:project
 valuation80_view.load_cost_report=lambda revision:project['costs']
+import analysis_option
+# Streamlit 1.47 AppTest cannot serialize scalar segmented-control values on rerun.
+st.segmented_control=st.radio
+commercial_tasks=pd.DataFrame([{'ID':'C'+str(i),'Proyecto':'Producto 80 kW',
+    'Hito objetivo':'Producto 80 kW','_cost_hito_objetivo':'Producto 80 kW',
+    'Sistema':row['Sistema'],'Paquete / línea':'Fabricación','Costo para producto':'Aplica',
+    'Comercial anterior':row['Monto comercial · CLP'],'Presupuesto vigente':row['Monto comercial · CLP'],
+    'Presupuesto referencia':row['Monto comercial · CLP'],'Cantidad':1,'Criterio':'Insumo'}
+    for i,row in project['costs']['systems'].iterrows()])
+analysis_option.load_workbook=lambda nonce:(commercial_tasks.copy(),pd.DataFrame(),project['cutoff'],model['fetched_at'])
 valuation80_view.render_valuation80(1)
 '''.replace('__FIXTURE__',repr(str(FIXTURE.resolve())))
 
@@ -436,11 +451,13 @@ class UI80Tests(unittest.TestCase):
         self.assertTrue(app.button(key='option4_valuation80_pdf_unavailable').disabled)
         self.assertEqual([tab.label for tab in app.tabs if tab.label in MAIN_TABS],MAIN_TABS)
 
-    def test_evaluation_is_one_executive_view_without_nested_tabs(self):
+    def test_evaluation_includes_commercial_cost_details_for_80kw(self):
         script=SCRIPT.replace('valuation80_view.render_valuation80(1)','valuation80_view.overview80(model)')
         app=AppTest.from_string(script,default_timeout=30).run()
         self.assertFalse(app.exception)
-        self.assertEqual(len(app.tabs),0)
+        self.assertEqual([tab.label for tab in app.tabs],['Por sistema','Por hito'])
+        self.assertTrue(any(item.label=='Costo comercial de la turbina de 80 kW' for item in app.expander))
+        self.assertFalse(any(item.label=='Valores publicados de 00 · economía unitaria' for item in app.expander))
         self.assertGreaterEqual(len(app.get('plotly_chart')),9)
         text=' '.join(element.proto.body for element in app.get('html'))
         self.assertIn('RESULTADOS Y VALORIZACIÓN',text)
@@ -482,7 +499,9 @@ class UI80Tests(unittest.TestCase):
         state=app.session_state.filtered_state
         self.assertFalse(any(key.startswith('option4_lcoe_') for key in state))
         self.assertFalse(any(key.startswith('option4_valuation_') for key in state))
-        specs=' '.join(fig.proto.spec for fig in app.get('plotly_chart'))
+        # The market-study comparison intentionally includes external 10 kW models.
+        specs=' '.join(fig.proto.spec for fig in app.get('plotly_chart')
+            if not fig.proto.id.rsplit('-',1)[-1].startswith('market_'))
         self.assertNotIn('10 kW',specs)
         self.assertFalse(any('10 kW' in option for item in app.selectbox for option in item.options))
         app.number_input(key='option4_valuation80_lab_rate').set_value(30.).run()

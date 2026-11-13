@@ -331,7 +331,7 @@ def _summary_table(summary, dimension, scope, key, project_scope=None, report_co
         file_name=filename+'.pdf', mime='application/pdf', key=group_key+'_download', on_click='ignore')
 
 
-def render_commercial_analysis(tasks):
+def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False):
     with st.container(border=True, key='option4_analysis_commercial'):
         st.subheader('Costo comercial de las turbinas')
         st.caption('Analiza el monto comercial informado para cada turbina y su composición por sistema y paquete. Se incluyen solo las partidas marcadas Aplica en Costos; el detalle permite contrastar cantidades, costos de referencia y presupuesto vigente.')
@@ -341,19 +341,19 @@ def render_commercial_analysis(tasks):
         if 'Costo para producto' not in tasks:
             st.info('Falta Costo para producto en Costos para identificar las partidas aplicables al análisis comercial.')
             return
-        projects = list(tasks['Proyecto'].dropna().unique())
+        projects = [fixed_project] if fixed_project else list(tasks['Proyecto'].dropna().unique())
         projects.sort(key=lambda name: (0 if re.search(r'10\s*k[wW]', name) else 1, name))
         if not projects:
             st.info('No hay proyectos para la selección de capital.')
             return
         projects.append('Comparar ambas turbinas')
         project_key = 'option4_commercial_project_select'
-        if project_key in st.session_state and st.session_state[project_key] not in projects:
+        if not fixed_project and project_key in st.session_state and st.session_state[project_key] not in projects:
             st.session_state[project_key] = projects[0]
         def select_project():
             selected = re.sub(r'\W+', '_', str(st.session_state[project_key]))
             st.session_state[f'option4_commercial_composition_{selected}'] = 'Total'
-        project = st.selectbox('Turbina del análisis comercial', projects, key=project_key, format_func=commercial_project_label,
+        project = fixed_project or st.selectbox('Turbina del análisis comercial', projects, key=project_key, format_func=commercial_project_label,
             on_change=select_project,
             help='Revisa una turbina o compara ambas por sistema y línea, con costos, HH y variaciones porcentuales.')
         if project == 'Comparar ambas turbinas':
@@ -452,7 +452,10 @@ def render_commercial_analysis(tasks):
                     file_name=f'informe_completo_turbina_{capacity}_kW.pdf', mime='application/pdf',
                     key=f'option4_commercial_full_download_{index}', on_click='ignore')
                 st.caption(f'Informe general · {commercial_project_label(project)} · Todos los sistemas y líneas del alcance actual, incluidas partidas sin monto. Disponible sin seleccionar un sistema; el detalle de una selección conserva su descarga independiente.')
-            with st.expander('Composición por sistema e hito', expanded=False):
+            composition = st.container() if embedded else st.expander('Composición por sistema e hito', expanded=False)
+            with composition:
+                if embedded:
+                    st.markdown('##### Composición por sistema e hito')
                 st.caption(f'Alcance seleccionado: {mode}. ' + ('Excluye fundaciones y anclajes, montaje y logística.' if mode == 'Comercial' else 'Incluye todos los sistemas de las partidas marcadas Aplica en Costos.'))
                 system_tab, milestone_tab = st.tabs(['Por sistema', 'Por hito'])
                 with system_tab:

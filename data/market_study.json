@@ -1,0 +1,767 @@
+{
+  "source": "https://docs.google.com/document/d/e/2PACX-1vTxFjPYiU6LQRt29hSiAXafzw-ITwxPSNqkDlGZJWMtlLI827KKRVf7FPK1gMY_IA/pub",
+  "preface": [
+    {
+      "kind": "paragraph",
+      "text": "FW AXIAL ENERGY | ESTUDIO DE MERCADO VAWT",
+      "links": []
+    },
+    {
+      "kind": "paragraph",
+      "text": "Estudio de mercado de turbinas eólicas de eje vertical",
+      "links": []
+    },
+    {
+      "kind": "paragraph",
+      "text": "Panorama mundial y sudamericano, madurez tecnológica, competidores y referencias de precio",
+      "links": []
+    },
+    {
+      "kind": "paragraph",
+      "text": "Preparado para FW Axial Energy",
+      "links": []
+    },
+    {
+      "kind": "paragraph",
+      "text": "Fecha de corte: 12 de noviembre de 2026 | Moneda: USD nominales salvo indicación",
+      "links": []
+    },
+    {
+      "kind": "paragraph",
+      "text": "Conclusión ejecutiva. La tecnología VAWT tiene una oportunidad comercial defendible en aplicaciones distribuidas, remotas e híbridas donde importan el viento multidireccional, la integración local y el acceso de mantenimiento. Sin embargo, todavía no es una alternativa de volumen comparable a la turbina horizontal (HAWT): la evidencia comercial, certificación y precios verificables en 80–100 kW es escasa. Para FW Axial Energy, la tesis más sólida es competir por desempeño probado en un caso de uso concreto y disponibilidad de servicio, mientras se escala de manera instrumentada desde el piloto de 10 kW hacia el diseño de 80 kW.",
+      "links": []
+    },
+    {
+      "kind": "paragraph",
+      "text": "Este documento separa datos publicados por fabricantes, referencias de distribuidores, evidencia técnica independiente y evaluación propia. Las especificaciones declaradas por vendedores no equivalen a certificación ni a desempeño comprobado en campo.",
+      "links": []
+    }
+  ],
+  "sections": [
+    {
+      "title": "Síntesis para decisión",
+      "blocks": [
+        {
+          "kind": "table",
+          "rows": [
+            [
+              "Tema",
+              "Lectura ejecutiva"
+            ],
+            [
+              "Mercado",
+              "La eólica en Latinoamérica es material y creciente: GWEC reporta 56 GW instalados a fines de 2024, con Brasil cerca del 60% regional. Esa cifra corresponde al mercado eólico total, dominado por HAWT; no mide demanda VAWT."
+            ],
+            [
+              "VAWT 80–100 kW",
+              "Nicho temprano con pocos fabricantes y brecha entre catálogo, prototipo de escala completa, certificación y ventas repetibles."
+            ],
+            [
+              "Competidores y proveedores visibles",
+              "Wind Harvest (50–75 kW), R&X y MUCE (100 kW anunciados), Greef (10 kW híbrida cotizada), Agile Wind Power (Vertical Sky de 1 MW) y los italianos Ventea y Ropatec (hasta 30 kW anunciados/documentados). No todos son comparables directos; madurez y disponibilidad deben verificarse por modelo."
+            ],
+            [
+              "Precio público comparable",
+              "R&X RX-HV100K aparece en un distribuidor a USD 53.793 netos; el fabricante vende por cotización [9, 10]. Un sitio de catálogo publica USD 108.000–132.000 ex-works para GH-H100K, pero la trazabilidad comercial es débil. Tratar ambos como referencias, no como precio instalado."
+            ],
+            [
+              "Posición FW Axial",
+              "El piloto 10 kW tiene diseño mecánico consolidado y está en integración/validación; las pruebas FAT/SAT y operación de campo aún son hitos críticos. El 80 kW está en prefactibilidad/conceptual, por lo que no es comparable a un modelo certificado."
+            ],
+            [
+              "Siguiente prioridad",
+              "Cerrar integración y ensayos del piloto, levantar una curva de potencia medida, documentar cargas/fatiga/disponibilidad y obtener cotizaciones comparables con alcance y garantías homogéneos."
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "title": "1. Alcance y método",
+      "blocks": [
+        {
+          "kind": "paragraph",
+          "text": "El estudio se enfoca en turbinas eólicas de eje vertical para generación distribuida y sistemas de potencia intermedia, con atención especial a modelos nominales cercanos a 80–100 kW. Se revisaron fabricantes, fichas publicadas, distribuidores, reportes sectoriales y literatura técnica disponible. La fecha de corte es 12 de noviembre de 2026.",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "La búsqueda no encontró una base pública auditada que cuantifique ventas, capacidad instalada o cuota de mercado VAWT por región. Por ello, el tamaño del mercado se describe a partir del contexto eólico regional y de segmentos de aplicación, sin inventar una cifra TAM/SAM para VAWT.",
+          "links": []
+        },
+        {
+          "kind": "subheading",
+          "text": "Cómo leer la evidencia",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Fabricante: afirmación, catálogo o ficha alojada por el fabricante; requiere verificación contractual y de ensayo.",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Distribuidor: precio o disponibilidad de reventa; no prueba volumen fabricado ni validez de la certificación.",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Independiente: datos de agencias, organismos sectoriales o artículos revisados por pares.",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Evaluación: juicio comercial de este informe a partir de la evidencia públicamente accesible, no una certificación formal de TRL.",
+          "links": []
+        }
+      ]
+    },
+    {
+      "title": "2. Mercado mundial y sudamericano",
+      "blocks": [
+        {
+          "kind": "subheading",
+          "text": "Escala de la eólica y lugar de la VAWT",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "El viento es un mercado global establecido, pero la escala la marcan las turbinas HAWT de varios megavatios. GWEC reportó 117 GW de nueva capacidad eólica instalada mundialmente en 2024 en su Global Wind Report 2025; su reporte de cadena de suministro registra 127 GW instalados por fabricantes en 2024, una métrica con definición distinta. La lectura útil para este estudio es la escala y concentración de la industria, no usar estas cifras como mercado VAWT [1, 2].",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "La revisión histórica de turbinas VAWT de 100 kW o mayores encuentra instalaciones de demostración desde los años setenta y ochenta y un resurgimiento de proyectos H-rotor más recientemente. También documenta problemas recurrentes de fatiga y durabilidad y fallas terminales en parte de los prototipos [4]. En otras palabras, la posibilidad de construir máquinas grandes está demostrada históricamente; la dificultad es sostener fiabilidad, certificación, financiación y ventas repetibles.",
+          "links": []
+        },
+        {
+          "kind": "subheading",
+          "text": "Sudamérica",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "GWEC sitúa la capacidad eólica instalada de Latinoamérica en 56 GW al cierre de 2024, alrededor de 60% en Brasil. La región añadió 5% de las unidades eólicas instaladas globalmente en 2024. En 2025, Brasil estuvo entre los cinco principales mercados globales por nueva capacidad. Estos indicadores muestran una base regional de proveedores, proyectos y capacidades de operación; no permiten inferir una demanda equivalente para VAWT [2, 3].",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "Brasil ofrece el mayor mercado de escala y una cadena industrial eólica más desarrollada. Chile combina buenos recursos eólicos, minería, telecomunicaciones, acuicultura y emplazamientos aislados; sus estadísticas de proyectos son monitoreadas mensualmente por el Ministerio de Energía. Argentina, Uruguay, Colombia y Perú pueden ser relevantes por recursos y cargas remotas, pero la bancabilidad depende de reglas de conexión, precio local de energía, financiamiento, logística, permisos y servicio técnico.",
+          "links": []
+        },
+        {
+          "kind": "subheading",
+          "text": "Segmentos de entrada pertinentes para FW Axial",
+          "links": []
+        },
+        {
+          "kind": "table",
+          "rows": [
+            [
+              "Segmento",
+              "Necesidad que puede resolver una VAWT",
+              "Condición para ganar"
+            ],
+            [
+              "Telecomunicaciones aisladas",
+              "Complemento eólico a solar, baterías y diésel; recurso variable y limitación de acceso.",
+              "AEP medida en sitio, operación autónoma, disponibilidad y mantenimiento local. Evitar vender solo por potencia nominal."
+            ],
+            [
+              "Minería y faenas remotas",
+              "Reducir diésel/logística y diversificar suministro en sitios con buen recurso.",
+              "Integración robusta, seguridad, cargas certificadas, repuestos y garantías financiables."
+            ],
+            [
+              "Industria / generación distribuida",
+              "Autoconsumo en perfiles compatibles, apoyo a microrredes y resiliencia.",
+              "Estudio de viento, interconexión y costo nivelado frente a solar, HAWT y red."
+            ],
+            [
+              "Acuicultura e infraestructura costera",
+              "Suministro híbrido en puntos con exposición a vientos cambiantes.",
+              "Protección ambiental/corrosión, ruido, mantenimiento y evidencia de producción anual."
+            ],
+            [
+              "Entornos con restricciones de HAWT",
+              "Emplazamientos donde transporte, altura, ruido percibido o acceso complican una HAWT.",
+              "Demostrar ventaja total de proyecto; no asumir que VAWT es automáticamente más silenciosa o segura."
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "title": "3. Madurez tecnológica de la categoría",
+      "blocks": [
+        {
+          "kind": "paragraph",
+          "text": "La VAWT no tiene un TRL único. La madurez depende del modelo, tamaño, configuración, fabricante y calidad de su evidencia. Hay desde máquinas pequeñas en venta a prototipos de escala completa y proyectos de certificación. En la banda 80–100 kW, el riesgo principal es la distancia entre ficha comercial y sistema validado bajo cargas, fatiga, operación continua y garantías de disponibilidad.",
+          "links": []
+        },
+        {
+          "kind": "table",
+          "rows": [
+            [
+              "Nivel de evidencia",
+              "Qué demuestra",
+              "Lectura para comprador"
+            ],
+            [
+              "Catálogo / diseño",
+              "Existe una configuración y potencia declarada.",
+              "TRL bajo a medio; pedir planos, cálculo, curva, certificados y referencias."
+            ],
+            [
+              "Prototipo de escala completa",
+              "La máquina opera en condiciones reales y genera datos.",
+              "Aproxima a TRL 7; revisar duración del ensayo, fallas, cargas y disponibilidad."
+            ],
+            [
+              "Demostración industrial / piloto",
+              "Sistema se prueba en sitio relevante con balance eléctrico e integración.",
+              "TRL 7–8 según alcance; resultados deben ser auditables y repetibles."
+            ],
+            [
+              "Certificación de tipo / modelo",
+              "Evaluación por tercero de diseño, seguridad, desempeño o ruido según normas aplicables.",
+              "Hito de reducción de riesgo; verificar organismo, estándar, alcance y vigencia."
+            ],
+            [
+              "Flota comercial financiable",
+              "Ventas repetidas, desempeño operativo y soporte demostrables.",
+              "TRL 9 y bancabilidad; evidencia más valiosa para clientes industriales."
+            ]
+          ]
+        },
+        {
+          "kind": "paragraph",
+          "text": "Los artículos revisados identifican como retos VAWT la aerodinámica no estacionaria, torque cíclico, arranque en algunas configuraciones, cargas alternantes, fatiga y falta histórica de procedimientos uniformes de validación [4, 5]. La certificación debe revisarse por modelo y estándar: una mención genérica a IEC 61400 o un certificado CE no acredita por sí sola curva de potencia, supervivencia estructural o bancabilidad.",
+          "links": []
+        },
+        {
+          "kind": "subheading",
+          "text": "Evaluación específica de FW Axial Energy",
+          "links": []
+        },
+        {
+          "kind": "table",
+          "rows": [
+            [
+              "Sistema",
+              "Estado reportado",
+              "TRL indicativo de este estudio",
+              "Evidencia/hito que lo subiría"
+            ],
+            [
+              "Piloto VAWT 10 kW",
+              "Darrieus tipo H, tres palas helicoidales NACA 0022, área barrida 35 m², 7 m × 5 m; PMSG nominal 70 rpm. Diseño mecánico consolidado; integración eléctrica/control final y FAT/SAT/pilotaje de campo pendientes.",
+              "TRL 5–6, provisional",
+              "FAT documentado, operación instrumentada de campo, curva de potencia/AEP, respuesta a ráfagas y cambios de dirección, vibración, paradas, disponibilidad y mantenimiento."
+            ],
+            [
+              "Concepto VAWT 80 kW",
+              "H-rotor de 3 palas rectas; 80 kW; rotor propuesto 16 m × 12 m, 192 m², 30 rpm y referencia simulada de 12 m/s. En prefactibilidad; no es diseño validado.",
+              "TRL 3–4, provisional",
+              "Diseño congelado, revisión independiente de cargas, prototipo integrado a escala completa, ensayos de subsistemas y pruebas en sitio."
+            ],
+            [
+              "Propiedad intelectual",
+              "Solicitud PCT/CL2024/050114 y antecedentes de solicitud nacional reportados por el proyecto.",
+              "No sustituye TRL",
+              "Confirmar estatus, titularidad/licencia, reivindicaciones y libertad de operación con asesoría legal."
+            ]
+          ]
+        },
+        {
+          "kind": "paragraph",
+          "text": "Los TRL indicados son una evaluación orientativa del avance documentado, no una auditoría ni una certificación. La potencia nominal no demuestra la energía anual: se requiere curva medida y distribución de viento del emplazamiento.",
+          "links": []
+        }
+      ]
+    },
+    {
+      "title": "4. Fabricantes y competidores",
+      "blocks": [
+        {
+          "kind": "paragraph",
+          "text": "La comparación prioriza fabricantes o modelos con una oferta pública en la banda intermedia. El nivel de evidencia se refiere a la información abierta encontrada, no a una calificación definitiva de la empresa.",
+          "links": []
+        },
+        {
+          "kind": "table",
+          "rows": [
+            [
+              "Fabricante / modelo",
+              "País / potencia anunciada",
+              "Estado y evidencia pública",
+              "Precio publicado",
+              "Lectura competitiva"
+            ],
+            [
+              "Wind Harvest — Wind Harvester 4.0",
+              "EE. UU. / 50, 70 o 75 kW según sitio.",
+              "H-rotor; prototipos de escala real y modelo aeroelástico. La empresa declara TRL 8 y preparación para certificación de tercero; el filing ante SEC indica que el equipo aún no estaba disponible para venta comercial a la fecha de ese documento.",
+              "No publicado.",
+              "Referencia de desarrollo industrial mejor documentada; venta/certificación pendientes. Fuerte foco en arreglos densos y viento turbulento a baja altura."
+            ],
+            [
+              "Agile Wind Power AG — Vertical Sky® A50",
+              "Suiza / 1 MW anunciado; escala megavatio.",
+              "VAWT de tres palas con control activo de paso. La empresa reporta curva de potencia medida bajo procedimientos compatibles con IEC para el A40 y una instalación de ensayo menor; publica inicio de producción comercial en 2026 y primeras entregas a clientes en 2027. Son hitos declarados por el fabricante.",
+              "No publicado; solicitar propuesta.",
+              "Proveedor/referente tecnológico de gran escala, no comparable directo a 80–100 kW. Hito comercial próximo, con certificación formal y entregas iniciales aún por seguir."
+            ],
+            [
+              "Ventea S.r.l. — Serie V V30/V10/V5",
+              "Italia / V30 30 kW; V10 10 kW; V5 5 kW anunciados.",
+              "La web del fabricante describe VAWT tipo H-Darrieus/StarDarrieus, generador PMSG direct-drive y versiones on-grid/híbridas. La información pública consultada no acredita por sí sola ventas, certificación del modelo o flota operativa.",
+              "No publicado.",
+              "Proveedor italiano potencial para solicitudes de cotización en el segmento distribuido. Confirmar disponibilidad comercial, curva medida, referencias, garantías y servicio exportable a Sudamérica."
+            ],
+            [
+              "Ropatec / ROPAT — T30 proS",
+              "Italia / hasta 30 kW en modelos documentados; T20 proS 20 kW y SA40 10 kW.",
+              "La entidad ROPAT relata desarrollo y fabricación histórica de máquinas de 1–30 kW y más de 1.200 unidades en más de 30 países durante su trayectoria. La web actual no confirma disponibilidad del catálogo ni fabricación vigente de esos modelos.",
+              "No publicado; disponibilidad actual por confirmar.",
+              "Proveedor/precedente italiano con trayectoria histórica relevante en pequeña eólica. Verificar continuidad OEM, modelo ofrecido, garantías, repuestos y referencias recientes antes de calificarlo."
+            ],
+            [
+              "Nantong R&X Energy — RX-HV100K",
+              "China / 100 kW; gama H-rotor publicada de 20–100 kW.",
+              "Página oficial del fabricante confirma modelo; distribuidores publican ficha y producto en preventa. Falta encontrar evidencia abierta de flota operativa certificada.",
+              "USD 53.793 netos en un distribuidor; fabricante solicita cotización. No incluye necesariamente torre, transporte, montaje, obras ni integración.",
+              "Precio de referencia de máquina, con riesgo alto de alcance incompleto. Verificar curva, clase de viento, estructura, garantías y certificado exacto."
+            ],
+            [
+              "Qingdao Greef New Energy — GVH-10 kW",
+              "China / 10 kW híbrida; 70 rpm y velocidad nominal de viento 11 m/s.",
+              "Cotización directa de fabricante aportada por FW Axial Energy; turbina, controlador, inversor híbrido, torre de 12 m, monitoreo, anemometría y batería LiFePO4 de 10,24 kWh.",
+              "USD 25.555 EXW por set (USD 2.555,50/kW). Oferta válida hasta 02-08-2026; 100% anticipado.",
+              "Útil como referencia de kit híbrido importado en 10 kW. Oferta vencida; no equiparar con instalación, obra civil, logística, aduana, impuestos o servicio local."
+            ],
+            [
+              "MUCE — FDM-100",
+              "China / 100 kW efectivos declarados.",
+              "Ficha del fabricante publica diámetro 15 m, altura rotor 16 m, torre 35 m, salida de 250 MWh/año y varias velocidades de supervivencia. Datos comerciales y despliegues verificables no fueron hallados.",
+              "No publicado.",
+              "Catálogo técnicamente detallado, pero las afirmaciones de arranque/energía anual requieren evidencia independiente y definición del viento de referencia."
+            ],
+            [
+              "WINDTURBINE / GH-H100K",
+              "Fabricante/origen no verificado en la ficha / 100 kW.",
+              "Página de producto publica rotor de 15 m, 300 m² y datos de producción; identidad y trazabilidad de fabricante no quedaron verificadas por fuente independiente [12].",
+              "USD 108.000–132.000 ex-works publicado por el propio sitio.",
+              "Tomar como señal de rango anunciado, no como cotización comparable ni prueba de capacidad de entrega."
+            ],
+            [
+              "VAWT Ltd. — VAWT-260",
+              "Reino Unido / 100 kW en base de modelos secundaria.",
+              "Listado secundario identifica modelo de 100 kW. No se encontró evidencia actual suficiente de disponibilidad comercial, certificación vigente o estado del fabricante.",
+              "No publicado.",
+              "Referencia histórica/listada; validar existencia del OEM y del producto antes de incluirlo en una RFP."
+            ],
+            [
+              "ArborWind — PT Series",
+              "EE. UU. / serie PT; la potencia varía por modelo y configuración.",
+              "Material comercial presenta su familia vertical; la prueba y potencia exacta deben confirmarse con el fabricante. No se halló precio abierto comparable de 100 kW.",
+              "No publicado.",
+              "Competidor de nicho en generación distribuida; solicitar ficha actual del modelo ofrecido y referencias de operación."
+            ]
+          ]
+        },
+        {
+          "kind": "paragraph",
+          "text": "Fabricantes de menor potencia como Ventea, Ropatec, IceWind y Ecolibrì pueden ser proveedores de solución para telecom y sitios remotos, aunque no son comparables directos a 80–100 kW. Las páginas de Agile Wind Power y su producto Vertical Sky también son relevantes para el seguimiento estratégico, pero corresponden a una plataforma de 1 MW. Las fechas de disponibilidad y prestaciones publicadas por cada fabricante requieren confirmación comercial, documental y contractual.",
+          "links": []
+        }
+      ]
+    },
+    {
+      "title": "5. Precios y comparabilidad",
+      "blocks": [
+        {
+          "kind": "paragraph",
+          "text": "No existe una cotización pública homogénea de turbina VAWT de 100 kW instalada en Sudamérica. Los precios abiertos se refieren principalmente a equipos ex-works o listados de distribuidores, sin igualar torre, fundación, convertidores, baterías, transporte, impuestos, permisos, interconexión, ingeniería ni SAT. El precio por kW del rotor aislado no permite comparar el costo total de energía.",
+          "links": []
+        },
+        {
+          "kind": "table",
+          "rows": [
+            [
+              "Referencia",
+              "Precio visible",
+              "Qué parece incluir / excluye",
+              "Uso recomendado"
+            ],
+            [
+              "R&X RX-HV100K",
+              "USD 53.793 netos (distribuidor)",
+              "Listado de turbina; condiciones de envío y alcance deben confirmarse.",
+              "Piso indicativo de equipo. Solicitar oferta FOB/CIF Santiago y lista de exclusiones."
+            ],
+            [
+              "Agile Vertical Sky® A50 (1 MW)",
+              "No publicado",
+              "Plataforma VAWT de escala MW; el fabricante informa inicio de producción comercial en 2026 y primera entrega a clientes en 2027. No se halló precio público.",
+              "Referencia de desarrollo industrial, no comparable a 80–100 kW. Consultar disponibilidad y modelo comercial."
+            ],
+            [
+              "Ventea Serie V V30 (30 kW)",
+              "No publicado",
+              "Fabricante italiano anuncia VAWT H-Darrieus de 30 kW, además de 10 y 5 kW; confirmar disponibilidad, alcance e historial del modelo.",
+              "Solicitar cotización vigente, curva de potencia, referencias de operación y condiciones de exportación."
+            ],
+            [
+              "Ropatec T30 proS (30 kW)",
+              "No publicado",
+              "Modelo de 30 kW documentado en fuentes de catálogo; el sitio oficial actual describe principalmente la trayectoria histórica y no confirma fabricación vigente.",
+              "Confirmar continuidad del OEM, soporte, garantía, repuestos y modelo actualmente suministrable."
+            ],
+            [
+              "Greef GVH-10 kW híbrida",
+              "USD 25.555 EXW (USD 2.555,50/kW)",
+              "Incluye turbina, controlador/dump load, inversor híbrido, torre 12 m, monitoreo/anemometría y batería LiFePO4 de 10,24 kWh. Excluye transporte y puesta en marcha; oferta venció 02-08-2026.",
+              "Benchmark de kit importado; pedir cotización vigente y aclarar instalación, fundaciones, impuestos, garantías de turbina y servicio."
+            ],
+            [
+              "GH-H100K (sitio WINDTURBINE)",
+              "USD 108.000–132.000 ex-works",
+              "Controlador incluido según el sitio; torre, batería y envío cotizados aparte. La identidad OEM debe verificarse.",
+              "Señal de precio anunciado, calidad de evidencia baja."
+            ],
+            [
+              "MUCE FDM-100",
+              "Cotización privada",
+              "Ficha menciona inversor opcional/red, torre 35 m y fundación tipo pilotes; configuración exacta variable.",
+              "Solicitar cotización técnica cerrada con incluidos/excluidos y garantía."
+            ],
+            [
+              "FW Axial Energy — oferta 10 kW ENTEL",
+              "CLP 54.518.991 netos (CLP 64.877.599 con IVA), oferta 2026",
+              "Oferta integral especificada; excluye mástil/fundaciones, obras civiles e interconexión final.",
+              "Útil como referencia de comercialización piloto 10 kW; no extrapolar linealmente a 80 kW."
+            ],
+            [
+              "FW Axial Energy — costos y precio 80 kW",
+              "Costo informado USD 68.052,09; costo unitario + OPEX USD 72.326,02; precio de venta neto USD 95.295; con IVA USD 113.401,05.",
+              "Snapshot informado por FW Axial el 12-11-2026. Precio calculado previo USD 90.408 incluye margen proveedor de 20%; precio de venta neto usa precio de entrada hoja 07.",
+              "Precio neto: USD 1.191,19/kW; costo + OPEX: USD 904,08/kW. Añadir alcance, garantía, logística y validar la lógica de precio antes de compararlo con cotizaciones OEM."
+            ]
+          ]
+        },
+        {
+          "kind": "subheading",
+          "text": "Estructura recomendada para comparar ofertas",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Precio del aerogenerador y generador, separado de convertidor/control y SCADA.",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Torre, cimentación, transporte, grúa/montaje, puesta en servicio y obras eléctricas.",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Curva de potencia certificada o medida; AEP P50/P90 con datos del sitio y pérdidas declaradas.",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Garantía de producto, disponibilidad, tiempos de repuestos, mantenimiento y capacitación.",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Condición de entrega (EXW/FOB/CIF/DAP), moneda, impuestos, aranceles y costo de importación a Chile.",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Vida de diseño, cargas de interfaz, clase de viento, supervivencia, freno, protecciones y certificación por modelo.",
+          "links": []
+        }
+      ]
+    },
+    {
+      "title": "6. Posicionamiento y estrategia recomendada para FW Axial",
+      "blocks": [
+        {
+          "kind": "subheading",
+          "text": "Propuesta de valor defendible",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "La ventaja no debe formularse como “la VAWT produce más” o “es más eficiente en cualquier viento”. La propuesta debe apoyarse en atributos observables: operación multidireccional sin sistema de yaw, arquitectura híbrida Darrieus–Savonius, adaptación al perfil de viento del cliente, integración eléctrica completa, freno mecánico independiente y posibilidad de transferir mantenimiento preventivo. Cada atributo debe validarse con datos y comparación en el sitio.",
+          "links": []
+        },
+        {
+          "kind": "subheading",
+          "text": "Prioridad comercial",
+          "links": []
+        },
+        {
+          "kind": "table",
+          "rows": [
+            [
+              "Prioridad",
+              "Aplicación / acción",
+              "Evidencia que cierra la venta"
+            ],
+            [
+              "1",
+              "Telecomunicaciones híbridas y sitios aislados.",
+              "Datos horarios, reducción de litros de diésel, curva medida, disponibilidad, operación junto a solar/batería."
+            ],
+            [
+              "2",
+              "Pilotos con minería, acuicultura e industria.",
+              "Cliente anfitrión, protocolo conjunto, baseline de energía y criterios claros de aceptación."
+            ],
+            [
+              "3",
+              "Escalamiento a 80 kW.",
+              "Revisión independiente del diseño y análisis de cargas; plan de ensayos, seguridad y contingencia."
+            ],
+            [
+              "4",
+              "Expansión sudamericana vía socios locales.",
+              "Instalador/O&M, importador, ingeniería civil y soporte de repuestos por país."
+            ]
+          ]
+        },
+        {
+          "kind": "subheading",
+          "text": "Secuencia de validación recomendada",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "FAT del conjunto electromecánico y eléctrico: potencia, protecciones, freno, control, MPPT, alarmas y parada segura.",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Ensayos de campo instrumentados: viento de referencia, rpm, potencia neta, vibraciones, temperatura, ruido, eventos de parada y disponibilidad.",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Publicar curva de potencia con método, incertidumbre y configuración; separar simulación, medición y certificación.",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Actualizar diseño de 80 kW con datos del 10 kW, análisis de escalamiento, cargas de fatiga y control de riesgo.",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Obtener tres cotizaciones OEM comparables de 80–100 kW y una oferta HAWT de referencia para el mismo sitio y alcance.",
+          "links": []
+        },
+        {
+          "kind": "bullet",
+          "text": "Convertir el primer piloto en caso de negocio: energía, combustible desplazado, OPEX, repuestos, garantías y lecciones de O&M.",
+          "links": []
+        }
+      ]
+    },
+    {
+      "title": "7. Riesgos y preguntas de debida diligencia",
+      "blocks": [
+        {
+          "kind": "table",
+          "rows": [
+            [
+              "Riesgo",
+              "Pregunta de control",
+              "Evidencia a exigir"
+            ],
+            [
+              "Potencia nominal engañosa",
+              "¿A qué velocidad de viento entrega la potencia nominal?",
+              "Curva medida/certificada, densidad de aire, control y pérdidas."
+            ],
+            [
+              "AEP inflada",
+              "¿Cómo se calculó la producción anual?",
+              "Distribución de viento del sitio, altura, turbulencia, disponibilidad y pérdidas."
+            ],
+            [
+              "Fatiga / durabilidad",
+              "¿Cuántos ciclos y horas probados a escala completa?",
+              "Cálculo independiente, inspecciones, historial de fallas, fatiga de palas y eje."
+            ],
+            [
+              "Sobrevida al viento extremo",
+              "¿Cuál es la clase y carga de supervivencia real?",
+              "Norma, condición de parada, freno, cargas de interfaz y ensayo/cálculo validado."
+            ],
+            [
+              "Certificados no equivalentes",
+              "¿El certificado corresponde al modelo y al sistema completo?",
+              "Número, organismo, estándar, alcance, vigencia y anexos técnicos."
+            ],
+            [
+              "Precio bajo incompleto",
+              "¿Qué queda fuera de la oferta?",
+              "Matriz de inclusiones, incoterm, impuestos, obras, integración, puesta en marcha y repuestos."
+            ],
+            [
+              "Riesgo de OEM / posventa",
+              "¿Quién responde en Chile y durante cuánto tiempo?",
+              "Referencias de clientes, SLA, stock, manuales, capacitación, garantía y entidad legal."
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "title": "8. Conclusiones",
+      "blocks": [
+        {
+          "kind": "paragraph",
+          "text": "La categoría VAWT presenta potencial de nicho en sistemas distribuidos, remotos e híbridos, pero su madurez comercial es heterogénea y la evidencia pública de equipos de 100 kW es limitada. El sector no permite inferir una curva de precios sólida ni un mercado VAWT sudamericano cuantificado. Las fichas y precios de catálogo son puntos de partida para solicitar propuestas, no evidencia de producción, certificación o bancabilidad.",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "FW Axial Energy tiene una oportunidad diferenciada si demuestra rendimiento y mantenibilidad en un cliente real. La ventaja competitiva inmediata será completar el piloto de 10 kW y convertirlo en evidencia medible. El desarrollo de 80 kW debe comunicarse como un siguiente escalón de ingeniería y validación, manteniendo transparente qué datos están simulados, medidos, ensayados y certificados.",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "Para una decisión de inversión o licitación, el criterio principal debe ser energía anual y costo total instalado por sitio, respaldados por curva y servicio. La comparación de precio nominal por kW entre equipos con alcances y niveles de madurez distintos puede conducir a decisiones equivocadas.",
+          "links": []
+        }
+      ]
+    },
+    {
+      "title": "Fuentes consultadas",
+      "blocks": [
+        {
+          "kind": "paragraph",
+          "text": "[1] GWEC, Global Wind Report 2025. https://www.gwec.net/reports/globalwindreport/2025",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[2] GWEC, Supply Side Data 2024, informe de fabricantes y unidades instaladas. https://marketintelligence.gwec.net/wp-content/uploads/2025/05/GWEC-Supply-Side-Data-2024-_-final.pdf",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[3] GWEC, Latin America could more than double onshore wind capacity by 2035, 14 nov. 2025. https://www.gwec.net/news/latin-america-must-strengthen-its-wind-energy-supply-chain-to-capture-a-once-in-a-generation-growth-opportunity-finds-new-gwec-report",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[4] Möllerström et al., A historical review of vertical axis wind turbines rated 100 kW and above, Renewable and Sustainable Energy Reviews 105 (2019), pp. 1–13. https://doi.org/10.1016/j.rser.2018.12.022",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[5] Rezaeiha et al., Towards a standard approach for future VAWT aerodynamics research and development, Renewable and Sustainable Energy Reviews (2021). https://www.sciencedirect.com/science/article/pii/S1364032121005086",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[6] Wind Harvest, Wind Harvester 4.0 Specifications (2023). https://windharvest.com/wp-content/uploads/2022/10/Wind-Harvester-70KW-Specifications-2023.pdf",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[7] Wind Harvest, FAQ on output and technology readiness, consultado 12 nov. 2026. https://windharvest.com/frequently-asked-questions/",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[8] U.S. SEC, Wind Harvest International offering memorandum (2025), disclosures on TRL, certification and commercial availability. https://www.sec.gov/Archives/edgar/data/1542172/000166516025001409/offeringmemoformc.pdf",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[9] R&X Energy, familia de aerogeneradores verticales 80–100 kW, ficha de fabricante. https://www.rx-energy.com/wind-turbine/vertical-wind-turbine/80kw-100kw-vertical-axis-wind-turbine.html",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[10] Prom-Nasos, ficha/preventa RX-HV100K y precio de distribuidor, consultado 12 nov. 2026. https://prom-nasos.com.ua/eng/generators-and-alternative-energy-sources/wind-turbines/vertical-wind-turbines/v-trogenerator-h-tipu-rx-hv100k-100-kvt-vertikalniy/",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[11] MUCE VAWT, ficha técnica fabricante FDM-100. https://www.vawtmuce.com/product_info.asp?id=582",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[12] WINDTURBINE, GH-H100K: ficha y precio anunciado; fuente comercial, sin verificación independiente. https://www.windturbine.com/products/100kw-vertical-axis-wind-turbine/",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[13] Ministerio de Energía de Chile, Reporte de Proyectos de energía, actualización mensual. https://energia.gob.cl/panel/reporte-de-proyectos",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[14] Wind Harvester, página de tecnología y declaración de TRL 8/certificación. https://windharvest.com/technology/",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[15] Solar Impulse Foundation, perfil de solución Wind Harvester (TRL 8 declarado). https://impulse-foundation.com/solutions/solutions-explorer/portfolio/solutions/wind-harvester-vertical-axis-wind-turbine",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[16] Qingdao Greef New Energy Equipment Co., Ltd., cotización GVH 3/5/10 kW, EXW, validez 2 ago. 2026; documento proporcionado por FW Axial Energy. https://www.greefenergy.com",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[17] FW Axial Energy, captura de costos y precio del equipo conceptual 80 kW, proporcionada el 12 nov. 2026. Fuente interna suministrada por el usuario; valores informados en USD.",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[18] Agile Wind Power, Investors: inicio de producción comercial en 2026 y primeras entregas en 2027. https://agilewindpower.com/en/about/investors/",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[19] Agile Wind Power, Technology: especificaciones Vertical Sky A50 y banco de ensayos. https://agilewindpower.com/en/technology/",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[20] VENTEA, Serie V: turbinas verticales V30, V10 y V5, página del fabricante. https://www.ventea.it/serie-v/",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[21] ROPAT, historia de la actividad eólica Ropatec y referencias de instalaciones históricas. https://www.ropat.it/language/en/renewable-energy/",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "[22] Ecolibrì, turbina vertical de 10 kW EW01, información del fabricante. https://www.ecolibri.it/hybrid-wind-solar-generators/hybrid-wind-solar-generators-10kw/",
+          "links": []
+        },
+        {
+          "kind": "paragraph",
+          "text": "Investigación documental | 12 de noviembre de 2026",
+          "links": []
+        }
+      ]
+    }
+  ],
+  "captured_at": "12-11-2026"
+}

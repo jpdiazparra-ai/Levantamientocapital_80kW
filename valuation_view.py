@@ -1,4 +1,6 @@
 """Executive valuation views for Block 4, Sub block 4."""
+from contextvars import ContextVar
+
 import html
 import textwrap
 from pathlib import Path
@@ -11,6 +13,8 @@ from display_currency import amount, currency_code, exchange_rate
 from valuation_data import load_valuation, SOURCE, SHEETS, number
 from valuation_interactive import diagnostics_panel, diagnostics_definitions, unit_panel, projection_panel, dcf_lab
 from valuation_report import report_payload
+
+chart_palette = ContextVar('valuation_chart_palette', default={})
 
 NAVY,TEAL,GOLD,ORANGE,MUTED='#315E7D','#3B8F96','#9DAFC0','#B36A52','#627588'
 
@@ -56,6 +60,15 @@ def plot(fig,key,height=330):
     if has_title:fig.update_layout(title=dict(x=.015,y=.98,yanchor='top',font=dict(size=14,color='#203E58')))
     fig.update_xaxes(automargin=True,gridcolor='#EEF2F6',zeroline=False,tickfont=dict(size=11))
     fig.update_yaxes(automargin=True,gridcolor='#EEF2F6',zeroline=False,tickfont=dict(size=11))
+    palette=chart_palette.get()
+    if palette:
+        def recolor(value):
+            if isinstance(value, str):return palette.get(value, value)
+            if isinstance(value, dict):return {k:recolor(v) for k,v in value.items()}
+            if isinstance(value, (list, tuple)):return [recolor(v) for v in value]
+            return value
+        fig=go.Figure(recolor(fig.to_plotly_json()))
+        key='10_'+key
     st.plotly_chart(fig,use_container_width=True,key='option4_valuation_'+key,config={'displaylogo':False,'scrollZoom':False,'modeBarButtonsToRemove':['select2d','lasso2d']})
 
 
