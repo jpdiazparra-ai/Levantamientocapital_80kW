@@ -15,7 +15,8 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 from timeline_scroll import timeline_document
-from capital_charts import render_capital_comparison, render_calendar, render_responsible_funds
+from capital_detail import render_system_detail
+from capital_charts import render_capital_comparison, render_calendar, render_responsible_funds, calendar_cash_rows
 from display_currency import amount, currency_code, currency_label, currency_number_format, currency_column_config, currency_export, convert_workbook, exchange_rate
 from commercial_analysis import render_commercial_analysis
 from valuation10_view import render_valuation10
@@ -69,7 +70,9 @@ def table_from(raw, header, id_column):
     frame = frame.loc[:, frame.columns != ''].copy()
     if id_column not in frame:
         raise ValueError(f'Falta la columna {id_column} en la fuente publicada.')
-    return frame[frame[id_column].astype(str).str.strip().ne('')].reset_index(drop=True)
+    frame=frame[frame[id_column].astype(str).str.strip().ne('')].copy()
+    frame.attrs['source_rows']=dict(zip(frame[id_column],frame.index+1))
+    return frame.reset_index(drop=True)
 
 
 def cash_from_costs(costs, plan):
@@ -94,9 +97,11 @@ def cash_from_costs(costs, plan):
     cash['Validación del saldo'] = selected['Validación caja']
     cash['Estado de pago'] = selected['Estado de pago caja']
     cash['Caja programada CLP'] = selected['Caja programada CLP'].map(number)
-    cash['Referencia por validar CLP'] = selected['Caja por validar CLP'].map(number)
+    cash['Caja calendarizada por validar CLP'] = selected['Caja por validar CLP'].map(number)
     validated = selected['Validación caja'].str.strip().str.casefold().eq('validado')
-    cash['Pendiente validado CLP'] = cash['Caja programada CLP'].where(validated)
+    cash['Caja calendarizada validada CLP'] = cash['Caja programada CLP'].where(validated)
+    cash['Pendiente validado CLP'] = cash['Saldo pendiente CLP'].where(validated)
+    cash['Referencia por validar CLP'] = cash['Saldo pendiente CLP'].where(~validated)
     cash['Respaldo / observaciones'] = selected['Sustento / observaciones']
     cash['Alerta caja'] = selected['Alerta caja']
     cash['Caja sin fecha CLP'] = selected['Caja sin fecha CLP'].map(number)
@@ -152,6 +157,8 @@ def load_workbook(refresh_nonce=0, source_url=SOURCE, sheets=tuple(SHEETS.items(
     shared = [c for c in costs if c in plan and c != 'ID']
     tasks = plan.merge(costs.drop(columns=shared), on='ID', how='left', validate='one_to_one')
     tasks['_cost_hito_objetivo'] = tasks['ID'].map(costs.set_index('ID')['Hito objetivo'])
+    tasks['_source_plan_row']=tasks['ID'].map(plan.attrs.get('source_rows',{}))
+    tasks['_source_costs_row']=tasks['ID'].map(costs.attrs.get('source_rows',{}))
     tasks = tasks.merge(revision[['ID', 'Estado / avance actual', 'Control de dependencia']], on='ID', how='left', validate='one_to_one')
     for col in ['Presupuesto referencia', 'Presupuesto vigente', 'Comercial anterior', 'AC económico', 'EAC económico', 'VAC al cierre', 'EV', 'PV', 'CPI', 'SPI', 'ETC actualizado']:
         tasks[col] = tasks[col].map(number)
@@ -234,36 +241,80 @@ def capital_dimension_summary(tasks, cash, dimension):
     return summary
 
 
+CAPITAL_TURBINES = ['Ambas turbinas', '10 kW', '80 kW']
+
+
+def capital_turbine_labels(tasks):
+    """Classify the Plan project without confusing 10/80 kW with 100/800 kW."""
+    projects=tasks['Proyecto'].fillna('').astype(str)
+    labels=pd.Series('Otros proyectos',index=tasks.index,dtype=object)
+    for capacity in (10,80):
+        selected=projects.str.contains(rf'(?<![\d.,]){capacity}\s*kw\b',case=False,regex=True)
+        labels.loc[selected]=f'{capacity} kW'
+    return labels
+
+
+def capital_turbine_scope(tasks, selection):
+    if selection == 'Ambas turbinas':return tasks.copy()
+    return tasks.loc[capital_turbine_labels(tasks).eq(selection)].copy()
+
+
+def capital_comparison_summary(tasks, cash, dimension, selection):
+    """In the joint view retain each turbine's systems and milestones separately."""
+    grouped=tasks.copy()
+    if selection=='Ambas turbinas' and dimension!='Proyecto':
+        turbine=capital_turbine_labels(grouped)
+        labels=grouped[dimension].fillna('').astype(str).str.strip().replace('','Sin clasificar')
+        grouped[dimension]=labels+' · '+turbine
+    summary=capital_dimension_summary(grouped,cash,dimension)
+    summary['Caja pendiente de cubrir']=summary[['Caja validada','Caja por validar']].sum(axis=1,min_count=1)
+    total=summary['Caja pendiente de cubrir'].sum(min_count=1)
+    summary['Participación %']=summary['Caja pendiente de cubrir']/total*100 if pd.notna(total) and total>0 else np.nan
+    return summary.sort_values('Caja pendiente de cubrir',ascending=False,na_position='last').reset_index(drop=True)
+
+
 def render_capital_dimensions(tasks, cash):
     with st.container(border=True, key='option4_analysis_budget'):
-        st.subheader('Presupuesto de referencia y caja')
-        st.caption('Compara cómo se distribuyen el presupuesto y la caja pendiente entre proyectos, hitos y sistemas. Cambia de vista para identificar dónde se concentra el capital y qué montos están validados o pendientes de revisión.')
+        st.subheader('Caja pendiente de cubrir')
+        st.caption('Saldos pendientes de pago incluidos en caja: validada + por validar. Los gráficos y el detalle usan los mismos registros de Costos, agrupados por proyecto, hito o sistema.')
+        selection=st.selectbox('Turbina para comparar',CAPITAL_TURBINES,key='option4_capital_comparison_turbine',
+            help='Aplica a los gráficos, totales, detalles y descargas de este panel. Respeta los filtros superiores.')
+        tasks=capital_turbine_scope(tasks,selection)
+        if tasks.empty:
+            st.info('No hay actividades de '+selection+' con los filtros actuales. Ajusta la turbina o los filtros superiores.')
+            return
+        st.caption('Vista: '+selection+'. En la vista conjunta, cada sistema e hito identifica su turbina. Los filtros superiores siguen vigentes.')
         tabs = st.tabs(['Por proyecto', 'Por hito', 'Por sistema'])
         for tab, dimension, key in zip(tabs, ['Proyecto', 'Hito objetivo', 'Sistema'], ['project', 'milestone', 'system']):
             with tab:
-                summary = capital_dimension_summary(tasks, cash, dimension)
+                summary = capital_comparison_summary(tasks, cash, dimension, selection)
                 render_capital_comparison(summary, dimension, key)
                 # Reads come from the same aggregates as the charts, respecting all filters.
-                known = summary[summary['Presupuesto referencia'].notna()]
+                known = summary[summary['Caja pendiente de cubrir'].notna()]
                 if not known.empty:
                     lead = known.iloc[0]
                     share = lead['Participación %']
-                    share_text = f' ({share:.1f}% de la referencia seleccionada)' if pd.notna(share) else ''
+                    share_text = f' ({share:.1f}% de la caja pendiente seleccionada)' if pd.notna(share) else ''
                     top = html.escape(str(lead[dimension]))
                     pending = summary['Caja por validar'].sum(min_count=1)
                     valid = summary['Caja validada'].sum(min_count=1)
                     validation_text = 'No hay caja validada informada.' if pd.isna(valid) else f'Caja validada informada: {money(valid)}.'
                     st.html('<div class="option-capital-reading"><span>LECTURA DE CAPITAL</span>'
-                        f'<p><b>{top}</b> concentra la mayor referencia: <b>{money(lead["Presupuesto referencia"])}</b>{share_text}.</p>'
+                        f'<p><b>{top}</b> concentra la mayor caja pendiente: <b>{money(lead["Caja pendiente de cubrir"])}</b>{share_text}.</p>'
                         f'<p>Caja por validar de la selección: <b>{money(pending)}</b>. {validation_text}</p></div>')
-                with st.expander(f'Detalle de capital por {dimension.lower()}'):
-                    st.dataframe(summary, hide_index=True, use_container_width=True,
-                        column_config={
-                            field: st.column_config.NumberColumn(field + ' ('+currency_code()+')', format=currency_number_format())
-                            for field in ['Presupuesto referencia', 'Caja por validar', 'Caja validada']
-                        })
+                with st.expander(f'Detalle de capital por {dimension.lower()}',expanded=dimension=='Sistema'):
+                    if dimension=='Sistema':
+                        categories=tasks['Sistema'].fillna('').astype(str).str.strip().replace('','Sin clasificar')
+                        if selection=='Ambas turbinas':categories=categories+' · '+capital_turbine_labels(tasks)
+                        render_system_detail(summary,tasks,cash,categories,SOURCE,SHEETS,selection)
+                    else:
+                        st.dataframe(summary, hide_index=True, use_container_width=True,
+                            column_config={
+                                field: st.column_config.NumberColumn(field + ' ('+currency_code()+')', format=currency_number_format())
+                                for field in ['Presupuesto referencia', 'Caja pendiente de cubrir', 'Caja por validar', 'Caja validada']
+                            })
                     st.download_button('Descargar este análisis', currency_export(summary).to_csv(index=False).encode('utf-8-sig'),
-                        file_name=f'capital_por_{key}.csv', mime='text/csv', key=f'option4_capital_{key}_download')
+                        file_name=f'capital_por_{key}_{selection.replace(" ","_")}.csv', mime='text/csv', key=f'option4_capital_{key}_download')
 
 
 def capital_view(tasks, cash, cutoff):
@@ -271,15 +322,30 @@ def capital_view(tasks, cash, cutoff):
     if tasks.empty:
         st.info('No hay actividades para la selección.')
         return
-    selected = cash[cash['ID actividad'].isin(tasks['ID'])].copy()
+    render_disbursement_calendar(tasks,cash,cutoff)
+    selected=cash[cash['ID actividad'].isin(tasks['ID'])].copy()
+    render_capital_dimensions(tasks, selected)
+    render_commercial_analysis(tasks)
+    render_responsible_funds(tasks, selected, capital_dimension_summary)
+
+
+def render_disbursement_calendar(tasks,cash,cutoff):
+    """Apply one turbine scope to totals, dates, milestones and calendar details."""
     with st.container(border=True, key='option4_analysis_calendar'):
         st.subheader('Calendario de desembolsos')
         st.caption('Programa mensual de caja y fechas previstas de los hitos del proyecto.')
-        reference = tasks['Presupuesto referencia'].sum(min_count=1)
+        turbine=st.selectbox('Turbina del calendario',CAPITAL_TURBINES,key='option4_capital_calendar_turbine',
+            help='Filtra los totales, desembolsos mensuales, fechas de hitos y tablas de este calendario.')
+        tasks=capital_turbine_scope(tasks,turbine)
+        if tasks.empty:
+            st.info('No hay actividades de '+turbine+' para el calendario con la selección actual.')
+            return
+        selected=cash[cash['ID actividad'].isin(tasks['ID'])].copy()
+        reference = selected[['Referencia por validar CLP','Pendiente validado CLP']].sum(axis=1,min_count=1).sum(min_count=1)
         pending = selected['Referencia por validar CLP'].sum(min_count=1)
         valid = selected['Pendiente validado CLP'].sum(min_count=1)
         summary_items = [
-            ('Presupuesto de referencia', money(reference), 'Suma de referencias informadas', 'reference'),
+            ('Caja pendiente de cubrir', money(reference), 'Saldo incluido · descontados los pagos registrados', 'reference'),
             ('Caja por validar', money(pending), 'Pendiente de revisión', 'pending'),
             ('Caja validada', money(valid), 'Saldos con validación confirmada', 'validated'),
             ('Actividades de caja por validar', str(selected['Validación del saldo'].eq('Por validar').sum()), 'Saldos y fechas FC de Costos', 'activities'),
@@ -293,9 +359,11 @@ def capital_view(tasks, cash, cutoff):
         selected['_month']=selected['_date'].dt.to_period('M').dt.to_timestamp()
         first_month=cutoff.to_period('M').to_timestamp()
         selected['_month']=selected['_month'].mask(selected['_month'].lt(first_month),first_month)
-        monthly=selected.dropna(subset=['_month']).groupby('_month')[['Pendiente validado CLP','Referencia por validar CLP']].sum(min_count=1).reset_index()
+        scheduled=calendar_cash_rows(selected)
+        monthly=scheduled.dropna(subset=['_month']).groupby('_month')[['Pendiente validado CLP','Referencia por validar CLP']].sum(min_count=1).reset_index()
+        render_cash_reconciliation(tasks,selected)
         render_calendar(monthly, milestones=explicit_milestone_rows(tasks), criteria=[
-            'La caja por validar forma parte del programa; no se suma nuevamente a la caja pendiente de cubrir.',
+            'El gráfico mensual usa Caja programada CLP y Caja por validar CLP publicadas. Las tarjetas y el detalle por sistema muestran el saldo pendiente total incluido.',
             'Fuente: Costos, saldos No pagado o Parcial con inclusión activa. La brecha requiere caja disponible e ingresos confirmados.',
             'Los totales se suman desde las partidas publicadas y pueden diferir por redondeo. Un importe sin validar no equivale a cero.',
             'Los vencimientos anteriores al corte se agrupan en el mes de corte. Los aportes en especie no equivalen a caja.'
@@ -304,9 +372,48 @@ def capital_view(tasks, cash, cutoff):
             st.dataframe(selected[['ID actividad','Concepto / cuota','Fecha FC / desembolso','Estado de pago','Saldo pendiente CLP','Validación del saldo','Caja programada CLP','Pendiente validado CLP','Referencia por validar CLP','Alerta caja','Respaldo / observaciones']].rename(columns={'Concepto / cuota':'Actividad / entregable'}),hide_index=True,use_container_width=True,column_config=currency_column_config(selected))
         with st.expander('Calendario mensual · selección activa'):
             st.dataframe(monthly.rename(columns={'_month':'Mes'}),hide_index=True,use_container_width=True,column_config=currency_column_config(monthly))
-    render_capital_dimensions(tasks, selected)
-    render_commercial_analysis(tasks)
-    render_responsible_funds(tasks, selected, capital_dimension_summary)
+
+
+def cash_reconciliation_data(tasks,cash):
+    required={'Estado de pago caja','Incluir en caja','Presupuesto vigente','Saldo pendiente caja CLP','Pagos registrados al corte'}
+    if not required.issubset(tasks.columns):return None
+    unpaid=tasks.loc[tasks['Estado de pago caja'].fillna('').str.strip().str.casefold().isin(['no pagado','parcial'])]
+    included=unpaid['Incluir en caja'].fillna('').str.strip().str.casefold().isin(['sí','si'])
+    def total(frame,field):return frame[field].map(number).sum(min_count=1)
+    budget=total(unpaid,'Presupuesto vigente')
+    paid=total(unpaid,'Pagos registrados al corte')
+    balance=total(unpaid,'Saldo pendiente caja CLP')
+    excluded=total(unpaid.loc[~included],'Saldo pendiente caja CLP')
+    selected=total(cash,'Saldo pendiente CLP')
+    programmed=total(cash,'Caja programada CLP')
+    return pd.DataFrame([
+        ('Presupuesto vigente · No pagado y Parcial',budget),
+        ('Pagos ya registrados en esas partidas',paid),
+        ('Saldo pendiente · antes de inclusión',balance),
+        ('Saldo sin inclusión activa en caja',excluded),
+        ('Saldo pendiente incluido · tarjetas y sistemas',selected),
+        ('Caja programada publicada',programmed),
+        ('Saldo incluido fuera de programación',selected-programmed),
+    ],columns=['Concepto','Monto'])
+
+
+def render_cash_reconciliation(tasks,cash):
+    reconciliation=cash_reconciliation_data(tasks,cash)
+    if reconciliation is None:return
+    with st.expander('Conciliación · no pagados, saldo pendiente y caja programada'):
+        display=reconciliation.copy()
+        display['Monto · '+currency_code()]=display.pop('Monto').map(amount)
+        st.dataframe(display,hide_index=True,use_container_width=True)
+        st.caption('No pagado y Parcial son estados distintos. Sumar el presupuesto vigente de ambos incluye montos ya abonados. El saldo pendiente descuenta esos pagos; Incluir en caja determina el alcance del calendario.')
+        blocked=cash.copy()
+        blocked['Saldo fuera de programación']=blocked['Saldo pendiente CLP']-blocked['Caja programada CLP'].fillna(0)
+        blocked=blocked.loc[blocked['Saldo fuera de programación'].gt(.001)]
+        if not blocked.empty:
+            st.caption(str(len(blocked))+' registros tienen saldo pendiente que la fuente no programa por completo. Las alertas publicadas se conservan para revisión.')
+            fields=['ID actividad','Proyecto','Saldo pendiente CLP','Caja programada CLP','Saldo fuera de programación','Alerta caja','Fecha FC / desembolso']
+            shown=blocked.reindex(columns=fields)
+            st.dataframe(shown.style.format({field:amount for field in ['Saldo pendiente CLP','Caja programada CLP','Saldo fuera de programación']},na_rep='Sin informar'),hide_index=True,use_container_width=True)
+            st.download_button('Descargar saldos fuera de programación',currency_export(shown).to_csv(index=False).encode('utf-8-sig'),file_name='saldos_fuera_programacion.csv',mime='text/csv',key='option4_cash_reconciliation_csv')
 
 
 def build_timeline_rows(tasks, end, level):

@@ -1,0 +1,625 @@
+ID,Estado de pago caja,Incluir en caja,Validación caja,Fecha FC / desembolso,Presupuesto vigente,Pagos registrados al corte,Saldo pendiente caja CLP,Caja programada CLP,Caja por validar CLP,Caja sin fecha CLP,Alerta caja,Sustento / observaciones,Proyecto,Actividad / entregable
+A1,Pagado,Sí,Validado,14-jun-2024,443.344,—,—,—,—,—,Pagado,,Piloto 10kW,A1
+A2,Pagado,Sí,Validado,19-jun-2024,157.437,—,—,—,—,—,Pagado,,Piloto 10kW,A2
+A3,Pagado,Sí,Validado,10-jul-2024,238.000,—,—,—,—,—,Pagado,,Piloto 10kW,A3
+A4,Pagado,Sí,Validado,31-mar-2025,584.795,—,—,—,—,—,Pagado,,Piloto 10kW,A4
+A5,Pagado,Sí,Validado,30-may-2025,351.083,—,—,—,—,—,Pagado,,Piloto 10kW,A5
+A6,Pagado,Sí,Validado,23-jun-2024,12.490,—,—,—,—,—,Pagado,,Piloto 10kW,A6
+A7,Pagado,Sí,Validado,25-jun-2024,297.500,—,—,—,—,—,Pagado,,Piloto 10kW,A7
+A8,Pagado,Sí,Validado,04-jul-2024,59.980,—,—,—,—,—,Pagado,,Piloto 10kW,A8
+A9,Pagado,Sí,Validado,01-ago-2024,82.100,—,—,—,—,—,Pagado,,Piloto 10kW,A9
+A10,Pagado,Sí,Validado,25-oct-2024,209.920,—,—,—,—,—,Pagado,,Piloto 10kW,A10
+A11,Pagado,Sí,Validado,25-oct-2024,649.115,—,—,—,—,—,Pagado,,Piloto 10kW,A11
+A12,Pagado,Sí,Validado,28-oct-2024,25.367,—,—,—,—,—,Pagado,,Piloto 10kW,A12
+A13,Pagado,Sí,Por validar,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A13
+A14,Pagado,Sí,Por validar,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A14
+A15,Pagado,Sí,Por validar,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A15
+A16,Pagado,Sí,Por validar,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A16
+A17,Pagado,Sí,Validado,30-abr-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A17
+A18,Pagado,Sí,Validado,30-sept-2026,178.500,—,—,—,—,—,Pagado,,Piloto 10kW,A18
+A19,Pagado,Sí,Validado,30-sept-2026,54.000,—,—,—,—,—,Pagado,,Piloto 10kW,A19
+A20,Pagado,Sí,Validado,30-abr-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A20
+A21,No pagado,Sí,Por validar,01-ago-2026,120.000,—,120.000,120.000,120.000,—,Por validar,,Piloto 10kW,A21
+A22,No pagado,Sí,Por validar,01-ago-2026,48.017,—,48.017,48.017,48.017,—,Por validar,,Piloto 10kW,A22
+A23,No pagado,Sí,Por validar,01-ago-2026,48.017,—,48.017,48.017,48.017,—,Por validar,,Piloto 10kW,A23
+A24,Pagado,Sí,Validado,02-jun-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A24
+A25,Pagado,Sí,Validado,02-jun-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A25
+A26,Pagado,Sí,Validado,02-jun-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A26
+A27,No pagado,Sí,Por validar,01-ago-2026,25.000,—,25.000,25.000,25.000,—,Por validar,,Piloto 10kW,A27
+A28,Pagado,Sí,Validado,29-mar-2024,173.913,—,—,—,—,—,Pagado,,Piloto 10kW,A28
+A29,Pagado,Sí,Validado,31-may-2024,220.290,—,—,—,—,—,Pagado,,Piloto 10kW,A29
+A30,Pagado,Sí,Validado,02-ago-2024,16.761.832,—,—,—,—,—,Pagado,,Piloto 10kW,A30
+A31,Pagado,Sí,Validado,30-abr-2025,200.000,—,—,—,—,—,Pagado,,Piloto 10kW,A31
+A32,Pagado,Sí,Validado,13-jul-2023,184.537,—,—,—,—,—,Pagado,,Piloto 10kW,A32
+A33,Pagado,Sí,Validado,21-ago-2023,4.538.575,—,—,—,—,—,Pagado,,Piloto 10kW,A33
+A34,Pagado,Sí,Validado,29-sept-2023,1.422.414,—,—,—,—,—,Pagado,,Piloto 10kW,A34
+A35,Pagado,Sí,Validado,29-sept-2023,300.521,—,—,—,—,—,Pagado,,Piloto 10kW,A35
+A36,Pagado,Sí,Validado,15-abr-2024,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A36
+A37,Pagado,Sí,Validado,23-nov-2023,1.005.747,—,—,—,—,—,Pagado,,Piloto 10kW,A37
+A38,Pagado,Sí,Validado,13-dic-2023,209.440,—,—,—,—,—,Pagado,,Piloto 10kW,A38
+A39,Pagado,Sí,Validado,17-ene-2024,13.180.007,—,—,—,—,—,Pagado,,Piloto 10kW,A39
+A40,Pagado,Sí,Validado,19-ene-2024,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A40
+A41,Pagado,Sí,Validado,15-abr-2024,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A41
+A42,Pagado,Sí,Validado,30-abr-2024,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A42
+A43,Pagado,Sí,Validado,16-may-2024,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A43
+A44,No pagado,Sí,Por validar,01-ago-2026,25.000,—,25.000,25.000,25.000,—,Por validar,,Piloto 10kW,A44
+A45,Pagado,Sí,Validado,14-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A45
+A46,No pagado,Sí,Por validar,30-sept-2026,104.000,—,104.000,104.000,104.000,—,Por validar,,Piloto 10kW,A46
+A47,No pagado,Sí,Por validar,30-sept-2026,202.200,—,202.200,202.200,202.200,—,Por validar,,Piloto 10kW,A47
+A48,No pagado,Sí,Por validar,01-ago-2026,416.500,—,416.500,416.500,416.500,—,Por validar,,Piloto 10kW,A48
+A49,No pagado,Sí,Por validar,01-ago-2026,214.200,—,214.200,214.200,214.200,—,Por validar,,Piloto 10kW,A49
+A51,No pagado,Sí,Por validar,01-ago-2026,119.000,—,119.000,119.000,119.000,—,Por validar,,Piloto 10kW,A51
+A52,No pagado,Sí,Por validar,01-ago-2026,48.017,—,48.017,48.017,48.017,—,Por validar,,Piloto 10kW,A52
+A53,Pagado,Sí,Por validar,20-may-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A53
+A54,Pagado,Sí,Por validar,25-may-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A54
+A55,Pagado,Sí,Por validar,27-may-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A55
+A56,Pagado,Sí,Por validar,29-may-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A56
+A57,Pagado,Sí,Por validar,29-may-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A57
+A58,Pagado,Sí,Por validar,30-ago-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A58
+A59,Pagado,Sí,Por validar,30-ago-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A59
+A60,Pagado,Sí,Por validar,30-ago-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A60
+A61,Pagado,Sí,Por validar,30-ago-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A61
+A62,No pagado,Sí,Por validar,01-ago-2026,48.017,—,48.017,48.017,48.017,—,Por validar,,Piloto 10kW,A62
+A63,Pagado,Sí,Por validar,30-sept-2026,416.500,416.500,—,—,—,—,Pagado,,Piloto 10kW,A63
+A64,Pagado,Sí,Por validar,30-sept-2026,468.000,468.000,—,—,—,—,Pagado,,Piloto 10kW,A64
+A65,Pagado,Sí,Por validar,30-sept-2026,94.500,94.500,—,—,—,—,Pagado,,Piloto 10kW,A65
+A66,Pagado,Sí,Por validar,30-sept-2026,94.500,94.500,—,—,—,—,Pagado,,Piloto 10kW,A66
+A67,Pagado,Sí,Por validar,30-sept-2026,94.500,94.500,—,—,—,—,Pagado,,Piloto 10kW,A67
+A68,Pagado,Sí,Por validar,30-sept-2026,94.500,94.500,—,—,—,—,Pagado,,Piloto 10kW,A68
+A69,Pagado,Sí,Por validar,31-jul-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A69
+A70,No pagado,Sí,Por validar,01-ene-2027,300.000,—,300.000,300.000,300.000,—,Por validar,,Piloto 10kW,A70
+A71,No pagado,Sí,Por validar,01-ene-2027,300.000,—,300.000,300.000,300.000,—,Por validar,,Piloto 10kW,A71
+A72,No pagado,Sí,Por validar,30-abr-2027,1.200.000,—,1.200.000,1.200.000,1.200.000,—,Por validar,,Piloto 10kW,A72
+A73,Parcial,Sí,Por validar,31-jul-2026,2.500.000,2.000.000,500.000,500.000,500.000,—,Por validar,,Piloto 10kW,A73
+A74,Parcial,Sí,Por validar,31-jul-2026,5.150.000,4.000.000,1.150.000,1.150.000,1.150.000,—,Por validar,,Piloto 10kW,A74
+A75,Pagado,Sí,Por validar,30-abr-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A75
+A76,Pagado,Sí,Por validar,30-abr-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A76
+A77,No pagado,Sí,Por validar,01-ene-2027,200.000,—,200.000,200.000,200.000,—,Por validar,,Piloto 10kW,A77
+A78,No pagado,Sí,Por validar,01-ene-2027,950.000,—,950.000,950.000,950.000,—,Por validar,,Piloto 10kW,A78
+A79,No pagado,Sí,Por validar,01-ene-2027,600.000,—,600.000,600.000,600.000,—,Por validar,,Piloto 10kW,A79
+A80,No pagado,Sí,Por validar,30-sept-2026,1.463.700,—,1.463.700,1.463.700,1.463.700,—,Por validar,,Piloto 10kW,A80
+A81,No pagado,Sí,Por validar,30-oct-2026,300.000,—,300.000,300.000,300.000,—,Por validar,,Piloto 10kW,A81
+A82,No pagado,Sí,Por validar,30-abr-2027,952.000,—,952.000,952.000,952.000,—,Por validar,,Piloto 10kW,A82
+A83,No pagado,Sí,Por validar,30-sept-2026,1.463.700,—,1.463.700,1.463.700,1.463.700,—,Por validar,,Piloto 10kW,A83
+A84,No pagado,Sí,Por validar,30-nov-2026,261.800,—,261.800,261.800,261.800,—,Por validar,,Piloto 10kW,A84
+A85,No pagado,Sí,Por validar,30-nov-2026,136.850,—,136.850,136.850,136.850,—,Por validar,,Piloto 10kW,A85
+A86,No pagado,Sí,Por validar,30-nov-2026,452.200,—,452.200,452.200,452.200,—,Por validar,,Piloto 10kW,A86
+A87,Pagado,Sí,Por validar,30-jun-2027,1.951.600,1.951.600,—,—,—,—,Pagado,,Piloto 10kW,A87
+A88,Pagado,Sí,Por validar,30-abr-2027,119.000,119.000,—,—,—,—,Pagado,,Piloto 10kW,A88
+A89,Pagado,Sí,Por validar,30-sept-2026,952.000,952.000,—,—,—,—,Pagado,,Piloto 10kW,A89
+A90,Pagado,Sí,Por validar,30-sept-2026,2.380.000,2.380.000,—,—,—,—,Pagado,,Piloto 10kW,A90
+A91,Pagado,Sí,Por validar,30-sept-2026,1.785.000,1.785.000,—,—,—,—,Pagado,,Piloto 10kW,A91
+A92,Pagado,Sí,Por validar,30-sept-2026,10.500.000,10.500.000,—,—,—,—,Pagado,,Piloto 10kW,A92
+A93,Pagado,Sí,Por validar,31-oct-2026,357.000,357.000,—,—,—,—,Pagado,,Piloto 10kW,A93
+A94,Pagado,Sí,Por validar,31-oct-2026,297.500,297.500,—,—,—,—,Pagado,,Piloto 10kW,A94
+A95,Pagado,Sí,Por validar,30-abr-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A95
+A96,Pagado,Sí,Por validar,30-abr-2027,357.000,357.000,—,—,—,—,Pagado,,Piloto 10kW,A96
+A97,Pagado,Sí,Por validar,31-oct-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A97
+A98,Pagado,Sí,Por validar,31-oct-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A98
+A99,Pagado,Sí,Por validar,31-ago-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A99
+A100,Pagado,Sí,Por validar,31-ago-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A100
+A101,Pagado,Sí,Por validar,31-ago-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A101
+A102,Pagado,Sí,Por validar,31-ago-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A102
+A103,Parcial,Sí,Por validar,31-ago-2026,2.500.000,1.000.000,1.500.000,1.500.000,1.500.000,—,Por validar,,Piloto 10kW,A103
+A104,Parcial,Sí,Por validar,31-ago-2026,5.150.000,2.000.000,3.150.000,3.150.000,3.150.000,—,Por validar,,Piloto 10kW,A104
+A105,Pagado,Sí,Validado,31-oct-2025,2.815.260,—,—,—,—,—,Pagado,,Piloto 10kW,A105
+A106,Pagado,Sí,Validado,05-ago-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A106
+A107,Pagado,Sí,Validado,09-dic-2025,—,—,—,—,—,—,Pagado,,Piloto 10kW,A107
+A108,Pagado,Sí,Validado,09-dic-2025,—,—,—,—,—,—,Pagado,,Piloto 10kW,A108
+A109,Pagado,Sí,Validado,10-dic-2025,100,—,—,—,—,—,Pagado,,Piloto 10kW,A109
+A110,Pagado,Sí,Validado,16-dic-2025,100,—,—,—,—,—,Pagado,,Piloto 10kW,A110
+A111,Pagado,Sí,Validado,17-dic-2025,—,—,—,—,—,—,Pagado,,Piloto 10kW,A111
+A112,Pagado,Sí,Validado,18-dic-2025,—,—,—,—,—,—,Pagado,,Piloto 10kW,A112
+A113,Pagado,Sí,Validado,02-dic-2024,285.600,—,—,—,—,—,Pagado,,Piloto 10kW,A113
+A114,Pagado,Sí,Validado,15-abr-2025,497.196,—,—,—,—,—,Pagado,,Piloto 10kW,A114
+A115,Pagado,Sí,Validado,01-dic-2025,—,—,—,—,—,—,Pagado,,Piloto 10kW,A115
+A116,Pagado,Sí,Validado,04-dic-2025,—,—,—,—,—,—,Pagado,,Piloto 10kW,A116
+A117,Pagado,Sí,Validado,05-dic-2025,—,—,—,—,—,—,Pagado,,Piloto 10kW,A117
+A118,Pagado,Sí,Validado,09-dic-2025,—,—,—,—,—,—,Pagado,,Piloto 10kW,A118
+A119,Pagado,Sí,Validado,06-mar-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A119
+A120,Pagado,Sí,Validado,12-mar-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A120
+A121,Pagado,Sí,Validado,13-mar-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A121
+A122,Pagado,Sí,Validado,13-mar-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A122
+A123,Pagado,Sí,Validado,25-jul-2024,30.000,—,—,—,—,—,Pagado,,Piloto 10kW,A123
+A124,Pagado,Sí,Validado,29-jul-2024,2.665.600,—,—,—,—,—,Pagado,,Piloto 10kW,A124
+A125,Pagado,Sí,Validado,01-ago-2024,220.000,—,—,—,—,—,Pagado,,Piloto 10kW,A125
+A126,Pagado,Sí,Validado,13-ene-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A126
+A127,Pagado,Sí,Validado,13-ene-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A127
+A128,Pagado,Sí,Validado,15-ene-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A128
+A129,Pagado,Sí,Validado,20-ene-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A129
+A130,Pagado,Sí,Validado,30-ene-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A130
+A131,Pagado,Sí,Validado,17-feb-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A131
+A132,Pagado,Sí,Validado,20-feb-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A132
+A133,Pagado,Sí,Validado,03-mar-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A133
+A134,Pagado,Sí,Validado,03-mar-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A134
+A135,Pagado,Sí,Validado,18-mar-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A135
+A136,Pagado,Sí,Validado,30-sept-2026,4.667.911,—,—,—,—,—,Pagado,,Piloto 10kW,A136
+A137,Pagado,Sí,Validado,12-mar-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A137
+A138,Pagado,Sí,Validado,12-mar-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A138
+A139,Pagado,Sí,Validado,12-mar-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A139
+A140,No pagado,Sí,Por validar,30-abr-2027,952.000,—,952.000,952.000,952.000,—,Por validar,,Piloto 10kW,A140
+A141,Pagado,Sí,Por validar,31-ago-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A141
+A142,Parcial,Sí,Por validar,31-ago-2026,1.000.000,1.000.000,—,—,—,—,Por validar,,Piloto 10kW,A142
+A143,No pagado,Sí,Por validar,30-nov-2026,300.000,—,300.000,300.000,300.000,—,Por validar,,Piloto 10kW,A143
+A144,Pagado,Sí,Por validar,30-abr-2027,2.975.000,2.975.000,—,—,—,—,Pagado,,Piloto 10kW,A144
+A145,No pagado,Sí,Por validar,02-sept-2026,384.132,—,384.132,384.132,384.132,—,Por validar,,Piloto 10kW,A145
+A146,No pagado,Sí,Por validar,30-sept-2026,384.132,—,384.132,384.132,384.132,—,Por validar,,Piloto 10kW,A146
+A147,No pagado,Sí,Por validar,30-mar-2027,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A147
+A148,Pagado,Sí,Por validar,31-ago-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A148
+A149,No pagado,Sí,Por validar,30-abr-2027,595.000,—,595.000,595.000,595.000,—,Por validar,,Piloto 10kW,A149
+A150,No pagado,Sí,Por validar,30-abr-2027,1.190.000,—,1.190.000,1.190.000,1.190.000,—,Por validar,,Piloto 10kW,A150
+A151,Pagado,Sí,Por validar,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A151
+A152,No pagado,Sí,Por validar,30-sept-2026,250.000,—,250.000,250.000,250.000,—,Por validar,,Piloto 10kW,A152
+A153,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A153
+A154,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A154
+A155,No pagado,Sí,Por validar,01-ene-2027,300.000,—,300.000,300.000,300.000,—,Por validar,,Piloto 10kW,A155
+A156,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A156
+A157,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A157
+A158,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A158
+A159,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A159
+A160,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A160
+A161,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A161
+A162,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A162
+A163,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A163
+A164,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A164
+A165,No pagado,Sí,Por validar,30-sept-2026,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 10kW,A165
+A166,No pagado,Sí,Por validar,30-sept-2026,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 10kW,A166
+A167,Pagado,Sí,Validado,16-ago-2024,25.000,—,—,—,—,—,Pagado,,Piloto 10kW,A167
+A168,Pagado,Sí,Validado,20-ago-2024,30.000,—,—,—,—,—,Pagado,,Piloto 10kW,A168
+A169,Pagado,Sí,Validado,28-ago-2024,30.000,—,—,—,—,—,Pagado,,Piloto 10kW,A169
+A170,Pagado,Sí,Validado,18-dic-2024,55.557,—,—,—,—,—,Pagado,,Piloto 10kW,A170
+A171,Pagado,Sí,Validado,18-dic-2024,12.000,—,—,—,—,—,Pagado,,Piloto 10kW,A171
+A172,Pagado,Sí,Validado,18-dic-2024,24.000,—,—,—,—,—,Pagado,,Piloto 10kW,A172
+A173,Pagado,Sí,Validado,18-dic-2024,41.560,—,—,—,—,—,Pagado,,Piloto 10kW,A173
+A174,Pagado,Sí,Validado,18-dic-2024,41.560,—,—,—,—,—,Pagado,,Piloto 10kW,A174
+A175,Pagado,Sí,Validado,18-dic-2024,56.800,—,—,—,—,—,Pagado,,Piloto 10kW,A175
+A176,Pagado,Sí,Validado,18-dic-2024,150.000,—,—,—,—,—,Pagado,,Piloto 10kW,A176
+A177,Pagado,Sí,Validado,18-dic-2024,276.246,—,—,—,—,—,Pagado,,Piloto 10kW,A177
+A178,Pagado,Sí,Validado,18-dic-2024,910.732,—,—,—,—,—,Pagado,,Piloto 10kW,A178
+A179,Pagado,Sí,Validado,08-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A179
+A180,Pagado,Sí,Validado,08-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A180
+A181,Pagado,Sí,Validado,08-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A181
+A182,Pagado,Sí,Validado,08-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A182
+A183,Pagado,Sí,Validado,08-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A183
+A184,Pagado,Sí,Validado,08-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A184
+A185,Pagado,Sí,Validado,09-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A185
+A186,Pagado,Sí,Validado,09-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A186
+A187,Pagado,Sí,Validado,09-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A187
+A188,Pagado,Sí,Validado,09-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A188
+A189,Pagado,Sí,Validado,09-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A189
+A190,Pagado,Sí,Validado,09-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A190
+A191,Pagado,Sí,Validado,09-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A191
+A192,Pagado,Sí,Validado,09-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A192
+A193,Pagado,Sí,Validado,10-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A193
+A194,Pagado,Sí,Validado,10-ago-2025,1.130.500,—,—,—,—,—,Pagado,,Piloto 10kW,A194
+A195,Pagado,Sí,Validado,29-may-2026,28.041.465,—,—,—,—,—,Pagado,,Piloto 10kW,A195
+A196,Pagado,Sí,Validado,29-may-2026,37.850.000,—,—,—,—,—,Pagado,,Piloto 10kW,A196
+A197,Pagado,Sí,Validado,02-jul-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A197
+A198,Pagado,Sí,Validado,30-sept-2026,28.560.000,—,—,—,—,—,Pagado,,Piloto 10kW,A198
+A199,Pagado,Sí,Por validar,30-sept-2026,1.000.000,1.000.000,—,—,—,—,Pagado,,Piloto 10kW,A199
+A200,No pagado,Sí,Por validar,30-dic-2026,300.000,—,300.000,300.000,300.000,—,Por validar,,Piloto 10kW,A200
+A201,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A201
+A202,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A202
+A203,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A203
+A204,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A204
+A205,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A205
+A206,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A206
+A207,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A207
+A208,Pagado,Sí,Por validar,28-feb-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A208
+A209,Pagado,Sí,Por validar,28-feb-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A209
+A210,Pagado,Sí,Por validar,28-feb-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A210
+A211,No pagado,Sí,Por validar,28-feb-2027,20.000.000,—,20.000.000,20.000.000,20.000.000,—,Por validar,,Piloto 10kW,A211
+A212,Pagado,Sí,Por validar,28-feb-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A212
+A213,Pagado,Sí,Por validar,28-feb-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A213
+A214,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A214
+A215,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A215
+A216,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A216
+A217,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A217
+A218,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A218
+A219,Pagado,Sí,Validado,21-jun-2024,600.000,—,—,—,—,—,Pagado,,Piloto 10kW,A219
+A220,Pagado,Sí,Validado,23-jun-2024,420.000,—,—,—,—,—,Pagado,,Piloto 10kW,A220
+A221,Pagado,Sí,Validado,25-jun-2024,3.800,—,—,—,—,—,Pagado,,Piloto 10kW,A221
+A222,Pagado,Sí,Validado,25-jun-2024,39.900,—,—,—,—,—,Pagado,,Piloto 10kW,A222
+A223,Pagado,Sí,Validado,25-jun-2024,75.784,—,—,—,—,—,Pagado,,Piloto 10kW,A223
+A224,Pagado,Sí,Validado,26-jun-2024,17.420,—,—,—,—,—,Pagado,,Piloto 10kW,A224
+A225,Pagado,Sí,Validado,26-jun-2024,25.500,—,—,—,—,—,Pagado,,Piloto 10kW,A225
+A226,Pagado,Sí,Validado,26-jun-2024,25.500,—,—,—,—,—,Pagado,,Piloto 10kW,A226
+A227,Pagado,Sí,Validado,28-jun-2024,398.983,—,—,—,—,—,Pagado,,Piloto 10kW,A227
+A228,Pagado,Sí,Validado,28-jun-2024,66.045,—,—,—,—,—,Pagado,,Piloto 10kW,A228
+A229,Pagado,Sí,Validado,28-jun-2024,87.000,—,—,—,—,—,Pagado,,Piloto 10kW,A229
+A230,Pagado,Sí,Validado,13-jul-2024,173.913,—,—,—,—,—,Pagado,,Piloto 10kW,A230
+A231,Pagado,Sí,Validado,29-ene-2025,40.000,—,—,—,—,—,Pagado,,Piloto 10kW,A231
+A232,Pagado,Sí,Validado,15-abr-2025,83.300,—,—,—,—,—,Pagado,,Piloto 10kW,A232
+A233,Pagado,Sí,Validado,17-abr-2025,25.000,—,—,—,—,—,Pagado,,Piloto 10kW,A233
+A234,Pagado,Sí,Validado,17-abr-2025,25.000,—,—,—,—,—,Pagado,,Piloto 10kW,A234
+A235,Pagado,Sí,Validado,17-abr-2025,250.000,—,—,—,—,—,Pagado,,Piloto 10kW,A235
+A236,Pagado,Sí,Validado,20-abr-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A236
+A237,Pagado,Sí,Validado,30-abr-2025,230.000,—,—,—,—,—,Pagado,,Piloto 10kW,A237
+A238,Pagado,Sí,Validado,30-abr-2025,10.000,—,—,—,—,—,Pagado,,Piloto 10kW,A238
+A239,Pagado,Sí,Validado,01-ago-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A239
+A240,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A240
+A241,No pagado,Sí,Por validar,30-oct-2026,48.017,—,48.017,48.017,48.017,—,Por validar,,Piloto 10kW,A241
+A242,No pagado,Sí,Por validar,30-oct-2026,48.017,—,48.017,48.017,48.017,—,Por validar,,Piloto 10kW,A242
+A243,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A243
+A244,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A244
+A245,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A245
+A246,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A246
+A247,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A247
+A248,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A248
+A249,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A249
+A250,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A250
+A251,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A251
+A252,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A252
+A253,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A253
+A254,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A254
+A255,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A255
+A256,No pagado,Sí,Por validar,30-nov-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A256
+A257,No pagado,Sí,Por validar,30-nov-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A257
+A258,Pagado,Sí,Por validar,25-oct-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A258
+A259,No pagado,Sí,Por validar,30-oct-2026,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 10kW,A259
+A260,No pagado,Sí,Por validar,31-oct-2026,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 10kW,A260
+A261,No pagado,Sí,Por validar,31-oct-2026,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 10kW,A261
+A262,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A262
+A263,No pagado,Sí,Por validar,30-nov-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A263
+A264,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A264
+A265,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A265
+A266,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A266
+A267,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A267
+A268,No pagado,Sí,Por validar,30-nov-2026,500.000,—,500.000,500.000,500.000,—,Por validar,,Piloto 10kW,A268
+A269,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A269
+A270,No pagado,Sí,Por validar,30-nov-2026,1.800.000,—,1.800.000,1.800.000,1.800.000,—,Por validar,,Piloto 10kW,A270
+A271,No pagado,Sí,Por validar,30-oct-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A271
+A272,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A272
+A273,No pagado,Sí,Por validar,30-nov-2026,250.000,—,250.000,250.000,250.000,—,Por validar,,Piloto 10kW,A273
+A274,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A274
+A275,No pagado,Sí,Por validar,30-nov-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A275
+A276,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A276
+A277,No pagado,Sí,Por validar,30-nov-2026,80.000,—,80.000,80.000,80.000,—,Por validar,,Piloto 10kW,A277
+A278,Pagado,Sí,Validado,22-ago-2024,60.000,—,—,—,—,—,Pagado,,Piloto 10kW,A278
+A279,Pagado,Sí,Validado,22-ago-2024,7.500,—,—,—,—,—,Pagado,,Piloto 10kW,A279
+A280,Pagado,Sí,Validado,27-sept-2024,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A280
+A281,Pagado,Sí,Validado,18-dic-2024,2.618.000,—,—,—,—,—,Pagado,,Piloto 10kW,A281
+A282,Pagado,Sí,Validado,17-abr-2025,210.000,—,—,—,—,—,Pagado,,Piloto 10kW,A282
+A283,Pagado,Sí,Validado,17-abr-2025,210.000,—,—,—,—,—,Pagado,,Piloto 10kW,A283
+A284,No pagado,Sí,Por validar,30-nov-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A284
+A285,No pagado,Sí,Por validar,30-nov-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A285
+A286,Pagado,Sí,Por validar,28-feb-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A286
+A287,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A287
+A288,Pagado,Sí,Por validar,28-feb-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A288
+A289,No pagado,Sí,Por validar,30-nov-2026,100.000,—,100.000,100.000,100.000,—,Por validar,,Piloto 10kW,A289
+A290,No pagado,Sí,Por validar,30-nov-2026,250.000,—,250.000,250.000,250.000,—,Por validar,,Piloto 10kW,A290
+A291,Pagado,Sí,Por validar,30-nov-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A291
+A292,No pagado,Sí,Por validar,30-nov-2026,650.000,—,650.000,650.000,650.000,—,Por validar,,Piloto 10kW,A292
+A293,Pagado,Sí,Por validar,28-feb-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A293
+A294,Pagado,Sí,Por validar,28-feb-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A294
+A295,Pagado,Sí,Por validar,28-feb-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A295
+A296,Pagado,Sí,Por validar,28-feb-2027,—,—,—,—,—,—,Pagado,,Piloto 10kW,A296
+A297,Pagado,Sí,Por validar,30-dic-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A297
+A298,No pagado,Sí,Por validar,30-nov-2026,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 10kW,A298
+A299,Pagado,Sí,Validado,28-jun-2024,11.625.070,—,—,—,—,—,Pagado,,Piloto 10kW,A299
+A300,Pagado,Sí,Validado,14-ago-2024,59.500,—,—,—,—,—,Pagado,,Piloto 10kW,A300
+A301,Pagado,Sí,Validado,14-ago-2024,60.869,—,—,—,—,—,Pagado,,Piloto 10kW,A301
+A302,Pagado,Sí,Validado,14-ago-2024,69.614,—,—,—,—,—,Pagado,,Piloto 10kW,A302
+A303,Pagado,Sí,Validado,14-ago-2024,171.539,—,—,—,—,—,Pagado,,Piloto 10kW,A303
+A304,Pagado,Sí,Validado,14-ago-2024,378.676,—,—,—,—,—,Pagado,,Piloto 10kW,A304
+A305,Pagado,Sí,Validado,14-ago-2024,3.308.019,—,—,—,—,—,Pagado,,Piloto 10kW,A305
+A306,Pagado,Sí,Validado,16-ago-2024,951.363,—,—,—,—,—,Pagado,,Piloto 10kW,A306
+A307,No pagado,Sí,Por validar,30-nov-2026,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 10kW,A307
+A308,No pagado,Sí,Por validar,30-nov-2026,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 10kW,A308
+A309,Pagado,Sí,Validado,16-ago-2024,—,—,—,—,—,—,Pagado,,Piloto 10kW,A309
+A310,No pagado,Sí,Por validar,30-dic-2026,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 10kW,A310
+A311,No pagado,Sí,Por validar,31-dic-2026,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 10kW,A311
+A312,No pagado,Sí,Por validar,31-dic-2026,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 10kW,A312
+A313,Pagado,Sí,Validado,10-sept-2024,45.885,—,—,—,—,—,Pagado,,Piloto 10kW,A313
+A314,No pagado,Sí,Por validar,30-jun-2027,1.190.000,—,1.190.000,1.190.000,1.190.000,—,Por validar,,Piloto 10kW,A314
+A315,No pagado,Sí,Por validar,29-ene-2027,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 10kW,A315
+A316,No pagado,Sí,Por validar,31-ene-2027,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 10kW,A316
+A317,Pagado,Sí,Validado,30-dic-2024,116.959,—,—,—,—,—,Pagado,,Piloto 10kW,A317
+A318,No pagado,Sí,Por validar,31-ene-2027,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 10kW,A318
+A319,Pagado,Sí,Validado,15-ene-2025,91.720,—,—,—,—,—,Pagado,,Piloto 10kW,A319
+A320,No pagado,Sí,Por validar,15-feb-2027,250.000,—,250.000,250.000,250.000,—,Por validar,,Piloto 10kW,A320
+A321,No pagado,Sí,Por validar,26-feb-2027,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 10kW,A321
+A322,Pagado,Sí,Validado,28-feb-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A322
+A323,Pagado,Sí,Validado,13-mar-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A323
+A324,Pagado,Sí,Validado,31-jul-2026,4.470.978,—,—,—,—,—,Pagado,,Piloto 10kW,A324
+A325,No pagado,Sí,Por validar,28-feb-2027,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 10kW,A325
+A326,No pagado,Sí,Por validar,28-feb-2027,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 10kW,A326
+A327,No pagado,Sí,Por validar,31-mar-2027,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 80kW,A327
+A328,No pagado,Sí,Por validar,31-mar-2027,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 10kW,A328
+A329,No pagado,Sí,Por validar,31-mar-2027,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 10kW,A329
+A330,Pagado,Sí,Por validar,30-abr-2027,1.800.000,1.800.000,—,—,—,—,Pagado,,Piloto 10kW,A330
+A331,No pagado,Sí,Por validar,30-abr-2027,2.000.000,—,2.000.000,2.000.000,2.000.000,—,Por validar,,Piloto 10kW,A331
+A332,No pagado,Sí,Por validar,30-abr-2027,2.000.000,—,2.000.000,2.000.000,2.000.000,—,Por validar,,Piloto 10kW,A332
+A333,No pagado,Sí,Por validar,30-abr-2027,350.000,—,350.000,350.000,350.000,—,Por validar,,Piloto 10kW,A333
+A334,No pagado,Sí,Por validar,30-abr-2027,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 80kW,A334
+A335,No pagado,Sí,Por validar,30-abr-2027,60.000.000,—,60.000.000,60.000.000,60.000.000,—,Por validar,,Piloto 80kW,A335
+A336,No pagado,Sí,Por validar,30-abr-2027,90.000.000,—,90.000.000,90.000.000,90.000.000,—,Por validar,,Piloto 80kW,A336
+A337,No pagado,Sí,Por validar,30-abr-2027,6.132.150,—,6.132.150,6.132.150,6.132.150,—,Por validar,,Piloto 80kW,A337
+A338,No pagado,Sí,Por validar,30-abr-2027,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 10kW,A338
+A339,No pagado,Sí,Por validar,30-abr-2027,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 10kW,A339
+A340,No pagado,Sí,Por validar,31-may-2027,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 80kW,A340
+A341,No pagado,Sí,Por validar,31-may-2027,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 10kW,A341
+A342,Pagado,Sí,Validado,04-jun-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A342
+A343,Pagado,Sí,Validado,05-jun-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A343
+A344,Pagado,Sí,Validado,20-may-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A344
+A345,Pagado,Sí,Validado,08-jun-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A345
+A346,No pagado,Sí,Por validar,31-may-2027,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 10kW,A346
+A347,No pagado,Sí,Por validar,30-jun-2027,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 80kW,A347
+A348,No pagado,Sí,Por validar,30-jun-2027,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 10kW,A348
+A349,No pagado,Sí,Por validar,30-nov-2027,25.000.000,—,25.000.000,25.000.000,25.000.000,—,Por validar,,Piloto 80kW,A349
+A350,No pagado,Sí,Por validar,30-jun-2027,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 10kW,A350
+A351,No pagado,Sí,Por validar,30-jul-2027,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 80kW,A351
+A352,No pagado,Sí,Por validar,30-jul-2027,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 80kW,A352
+A353,No pagado,Sí,Por validar,30-jul-2027,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 80kW,A353
+A354,No pagado,Sí,Por validar,31-ago-2027,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 80kW,A354
+A355,Pagado,Sí,Validado,14-jun-2024,107.669,—,—,—,—,—,Pagado,,Piloto 10kW,A355
+A356,Pagado,Sí,Validado,23-jun-2024,38.235,—,—,—,—,—,Pagado,,Piloto 10kW,A356
+A357,Pagado,Sí,Validado,25-jul-2024,238.000,—,—,—,—,—,Pagado,,Piloto 10kW,A357
+A474,No pagado,Sí,Validado,25-jul-2024,80.000,—,80.000,80.000,—,—,Listo,,Piloto 10kW,A474
+A475,No pagado,Sí,Validado,25-jul-2024,25.990,—,25.990,25.990,—,—,Listo,,Piloto 10kW,A475
+A358,Pagado,Sí,Validado,30-abr-2025,579.710,—,—,—,—,—,Pagado,,Piloto 10kW,A358
+A359,Pagado,Sí,Validado,15-abr-2024,114.874.480,—,—,—,—,—,Pagado,,Piloto 10kW,A359
+A360,Pagado,Sí,Validado,31-mar-2025,382.609,—,—,—,—,—,Pagado,,Piloto 10kW,A360
+A361,Pagado,Sí,Validado,30-abr-2025,91.790.800,—,—,—,—,—,Pagado,,Piloto 10kW,A361
+A362,Pagado,Sí,Validado,30-abr-2025,39.646.068,—,—,—,—,—,Pagado,,Piloto 10kW,A362
+A363,Pagado,Sí,Validado,30-abr-2025,39.646.068,—,—,—,—,—,Pagado,,Piloto 10kW,A363
+A364,Pagado,Sí,Validado,15-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A364
+A365,Pagado,Sí,Validado,15-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A365
+A366,Pagado,Sí,Validado,07-nov-2024,45.990,—,—,—,—,—,Pagado,,Piloto 10kW,A366
+A367,Pagado,Sí,Validado,27-dic-2024,464.100,—,—,—,—,—,Pagado,,Piloto 10kW,A367
+A368,Pagado,Sí,Validado,27-dic-2024,1.463.700,—,—,—,—,—,Pagado,,Piloto 10kW,A368
+A369,Pagado,Sí,Validado,27-dic-2024,2.011.100,—,—,—,—,—,Pagado,,Piloto 10kW,A369
+A370,Pagado,Sí,Validado,15-ene-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A370
+A371,Pagado,Sí,Validado,18-ene-2025,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A371
+A372,No pagado,Sí,Por validar,30-abr-2027,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 80kW,A372
+A373,No pagado,Sí,Por validar,31-ago-2027,20.000.000,—,20.000.000,20.000.000,20.000.000,—,Por validar,,Piloto 80kW,A373
+A374,No pagado,Sí,Por validar,31-ago-2027,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 80kW,A374
+A375,No pagado,Sí,Por validar,31-ago-2027,25.000.000,—,25.000.000,25.000.000,25.000.000,—,Por validar,,Piloto 80kW,A375
+A376,Pagado,Sí,Validado,12-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A376
+A377,Pagado,Sí,Validado,14-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A377
+A378,Pagado,Sí,Validado,14-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A378
+A379,Pagado,Sí,Validado,14-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A379
+A380,Pagado,Sí,Validado,15-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A380
+A381,Pagado,Sí,Validado,18-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A381
+A382,Pagado,Sí,Validado,18-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A382
+A383,Pagado,Sí,Validado,19-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A383
+A384,Pagado,Sí,Validado,20-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A384
+A385,Pagado,Sí,Validado,22-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A385
+A386,Pagado,Sí,Validado,26-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A386
+A387,Pagado,Sí,Validado,09-jun-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A387
+A388,Pagado,Sí,Validado,26-jun-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A388
+A389,Pagado,Sí,Validado,30-jun-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A389
+A390,Pagado,Sí,Validado,28-abr-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A390
+A391,Pagado,Sí,Validado,28-abr-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A391
+A392,Pagado,Sí,Validado,28-abr-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A392
+A393,Pagado,Sí,Validado,29-abr-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A393
+A394,Pagado,Sí,Validado,05-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A394
+A395,Pagado,Sí,Validado,05-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A395
+A396,Pagado,Sí,Validado,06-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A396
+A397,Pagado,Sí,Validado,07-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A397
+A398,Pagado,Sí,Validado,08-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A398
+A399,Pagado,Sí,Validado,08-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A399
+A400,Pagado,Sí,Validado,10-may-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A400
+A401,Pagado,Sí,Validado,09-jun-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A401
+A402,Pagado,Sí,Validado,26-jun-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A402
+A403,Pagado,Sí,Validado,30-jun-2026,100,—,—,—,—,—,Pagado,,Piloto 10kW,A403
+A404,Pagado,Sí,Validado,30-sept-2026,5.000.000,—,—,—,—,—,Pagado,,Piloto 10kW,A404
+A405,Pagado,Sí,Validado,31-oct-2024,329.868,—,—,—,—,—,Pagado,,Piloto 10kW,A405
+A406,Pagado,Sí,Validado,06-ene-2025,386.750,—,—,—,—,—,Pagado,,Piloto 10kW,A406
+A407,Pagado,Sí,Validado,10-abr-2025,381.752,—,—,—,—,—,Pagado,,Piloto 10kW,A407
+A408,Pagado,Sí,Validado,19-dic-2025,500.000,—,—,—,—,—,Pagado,,Piloto 10kW,A408
+A409,Pagado,Sí,Validado,19-dic-2025,—,—,—,—,—,—,Pagado,,Piloto 10kW,A409
+A410,Pagado,Sí,Validado,19-dic-2025,1.053.000,—,—,—,—,—,Pagado,,Piloto 10kW,A410
+A411,Pagado,Sí,Validado,19-dic-2025,1.053.000,—,—,—,—,—,Pagado,,Piloto 10kW,A411
+A412,Pagado,Sí,Validado,19-dic-2025,526.500,—,—,—,—,—,Pagado,,Piloto 10kW,A412
+A413,Pagado,Sí,Validado,20-abr-2026,1.053.000,—,—,—,—,—,Pagado,,Piloto 10kW,A413
+A414,Pagado,Sí,Validado,20-abr-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A414
+A415,Pagado,Sí,Validado,22-abr-2026,526.500,—,—,—,—,—,Pagado,,Piloto 10kW,A415
+A416,Pagado,Sí,Validado,22-abr-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A416
+A417,Pagado,Sí,Validado,23-abr-2026,1.404.000,—,—,—,—,—,Pagado,,Piloto 10kW,A417
+A418,Pagado,Sí,Validado,23-abr-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A418
+A419,Pagado,Sí,Validado,09-jun-2026,526.500,—,—,—,—,—,Pagado,,Piloto 10kW,A419
+A420,Pagado,Sí,Validado,26-jun-2026,600.000,—,—,—,—,—,Pagado,,Piloto 10kW,A420
+A421,Pagado,Sí,Validado,30-jun-2026,526.500,—,—,—,—,—,Pagado,,Piloto 10kW,A421
+A422,Pagado,Sí,Validado,30-sept-2026,14.041.465,—,—,—,—,—,Pagado,,Piloto 10kW,A422
+A423,No pagado,Sí,Por validar,31-ago-2027,30.000.000,—,30.000.000,30.000.000,30.000.000,—,Por validar,,Piloto 80kW,A423
+A424,No pagado,Sí,Por validar,31-ago-2027,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 80kW,A424
+A425,No pagado,Sí,Por validar,30-abr-2027,20.000.000,—,20.000.000,20.000.000,20.000.000,—,Por validar,,Piloto 80kW,A425
+A426,No pagado,Sí,Por validar,30-abr-2027,20.000.000,—,20.000.000,20.000.000,20.000.000,—,Por validar,,Piloto 80kW,A426
+A427,No pagado,Sí,Por validar,30-sept-2027,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 80kW,A427
+A428,Pagado,Sí,Validado,06-sept-2024,231.884,—,—,—,—,—,Pagado,,Piloto 10kW,A428
+A429,Pagado,Sí,Validado,31-oct-2024,57.971,—,—,—,—,—,Pagado,,Piloto 10kW,A429
+A430,Pagado,Sí,Validado,31-oct-2024,69.565,—,—,—,—,—,Pagado,,Piloto 10kW,A430
+A431,Pagado,Sí,Validado,14-jun-2024,211.116,—,—,—,—,—,Pagado,,Piloto 10kW,A431
+A432,Pagado,Sí,Validado,21-jun-2024,82.335,—,—,—,—,—,Pagado,,Piloto 10kW,A432
+A433,Pagado,Sí,Validado,25-jun-2024,29.238,—,—,—,—,—,Pagado,,Piloto 10kW,A433
+A434,Pagado,Sí,Validado,25-jun-2024,12.019,—,—,—,—,—,Pagado,,Piloto 10kW,A434
+A435,Pagado,Sí,Validado,25-jun-2024,74.732,—,—,—,—,—,Pagado,,Piloto 10kW,A435
+A436,Pagado,Sí,Validado,02-jul-2024,59.400,—,—,—,—,—,Pagado,,Piloto 10kW,A436
+A437,Pagado,Sí,Validado,23-jul-2024,11.900,—,—,—,—,—,Pagado,,Piloto 10kW,A437
+A438,Pagado,Sí,Validado,26-jul-2024,119.000,—,—,—,—,—,Pagado,,Piloto 10kW,A438
+A440,Pagado,Sí,Validado,27-ago-2024,25.000,—,—,—,—,—,Pagado,,Piloto 10kW,A440
+A441,Pagado,Sí,Validado,27-ago-2024,136.100,—,—,—,—,—,Pagado,,Piloto 10kW,A441
+A442,Pagado,Sí,Validado,27-ago-2024,26.400,—,—,—,—,—,Pagado,,Piloto 10kW,A442
+A444,Pagado,Sí,Validado,30-ago-2024,15.000,—,—,—,—,—,Pagado,,Piloto 10kW,A444
+A446,Pagado,Sí,Validado,16-sept-2024,200.277,—,—,—,—,—,Pagado,,Piloto 10kW,A446
+A447,Pagado,Sí,Validado,30-abr-2025,584.795,—,—,—,—,—,Pagado,,Piloto 10kW,A447
+A448,Pagado,Sí,Validado,31-mar-2025,584.795,—,—,—,—,—,Pagado,,Piloto 10kW,A448
+A449,Pagado,Sí,Validado,08-may-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A449
+A450,No pagado,Sí,Por validar,30-sept-2027,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 80kW,A450
+A451,Pagado,Sí,Validado,08-may-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A451
+A452,Pagado,Sí,Validado,22-may-2026,48.017,—,—,—,—,—,Pagado,,Piloto 10kW,A452
+A453,No pagado,Sí,Por validar,01-sept-2027,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 80kW,A453
+A454,No pagado,Sí,Por validar,30-sept-2027,25.000.000,—,25.000.000,25.000.000,25.000.000,—,Por validar,,Piloto 80kW,A454
+A455,Pagado,Sí,Validado,08-may-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A455
+A456,Pagado,Sí,Validado,15-may-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A456
+A457,Pagado,Sí,Validado,15-may-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A457
+A458,Pagado,Sí,Validado,03-jun-2026,11.900,—,—,—,—,—,Pagado,,Piloto 10kW,A458
+A459,No pagado,Sí,Por validar,29-oct-2027,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 80kW,A459
+A460,No pagado,Sí,Por validar,30-dic-2026,18.000.000,—,18.000.000,18.000.000,18.000.000,—,Por validar,,Piloto 80kW,A460
+A461,Pagado,Sí,Validado,28-feb-2025,584.795,—,—,—,—,—,Pagado,,Piloto 10kW,A461
+A462,No pagado,Sí,Por validar,29-oct-2027,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 80kW,A462
+A463,No pagado,Sí,Por validar,01-oct-2027,1.000.000,—,1.000.000,1.000.000,1.000.000,—,Por validar,,Piloto 80kW,A463
+A464,No pagado,Sí,Por validar,30-nov-2027,2.500.000,—,2.500.000,2.500.000,2.500.000,—,Por validar,,Piloto 80kW,A464
+A465,No pagado,Sí,Por validar,30-nov-2027,5.150.000,—,5.150.000,5.150.000,5.150.000,—,Por validar,,Piloto 80kW,A465
+A471,Pagado,Sí,Validado,30-sept-2026,72.000,72.000,—,—,—,—,Pagado,,Piloto 10kW,A471
+A472,Pagado,Sí,Validado,30-sept-2026,16.500,16.500,—,—,—,—,ID duplicado,,Piloto 10kW,A472
+A473,Pagado,Sí,Validado,30-sept-2026,45.000,45.000,—,—,—,—,ID duplicado,,Piloto 10kW,A473
+A476,No pagado,Sí,Validado,25-jul-2024,31.990,—,31.990,31.990,—,—,Listo,,Piloto 10kW,A476
+A477,No pagado,Sí,Validado,25-jul-2024,145.000,—,145.000,145.000,—,—,Listo,,Piloto 10kW,A477
+A478,No pagado,Sí,Validado,30-sept-2026,32.500,—,32.500,32.500,—,—,Listo,,Piloto 10kW,A478
+A479,No pagado,Sí,Validado,30-sept-2026,19.500,—,19.500,19.500,—,—,Listo,,Piloto 10kW,A479
+A50,No pagado,Sí,Validado,30-sept-2026,21.000,—,21.000,21.000,—,—,Listo,,Piloto 10kW,A50
+A480,No pagado,Sí,Validado,30-sept-2026,15.990,—,15.990,15.990,—,—,Listo,,Piloto 10kW,A480
+A481,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A481
+A482,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A482
+A483,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A483
+A484,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A484
+A485,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A485
+A486,No pagado,Sí,Validado,30-sept-2026,45.990,—,45.990,45.990,—,—,Listo,,Piloto 10kW,A486
+A487,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A487
+A488,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A488
+A489,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A489
+A490,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A490
+A491,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A491
+A492,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A492
+A493,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A493
+A494,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A494
+A495,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A495
+A496,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A496
+A497,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A497
+A498,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A498
+A499,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A499
+A500,No pagado,Sí,Validado,30-sept-2026,400.000,—,400.000,400.000,—,—,Listo,,Piloto 10kW,A500
+A501,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A501
+A502,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A502
+A503,No pagado,Sí,Validado,30-sept-2026,100.000,—,100.000,100.000,—,—,Listo,,Piloto 10kW,A503
+A504,No pagado,Sí,Validado,30-sept-2026,100.000,—,100.000,100.000,—,—,Listo,,Piloto 10kW,A504
+A505,No pagado,Sí,Validado,30-sept-2026,100.000,—,100.000,100.000,—,—,Listo,,Piloto 10kW,A505
+A506,No pagado,Sí,Validado,30-sept-2026,100.000,—,100.000,100.000,—,—,Listo,,Piloto 10kW,A506
+A507,No pagado,Sí,Validado,30-sept-2026,100.000,—,100.000,100.000,—,—,Listo,,Piloto 10kW,A507
+A508,No pagado,Sí,Validado,30-sept-2026,100.000,—,100.000,100.000,—,—,Listo,,Piloto 10kW,A508
+A509,No pagado,Sí,Validado,30-sept-2026,100.000,—,100.000,100.000,—,—,Listo,,Piloto 10kW,A509
+A510,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A510
+A511,Pagado,Sí,Validado,30-sept-2026,—,—,—,—,—,—,Pagado,,Piloto 10kW,A511
+A512,Pagado,Sí,Validado,30-sept-2026,168.000,168.000,—,—,—,—,Pagado,,Piloto 10kW,A512
+A513,Pagado,Sí,Validado,30-jun-2026,175.500,175.500,—,—,—,—,Pagado,,Piloto 10kW,A513
+A514,Pagado,Sí,Validado,30-jun-2026,450.000,450.000,—,—,—,—,Pagado,,Piloto 10kW,A514
+A515,Pagado,Sí,Validado,30-jun-2026,1.500.000,1.500.000,—,—,—,—,Pagado,,Piloto 10kW,A515
+A516,No pagado,Sí,Validado,30-jun-2026,202.000,—,202.000,202.000,—,—,Listo,,Piloto 10kW,A516
+A517,No pagado,Sí,Validado,30-jun-2026,149.000,—,149.000,149.000,—,—,Listo,,Piloto 10kW,A517
+A518,No pagado,,,30-jun-2026,60.000,—,60.000,—,—,—,Definir inclusión,,Piloto 10kW,A518
+A439,Pagado,Sí,Validado,27-ago-2024,190.400,—,—,—,—,—,Pagado,,Piloto 10kW,A439
+A443,Pagado,Sí,Validado,27-ago-2024,19.800,—,—,—,—,—,Pagado,,Piloto 10kW,A443
+A445,Pagado,Sí,Validado,27-ago-2024,160.000,—,—,—,—,—,Pagado,,Piloto 10kW,A445
+A519,No pagado,,,27-ago-2024,100.000,—,100.000,—,—,—,Definir inclusión,,Piloto 10kW,A519
+A520,No pagado,Sí,Por validar,30-abr-2027,4.289.294,—,4.289.294,4.289.294,4.289.294,—,Por validar,,Piloto 80kW,A520
+A521,No pagado,Sí,Por validar,30-abr-2027,770.436,—,770.436,—,—,—,ID duplicado,,Piloto 80kW,A521
+A522,No pagado,Sí,Por validar,30-abr-2027,1.817.874,—,1.817.874,—,—,—,ID duplicado,,Piloto 80kW,A522
+A523,No pagado,Sí,Por validar,30-abr-2027,1.053.249,—,1.053.249,—,—,—,ID duplicado,,Piloto 80kW,A523
+A524,No pagado,Sí,Por validar,30-abr-2027,108.000,—,108.000,—,—,—,ID duplicado,,Piloto 80kW,A524
+A525,No pagado,Sí,Por validar,30-abr-2027,150.000,—,150.000,—,—,—,ID duplicado,,Piloto 80kW,A525
+A526,No pagado,Sí,Por validar,30-abr-2027,1.677.600,—,1.677.600,—,—,—,ID duplicado,,Piloto 80kW,A526
+A527,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A527
+A528,No pagado,Sí,Por validar,30-abr-2027,430.000,—,430.000,—,—,—,ID duplicado,,Piloto 80kW,A528
+A529,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A529
+A530,No pagado,Sí,Por validar,30-nov-2027,13.000,—,13.000,—,—,—,ID duplicado,,Piloto 80kW,A530
+A531,No pagado,Sí,Por validar,30-abr-2027,468.000,—,468.000,—,—,—,ID duplicado,,Piloto 80kW,A531
+A532,No pagado,Sí,Por validar,30-abr-2027,6.048.000,—,6.048.000,—,—,—,ID duplicado,,Piloto 80kW,A532
+A533,No pagado,Sí,Por validar,30-nov-2027,4.500.000,—,4.500.000,—,—,—,ID duplicado,,Piloto 80kW,A533
+A534,No pagado,Sí,Por validar,,1.500.000,—,1.500.000,—,—,1.500.000,ID duplicado,,Piloto 80kW,A534
+A535,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A535
+A536,No pagado,Sí,Por validar,30-nov-2027,840.000,—,840.000,—,—,—,ID duplicado,,Piloto 80kW,A536
+A537,No pagado,Sí,Por validar,30-nov-2027,7.980,—,7.980,—,—,—,ID duplicado,,Piloto 80kW,A537
+A538,No pagado,Sí,Por validar,30-nov-2027,12.631,—,12.631,—,—,—,ID duplicado,,Piloto 80kW,A538
+A539,No pagado,Sí,Por validar,30-nov-2027,279.960,—,279.960,—,—,—,ID duplicado,,Piloto 80kW,A539
+A540,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A540
+A541,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A541
+A542,No pagado,Sí,Por validar,30-nov-2027,350.000,—,350.000,—,—,—,ID duplicado,,Piloto 80kW,A542
+A543,No pagado,Sí,Por validar,30-nov-2027,1.200.000,—,1.200.000,—,—,—,ID duplicado,,Piloto 80kW,A543
+A544,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A544
+A545,No pagado,Sí,Por validar,30-abr-2027,50.000,—,50.000,—,—,—,ID duplicado,,Piloto 80kW,A545
+A546,No pagado,Sí,Por validar,30-abr-2027,50.000,—,50.000,—,—,—,ID duplicado,,Piloto 80kW,A546
+A547,No pagado,Sí,Por validar,30-abr-2027,700.000,—,700.000,—,—,—,ID duplicado,,Piloto 80kW,A547
+A548,No pagado,Sí,Por validar,30-abr-2027,200.000,—,200.000,—,—,—,ID duplicado,,Piloto 80kW,A548
+A549,No pagado,Sí,Por validar,30-oct-2027,1.500.000,—,1.500.000,—,—,—,ID duplicado,,Piloto 80kW,A549
+A550,No pagado,Sí,Por validar,30-nov-2027,156.000,—,156.000,—,—,—,ID duplicado,,Piloto 80kW,A550
+A551,No pagado,Sí,Por validar,30-nov-2027,52.000,—,52.000,—,—,—,ID duplicado,,Piloto 80kW,A551
+A552,No pagado,Sí,Por validar,30-oct-2027,450.000,—,450.000,—,—,—,ID duplicado,,Piloto 80kW,A552
+A553,No pagado,Sí,Por validar,30-oct-2027,650.000,—,650.000,—,—,—,ID duplicado,,Piloto 80kW,A553
+A554,No pagado,Sí,Por validar,30-abr-2027,13.195.500,—,13.195.500,—,—,—,ID duplicado,,Piloto 80kW,A554
+A555,No pagado,Sí,Por validar,30-abr-2027,7.200.000,—,7.200.000,—,—,—,ID duplicado,,Piloto 80kW,A555
+A556,No pagado,Sí,Por validar,30-abr-2027,343.078,—,343.078,—,—,—,ID duplicado,,Piloto 80kW,A556
+A557,No pagado,Sí,Por validar,30-abr-2027,757.352,—,757.352,—,—,—,ID duplicado,,Piloto 80kW,A557
+A558,No pagado,Sí,Por validar,30-abr-2027,161.500,—,161.500,—,—,—,ID duplicado,,Piloto 80kW,A558
+A559,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A559
+A560,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A560
+A561,No pagado,Sí,Por validar,30-abr-2027,3.600.000,—,3.600.000,—,—,—,ID duplicado,,Piloto 80kW,A561
+A562,No pagado,Sí,Por validar,30-abr-2027,1.425.000,—,1.425.000,—,—,—,ID duplicado,,Piloto 80kW,A562
+A563,No pagado,Sí,Por validar,30-abr-2027,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A563
+A564,No pagado,Sí,Por validar,30-abr-2027,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A564
+A565,No pagado,Sí,Por validar,30-abr-2027,700.000,—,700.000,—,—,—,ID duplicado,,Piloto 80kW,A565
+A566,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A566
+A567,No pagado,Sí,Por validar,30-abr-2027,2.080.000,—,2.080.000,—,—,—,ID duplicado,,Piloto 80kW,A567
+A568,No pagado,Sí,Por validar,30-abr-2027,2.080.000,—,2.080.000,—,—,—,ID duplicado,,Piloto 80kW,A568
+A569,No pagado,Sí,Por validar,30-abr-2027,1.053.000,—,1.053.000,—,—,—,ID duplicado,,Piloto 80kW,A569
+A570,No pagado,Sí,Por validar,30-abr-2027,2.080.000,—,2.080.000,—,—,—,ID duplicado,,Piloto 80kW,A570
+A571,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A571
+A572,No pagado,Sí,Por validar,30-abr-2027,2.080.000,—,2.080.000,—,—,—,ID duplicado,,Piloto 80kW,A572
+A573,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A573
+A574,No pagado,Sí,Por validar,30-abr-2027,2.808.000,—,2.808.000,—,—,—,ID duplicado,,Piloto 80kW,A574
+A575,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A575
+A576,No pagado,Sí,Por validar,30-abr-2027,1.053.000,—,1.053.000,—,—,—,ID duplicado,,Piloto 80kW,A576
+A577,No pagado,Sí,Por validar,30-abr-2027,1.200.000,—,1.200.000,—,—,—,ID duplicado,,Piloto 80kW,A577
+A578,No pagado,Sí,Por validar,30-abr-2027,1.053.000,—,1.053.000,—,—,—,ID duplicado,,Piloto 80kW,A578
+A579,No pagado,Sí,Por validar,30-abr-2027,290.000,—,290.000,—,—,—,ID duplicado,,Piloto 80kW,A579
+A580,No pagado,Sí,Por validar,30-abr-2027,450.000,—,450.000,—,—,—,ID duplicado,,Piloto 80kW,A580
+A581,No pagado,Sí,Por validar,30-abr-2027,3.042.000,—,3.042.000,—,—,—,ID duplicado,,Piloto 80kW,A581
+A582,No pagado,Sí,Por validar,30-abr-2027,2.110.000,—,2.110.000,—,—,—,ID duplicado,,Piloto 80kW,A582
+A583,No pagado,Sí,Por validar,30-abr-2027,480.000,—,480.000,—,—,—,ID duplicado,,Piloto 80kW,A583
+A584,No pagado,Sí,Por validar,30-abr-2027,216.000,—,216.000,—,—,—,ID duplicado,,Piloto 80kW,A584
+A585,No pagado,Sí,Por validar,30-abr-2027,45.000,—,45.000,—,—,—,ID duplicado,,Piloto 80kW,A585
+A586,No pagado,Sí,Por validar,30-abr-2027,45.000,—,45.000,—,—,—,ID duplicado,,Piloto 80kW,A586
+A587,No pagado,Sí,Por validar,30-abr-2027,750.000,—,750.000,—,—,—,ID duplicado,,Piloto 80kW,A587
+A588,No pagado,Sí,Por validar,30-abr-2027,2.200.000,—,2.200.000,—,—,—,ID duplicado,,Piloto 80kW,A588
+A589,No pagado,Sí,Por validar,30-abr-2027,50.000,—,50.000,—,—,—,ID duplicado,,Piloto 80kW,A589
+A590,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A590
+A591,No pagado,Sí,Por validar,30-abr-2027,100.000,—,100.000,—,—,—,ID duplicado,,Piloto 80kW,A591
+A592,No pagado,Sí,Por validar,30-abr-2027,350.000,—,350.000,—,—,—,ID duplicado,,Piloto 80kW,A592
+A593,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A593
+A594,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A594
+A595,No pagado,Sí,Por validar,30-abr-2027,3.940.052,—,3.940.052,—,—,—,ID duplicado,,Piloto 80kW,A595
+A596,No pagado,Sí,Por validar,30-abr-2027,80.000,—,80.000,—,—,—,ID duplicado,,Piloto 80kW,A596
+A597,No pagado,Sí,Por validar,30-abr-2027,156.000,—,156.000,—,—,—,ID duplicado,,Piloto 80kW,A597
+A598,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A598
+A599,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A599
+A600,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A600
+A601,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A601
+A602,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A602
+A603,No pagado,Sí,Por validar,30-abr-2027,250.000,—,250.000,—,—,—,ID duplicado,,Piloto 80kW,A603
+A604,No pagado,Sí,Por validar,30-abr-2027,5.500.000,—,5.500.000,—,—,—,ID duplicado,,Piloto 80kW,A604
+A605,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A605
+A606,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A606
+A607,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A607
+A608,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A608
+A609,No pagado,Sí,Por validar,30-nov-2027,200.000,—,200.000,—,—,—,ID duplicado,,Piloto 80kW,A609
+A610,No pagado,Sí,Por validar,30-nov-2027,78.000,—,78.000,—,—,—,ID duplicado,,Piloto 80kW,A610
+A611,No pagado,Sí,Por validar,30-nov-2027,39.000,—,39.000,—,—,—,ID duplicado,,Piloto 80kW,A611
+A612,No pagado,Sí,Por validar,30-oct-2027,200.000,—,200.000,—,—,—,ID duplicado,,Piloto 80kW,A612
+A613,No pagado,Sí,Por validar,30-oct-2027,200.000,—,200.000,—,—,—,ID duplicado,,Piloto 80kW,A613
+A614,No pagado,Sí,Por validar,30-oct-2027,250.000,—,250.000,—,—,—,ID duplicado,,Piloto 80kW,A614
+A615,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A615
+A616,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A616
+A617,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A617
+A618,No pagado,Sí,Por validar,03-mar-2027,14.000,—,14.000,—,—,—,ID duplicado,,Piloto 80kW,A618
+A619,No pagado,Sí,Por validar,03-mar-2027,13.000,—,13.000,—,—,—,ID duplicado,,Piloto 80kW,A619
+A620,Pagado,,,,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A620
+A621,No pagado,Sí,Por validar,30-abr-2027,336.000,—,336.000,—,—,—,ID duplicado,,Piloto 80kW,A621
+A622,No pagado,Sí,Por validar,30-abr-2027,117.000,—,117.000,—,—,—,ID duplicado,,Piloto 80kW,A622
+A623,No pagado,Sí,Por validar,30-abr-2027,450.000,—,450.000,—,—,—,ID duplicado,,Piloto 80kW,A623
+A624,No pagado,Sí,Por validar,30-abr-2027,2.400.000,—,2.400.000,—,—,—,ID duplicado,,Piloto 80kW,A624
+A625,No pagado,Sí,Por validar,30-abr-2027,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A625
+A626,No pagado,Sí,Por validar,30-abr-2027,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A626
+A627,No pagado,Sí,Por validar,30-abr-2027,—,—,—,—,—,—,ID duplicado,,Piloto 80kW,A627
+A628,No pagado,Sí,Por validar,30-abr-2027,650.000,—,650.000,—,—,—,ID duplicado,,Piloto 80kW,A628
+A629,No pagado,Sí,Por validar,30-nov-2026,14.500.000,—,14.500.000,14.500.000,14.500.000,—,Por validar,,Piloto 10kW,A629

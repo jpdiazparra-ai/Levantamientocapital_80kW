@@ -47,22 +47,22 @@ def header(title, value, note, comparison=False):
 
 
 def comparison_figures(summary, dimension):
-    values=summary[['Presupuesto referencia','Caja por validar','Caja validada']]
+    values=summary[['Caja pendiente de cubrir','Caja por validar','Caja validada']]
     maximum=values.max().max()
     limit=max(1,float(maximum)/chart_scale()*1.32) if pd.notna(maximum) else 1
     labels=summary[dimension].astype(str).tolist()
     height=max(270,110+len(summary)*48)
-    known=summary[summary['Presupuesto referencia'].notna()]
+    known=summary[summary['Caja pendiente de cubrir'].notna()]
     reference=go.Figure()
     if not known.empty:
         texts=[amount(value,True)+' · '+f'{share:.1f}%'.replace('.',',') if pd.notna(share) else amount(value,True)
-            for value,share in zip(known['Presupuesto referencia'],known['Participación %'])]
-        reference.add_bar(x=known['Presupuesto referencia']/chart_scale(),y=known[dimension].astype(str),orientation='h',width=.38,
+            for value,share in zip(known['Caja pendiente de cubrir'],known['Participación %'])]
+        reference.add_bar(x=known['Caja pendiente de cubrir']/chart_scale(),y=known[dimension].astype(str),orientation='h',width=.38,
             marker=dict(color=NAVY,cornerradius=4),text=texts,textposition='outside',cliponaxis=False,
             textfont=dict(size=11,color='#0F2435'),
             customdata=[[amount(value),f'{share:.1f}%'.replace('.',',') if pd.notna(share) else 'Sin base',int(count),wrap(label)]
-                for value,share,count,label in zip(known['Presupuesto referencia'],known['Participación %'],known['Actividades'],known[dimension])],
-            hovertemplate='<b>%{customdata[3]}</b><br>Referencia: %{customdata[0]}<br>Participación: %{customdata[1]}<br>Actividades: %{customdata[2]}<extra></extra>')
+                for value,share,count,label in zip(known['Caja pendiente de cubrir'],known['Participación %'],known['Actividades'],known[dimension])],
+            hovertemplate='<b>%{customdata[3]}</b><br>Pendiente: %{customdata[0]}<br>Participación: %{customdata[1]}<br>Actividades: %{customdata[2]}<extra></extra>')
     cash=go.Figure()
     available=[field for field in ['Caja validada','Caja por validar'] if summary[field].notna().any()]
     for field,color in [('Caja validada',VALID),('Caja por validar',PENDING)]:
@@ -87,21 +87,31 @@ def render_capital_comparison(summary,dimension,key):
     left,right=st.columns(2,gap='large')
     with left:
         with st.container(border=False,key=f'capital_{key}_reference_panel'):
-            header('Presupuesto de referencia',amount(summary['Presupuesto referencia'].sum(min_count=1)),
+            header('Caja pendiente de cubrir',amount(summary['Caja pendiente de cubrir'].sum(min_count=1)),
                 'Monto y participación de cada categoría', comparison=True)
-            st.html('<div class="option-finance-legend option-finance-comparison-legend"><span><i style="background:'+NAVY+'"></i>Referencia presupuestaria</span></div>')
+            st.html('<div class="option-finance-legend option-finance-comparison-legend"><span><i style="background:'+NAVY+'"></i>Saldo pendiente total</span></div>')
             if reference.data:render(reference,f'capital_{key}_reference')
-            else:st.html(f'<div class="option-finance-chart-empty" style="height:{reference.layout.height}px">No hay presupuestos de referencia informados.</div>')
-            st.html('<div class="option-finance-comparison-footer">Porcentajes sobre el presupuesto de referencia de la selección.</div>')
+            else:st.html(f'<div class="option-finance-chart-empty" style="height:{reference.layout.height}px">No hay saldos pendientes de caja informados.</div>')
+            st.html('<div class="option-finance-comparison-footer">Porcentajes sobre la caja pendiente de cubrir de la selección.</div>')
     with right:
         with st.container(border=False,key=f'capital_{key}_cash_panel'):
-            header('Caja pendiente de cubrir',amount(summary[['Caja por validar','Caja validada']].sum(axis=1,min_count=1).sum(min_count=1)),
+            header('Desglose de caja pendiente',amount(summary[['Caja por validar','Caja validada']].sum(axis=1,min_count=1).sum(min_count=1)),
                 'Validada y por validar se presentan por separado', comparison=True)
             st.html('<div class="option-finance-legend option-finance-comparison-legend"><span><i style="background:'+VALID+'"></i>Validada</span><span><i style="background:'+PENDING+'"></i>Por validar</span></div>')
             if cash.data:render(cash,f'capital_{key}_cash')
             else:st.html(f'<div class="option-finance-chart-empty" style="height:{cash.layout.height}px">No hay importes de caja informados.</div>')
             footer = 'Sin importes de caja validada informados en esta selección.' if summary['Caja validada'].isna().all() else 'La validación se muestra por separado de los importes pendientes de revisar.'
             st.html('<div class="option-finance-comparison-footer">'+html.escape(footer)+'</div>')
+
+
+def calendar_cash_rows(cash):
+    """Retain the source's scheduling exclusions when total pending cash is larger."""
+    result=cash.copy()
+    fields={'Pendiente validado CLP':'Caja calendarizada validada CLP',
+        'Referencia por validar CLP':'Caja calendarizada por validar CLP'}
+    if all(source in result for source in fields.values()):
+        for target,source in fields.items():result[target]=result[source]
+    return result
 
 
 def add_calendar_milestones(fig, visible, milestones):

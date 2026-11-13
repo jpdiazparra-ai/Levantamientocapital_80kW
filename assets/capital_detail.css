@@ -1,0 +1,15 @@
+.st-key-option4_analysis_budget .capital-detail-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:6px 0 18px;padding-bottom:14px;border-bottom:1px solid #D8E3EB}
+.st-key-option4_analysis_budget .capital-detail-heading span{font-size:10px;letter-spacing:1.4px;font-weight:750;color:#0F766E}
+.st-key-option4_analysis_budget .capital-detail-heading h4{font-size:20px;color:#17334A;margin:5px 0;padding:0;letter-spacing:-.4px}
+.st-key-option4_analysis_budget .capital-detail-heading p{font-size:12px;color:#64748B;margin:6px 0 0;line-height:1.6}
+.st-key-option4_analysis_budget .capital-detail-heading>b{font-size:11px;color:#244A6C;background:#F0F5F9;border:1px solid #D8E3EB;border-radius:6px;padding:7px 10px;white-space:nowrap}
+.st-key-option4_analysis_budget .capital-detail-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid #D8E3EB;border-radius:8px;overflow:hidden;margin:12px 0 22px;background:#FAFCFD}
+.st-key-option4_analysis_budget .capital-detail-kpis article{padding:16px;border-right:1px solid #D8E3EB;min-width:0}
+.st-key-option4_analysis_budget .capital-detail-kpis article:last-child{border:0}
+.st-key-option4_analysis_budget .capital-detail-kpis span{display:block;color:#64748B;font-size:11px;margin-bottom:7px}
+.st-key-option4_analysis_budget .capital-detail-kpis strong{color:#17334A;font-size:21px;letter-spacing:-.4px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.st-key-option4_analysis_budget .capital-detail-kpis article:nth-child(2) strong{color:#0F766E}
+.st-key-option4_analysis_budget .capital-detail-kpis article:nth-child(3) strong{color:#B7791F}
+.st-key-option4_analysis_budget .capital-detail-empty{padding:22px;border:1px dashed #BDCEDC;border-radius:8px;background:#F8FAFC;font-size:12px;color:#64748B;margin:12px 0}
+.st-key-option4_analysis_budget .capital-detail-source{display:flex;gap:12px;flex-wrap:wrap;padding:12px 16px;background:#EFF8F5;border-left:3px solid #0F766E;border-radius:4px;font-size:12px;color:#335C58;margin:18px 0 10px}
+@media(max-width:760px){.st-key-option4_analysis_budget .capital-detail-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.st-key-option4_analysis_budget .capital-detail-heading{align-items:flex-start;flex-direction:column}.st-key-option4_analysis_budget .capital-detail-kpis strong{font-size:18px}}

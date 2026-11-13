@@ -1,4 +1,5 @@
 """Native CLP cost and disbursement evidence from Capital Strategy, for the 80 kW PDF."""
+from capital_charts import calendar_cash_rows
 import pandas as pd
 import streamlit as st
 
@@ -28,7 +29,7 @@ def project_calendar80(tasks,cash,cutoff):
         raise ValueError('IDs duplicados: no se pueden agregar los desembolsos de 80 kW.')
     scope=tasks.loc[tasks['Proyecto'].fillna('').str.contains(r'(?<!\d)80\s*kw\b',case=False,regex=True)]
     if scope.empty:raise ValueError('Plan no contiene el proyecto de 80 kW para el calendario.')
-    selected=cash.loc[cash['ID actividad'].isin(scope['ID'])].copy()
+    selected=calendar_cash_rows(cash.loc[cash['ID actividad'].isin(scope['ID'])])
     first_month=pd.Timestamp(cutoff).to_period('M').to_timestamp()
     selected['_month']=selected['_date'].dt.to_period('M').dt.to_timestamp()
     selected['_month']=selected['_month'].mask(selected['_month'].lt(first_month),first_month)

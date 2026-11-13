@@ -14,11 +14,12 @@ TASK_MONEY_COLUMNS = {
 CASH_MONEY_COLUMNS = {
     'Saldo pendiente CLP', 'Caja programada CLP', 'Referencia por validar CLP',
     'Pendiente validado CLP', 'Caja sin fecha CLP',
+    'Caja calendarizada validada CLP', 'Caja calendarizada por validar CLP',
 }
 DISPLAY_MONEY_COLUMNS = TASK_MONEY_COLUMNS | CASH_MONEY_COLUMNS | {
     'Monto comercial · CLP', 'Costo por unidad · CLP', 'Caja por validar', 'Caja validada',
     'Monto comercial · USD', 'Costo por unidad · USD',
-    'Monto no comercial · CLP', 'Monto no comercial · USD',
+    'Monto no comercial · CLP', 'Monto no comercial · USD', 'Saldo fuera de programación',
 }
 
 
