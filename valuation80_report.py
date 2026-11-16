@@ -270,7 +270,7 @@ def lcoe_page80(c,r,model,factor,result):
     unit=lambda value,mwh=False:decimal(value*r.fx*(1000 if mwh else 1),2 if mwh else 5)+' '+r.currency+('/MWh' if mwh else '/kWh')
     y=r.kpis(c,H-114,[('LCOE del escenario',unit(result['lcoe'],True),unit(result['lcoe'])),
         ('Generación neta anual',decimal(result['energy_y1']/1000,2)+' MWh','80 kW × 8.760 h × '+r.pct(factor)),
-        ('CAPEX de referencia',r.money(result['capex'],True),'Precio inicial · moneda publicada'),
+        ('CAPEX de referencia',r.money(result['capex'],True),result['price_source']),
         ('O&M anual supuesto',r.money(result['fixed_om']),'2 % del precio · constante en términos reales')])
     height=156
     r.panel(c,M,y,HALF,height,'Sensibilidad al factor de planta neto','Escenario: FP '+r.pct(factor)+' · '+unit(result['lcoe'],True))
@@ -307,7 +307,7 @@ def lcoe_page80(c,r,model,factor,result):
         'LCOE = [CAPEX inicial + suma(t=1…20) O&M anual / (1 + 0,08)^t] / [suma(t=1…20) energía neta anual / (1 + 0,08)^t]. '
         'Costos al cierre de cada año; CAPEX al inicio. Energía anual constante; el FP ya incluye disponibilidad y pérdidas. '
         'El PDF conserva el FP seleccionado al prepararlo. La curva varía solo ese factor; precio, O&M, vida y tasa permanecen fijos.')-9
-    r.para(c,M,y,CW,'Fuente monetaria: precio inicial de 00 Datos de entrada (USD directo; CLP / TC del panel), con multiplicadores de precio activos. El 2 % de O&M, los 20 años y el 8 % real son hipótesis, no datos confirmados del archivo ni la tasa DCF. '
+    r.para(c,M,y,CW,'Fuente monetaria sin IVA: '+result['price_source']+'. Con margen proveedor cero, precio calculado de la hoja 07 (USD); en los demás casos, precio inicial de 00 con multiplicadores y conversión de moneda. El 2 % de O&M, los 20 años y el 8 % real son hipótesis, no datos confirmados del archivo ni la tasa DCF. '
         'Sin degradación, crecimiento real del O&M, O&M variable, reposiciones, retiro, valor residual ni impuestos. Costos de instalación y sitio no incluidos en el precio quedan por completar. '
         'Resultado indicativo del propietario; no usa costos de fabricación ni gastos operativos de la empresa como mantenimiento de la turbina. '
         'USD nativos; CLP se convierte una vez al TC de presentación '+decimal(r.exchange_rate,2)+' CLP/USD.',6.6,MUTED)
@@ -372,12 +372,12 @@ def build_report80(model,currency='USD',fx=925.,project_data=None,capacity_facto
 
     header(4,'80 kW · economía unitaria y costos','Precio: moneda publicada / TC del panel para CLP · precios con/sin IVA y por kW · costos: Estrategia de Capital y Costos')
     prices=sale_prices80(model,fx)
-    y=r.kpis(c,H-114,[('Precio por equipo · sin IVA',r.money(prices['net']),'USD directo; CLP / TC del panel'),
+    y=r.kpis(c,H-114,[('Precio por equipo · sin IVA',r.money(prices['net']),prices['source']),
         ('Precio por kW · sin IVA',r.money(prices['net_kw']),'Precio del equipo / 80 kW'),
         ('Precio por equipo · con IVA',r.money(prices['gross']),'IVA referencial '+r.pct(prices['vat_rate'])),
         ('Precio por kW · con IVA',r.money(prices['gross_kw']),'Precio con IVA / 80 kW')])
     unit_costs=unit_cost_inputs80(model)
-    r.hbars(c,M,y,HALF,156,'Evolución del costo unitario',['Costo base','Costo base + OPEX','Precio calculado · 07' if unit_costs['final_is_price'] else 'Costo unitario + margen'],[unit_costs['base'],unit_costs['before_margin'],unit_costs['with_margin']],palette=[SLATE,BLUE,TEAL],subtitle='07 · componentes según sus etiquetas publicadas · importes no sumables')
+    r.hbars(c,M,y,HALF,156,'Evolución del costo unitario',['Costo base','Costo base + OPEX','Precio calculado · 07' if unit_costs['final_is_price'] or unit_costs['margin'] == 0 else 'Costo unitario + margen'],[unit_costs['base'],unit_costs['before_margin'],unit_costs['with_margin']],palette=[SLATE,BLUE,TEAL],subtitle='07 · componentes según sus etiquetas publicadas · importes no sumables')
     costs=project_data['costs'];systems=costs['systems']
     r.hbars(c,M+HALF+GAP,y,HALF,156,'Costos informados de 80 kW por sistema',systems['Sistema'],
         systems['Monto comercial · CLP']/fx,palette=[BLUE,TEAL,SLATE,RUST],subtitle='Comercial anterior · fuente CLP convertida una sola vez');y-=168

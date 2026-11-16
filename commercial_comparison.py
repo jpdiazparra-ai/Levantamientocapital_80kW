@@ -73,13 +73,13 @@ def _total(series):
 
 def render_commercial_comparison(project_scopes):
     # Local imports avoid a cycle while sharing the existing eligibility rules.
-    from commercial_analysis import commercial_composition_scope, commercial_hour_values
+    from commercial_analysis import commercial_composition_scope, commercial_hour_values, commercial_scope_label
     st.markdown('#### Comparación técnica y comercial · 10 kW vs 80 kW')
     st.caption('Contrasta el costo informado, la intensidad de HH y la composición de ambas turbinas. La potencia de 80 kW es ocho veces la de 10 kW: el indicador por kW permite leer el escalamiento junto con la cobertura de los datos.')
     with st.container(border=True, key='option4_comparison_controls'):
         scope_col, level_col = st.columns(2)
         with scope_col:
-            mode = st.segmented_control('Alcance de la comparación', ['Total', 'Comercial'], default='Total', key='option4_compare_mode') or 'Total'
+            mode = st.segmented_control('Alcance de la comparación', ['Total', 'Comercial'], default='Total', format_func=commercial_scope_label, key='option4_compare_mode') or 'Total'
         with level_col:
             level = st.segmented_control('Nivel de comparación', ['Por sistema', 'Por línea'], default='Por sistema', key='option4_compare_level') or 'Por sistema'
         scopes = {}
@@ -109,7 +109,7 @@ def render_commercial_comparison(project_scopes):
             if selected_lines:
                 frame = frame[[pair in selected_lines for pair in zip(frame['Sistema'], frame['Paquete / línea'])]].copy()
         metric = st.radio('Indicador del gráfico', ['Monto comercial', 'Costo comercial por kW', 'Presupuesto vigente', 'HH informadas', 'HH por kW'], horizontal=True, key='option4_compare_metric')
-        st.caption('Total incluye todas las partidas Aplica. Comercial excluye fundaciones y anclajes, montaje y logística. La comparación usa Hito objetivo de Costos para asignar cada turbina.')
+        st.caption('Turbina + instalación incluye todas las partidas Aplica. Solo equipo turbina excluye fundaciones y anclajes, montaje y logística. La comparación usa Hito objetivo de Costos para asignar cada turbina.')
     if frame.empty:
         st.info('No hay líneas o sistemas para la selección actual.')
         return
@@ -172,7 +172,7 @@ def render_commercial_comparison(project_scopes):
     st.dataframe(style,hide_index=True,use_container_width=True,height=min(650,38+len(frame)*36),column_config=configs)
     with st.expander('Criterios de comparación y lectura técnica'):
         st.caption('Los indicadores y gráficos siguen la selección actual. Los montos son parciales cuando faltan registros; una reducción por kW no demuestra ahorro validado si la cobertura o el alcance técnico difieren.')
-        st.caption('Los porcentajes de participación se refieren al total de cada turbina dentro del alcance Total/Comercial, y permanecen estables al filtrar sistemas o líneas. pp = puntos porcentuales. Sin cálculo indica que no existe una base positiva de 10 kW o falta un monto.')
+        st.caption('Los porcentajes de participación se refieren al total de cada turbina dentro del alcance seleccionado, y permanecen estables al filtrar sistemas o líneas. pp = puntos porcentuales. Sin cálculo indica que no existe una base positiva de 10 kW o falta un monto.')
         st.markdown('**Base:** Comercial anterior y Presupuesto vigente de Costos, solo Costo para producto = Aplica, asignadas por Hito objetivo de 10/80 kW. '
             '**Variación:** (80 − 10) / 10 × 100, tanto en monto total como en costo/kW; una base cero, negativa o faltante queda sin cálculo. '
             '**HH:** Cantidad de Costos solo para criterio HH; los insumos no se suman como horas. '
@@ -181,7 +181,7 @@ def render_commercial_comparison(project_scopes):
             'Los gráficos muestran todas las filas filtradas, sin páginas.')
 
     line_note = (" · 1 línea seleccionada" if len(frame) == 1 else f" · {len(frame)} líneas seleccionadas") if by_line else ''
-    context = dict(currency=currency_code(), fx_rate=exchange_rate(), mode=mode, level=level,
+    context = dict(currency=currency_code(), fx_rate=exchange_rate(), mode=commercial_scope_label(mode), level=level,
         selection=system+line_note, metric=metric, metric_field=metric_field,
         generated_at=datetime.now(ZoneInfo('America/Santiago')).strftime('%d-%m-%Y %H:%M'),
         cutoff=project_scopes[10].attrs.get('document_cutoff'),

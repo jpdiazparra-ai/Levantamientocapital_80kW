@@ -64,27 +64,34 @@ def summary_lcoe_panel10(model):
         plot(fig,'10_summary_lcoe_factor',210)
         st.caption(('CAPEX ref.: '+money(result['capex'])+' · O&M supuesto: '+money(result['fixed_om'])+'/año · Vida: 20 años · Tasa real: 8 %.').replace('$',r'\$'))
         with st.expander('Bases y alcance del LCOE'):
-            st.caption('CAPEX: precio inicial de 00 Datos de entrada en su moneda publicada (USD directo; CLP convertido con el TC del panel) y los multiplicadores activos. O&M anual: hipótesis fija del 2 % de ese precio; no es el OPEX de la empresa fabricante. Vida útil y tasa son supuestos ilustrativos, independientes del DCF.')
+            st.caption('CAPEX sin IVA: '+result['price_source']+'. Con margen proveedor cero se usa el precio publicado de la hoja 07, en USD; en los demás casos, el precio inicial de 00 con sus multiplicadores y conversión de moneda. O&M anual: hipótesis fija del 2 % de ese precio; no es el OPEX de la empresa fabricante. Vida útil y tasa son supuestos ilustrativos, independientes del DCF.')
             st.caption('LCOE = valor presente de CAPEX y O&M / valor presente de la energía neta. Generación anual = 10 × 8.760 × FP. Moneda constante, sin degradación, impuestos, reposiciones ni valor residual. Costos adicionales de sitio no incluidos en el precio quedan pendientes de completar; el resultado es indicativo.')
 
 
-def unit_cost_overview10(model):
+def unit_cost_overview10(model, mode='Total'):
+    from commercial_analysis import commercial_composition_scope, commercial_selection_totals, commercial_scope_label
     data=unit_cost_inputs10(model)
     subtotal=float('nan');coverage='Fuente de costos no disponible'
     try:
         costs=load_cost_report(model['fetched_at'])
-        totals=costs['totals'];subtotal=totals['Comercial anterior']/exchange_rate()
+        if mode == 'Total':
+            totals=costs['totals']
+        else:
+            scope=commercial_composition_scope(costs['scope'], mode)
+            totals=commercial_selection_totals(scope)
+            totals.update(Informadas=int(scope['Comercial anterior'].notna().sum()), Partidas=len(scope))
+        subtotal=totals['Comercial anterior']/exchange_rate()
         coverage=str(totals['Informadas'])+'/'+str(totals['Partidas'])+' partidas con monto · subtotal informado'
     except Exception:
         st.caption('No se pudo consultar el costo informado del Producto 10 kW; los valores de la hoja 07 siguen disponibles.')
     prices=sale_prices10(model,exchange_rate())
     same_price=pd.notna(data['with_margin']) and abs(prices['net']-data['with_margin'])<.005
-    rows=[('Costo informado',subtotal,'Producto 10 kW · '+coverage,'cost'),
+    rows=[('Costo informado',subtotal,commercial_scope_label(mode)+' · '+coverage,'cost'),
         ('Costo unitario + OPEX',data['before_margin'],'Antes del margen proveedor','cost')]
-    final_title='Precio calculado · hoja 07' if data['final_is_price'] else 'Costo unitario + margen'
+    final_title='Precio calculado · hoja 07' if data['final_is_price'] or data['margin'] == 0 else 'Costo unitario + margen'
     if not same_price:rows.append((final_title,data['with_margin'],data['references'].get('with_margin','07')+' · valor publicado','cost'))
     rows.extend([('Precio de venta · sin IVA',prices['net'],
-        'Coincide con '+final_title.lower() if same_price else 'Precio inicial de 00 Datos de entrada','net'),
+        'Coincide con '+final_title.lower() if same_price else prices.get('source','Precio inicial de 00 Datos de entrada'),'net'),
         ('Precio de venta · con IVA',prices['gross'],'IVA referencial '+pct(prices['vat_rate']),'gross')])
     cells=''.join('<tr class="'+kind+'"><th scope="row">'+html.escape(label)+'<small>'+html.escape(note)+'</small></th>'
         '<td>'+html.escape(money(value))+'</td><td>'+html.escape(money(value/10))+' <small>/ kW</small></td></tr>'
@@ -104,9 +111,9 @@ def unit_cost_overview10(model):
     fig.update_xaxes(title_text=currency_code()+' / equipo',range=[0,maximum*1.3])
     plot(fig,'10_evaluation_unit',280)
     with st.expander('Fuentes y criterios de costos y precios'):
-        st.caption('Costo informado: Estrategia de Capital y Costos, Producto 10 kW, partidas Aplica, Comercial anterior, con fundaciones y montaje. Los faltantes no se estiman; el subtotal no acredita un costo final completo ni se suma a la hoja 07.')
+        st.caption('Costo informado: Estrategia de Capital y Costos, Producto 10 kW, partidas Aplica, Comercial anterior. Alcance seleccionado: '+commercial_scope_label(mode)+'. Solo equipo turbina excluye fundaciones y anclajes, montaje y logística. Los faltantes no se estiman; el subtotal no acredita un costo final completo ni se suma a la hoja 07.')
         st.caption('Costo + OPEX: '+data['references'].get('base','Sin referencia')+' + '+data['references'].get('opex','Sin referencia')+'. '+final_title+': '+data['references'].get('with_margin','Sin referencia')+' · '+data['labels'].get('with_margin','Sin dato publicado')+'. Margen proveedor: '+data['references'].get('margin','Sin referencia')+', sobre precio. Las barras comparan importes completos y no se suman entre sí.')
-        st.caption('Precio: 00 Datos de entrada, USD directo o CLP convertido con el TC del panel, con los multiplicadores activos. IVA: tasa referencial de 03 Supuestos. Por kW: importe por equipo / 10. Cuando precio y costo con margen coinciden, se presentan en una sola fila; si difieren, se muestran separados.')
+        st.caption('Precio: con margen proveedor cero se usa Precio calculado · hoja 07, publicado en USD. En los demás casos se usa 00 Datos de entrada, USD directo o CLP convertido con el TC del panel, con los multiplicadores activos. IVA: tasa referencial de 03 Supuestos. Por kW: importe por equipo / 10. Cuando precio y costo con margen coinciden, se presentan en una sola fila; si difieren, se muestran separados.')
 
 
 
@@ -293,10 +300,13 @@ def overview10(model, refresh_nonce=0):
         with st.expander('Cifras exactas y referencias · inversión y financiamiento'):evaluation_table(e['funding'])
     with st.container(border=True):
         section('03 / ECONOMÍA UNITARIA Y RESPALDOS','Lo que deja cada turbina entregada')
+        from commercial_analysis import render_commercial_scope
+        mode=render_commercial_scope('Turbina de 10 kW')
+        st.caption('El alcance filtra el costo informado y su desglose. Los precios y costos publicados de la hoja 07, el LCOE y la proyección financiera conservan sus bases de origen.')
         u=commercial_unit10(model,exchange_rate())
         left,right=st.columns(2,gap='large')
         with left:
-            unit_cost_overview10(model)
+            unit_cost_overview10(model, mode)
         with right:
             summary_lcoe_panel10(model)
         st.caption('Entregas del primer año: '+count(u['Equipos entregados'])+' equipos. Los precios y el LCOE respetan la moneda de origen; CLP usa el TC del panel izquierdo; los flujos y el DCF conservan la proyección publicada.')
@@ -310,7 +320,7 @@ def overview10(model, refresh_nonce=0):
                 st.error('No se pudo cargar la fuente de costos: '+str(exc))
             else:
                 tasks, _ = convert_workbook(tasks, cash, number)
-                render_commercial_analysis(tasks, fixed_project='Turbina de 10 kW', embedded=True)
+                render_commercial_analysis(tasks, fixed_project='Turbina de 10 kW', embedded=True, show_scope_selector=False)
     with st.container(border=True):
         section('04 / PRIMEROS CINCO AÑOS','Trayectoria comercial, rentabilidad y caja')
         p=e['projection'];sales=complete_sum(p['sales']);ebitda=complete_sum(p['ebitda'])

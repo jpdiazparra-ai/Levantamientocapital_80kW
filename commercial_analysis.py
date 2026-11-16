@@ -72,6 +72,20 @@ def commercial_composition_scope(tasks, mode):
     return tasks[~systems.isin(excluded)].copy()
 
 
+def commercial_scope_label(mode):
+    return {'Total': 'Turbina + instalación', 'Comercial': 'Solo equipo turbina'}[mode]
+
+
+def render_commercial_scope(project):
+    index = re.sub(r'\W+', '_', str(project))
+    key = f'option4_commercial_composition_{index}'
+    if st.session_state.get(key) not in ('Total', 'Comercial'):
+        st.session_state[key] = 'Total'
+    return st.segmented_control('Alcance del análisis', ['Total', 'Comercial'], key=key,
+        format_func=commercial_scope_label,
+        help='Turbina + instalación incluye todas las partidas Aplica. Solo equipo turbina excluye fundaciones y anclajes, montaje y logística. Actualiza el costo informado, su desglose y los informes del alcance.') or 'Total'
+
+
 def commercial_hour_values(frame):
     criteria = frame.get('Criterio', pd.Series('', index=frame.index)).fillna('').astype(str)
     is_hh = criteria.str.replace(r'[\s.]', '', regex=True).str.casefold().eq('hh')
@@ -331,7 +345,7 @@ def _summary_table(summary, dimension, scope, key, project_scope=None, report_co
         file_name=filename+'.pdf', mime='application/pdf', key=group_key+'_download', on_click='ignore')
 
 
-def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False):
+def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False, show_scope_selector=True):
     with st.container(border=True, key='option4_analysis_commercial'):
         st.subheader('Costo comercial de las turbinas')
         st.caption('Analiza el monto comercial informado para cada turbina y su composición por sistema y paquete. Se incluyen solo las partidas marcadas Aplica en Costos; el detalle permite contrastar cantidades, costos de referencia y presupuesto vigente.')
@@ -366,25 +380,24 @@ def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False):
         index = re.sub(r'\W+', '_', str(project))
         project_tasks = commercial_project_rows(tasks, project)
         project_scope = commercial_product_scope(project_tasks)
-        composition_key = f'option4_commercial_composition_{index}'
-        remembered_mode = st.session_state.get(composition_key, 'Total')
-        mode = remembered_mode if remembered_mode in ('Total', 'Comercial') else 'Total'
-        st.session_state[composition_key] = mode
-        mode = st.segmented_control('Alcance del análisis', ['Total', 'Comercial'], key=composition_key,
-            help='Actualiza KPI, gráficos, tablas e informe general. Comercial excluye Fundaciones y anclajes y Montaje y Logística; Total incluye todas las partidas Aplica de la turbina.') or 'Total'
+        if show_scope_selector:
+            mode = render_commercial_scope(project)
+        else:
+            mode = st.session_state.get(f'option4_commercial_composition_{index}', 'Total') or 'Total'
+        mode_label = commercial_scope_label(mode)
         scope = commercial_composition_scope(project_scope, mode)
         excluded = len(project_tasks) - len(project_scope)
-        mode_note = f' · Vista Comercial: {len(scope)} partidas, con {len(project_scope) - len(scope)} excluidas del alcance' if mode == 'Comercial' else ''
+        mode_note = f' · Solo equipo turbina: {len(scope)} partidas, con {len(project_scope) - len(scope)} excluidas del alcance' if mode == 'Comercial' else ''
         st.caption(f'Turbina completa: {len(project_scope)} partidas Aplica · {excluded} excluidas por su clasificación en Costos.{mode_note}')
         values = scope[COMMERCIAL]
         total = values.sum(min_count=1)
         if mode == 'Comercial':
             excluded_scope = project_scope[~project_scope['ID'].isin(scope['ID'])]
             excluded_amount = excluded_scope[COMMERCIAL].sum(min_count=1) if len(excluded_scope) else 0
-            st.html('<div class="option-commercial-note"><b>El alcance Comercial excluye fundaciones y montaje</b>'
-                f'<span>Referencia de la turbina completa (Total): <b>{amount(project_scope[COMMERCIAL].sum(min_count=1))}</b>'
-                f' · Excluido del alcance Comercial: <b>{amount(excluded_amount)}</b>'
-                f' · Monto del alcance Comercial: <b>{amount(total)}</b>.</span></div>')
+            st.html('<div class="option-commercial-note"><b>Solo equipo turbina excluye fundaciones, montaje y logística</b>'
+                f'<span>Referencia de Turbina + instalación: <b>{amount(project_scope[COMMERCIAL].sum(min_count=1))}</b>'
+                f' · Instalación excluida: <b>{amount(excluded_amount)}</b>'
+                f' · Monto de Solo equipo turbina: <b>{amount(total)}</b>.</span></div>')
         known, count = int(values.notna().sum()), len(scope)
         coverage = 100 * known / count if count else 0
         summary = commercial_breakdown(scope, 'Sistema')
@@ -401,11 +414,11 @@ def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False):
         unit_label = 'Subtotal del alcance por kW' if known < count else 'Monto del alcance por kW'
         with st.container(border=False, key=f'option4_commercial_project_{index}'):
             st.html(f'<div class="option-commercial-executive-head"><div><span>ANÁLISIS COMERCIAL</span><h4>{safe_project}</h4></div>'
-                f'<span class="option-commercial-source">Alcance: {mode} · Costos · Comercial anterior</span></div>'
+                f'<span class="option-commercial-source">Alcance: {mode_label} · Costos · Comercial anterior</span></div>'
                 '<div class="option-commercial-executive-kpis">'
-                f'<article class="primary"><span>Monto comercial · Alcance {mode} · {currency_code()}</span><strong>{amount(total)}</strong><small>Costos · Hito objetivo {capacity if capacity else ""} kW · Aplica</small></article>'
+                f'<article class="primary"><span>Monto comercial · Alcance {mode_label} · {currency_code()}</span><strong>{amount(total)}</strong><small>Costos · Hito objetivo {capacity if capacity else ""} kW · Aplica</small></article>'
                 f'<article><span>{unit_label} · {currency_code()}/kW</span><strong>{unit}</strong><small>Potencia nominal: {capacity if capacity else "sin informar"} kW</small></article>'
-                f'<article><span>Cobertura del alcance {mode}</span><strong>{coverage:.1f}%</strong><small>{known} de {count} partidas · {count-known} sin monto</small>'
+                f'<article><span>Cobertura del alcance {mode_label}</span><strong>{coverage:.1f}%</strong><small>{known} de {count} partidas · {count-known} sin monto</small>'
                 f'<div class="option-commercial-coverage-track"><i style="width:{coverage:.3f}%"></i></div></article>'
                 f'<article><span>Concentración en {concentration_count} sistemas</span><strong>{concentration_label}</strong><small>{funded_systems} sistemas con monto informado</small></article></div>')
             donut_col, detail_col = st.columns([.85, 1.3], gap='large')
@@ -443,7 +456,7 @@ def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False):
                 overview_details = overview_details.sort_values('ID', kind='stable', key=lambda ids:
                     ids.astype(str).str.casefold().str.replace(r'\d+', lambda match: match.group().zfill(20), regex=True))
                 overview_totals = commercial_selection_totals(scope)
-                overview_context = dict(project=commercial_project_label(project), selection='Todos los sistemas · Todas las líneas', mode=mode,
+                overview_context = dict(project=commercial_project_label(project), selection='Todos los sistemas · Todas las líneas', mode=mode_label,
                     currency=currency_code(), fx_rate=exchange_rate(), hours=overview_totals['HH'], missing_hours=overview_totals['HH pendientes'],
                     chart_dimension='Sistema', system_summary=summary.to_dict('records'),
                     generated_at=datetime.now(ZoneInfo('America/Santiago')).strftime('%d-%m-%Y %H:%M'),
@@ -456,9 +469,9 @@ def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False):
             with composition:
                 if embedded:
                     st.markdown('##### Composición por sistema e hito')
-                st.caption(f'Alcance seleccionado: {mode}. ' + ('Excluye fundaciones y anclajes, montaje y logística.' if mode == 'Comercial' else 'Incluye todos los sistemas de las partidas marcadas Aplica en Costos.'))
+                st.caption(f'Alcance seleccionado: {mode_label}. ' + ('Excluye fundaciones y anclajes, montaje y logística.' if mode == 'Comercial' else 'Incluye todos los sistemas de las partidas marcadas Aplica en Costos.'))
                 system_tab, milestone_tab = st.tabs(['Por sistema', 'Por hito'])
                 with system_tab:
-                    _summary_table(summary, 'Sistema', scope, f'option4_commercial_system_{index}', project_scope=project_scope, report_context={'project': commercial_project_label(project), 'mode': mode})
+                    _summary_table(summary, 'Sistema', scope, f'option4_commercial_system_{index}', project_scope=project_scope, report_context={'project': commercial_project_label(project), 'mode': mode_label})
                 with milestone_tab:
-                    _summary_table(commercial_breakdown(scope, 'Hito objetivo'), 'Hito objetivo', scope, f'option4_commercial_milestone_{index}', project_scope=project_scope, report_context={'project': commercial_project_label(project), 'mode': mode})
+                    _summary_table(commercial_breakdown(scope, 'Hito objetivo'), 'Hito objetivo', scope, f'option4_commercial_milestone_{index}', project_scope=project_scope, report_context={'project': commercial_project_label(project), 'mode': mode_label})

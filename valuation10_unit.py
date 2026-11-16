@@ -27,9 +27,11 @@ def commercial_unit10(model,fx=None):
 
 
 def sale_prices10(model,fx):
-    price=commercial_unit10(model,fx)['Precio de venta']
+    data=unit_cost_inputs10(model)
+    from_sheet07=data['margin'] == 0
+    price=data['with_margin'] if from_sheet07 else commercial_unit10(model,fx)['Precio de venta']
     vat=Sheet('03 Supuestos',model['raw']['03 Supuestos']).value('IVA referencial')
-    return dict(net=price,net_kw=price/10,vat_rate=vat,gross=price*(1+vat),gross_kw=price*(1+vat)/10)
+    return dict(source='Precio calculado · hoja 07' if from_sheet07 else 'Precio inicial de 00 Datos de entrada', net=price,net_kw=price/10,vat_rate=vat,gross=price*(1+vat),gross_kw=price*(1+vat)/10)
 
 
 def unit_cost_inputs10(model):
