@@ -1,5 +1,6 @@
 """Executive report for the standalone 80 kW case, sharing the established palette."""
 import html
+from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
@@ -7,6 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from display_currency import currency_code, exchange_rate
+from projection_matrix import render_projection_matrix
 from valuation_data import column_name
 from valuation80_data import SOURCE, SHEETS, load_valuation80
 from valuation_finance import complete_sum, divide, projection_diagnostics
@@ -16,9 +18,10 @@ from valuation80_lcoe import summary_lcoe80
 from valuation80_unit import unit_cost_inputs80, commercial_unit80, sale_prices80
 from market_study import render_market_study
 from valuation_costs import load_cost_report
-from valuation_view import (NAVY, TEAL, GOLD, ORANGE, kpis, context, section, plot, money, pct, count,
-    displayed, financial_table, annual_bars, investment_details, operating, cash_view)
+from valuation_view import (BLUE_UNIT_PALETTE, NAVY, TEAL, GOLD, ORANGE, kpis, context, section, plot, money, pct, count,
+    displayed, financial_table, annual_bars, investment_details, operating, cash_view, chart_theme)
 
+COMMERCIAL_PALETTE80 = ['#003366', '#00509E', '#007ACC', '#66A3FF', '#CCE0FF', '#00509E', '#66A3FF']
 PREFIX = 'option4_valuation80'
 MAIN_TABS = ['Evaluación 80 kW','Datos y supuestos','Inversión y socios','Resultados y caja',
     'Ventas y fabricación','Gastos operativos','Activos y desarrollo','Controles y fuentes','Estudio de mercado']
@@ -33,7 +36,7 @@ def summary_factor80():
     return st.session_state.get(key,35)/100
 
 
-def summary_lcoe_panel80(model):
+def summary_lcoe_panel80(model, equipment_cost=None):
     summary_factor80()
     with st.container(key=PREFIX+'_summary_lcoe'):
         st.html('<style>.st-key-'+PREFIX+'_summary_lcoe .valuation-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}'
@@ -42,13 +45,13 @@ def summary_lcoe_panel80(model):
         st.markdown('##### LCOE · energía de la turbina de 80 kW')
         factor=st.slider('Factor de planta neto (%)',min_value=1,max_value=100,value=35,step=1,
             key=PREFIX+'_summary_lcoe_factor',help='Único supuesto editable de este panel. Incluye disponibilidad y pérdidas; no se descuentan nuevamente.')/100
-        try:result=summary_lcoe80(model,factor,exchange_rate())
+        try:result=summary_lcoe80(model,factor,exchange_rate(),equipment_cost=equipment_cost)
         except ValueError as exc:
             st.info('LCOE sin cálculo: '+str(exc));return
         kpis([('LCOE · '+currency_code()+'/kWh',lcoe_text(result['lcoe']),lcoe_text(result['lcoe'],True)+' / MWh'),
             ('Generación neta anual',f'{result["energy_y1"]/1000:,.1f}'.replace(',','X').replace('.',',').replace('X','.')+' MWh','80 kW × 8.760 h × '+pct(factor))])
         factors=sorted(set([v/100 for v in range(5,101,5)]+[factor]))
-        curve=[summary_lcoe80(model,v,exchange_rate())['lcoe'] for v in factors]
+        curve=[summary_lcoe80(model,v,exchange_rate(),equipment_cost=equipment_cost)['lcoe'] for v in factors]
         fig=go.Figure(go.Scatter(x=[v*100 for v in factors],y=[displayed(v) for v in curve],mode='lines',
             line=dict(color=TEAL,width=2.5),showlegend=False,customdata=[lcoe_text(v) for v in curve],
             hovertemplate='FP %{x:.0f}%<br>%{customdata} / kWh<extra></extra>'))
@@ -57,11 +60,12 @@ def summary_lcoe_panel80(model):
         fig.add_vline(x=factor*100,line_dash='dot',line_color=GOLD)
         fig.update_xaxes(title_text='Factor de planta neto (%)',range=[0,102])
         fig.update_yaxes(title_text=currency_code()+'/kWh',rangemode='tozero')
-        plot(fig,'80_summary_lcoe_factor',210)
+        plot(fig,'80_summary_lcoe_factor',210,palette=BLUE_UNIT_PALETTE)
         st.caption(('CAPEX ref.: '+money(result['capex'])+' · O&M supuesto: '+money(result['fixed_om'])+'/año · Vida: 20 años · Tasa real: 8 %.').replace('$',r'\$'))
         with st.expander('Bases y alcance del LCOE'):
-            st.caption('CAPEX sin IVA: '+result['price_source']+'. Con margen proveedor cero se usa el precio publicado de la hoja 07, en USD; en los demás casos, el precio inicial de 00 con sus multiplicadores y conversión de moneda. O&M anual: hipótesis fija del 2 % de ese precio; no es el OPEX de la empresa fabricante. Vida útil y tasa son supuestos ilustrativos, independientes del DCF.')
+            st.caption('CAPEX sin IVA: '+result['price_source']+'. Se usa el precio de venta sin IVA mostrado: equipamiento del alcance seleccionado + OPEX por turbina. O&M anual: hipótesis fija del 2 % de ese precio; no es el OPEX de la empresa fabricante. Vida útil y tasa son supuestos ilustrativos, independientes del DCF.')
             st.caption('LCOE = valor presente de CAPEX y O&M / valor presente de la energía neta. Generación anual = 80 × 8.760 × FP. Moneda constante, sin degradación, impuestos, reposiciones ni valor residual. Costos adicionales de sitio no incluidos en el precio quedan pendientes de completar; el resultado es indicativo.')
+        return result
 
 
 def unit_cost_overview80(model, mode='Total'):
@@ -80,14 +84,11 @@ def unit_cost_overview80(model, mode='Total'):
         coverage=str(totals['Informadas'])+'/'+str(totals['Partidas'])+' partidas con monto · subtotal informado'
     except Exception:
         st.caption('No se pudo consultar el costo informado del Producto 80 kW; los valores de la hoja 07 siguen disponibles.')
-    prices=sale_prices80(model,exchange_rate())
-    same_price=pd.notna(data['with_margin']) and abs(prices['net']-data['with_margin'])<.005
-    rows=[('Costo informado',subtotal,commercial_scope_label(mode)+' · '+coverage,'cost'),
-        ('Costo unitario + OPEX',data['before_margin'],'Antes del margen proveedor','cost')]
-    final_title='Precio calculado · hoja 07' if data['final_is_price'] or data['margin'] == 0 else 'Costo unitario + margen'
-    if not same_price:rows.append((final_title,data['with_margin'],data['references'].get('with_margin','07')+' · valor publicado','cost'))
+    prices=sale_prices80(model,exchange_rate(),equipment_cost=subtotal)
+    rows=[('Costo equipamiento turbina',subtotal,commercial_scope_label(mode)+' · '+coverage,'cost'),
+        ('OPEX por turbina',data['opex'],data['references'].get('opex','Sin referencia')+' · OPEX unitario publicado','cost')]
     rows.extend([('Precio de venta · sin IVA',prices['net'],
-        'Coincide con '+final_title.lower() if same_price else prices.get('source','Precio inicial de 00 Datos de entrada'),'net'),
+        'Costo equipamiento turbina + OPEX por turbina','net'),
         ('Precio de venta · con IVA',prices['gross'],'IVA referencial '+pct(prices['vat_rate']),'gross')])
     cells=''.join('<tr class="'+kind+'"><th scope="row">'+html.escape(label)+'<small>'+html.escape(note)+'</small></th>'
         '<td>'+html.escape(money(value))+'</td><td>'+html.escape(money(value/80))+' <small>/ kW</small></td></tr>'
@@ -96,8 +97,8 @@ def unit_cost_overview80(model, mode='Total'):
         '<p>Una misma vista por equipo y por potencia</p></div><span>Margen proveedor <b>'+html.escape(pct(data['margin']))+'</b></span></header>'
         '<div class="unit-economics-scroll"><table><thead><tr><th scope="col">Concepto</th><th scope="col">Por equipo · '+currency_code()+'</th>'
         '<th scope="col">Por kW · '+currency_code()+'</th></tr></thead><tbody>'+cells+'</tbody></table></div></section>')
-    labels=['Costo base','Costo base + OPEX',final_title]
-    values=[data['base'],data['before_margin'],data['with_margin']]
+    labels=['Costo equipamiento turbina','OPEX por turbina','Precio de venta · sin IVA']
+    values=[subtotal,data['opex'],prices['net']]
     fig=go.Figure(go.Bar(x=[displayed(v) for v in values],y=labels,orientation='h',
         marker_color=[GOLD,NAVY,TEAL],text=[money(v) for v in values],textposition='outside',cliponaxis=False,
         customdata=[money(v) for v in values],hovertemplate='%{y}<br>%{customdata} / equipo<extra></extra>'))
@@ -105,11 +106,12 @@ def unit_cost_overview80(model, mode='Total'):
     fig.update_yaxes(autorange='reversed')
     maximum=max([displayed(v) for v in values if pd.notna(v)]+[1])
     fig.update_xaxes(title_text=currency_code()+' / equipo',range=[0,maximum*1.3])
-    plot(fig,'80_evaluation_unit',280)
+    plot(fig,'80_evaluation_unit',280,palette=BLUE_UNIT_PALETTE)
     with st.expander('Fuentes y criterios de costos y precios'):
         st.caption('Costo informado: Estrategia de Capital y Costos, Producto 80 kW, partidas Aplica, Comercial anterior. Alcance seleccionado: '+commercial_scope_label(mode)+'. Solo equipo turbina excluye fundaciones y anclajes, montaje y logística. Los faltantes no se estiman; el subtotal no acredita un costo final completo ni se suma a la hoja 07.')
-        st.caption('Costo + OPEX: '+data['references'].get('base','Sin referencia')+' + '+data['references'].get('opex','Sin referencia')+'. '+final_title+': '+data['references'].get('with_margin','Sin referencia')+' · '+data['labels'].get('with_margin','Sin dato publicado')+'. Margen proveedor: '+data['references'].get('margin','Sin referencia')+', sobre precio. Las barras comparan importes completos y no se suman entre sí.')
-        st.caption('Precio: con margen proveedor cero se usa Precio calculado · hoja 07, publicado en USD. En los demás casos se usa 00 Datos de entrada, USD directo o CLP convertido con el TC del panel, con los multiplicadores activos. IVA: tasa referencial de 03 Supuestos. Por kW: importe por equipo / 80. Cuando precio y costo con margen coinciden, se presentan en una sola fila; si difieren, se muestran separados.')
+        st.caption('OPEX por turbina: '+data['references'].get('opex','Sin referencia')+'. Precio sin IVA = costo de equipamiento del alcance seleccionado + OPEX por turbina. La suma no aplica un margen adicional.')
+        st.caption('Precio con IVA = precio sin IVA × (1 + tasa de IVA referencial de 03 Supuestos). Por kW: cada importe por equipo / 80. El LCOE usa el mismo precio sin IVA. Si faltan montos de equipamiento, el precio usa el subtotal informado y conserva su cobertura visible.')
+    return subtotal
 
 
 
@@ -177,6 +179,55 @@ def unit_panel80(model):
     context('Alcance del laboratorio','Mantiene precio, fabricación y costo de entrega/flota por equipo del año elegido, con estructura fija. No recalcula inflación, economías de escala, capital de trabajo, anticipos, impuestos, CAPEX ni disponibilidad de terceros. La flota se aproxima como costo proporcional al volumen.')
 
 
+RESULTS_THEME80 = {
+    'palette': {**BLUE_UNIT_PALETTE, NAVY:'#003366', TEAL:'#007ACC', GOLD:'#66A3FF', ORANGE:'#00509E'},
+    'series': {'Ventas':'#003366', 'EBITDA':'#007ACC', 'Flujo libre':'#66A3FF',
+        'Flujo libre anual':'#66A3FF', 'Caja libre al cierre':'#00509E',
+        'Entregas 80 kW':'#00509E', 'Turbina de 80 kW':'#00509E', 'Capacidad propia':'#007ACC',
+        'Flujo neto antes de capital':'#66A3FF', 'Aporte propuesto':'#007ACC',
+        'Cobros recibidos':'#00509E', 'Ingresos por entregas':'#003366',
+        'Anticipos pendientes al cierre':'#66A3FF'},
+    'kpis': {'ventas':'#003366', 'ebitda':'#007ACC', 'flujo':'#66A3FF', 'caja':'#00509E'},
+    'waterfall': {'increasing':dict(marker_color='#003366'),
+        'decreasing':dict(marker_color='#CCE0FF'), 'totals':dict(marker_color='#007ACC')},
+}
+
+
+OPEX_THEME80 = {
+    'palette': RESULTS_THEME80['palette'],
+    'series': {'Estructura':'#00509E', 'Entrega y flota':'#007ACC'},
+    'kpis': {'opex total':'#003366', 'estructura':'#00509E', 'entrega':'#007ACC', 'cobertura':'#66A3FF'},
+}
+ASSETS_THEME80 = {
+    'palette': {**BLUE_UNIT_PALETTE, NAVY:'#003366', GOLD:'#00509E', TEAL:'#007ACC', ORANGE:'#66A3FF'},
+    'series': {'Valor contable':'#003366', 'Depreciación':'#66A3FF'},
+    'kpis': {'activos':'#003366', 'desarrollo':'#00509E', 'stock':'#007ACC', 'repuestos':'#66A3FF'},
+}
+
+
+@contextmanager
+def blue_financial_panel80(name, theme):
+    with st.container(key=PREFIX+'_'+name):
+        css=Path(__file__).with_name('assets').joinpath('results80.css').read_text()
+        st.html('<style>'+css+'</style>')
+        token=chart_theme.set(theme)
+        try:
+            yield
+        finally:
+            chart_theme.reset(token)
+
+
+def results80(model, year):
+    with blue_financial_panel80('results', RESULTS_THEME80):
+        st.caption('04 Resultados y flujo · 05 Balance y cobros · 06 Caja mensual')
+        st.html('<div class="results-color-key" aria-label="Colores de los indicadores">'
+            '<span class="sales">Ventas</span><span class="ebitda">EBITDA</span>'
+            '<span class="flow">Flujo libre</span><span class="cash">Caja al cierre</span></div>')
+        projection80(model)
+        operating(model,year)
+        cash_view(model,year,key_prefix=PREFIX)
+
+
 def projection80(model):
     section('02 / PROYECCIÓN','Operación y caja del negocio de 80 kW')
     operating = model['annual'].loc[lambda f:f['Año modelo'].gt(0)]
@@ -203,9 +254,8 @@ def projection80(model):
         fig.update_xaxes(type='category');fig.update_layout(title=metric);plot(fig,'80_projection_other')
     context('Ratios del período',f'CAGR de ventas: {pct(d["cagr"])} · Conversión flujo libre/EBITDA: {pct(d["cash_conversion"])} · Entregas externas: {pct(d["external_share"])}. El flujo incluye anticipos, IVA, inventario y CAPEX; los saldos de caja no se suman.')
     fields=[('Demanda 80 kW','demand_80','n'),('Entregas 80 kW','units_80','n'),('Capacidad propia','capacity','n'),('Fabricación externa','external','n'),('Demanda sin atender','unserved','n'),('Ventas','sales','m'),('Fabricación','cogs','m'),('OPEX','opex','m'),('EBITDA','ebitda','m'),('Margen EBITDA','ebitda_margin','p'),('Flujo libre','fcff','m'),('CAPEX','capex','m'),('Anticipos al cierre','advances','m'),('Caja libre al cierre','cash_free','m')]
-    matrix=[{'Indicador':label,'Unidad':'equipos' if kind=='n' else '%' if kind=='p' else currency_code(),
-        **{r['Año']:count(r[field]) if kind=='n' else pct(r[field]) if kind=='p' else money(r[field]) for _,r in frame.iterrows()}} for label,field,kind in fields]
-    st.dataframe(pd.DataFrame(matrix),hide_index=True,use_container_width=True,height=540)
+    render_projection_matrix(frame,fields,key=PREFIX+'_annual_matrix',
+        title='Proyección anual · 80 kW',theme='blue')
 
 
 def evaluation_table(frame):
@@ -294,19 +344,25 @@ def overview80(model, refresh_nonce=0):
             ('Puente teórico requerido',money(f['Puente teórico máximo requerido']),'Financiamiento por conseguir, según calendario')],secondary=True)
         context('Precio y disponibilidad del capital',f'Valor previo implícito: {money(f["Valor previo implícito negociado"])} · valor posterior: {money(f["Valor posterior implícito negociado"])}. El precio usa el mismo valor por acción en los tramos primario y secundario. El aporte está en estado {model["status"]}; la caja publicada lo proyecta. El DCF supone que los activos aportados estarán disponibles para operar.')
         with st.expander('Cifras exactas y referencias · inversión y financiamiento'):evaluation_table(e['funding'])
-    with st.container(border=True):
+    with st.container(border=True,key=PREFIX+'_unit_economics'):
+        st.html('<style>'+Path(__file__).with_name('assets').joinpath('commercial80.css').read_text()+'</style>')
         section('03 / ECONOMÍA UNITARIA Y RESPALDOS','Lo que deja cada turbina entregada')
         from commercial_analysis import render_commercial_scope
-        mode=render_commercial_scope('Turbina de 80 kW')
-        st.caption('El alcance filtra el costo informado y su desglose. Los precios y costos publicados de la hoja 07, el LCOE y la proyección financiera conservan sus bases de origen.')
+        mode=render_commercial_scope('Turbina de 80 kW', default_mode='Comercial')
+        st.caption('El alcance actualiza el equipamiento, el precio de venta y el LCOE. El OPEX por turbina procede de la hoja 07; la proyección financiera conserva los valores publicados.')
         u=commercial_unit80(model,exchange_rate())
         left,right=st.columns(2,gap='large')
         with left:
-            unit_cost_overview80(model, mode)
+            equipment_cost=unit_cost_overview80(model, mode)
         with right:
-            summary_lcoe_panel80(model)
+            base_lcoe=summary_lcoe_panel80(model, equipment_cost)
         st.caption('Entregas del primer año: '+count(u['Equipos entregados'])+' equipos. Los precios y el LCOE respetan la moneda de origen; CLP usa el TC del panel izquierdo; los flujos y el DCF conservan la proyección publicada.')
-        with st.expander('Costo comercial de la turbina de 80 kW'):
+        if base_lcoe is not None:
+            from commercial_analysis import commercial_scope_label
+            from monte_carlo_view import render_lcoe_monte_carlo
+            render_lcoe_monte_carlo(base_lcoe, capacity_factor=summary_factor80(),
+                scope=commercial_scope_label(mode), source_revision=model['fetched_at'])
+        with st.container(key=PREFIX+'_commercial_detail'):
             from analysis_option import load_workbook, number
             from commercial_analysis import render_commercial_analysis
             from display_currency import convert_workbook
@@ -316,7 +372,11 @@ def overview80(model, refresh_nonce=0):
                 st.error('No se pudo cargar la fuente de costos: '+str(exc))
             else:
                 tasks, _ = convert_workbook(tasks, cash, number)
-                render_commercial_analysis(tasks, fixed_project='Turbina de 80 kW', embedded=True, show_scope_selector=False)
+                render_commercial_analysis(tasks, fixed_project='Turbina de 80 kW', embedded=True,
+                    scope_selector_suffix='detail80', palette=COMMERCIAL_PALETTE80,
+                    title='Costo comercial de la turbina de 80 kW',
+                    table_colors={'summary_bg':'#CCE0FF', 'summary_text':'#003366',
+                        'detail_bg':'#E4EFFF', 'detail_text':'#00509E'})
     with st.container(border=True):
         section('04 / PRIMEROS CINCO AÑOS','Trayectoria comercial, rentabilidad y caja')
         p=e['projection'];sales=complete_sum(p['sales']);ebitda=complete_sum(p['ebitda'])
@@ -339,8 +399,8 @@ def overview80(model, refresh_nonce=0):
             fig.update_layout(title='Demanda, entregas y capacidad',barmode='group');fig.update_yaxes(title_text='Equipos / año');fig.update_xaxes(type='category');plot(fig,'80_evaluation_five_capacity')
         with right:annual_bars(p,[('advances','Anticipos al cierre',GOLD),('capex','CAPEX pagado por FW',NAVY)],'80_evaluation_five_commitments','Anticipos pendientes y reinversión')
         metrics=[('Demanda proyectada','demand_80','n'),('Capacidad propia','capacity','n'),('Entregas','units_80','n'),('Fabricación externa','external','n'),('Demanda sin atender','unserved','n'),('Ventas netas','sales','m'),('EBITDA','ebitda','m'),('Margen EBITDA','ebitda_margin','p'),('Flujo libre operativo','fcff','m'),('CAPEX pagado por FW','capex','m'),('Anticipos pendientes','advances','m'),('Caja libre al cierre','cash_free','m')]
-        matrix=[{'Indicador':label,'Unidad':'equipos' if kind=='n' else '%' if kind=='p' else currency_code(),**{r['Año']:count(r[field]) if kind=='n' else pct(r[field]) if kind=='p' else money(r[field]) for _,r in p.iterrows()}} for label,field,kind in metrics]
-        st.dataframe(pd.DataFrame(matrix),hide_index=True,use_container_width=True,height=470,column_config={'Indicador':st.column_config.TextColumn(width='large')})
+        render_projection_matrix(p,metrics,key=PREFIX+'_five_year_matrix',
+            title='Primeros cinco años · 80 kW',theme='blue')
         st.caption('Los cinco años y los valores proceden directamente de 00 Evaluación. Los acumulados y el margen ponderado son derivados; caja y anticipos son saldos de cierre. El detalle anual completo y el calendario mensual se consultan en Resultados y caja.')
 
 
@@ -395,6 +455,14 @@ def inputs80(model):
 
 
 def opex80(model,year):
+    with blue_financial_panel80('opex', OPEX_THEME80):
+        st.html('<div class="results-color-key" aria-label="Colores de gastos operativos">'
+            '<span style="--series-color:#00509E">Estructura</span>'
+            '<span style="--series-color:#007ACC">Entrega y flota</span></div>')
+        _opex80(model,year)
+
+
+def _opex80(model,year):
     section('08 / GASTOS OPERATIVOS','Estructura, entregas y flota · '+year)
     opex=model['opex'].loc[lambda f:f['Año'].eq(year)].copy()
     row=model['annual'].loc[lambda f:f['Año'].eq(year)].iloc[0]
@@ -415,6 +483,16 @@ def opex80(model,year):
 
 
 def assets80(model):
+    with blue_financial_panel80('assets', ASSETS_THEME80):
+        st.html('<div class="results-color-key" aria-label="Colores de activos y desarrollo">'
+            '<span style="--series-color:#003366">Activos aportados</span>'
+            '<span style="--series-color:#00509E">Desarrollo y preoperacionales</span>'
+            '<span style="--series-color:#007ACC">Stock de producción</span>'
+            '<span style="--series-color:#66A3FF">Repuestos</span></div>')
+        _assets80(model)
+
+
+def _assets80(model):
     section('09 / ACTIVOS Y DESARROLLO','Recursos de arranque e industrialización')
     s=model['scalars'];assets=model['assets'].copy()
     kpis([('Activos aportados en especie',money(s['assets_in_kind']),'Aporte patrimonial sin entrada de efectivo'),('Desarrollo y preoperacionales',money(s['preop']),'Incluye el presupuesto de hitos'),
@@ -477,7 +555,7 @@ def render_valuation80(refresh_nonce=0):
         with st.expander('Fuente, moneda y año de detalle'):
             st.caption(f'Fecha base DCF: {s["valuation_date"]} · Consulta: {model["fetched_at"]} · Hora de Santiago · Proyección {int(s["first_year"])}–{int(s["first_year"])+9}')
             st.caption(f'Fuente en USD nominales · Visualización {currency_code()} · TC de presentación {exchange_rate():,.2f} CLP/USD · TC interno del modelo {s["model_fx"]:,.2f} CLP/USD. La conversión se aplica una sola vez.')
-            st.caption('Consulta independiente de once pestañas, incluida 10 Controles. Actualización cada 60 segundos y mediante Actualizar todo; las simulaciones no modifican la fuente.')
+            st.caption('Consulta independiente de once pestañas, incluida 10 Controles. Recarga mediante Actualizar todo y al usar los controles; las simulaciones no modifican la fuente.')
             st.link_button('Abrir documento exclusivo de 80 kW',SOURCE+'html')
             options=model['annual'].loc[lambda f:f['Año modelo'].gt(0),'Año'].tolist()
             key=PREFIX+'_year'
@@ -490,11 +568,7 @@ def render_valuation80(refresh_nonce=0):
         with tabs[0]:overview80(model, refresh_nonce)
         with tabs[1]:inputs80(model)
         with tabs[2]:investment_details(model)
-        with tabs[3]:
-            st.caption('04 Resultados y flujo · 05 Balance y cobros · 06 Caja mensual')
-            projection80(model)
-            operating(model,year)
-            cash_view(model,year,key_prefix=PREFIX)
+        with tabs[3]:results80(model,year)
         with tabs[4]:
             st.caption('07 Ventas y producción · economía por equipo, componentes y escala de fabricación')
             unit_panel80(model)

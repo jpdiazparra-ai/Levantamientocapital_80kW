@@ -52,7 +52,7 @@ class Report:
     def money(self,value,compact=False):
         if pd.isna(value):return 'Sin dato'
         value=value*self.fx;unit=1e6 if compact and abs(value)>=1e6 else 1e3 if compact and abs(value)>=1e3 else 1
-        return ('US$ ' if self.currency=='USD' else '$')+decimal(value/unit,1 if unit>1 else 2 if self.currency=='USD' else 0)+(' MM' if unit==1e6 else ' mil' if unit==1e3 else '')
+        return ('US$ ' if self.currency=='USD' else '$')+decimal(value/unit,0)+(' MM' if unit==1e6 else ' mil' if unit==1e3 else '')
     def cost_money(self,value,compact=False):
         return self.money(value/self.exchange_rate,compact)
     def pct(self,value):return decimal(value*100)+'%' if pd.notna(value) else 'Sin dato'

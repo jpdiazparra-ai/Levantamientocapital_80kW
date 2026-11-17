@@ -15,8 +15,12 @@ from valuation_interactive import diagnostics_panel, diagnostics_definitions, un
 from valuation_report import report_payload
 
 chart_palette = ContextVar('valuation_chart_palette', default={})
+chart_theme = ContextVar('valuation_chart_theme', default=None)
 
 NAVY,TEAL,GOLD,ORANGE,MUTED='#315E7D','#3B8F96','#9DAFC0','#B36A52','#627588'
+BLUE_UNIT_PALETTE = {'#315E7D':'#00509E', '#3B8F96':'#007ACC', '#9DAFC0':'#66A3FF',
+    '#203E58':'#003366', '#627588':'#00509E', '#8296A7':'#66A3FF',
+    '#EEF2F6':'#EEF5FF', '#276F73':'#00509E'}
 
 
 def money(value,compact=False):
@@ -32,7 +36,15 @@ def count(value):return 'Sin dato' if pd.isna(value) else f'{value:,.0f}'.replac
 
 
 def kpis(items,secondary=False):
-    cards=''.join(f'<article><span>{html.escape(label)}</span><strong>{html.escape(str(value))}</strong><small>{html.escape(note)}</small></article>' for label,value,note in items)
+    theme=chart_theme.get()
+    cards=[]
+    for label,value,note in items:
+        accent=''
+        if theme:
+            color=next((color for token,color in theme.get('kpis',{}).items() if token in label.casefold()), '#00509E')
+            accent=' style="--kpi-accent:'+color+'"'
+        cards.append(f'<article{accent}><span>{html.escape(label)}</span><strong>{html.escape(str(value))}</strong><small>{html.escape(note)}</small></article>')
+    cards=''.join(cards)
     st.html('<div class="valuation-kpis'+(' secondary' if secondary else '')+'">'+cards+'</div>')
 
 
@@ -44,7 +56,7 @@ def section(number,title):
     st.html('<div class="valuation-section"><em>'+html.escape(number)+'</em><h3>'+html.escape(title)+'</h3></div>')
 
 
-def plot(fig,key,height=330):
+def plot(fig,key,height=330,*,palette=None):
     pie=bool(fig.data) and fig.data[0].type=='pie'
     has_title=bool(fig.layout.title.text)
     multiple=len(fig.data)>1
@@ -60,7 +72,17 @@ def plot(fig,key,height=330):
     if has_title:fig.update_layout(title=dict(x=.015,y=.98,yanchor='top',font=dict(size=14,color='#203E58')))
     fig.update_xaxes(automargin=True,gridcolor='#EEF2F6',zeroline=False,tickfont=dict(size=11))
     fig.update_yaxes(automargin=True,gridcolor='#EEF2F6',zeroline=False,tickfont=dict(size=11))
-    palette=chart_palette.get()
+    theme=chart_theme.get()
+    inherited_palette = palette is None and theme is None
+    # Round currency axes only; keep precision for LCOE, rates and physical units.
+    for axis_name in fig.layout:
+        if axis_name.startswith(('xaxis', 'yaxis')):
+            axis=fig.layout[axis_name]
+            label=(axis.title.text or '').upper()
+            if any(token in label for token in ('USD', 'CLP', 'MM ')) and not any(
+                    token in label for token in ('LCOE', '/KWH', '/MWH', 'CLP/USD', 'USD/CLP')):
+                axis.tickformat=',.0f'
+    palette=chart_palette.get() if inherited_palette else (theme.get('palette', {}) if palette is None and theme else palette)
     if palette:
         def recolor(value):
             if isinstance(value, str):return palette.get(value, value)
@@ -68,7 +90,14 @@ def plot(fig,key,height=330):
             if isinstance(value, (list, tuple)):return [recolor(v) for v in value]
             return value
         fig=go.Figure(recolor(fig.to_plotly_json()))
-        key='10_'+key
+        if inherited_palette:key='10_'+key
+    if theme:
+        for trace in fig.data:
+            color=theme.get('series',{}).get(trace.name)
+            if color and trace.type=='bar':trace.update(marker_color=color)
+            elif color and trace.type=='scatter':trace.update(line_color=color,marker_color=color)
+            elif trace.type=='waterfall' and theme.get('waterfall'):
+                trace.update(**theme['waterfall'])
     st.plotly_chart(fig,use_container_width=True,key='option4_valuation_'+key,config={'displaylogo':False,'scrollZoom':False,'modeBarButtonsToRemove':['select2d','lasso2d']})
 
 
@@ -82,7 +111,12 @@ def financial_table(data,money_cols=(),percent_cols=(),key=None):
     config.update({field:st.column_config.NumberColumn(width=145) for field in percent_cols if field in result})
     for field in ['Concepto','Activo / alcance','Fuente','Sistema','Condición','Control']:
         if field in result:config[field]=st.column_config.TextColumn(width='large')
-    st.dataframe(result.style.format(fmt,na_rep='Sin dato'),hide_index=True,use_container_width=True,row_height=52,height=min(600,45+len(result)*52),column_config=config,key=key)
+    styled=result.style.format(fmt,na_rep='Sin dato')
+    if chart_theme.get():
+        stripes=pd.DataFrame([['background-color: '+('#F4F8FF' if i%2 else '#FFFFFF')]*len(result.columns)
+            for i in range(len(result))],index=result.index,columns=result.columns)
+        styled=styled.apply(lambda _:stripes,axis=None).set_properties(**{'color':'#003366'})
+    st.dataframe(styled,hide_index=True,use_container_width=True,row_height=52,height=min(600,45+len(result)*52),column_config=config,key=key)
 
 
 def source_note(*sheets):

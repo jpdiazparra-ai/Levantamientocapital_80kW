@@ -1,0 +1,38 @@
+/* Shared blue design for Results, OPEX and Assets in the 80 kW case. */
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets){--valuation-ink:#003366;--valuation-muted:#536B83;--ink:#003366;--line:#CCE0FF;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .results-color-key{display:flex;flex-wrap:wrap;gap:9px 20px;padding:12px 16px;margin:4px 0 14px;background:#F2F7FE;border:1px solid #CCE0FF;border-radius:9px;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .results-color-key span{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:#003366;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .results-color-key span::before{content:"";width:10px;height:10px;border-radius:3px;background:var(--series-color);}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .sales{--series-color:#003366;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .ebitda{--series-color:#007ACC;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .flow{--series-color:#66A3FF;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .cash{--series-color:#00509E;}
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) :is(h3,h5,[data-testid="stSubheader"]){color:#003366;}
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .valuation-section{border-bottom-color:#CCE0FF;}
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .valuation-section em{color:#007ACC;}
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .valuation-kpis{border-color:#CCE0FF;border-radius:10px;margin:10px 0 18px;}
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .valuation-kpis article{border-right-color:#D7E5F5;border-top:3px solid var(--kpi-accent,#00509E);background:#FFF;padding:15px 18px;}
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .valuation-kpis article:first-child{background:#EEF5FF;}
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .valuation-kpis strong{color:#003366;font-variant-numeric:tabular-nums;}
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .valuation-kpis :is(span,small){color:#536B83;}
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) [data-testid="stPlotlyChart"]{border:1px solid #CCE0FF;border-radius:10px;background:#FFF;padding:7px;margin:7px 0 20px;}
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .valuation-reading{background:#EEF5FF;border-color:#CCE0FF;border-left:3px solid #007ACC;border-radius:8px;}
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .valuation-reading b{color:#00509E;}
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .valuation-reading p{color:#415D78;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) [data-testid="stRadio"] [role="radiogroup"]{gap:10px;flex-wrap:wrap;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) label[data-baseweb="radio"]{padding:9px 13px!important;margin:0!important;border:1px solid #CCE0FF;border-radius:8px;background:#FFF;transition:background .15s,border-color .15s;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) label[data-baseweb="radio"]:has(input:checked){background:#E4EFFF;border-color:#66A3FF;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) label[data-baseweb="radio"]:has(input:checked)>div:first-child{background-color:#007ACC!important;border-color:#007ACC!important;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) label[data-baseweb="radio"]:has(input:checked) p{color:#003366;font-weight:650;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) label[data-baseweb="radio"]:hover{background:#F2F7FE;border-color:#66A3FF;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) [data-baseweb="slider"] [role="slider"]{background-color:#00509E!important;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) [data-testid="stSliderThumbValue"]{color:#00509E!important;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) [data-baseweb="select"]>div{border-color:#CCE0FF;background:#F8FBFF;border-radius:8px;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) [data-testid="stExpander"] details{border-color:#CCE0FF;border-radius:9px;background:#FFF;}
+:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) [data-testid="stExpander"] summary{color:#003366;background:#F4F8FF;}
+@media(max-width:700px){:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) .results-color-key{gap:8px 15px;}:is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) label[data-baseweb="radio"]{width:100%;box-sizing:border-box;}}
+
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) [data-baseweb="tag"]{background:#E4EFFF!important;border:1px solid #CCE0FF;color:#003366!important;}
+.st-key-option4_valuation80 :is(.st-key-option4_valuation80_results,.st-key-option4_valuation80_opex,.st-key-option4_valuation80_assets) [data-baseweb="tag"] :is(span,svg){color:#003366!important;}
+.st-key-option4_valuation80_assets input[type="checkbox"]{accent-color:#007ACC;}
+.st-key-option4_valuation80_assets label[data-baseweb="checkbox"]:has(input:checked)>:is(span,div):first-child{background-color:#007ACC!important;border-color:#007ACC!important;}

@@ -74,7 +74,7 @@ class MarketStudyTests(unittest.TestCase):
             'Composición geográfica de la muestra', 'Del costo informado al precio FW'])
         # All four export charts carry actual data, not only section headings.
         texts=[[item.text for item in drawing.contents if hasattr(item,'text')] for _,drawing,_ in charts]
-        self.assertIn('US$ 1.191,19',texts[0])
+        self.assertIn('US$ 1.191',texts[0])
         self.assertIn('TRL 3–4',texts[1])
         self.assertIn('30,0%',texts[2])
         self.assertIn('US$ 95.295',texts[3])
@@ -93,7 +93,7 @@ market_study.render_market_study(0)
         self.assertEqual(len(app.get('iframe')), 0)
         self.assertEqual(len(app.get('plotly_chart')),4)
         initial=' '.join(element.proto.body for element in app.get('html'))
-        self.assertIn('1.191,19',initial)
+        self.assertIn('1.191',initial)
         self.assertIn('24,1%',initial)
         self.assertTrue(any(button.label == 'Descargar estudio de mercado · PDF' for button in app.get('download_button')))
         selector = app.selectbox(key='market_study_section')

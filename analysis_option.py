@@ -746,11 +746,11 @@ def render_source_context(cutoff,fetched_at):
             with st.popover('Fuente y actualización',use_container_width=True):
                 st.markdown('**Consulta:** '+fetched_at+' · Santiago')
                 st.markdown('**Corte del documento:** '+cutoff.strftime('%d-%m-%Y'))
-                st.caption('Actualización cada 60 segundos mientras esta vista está abierta. Los montos provienen de Costos; las fechas y actividades, de Plan.')
+                st.caption('Sin recarga automática periódica. Usa Actualizar todo para recargar las fuentes; los controles recalculan la vista al usarlos. Los montos provienen de Costos; las fechas y actividades, de Plan.')
                 st.link_button('Abrir documento fuente',SOURCE+'?output=csv')
 
 
-@st.fragment(run_every=60)
+@st.fragment
 def render_analysis_option(refresh_nonce, render_navigation):
     with st.container(key='analysis_option'):
         st.html('<style>'+Path(__file__).with_name('assets').joinpath('analysis_option.css').read_text()+'</style>')

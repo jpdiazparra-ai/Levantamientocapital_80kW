@@ -27,10 +27,10 @@ def figure_style(fig, height=320, limit=None, horizontal=True):
     fig.update_yaxes(automargin=True, zeroline=False, showline=False,
         gridcolor='#EDF2F6', title_font=dict(size=11,color='#64748B'), tickfont=dict(size=11))
     if horizontal:
-        fig.update_xaxes(title=chart_units()+' · misma escala',range=[0,limit or 1],showgrid=True)
+        fig.update_xaxes(title=chart_units()+' · misma escala',range=[0,limit or 1],showgrid=True,tickformat=',.0f')
         fig.update_yaxes(showgrid=False,title=None)
     else:
-        fig.update_yaxes(title=chart_units(),showgrid=True)
+        fig.update_yaxes(title=chart_units(),showgrid=True,tickformat=',.0f')
         fig.update_xaxes(showgrid=False,title=None)
     return fig
 

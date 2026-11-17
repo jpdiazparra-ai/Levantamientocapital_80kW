@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from display_currency import currency_code, exchange_rate
+from projection_matrix import render_projection_matrix
 from valuation_data import column_name
 from valuation10_data import SOURCE, SHEETS, load_valuation10
 from valuation_finance import complete_sum, divide, projection_diagnostics
@@ -37,7 +38,7 @@ def summary_factor10():
     return st.session_state.get(key,35)/100
 
 
-def summary_lcoe_panel10(model):
+def summary_lcoe_panel10(model, equipment_cost=None):
     summary_factor10()
     with st.container(key=PREFIX+'_summary_lcoe'):
         st.html('<style>.st-key-'+PREFIX+'_summary_lcoe .valuation-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}'
@@ -46,13 +47,13 @@ def summary_lcoe_panel10(model):
         st.markdown('##### LCOE · energía de la turbina de 10 kW')
         factor=st.slider('Factor de planta neto (%)',min_value=1,max_value=100,value=35,step=1,
             key=PREFIX+'_summary_lcoe_factor',help='Único supuesto editable de este panel. Incluye disponibilidad y pérdidas; no se descuentan nuevamente.')/100
-        try:result=summary_lcoe10(model,factor,exchange_rate())
+        try:result=summary_lcoe10(model,factor,exchange_rate(),equipment_cost=equipment_cost)
         except ValueError as exc:
             st.info('LCOE sin cálculo: '+str(exc));return
         kpis([('LCOE · '+currency_code()+'/kWh',lcoe_text(result['lcoe']),lcoe_text(result['lcoe'],True)+' / MWh'),
             ('Generación neta anual',f'{result["energy_y1"]/1000:,.1f}'.replace(',','X').replace('.',',').replace('X','.')+' MWh','10 kW × 8.760 h × '+pct(factor))])
         factors=sorted(set([v/100 for v in range(5,101,5)]+[factor]))
-        curve=[summary_lcoe10(model,v,exchange_rate())['lcoe'] for v in factors]
+        curve=[summary_lcoe10(model,v,exchange_rate(),equipment_cost=equipment_cost)['lcoe'] for v in factors]
         fig=go.Figure(go.Scatter(x=[v*100 for v in factors],y=[displayed(v) for v in curve],mode='lines',
             line=dict(color=TEAL,width=2.5),showlegend=False,customdata=[lcoe_text(v) for v in curve],
             hovertemplate='FP %{x:.0f}%<br>%{customdata} / kWh<extra></extra>'))
@@ -64,7 +65,7 @@ def summary_lcoe_panel10(model):
         plot(fig,'10_summary_lcoe_factor',210)
         st.caption(('CAPEX ref.: '+money(result['capex'])+' · O&M supuesto: '+money(result['fixed_om'])+'/año · Vida: 20 años · Tasa real: 8 %.').replace('$',r'\$'))
         with st.expander('Bases y alcance del LCOE'):
-            st.caption('CAPEX sin IVA: '+result['price_source']+'. Con margen proveedor cero se usa el precio publicado de la hoja 07, en USD; en los demás casos, el precio inicial de 00 con sus multiplicadores y conversión de moneda. O&M anual: hipótesis fija del 2 % de ese precio; no es el OPEX de la empresa fabricante. Vida útil y tasa son supuestos ilustrativos, independientes del DCF.')
+            st.caption('CAPEX sin IVA: '+result['price_source']+'. Se usa el precio de venta sin IVA mostrado: equipamiento del alcance seleccionado + OPEX por turbina. O&M anual: hipótesis fija del 2 % de ese precio; no es el OPEX de la empresa fabricante. Vida útil y tasa son supuestos ilustrativos, independientes del DCF.')
             st.caption('LCOE = valor presente de CAPEX y O&M / valor presente de la energía neta. Generación anual = 10 × 8.760 × FP. Moneda constante, sin degradación, impuestos, reposiciones ni valor residual. Costos adicionales de sitio no incluidos en el precio quedan pendientes de completar; el resultado es indicativo.')
 
 
@@ -84,14 +85,11 @@ def unit_cost_overview10(model, mode='Total'):
         coverage=str(totals['Informadas'])+'/'+str(totals['Partidas'])+' partidas con monto · subtotal informado'
     except Exception:
         st.caption('No se pudo consultar el costo informado del Producto 10 kW; los valores de la hoja 07 siguen disponibles.')
-    prices=sale_prices10(model,exchange_rate())
-    same_price=pd.notna(data['with_margin']) and abs(prices['net']-data['with_margin'])<.005
-    rows=[('Costo informado',subtotal,commercial_scope_label(mode)+' · '+coverage,'cost'),
-        ('Costo unitario + OPEX',data['before_margin'],'Antes del margen proveedor','cost')]
-    final_title='Precio calculado · hoja 07' if data['final_is_price'] or data['margin'] == 0 else 'Costo unitario + margen'
-    if not same_price:rows.append((final_title,data['with_margin'],data['references'].get('with_margin','07')+' · valor publicado','cost'))
+    prices=sale_prices10(model,exchange_rate(),equipment_cost=subtotal)
+    rows=[('Costo equipamiento turbina',subtotal,commercial_scope_label(mode)+' · '+coverage,'cost'),
+        ('OPEX por turbina',data['opex'],data['references'].get('opex','Sin referencia')+' · OPEX unitario publicado','cost')]
     rows.extend([('Precio de venta · sin IVA',prices['net'],
-        'Coincide con '+final_title.lower() if same_price else prices.get('source','Precio inicial de 00 Datos de entrada'),'net'),
+        'Costo equipamiento turbina + OPEX por turbina','net'),
         ('Precio de venta · con IVA',prices['gross'],'IVA referencial '+pct(prices['vat_rate']),'gross')])
     cells=''.join('<tr class="'+kind+'"><th scope="row">'+html.escape(label)+'<small>'+html.escape(note)+'</small></th>'
         '<td>'+html.escape(money(value))+'</td><td>'+html.escape(money(value/10))+' <small>/ kW</small></td></tr>'
@@ -100,8 +98,8 @@ def unit_cost_overview10(model, mode='Total'):
         '<p>Una misma vista por equipo y por potencia</p></div><span>Margen proveedor <b>'+html.escape(pct(data['margin']))+'</b></span></header>'
         '<div class="unit-economics-scroll"><table><thead><tr><th scope="col">Concepto</th><th scope="col">Por equipo · '+currency_code()+'</th>'
         '<th scope="col">Por kW · '+currency_code()+'</th></tr></thead><tbody>'+cells+'</tbody></table></div></section>')
-    labels=['Costo base','Costo base + OPEX',final_title]
-    values=[data['base'],data['before_margin'],data['with_margin']]
+    labels=['Costo equipamiento turbina','OPEX por turbina','Precio de venta · sin IVA']
+    values=[subtotal,data['opex'],prices['net']]
     fig=go.Figure(go.Bar(x=[displayed(v) for v in values],y=labels,orientation='h',
         marker_color=[GOLD,NAVY,TEAL],text=[money(v) for v in values],textposition='outside',cliponaxis=False,
         customdata=[money(v) for v in values],hovertemplate='%{y}<br>%{customdata} / equipo<extra></extra>'))
@@ -112,8 +110,9 @@ def unit_cost_overview10(model, mode='Total'):
     plot(fig,'10_evaluation_unit',280)
     with st.expander('Fuentes y criterios de costos y precios'):
         st.caption('Costo informado: Estrategia de Capital y Costos, Producto 10 kW, partidas Aplica, Comercial anterior. Alcance seleccionado: '+commercial_scope_label(mode)+'. Solo equipo turbina excluye fundaciones y anclajes, montaje y logística. Los faltantes no se estiman; el subtotal no acredita un costo final completo ni se suma a la hoja 07.')
-        st.caption('Costo + OPEX: '+data['references'].get('base','Sin referencia')+' + '+data['references'].get('opex','Sin referencia')+'. '+final_title+': '+data['references'].get('with_margin','Sin referencia')+' · '+data['labels'].get('with_margin','Sin dato publicado')+'. Margen proveedor: '+data['references'].get('margin','Sin referencia')+', sobre precio. Las barras comparan importes completos y no se suman entre sí.')
-        st.caption('Precio: con margen proveedor cero se usa Precio calculado · hoja 07, publicado en USD. En los demás casos se usa 00 Datos de entrada, USD directo o CLP convertido con el TC del panel, con los multiplicadores activos. IVA: tasa referencial de 03 Supuestos. Por kW: importe por equipo / 10. Cuando precio y costo con margen coinciden, se presentan en una sola fila; si difieren, se muestran separados.')
+        st.caption('OPEX por turbina: '+data['references'].get('opex','Sin referencia')+'. Precio sin IVA = costo de equipamiento del alcance seleccionado + OPEX por turbina. La suma no aplica un margen adicional.')
+        st.caption('Precio con IVA = precio sin IVA × (1 + tasa de IVA referencial de 03 Supuestos). Por kW: cada importe por equipo / 10. El LCOE usa el mismo precio sin IVA. Si faltan montos de equipamiento, el precio usa el subtotal informado y conserva su cobertura visible.')
+    return subtotal
 
 
 
@@ -207,9 +206,8 @@ def projection10(model):
         fig.update_xaxes(type='category');fig.update_layout(title=metric);plot(fig,'10_projection_other')
     context('Ratios del período',f'CAGR de ventas: {pct(d["cagr"])} · Conversión flujo libre/EBITDA: {pct(d["cash_conversion"])} · Entregas externas: {pct(d["external_share"])}. El flujo incluye anticipos, IVA, inventario y CAPEX; los saldos de caja no se suman.')
     fields=[('Demanda 10 kW','demand_10','n'),('Entregas 10 kW','units_10','n'),('Capacidad propia','capacity','n'),('Fabricación externa','external','n'),('Demanda sin atender','unserved','n'),('Ventas','sales','m'),('Fabricación','cogs','m'),('OPEX','opex','m'),('EBITDA','ebitda','m'),('Margen EBITDA','ebitda_margin','p'),('Flujo libre','fcff','m'),('CAPEX','capex','m'),('Anticipos al cierre','advances','m'),('Caja libre al cierre','cash_free','m')]
-    matrix=[{'Indicador':label,'Unidad':'equipos' if kind=='n' else '%' if kind=='p' else currency_code(),
-        **{r['Año']:count(r[field]) if kind=='n' else pct(r[field]) if kind=='p' else money(r[field]) for _,r in frame.iterrows()}} for label,field,kind in fields]
-    st.dataframe(pd.DataFrame(matrix),hide_index=True,use_container_width=True,height=540)
+    render_projection_matrix(frame,fields,key=PREFIX+'_annual_matrix',
+        title='Proyección anual · 10 kW',theme='violet')
 
 
 def evaluation_table(frame):
@@ -302,13 +300,13 @@ def overview10(model, refresh_nonce=0):
         section('03 / ECONOMÍA UNITARIA Y RESPALDOS','Lo que deja cada turbina entregada')
         from commercial_analysis import render_commercial_scope
         mode=render_commercial_scope('Turbina de 10 kW')
-        st.caption('El alcance filtra el costo informado y su desglose. Los precios y costos publicados de la hoja 07, el LCOE y la proyección financiera conservan sus bases de origen.')
+        st.caption('El alcance actualiza el equipamiento, el precio de venta y el LCOE. El OPEX por turbina procede de la hoja 07; la proyección financiera conserva los valores publicados.')
         u=commercial_unit10(model,exchange_rate())
         left,right=st.columns(2,gap='large')
         with left:
-            unit_cost_overview10(model, mode)
+            equipment_cost=unit_cost_overview10(model, mode)
         with right:
-            summary_lcoe_panel10(model)
+            summary_lcoe_panel10(model, equipment_cost)
         st.caption('Entregas del primer año: '+count(u['Equipos entregados'])+' equipos. Los precios y el LCOE respetan la moneda de origen; CLP usa el TC del panel izquierdo; los flujos y el DCF conservan la proyección publicada.')
         with st.expander('Costo comercial de la turbina de 10 kW'):
             from analysis_option import load_workbook, number
@@ -343,8 +341,8 @@ def overview10(model, refresh_nonce=0):
             fig.update_layout(title='Demanda, entregas y capacidad',barmode='group');fig.update_yaxes(title_text='Equipos / año');fig.update_xaxes(type='category');plot(fig,'10_evaluation_five_capacity')
         with right:annual_bars(p,[('advances','Anticipos al cierre',GOLD),('capex','CAPEX pagado por FW',NAVY)],'10_evaluation_five_commitments','Anticipos pendientes y reinversión')
         metrics=[('Demanda proyectada','demand_10','n'),('Capacidad propia','capacity','n'),('Entregas','units_10','n'),('Fabricación externa','external','n'),('Demanda sin atender','unserved','n'),('Ventas netas','sales','m'),('EBITDA','ebitda','m'),('Margen EBITDA','ebitda_margin','p'),('Flujo libre operativo','fcff','m'),('CAPEX pagado por FW','capex','m'),('Anticipos pendientes','advances','m'),('Caja libre al cierre','cash_free','m')]
-        matrix=[{'Indicador':label,'Unidad':'equipos' if kind=='n' else '%' if kind=='p' else currency_code(),**{r['Año']:count(r[field]) if kind=='n' else pct(r[field]) if kind=='p' else money(r[field]) for _,r in p.iterrows()}} for label,field,kind in metrics]
-        st.dataframe(pd.DataFrame(matrix),hide_index=True,use_container_width=True,height=470,column_config={'Indicador':st.column_config.TextColumn(width='large')})
+        render_projection_matrix(p,metrics,key=PREFIX+'_five_year_matrix',
+            title='Primeros cinco años · 10 kW',theme='violet')
         st.caption('Los cinco años y los valores proceden directamente de 00 Evaluación. Los acumulados y el margen ponderado son derivados; caja y anticipos son saldos de cierre. El detalle anual completo y el calendario mensual se consultan en Resultados y caja.')
 
 

@@ -2005,9 +2005,9 @@ def format_compact_usd(value: float) -> str:
     value = float(value or 0.0)
     abs_value = abs(value)
     if abs_value >= 1_000_000:
-        return f"US${value / 1_000_000:.2f}M"
+        return f"US${value / 1_000_000:.0f}M"
     if abs_value >= 1_000:
-        return f"US${value / 1_000:.1f}k"
+        return f"US${value / 1_000:.0f}k"
     return format_usd(value)
 
 
@@ -3155,7 +3155,7 @@ def _fmt_report_mm_clp(value: object) -> str:
     number = parse_float_local(value, np.nan)
     if not np.isfinite(number):
         return "-"
-    return f"{number / 1_000_000:,.1f} MM CLP".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{number / 1_000_000:,.0f} MM CLP".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def _fmt_report_num(value: object, digits: int = 1, suffix: str = "") -> str:
@@ -4242,7 +4242,7 @@ def render_inputs_knowhow_fw_detail():
         ),
         hovertemplate=(
             "<b>%{y}</b><br>"
-            "Valor modelado: %{x:.2f} MM CLP<br>"
+            "Valor modelado: %{x:.0f} MM CLP<br>"
             "Partidas: %{customdata[0]:.0f}<br>"
             "Horas modeladas: %{customdata[1]:.0f}<br>"
             "Monto origen: $%{customdata[2]:,.0f}<extra></extra>"
@@ -4360,7 +4360,7 @@ def make_inputs_suministro_chart(df_in: pd.DataFrame):
     orden = ["Suministro", "I+D", "Montaje"]
     agg["__ord"] = agg["Categoria"].apply(lambda x: orden.index(x) if x in orden else 999)
     agg = agg.sort_values(["__ord", "Monto"], ascending=[True, False]).drop(columns="__ord")
-    agg["label_pct"] = agg.apply(lambda r: f"{r['% del total']:.2f}% · {r['Monto_MM']:.1f} MM", axis=1)
+    agg["label_pct"] = agg.apply(lambda r: f"{r['% del total']:.2f}% · {r['Monto_MM']:.0f} MM", axis=1)
 
     fig = px.bar(
         agg,
@@ -5321,7 +5321,7 @@ def render_inputs_factor_chart(df_in: pd.DataFrame):
     agg_fc["__oc"] = agg_fc["Categoria"].apply(lambda x: orden_cat.index(x) if x in orden_cat else 999)
     agg_fc = agg_fc.sort_values(["__of", "__oc"]).drop(columns=["__of", "__oc"])
     agg_fc["Monto_MM"] = agg_fc["Monto"] / 1_000_000
-    agg_fc["label"] = agg_fc.apply(lambda r: f"{r['Monto_MM']:.1f} MM · {float(r['% dentro del Factor']):.1f}%", axis=1)
+    agg_fc["label"] = agg_fc.apply(lambda r: f"{r['Monto_MM']:.0f} MM · {float(r['% dentro del Factor']):.1f}%", axis=1)
 
     st.markdown(
         '<div class="eng-body-title" style="font-size:20px;font-weight:800;color:#0f172a;margin:0 0 6px 0;">Eficiencia del CAPEX Ejecutado</div>',
@@ -5347,7 +5347,7 @@ def render_inputs_factor_chart(df_in: pd.DataFrame):
         customdata=np.stack([agg_fc["% dentro del Factor"], agg_fc["%_esc"], agg_fc["Items"]], axis=-1),
         hovertemplate=(
             "<b>%{y}</b> · %{trace.name}<br>"
-            "Monto seg.: %{x:.1f} MM CLP<br>"
+            "Monto seg.: %{x:.0f} MM CLP<br>"
             "Participación en Factor: %{customdata[0]:.2f}%<br>"
             "%_esc seg.: %{customdata[1]:.2f}%<br>"
             "Ítems seg.: %{customdata[2]}<extra></extra>"
@@ -5829,7 +5829,7 @@ def render_cut_charts(history_df: pd.DataFrame) -> None:
                 fill="tozeroy", fillcolor="rgba(7,20,39,.08)",
                 line=dict(color="#071427", width=3.4, shape="spline", smoothing=.45),
                 marker=dict(size=7, color="#071427", line=dict(color="#FFFFFF", width=1.5)),
-                hovertemplate="EAC: %{y:.1f} MM CLP<extra></extra>",
+                hovertemplate="EAC: %{y:.0f} MM CLP<extra></extra>",
             ))
             fig_eac.update_yaxes(title="MM CLP")
             st.plotly_chart(style_trace_fig(fig_eac, "Evolución Forecast EAC"), use_container_width=True, key="cut_trace_eac")
@@ -5860,9 +5860,9 @@ def render_cut_charts(history_df: pd.DataFrame) -> None:
             colors_delta = ["#C00000" if value > 0 else "#548235" if value < 0 else "#94A3B8" for value in agg["Variación EAC"]]
             fig_delta = go.Figure(go.Bar(
                 x=agg["ID Corte"], y=agg["Variación EAC MM"], marker_color=colors_delta,
-                text=[f"{value:.1f} MM" for value in agg["Variación EAC MM"]],
+                text=[f"{value:.0f} MM" for value in agg["Variación EAC MM"]],
                 textposition="outside",
-                hovertemplate="Δ EAC: %{y:.1f} MM CLP<extra></extra>",
+                hovertemplate="Δ EAC: %{y:.0f} MM CLP<extra></extra>",
             ))
             fig_delta.add_hline(y=0, line_color="#0B1F3A", line_width=1)
             fig_delta.update_yaxes(title="MM CLP")
@@ -5879,9 +5879,9 @@ def render_cut_charts(history_df: pd.DataFrame) -> None:
             fig_rank = go.Figure(go.Bar(
                 x=rank["VAC_MM"], y=rank["Tarea corta"], orientation="h",
                 marker_color="#C00000",
-                text=[f"{value:.1f} MM" for value in rank["VAC_MM"]],
+                text=[f"{value:.0f} MM" for value in rank["VAC_MM"]],
                 textposition="outside",
-                hovertemplate="<b>%{y}</b><br>VAC: %{x:.1f} MM CLP<extra></extra>",
+                hovertemplate="<b>%{y}</b><br>VAC: %{x:.0f} MM CLP<extra></extra>",
             ))
             fig_rank.update_yaxes(autorange="reversed", title="")
             fig_rank.update_xaxes(title="MM CLP")
@@ -7104,7 +7104,7 @@ def render_inputs_gantt_executive_summary(df: pd.DataFrame, date_mode: str = "Re
     dfk["_selected_funds"] = gantt_selected_funds_series(dfk)
     selected_funds_total = float(dfk["_selected_funds"].sum() or 0.0)
     selected_funds_count = int((dfk["_selected_funds"] > 0).sum())
-    selected_funds_display = f"${selected_funds_total / 1_000_000:.1f}MM".replace(".", ",")
+    selected_funds_display = f"${selected_funds_total / 1_000_000:.0f}MM".replace(".", ",")
 
     total_tasks = int(len(dfk))
     comparable_tasks = int(len(comparable_df))
@@ -7482,13 +7482,13 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
         return format_clp(float(value))
 
     def money_mm(value: float) -> str:
-        return f"${float(value) / 1_000_000:,.1f} MM".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"${float(value) / 1_000_000:,.0f} MM".replace(",", "X").replace(".", ",").replace("X", ".")
 
     def money_display(value: float) -> str:
         return money_mm(value) if abs(float(value)) >= 1_000_000 else money_clp(value)
 
     def money_kpi_display(value: float) -> str:
-        return f"${float(value) / 1_000_000:.1f} MM".replace(".", ",") if abs(float(value)) >= 1_000_000 else money_clp(value)
+        return f"${float(value) / 1_000_000:.0f} MM".replace(".", ",") if abs(float(value)) >= 1_000_000 else money_clp(value)
 
     def pct_fmt(value: float) -> str:
         return f"{float(value) * 100:.1f}%".replace(".", ",")
@@ -7615,7 +7615,7 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
             curve_fig.add_annotation(
                 x=last_x,
                 y=value,
-                text=f"<b>{label}</b> {value:.1f} MM",
+                text=f"<b>{label}</b> {value:.0f} MM",
                 showarrow=True,
                 arrowhead=2,
                 arrowsize=0.8,
@@ -7746,7 +7746,7 @@ def render_dashboard_control_costos_evm(df: pd.DataFrame) -> None:
             marker=dict(color=["#C00000" if total_cv < 0 else "#548235", "#C00000" if total_sv < 0 else "#548235"]),
             text=[money_mm(total_cv), money_mm(total_sv)],
             textposition="outside",
-            hovertemplate="<b>%{y}</b><br>%{x:.1f} MM CLP<extra></extra>",
+            hovertemplate="<b>%{y}</b><br>%{x:.0f} MM CLP<extra></extra>",
         )
     )
     variation_fig.add_vline(x=0, line=dict(color="#0B1F3A", width=2))
@@ -11430,7 +11430,7 @@ def render_capex10_investor_injection_cash_flow(
             mode="lines+markers",
             line=dict(color="#244A6C", width=3),
             marker=dict(size=6, color="#FFFFFF", line=dict(color="#244A6C", width=2)),
-            hovertemplate="<b>%{x}</b><br>Acumulado requerido: $%{y:.1f} MM<extra></extra>",
+            hovertemplate="<b>%{x}</b><br>Acumulado requerido: $%{y:.0f} MM<extra></extra>",
         )
     )
     fig_commitment.add_trace(
@@ -11441,7 +11441,7 @@ def render_capex10_investor_injection_cash_flow(
             mode="lines+markers",
             line=dict(color="#0F766E", width=3.5, dash="dot" if is_plan_a_cashflow else "solid"),
             marker=dict(size=6, color="#FFFFFF", line=dict(color="#0F766E", width=2)),
-            hovertemplate="<b>%{x}</b><br>Capital acumulado: $%{y:.1f} MM<extra></extra>",
+            hovertemplate="<b>%{x}</b><br>Capital acumulado: $%{y:.0f} MM<extra></extra>",
         )
     )
     fig_commitment.add_trace(
@@ -11452,7 +11452,7 @@ def render_capex10_investor_injection_cash_flow(
             mode="lines+markers",
             line=dict(color="#D97706", width=3),
             marker=dict(size=6, color="#FFFFFF", line=dict(color="#D97706", width=2)),
-            hovertemplate="<b>%{x}</b><br>Saldo caja: $%{y:.1f} MM<extra></extra>",
+            hovertemplate="<b>%{x}</b><br>Saldo caja: $%{y:.0f} MM<extra></extra>",
         )
     )
     event_month_index = {
@@ -13210,7 +13210,7 @@ def render_capex10_investor_injection_cash_flow(
                     ],
                     textposition="top center",
                     textfont=dict(size=11, color="#0F766E"),
-                    hovertemplate="<b>%{x|%b %Y}</b><br>Capital acumulado disponible: $%{y:.1f} MM<extra></extra>",
+                    hovertemplate="<b>%{x|%b %Y}</b><br>Capital acumulado disponible: $%{y:.0f} MM<extra></extra>",
                 )
             )
             fig_aportes.add_shape(
@@ -13980,7 +13980,7 @@ def render_capex10_selected_cash_flow(funds_df: pd.DataFrame) -> None:
             mode="lines+markers",
             line=dict(color="#1E3A8A", width=3),
             marker=dict(size=8, color="#FFFFFF", line=dict(color="#1E3A8A", width=2)),
-            hovertemplate="<b>%{x}</b><br>Acumulado: $%{y:.1f} MM<extra></extra>",
+            hovertemplate="<b>%{x}</b><br>Acumulado: $%{y:.0f} MM<extra></extra>",
         )
     )
     fig.update_layout(
@@ -14789,7 +14789,7 @@ def render_capex10_available_funds_by_phase_line(filters_container=None) -> None
                     "<b>%{x}</b><br>"
                     "Línea: %{customdata[2]}<br>"
                     "Disponible: %{customdata[0]}<br>"
-                    "Monto: %{y:.1f} MM CLP<br>"
+                    "Monto: %{y:.0f} MM CLP<br>"
                     "Partidas: %{customdata[1]}<extra></extra>"
                 ),
             )
@@ -15469,11 +15469,11 @@ def render_capex10_executed_investment_scaling_80kw() -> None:
                 return col
         return None
 
-    def fmt_mm_clp(value: float, decimals: int = 1) -> str:
+    def fmt_mm_clp(value: float, decimals: int = 0) -> str:
         number = float(value or 0.0) / 1_000_000
         if decimals == 0:
             return f"{number:,.0f}".replace(",", ".")
-        return f"{number:,.{decimals}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"{number:,.0f}".replace(",", ".")
 
     def normalize_epc(value: object) -> str:
         label = str(value or "").strip()
@@ -16740,7 +16740,7 @@ def render_client_sensitivity_analysis():
                 text=payback_with,
                 textposition="outside",
                 cliponaxis=False,
-                hovertemplate="<b>%{x}</b><br>Payback con excedentes: %{text}<br>Aporte excedente: %{customdata[0]:.2f} MM CLP/año<br>Excedente: %{customdata[1]:,.0f} kWh/mes<extra></extra>",
+                hovertemplate="<b>%{x}</b><br>Payback con excedentes: %{text}<br>Aporte excedente: %{customdata[0]:.0f} MM CLP/año<br>Excedente: %{customdata[1]:,.0f} kWh/mes<extra></extra>",
                 customdata=surplus_customdata,
             )
         )
@@ -16753,10 +16753,10 @@ def render_client_sensitivity_analysis():
                 mode="lines+markers+text",
                 line=dict(color=client_blue_5, width=3),
                 marker=dict(size=11, color=client_blue_3, line=dict(color="#ffffff", width=2)),
-                text=[f"{float(v):.1f} MM" if float(v) > 0 else "0 MM" for v in surplus_payback_df["Aporte excedente anual"]],
+                text=[f"{float(v):.0f} MM" if float(v) > 0 else "0 MM" for v in surplus_payback_df["Aporte excedente anual"]],
                 textposition=["top center", "bottom center", "top center", "bottom center", "top center"][: len(surplus_payback_df)],
                 textfont=dict(color=client_blue_text, size=11),
-                hovertemplate="<b>%{x}</b><br>Aporte por excedentes: %{y:.2f} MM CLP/año<extra></extra>",
+                hovertemplate="<b>%{x}</b><br>Aporte por excedentes: %{y:.0f} MM CLP/año<extra></extra>",
             )
         )
         surplus_payback_values = pd.concat(
@@ -16859,14 +16859,14 @@ def render_client_sensitivity_analysis():
                 y=chart_df["CAPEX MM CLP"],
                 name="CAPEX total",
                 marker_color=client_blue_4,
-                text=[f"{v:.1f} MM" for v in chart_df["CAPEX MM CLP"]],
+                text=[f"{v:.0f} MM" for v in chart_df["CAPEX MM CLP"]],
                 textposition="inside",
                 insidetextanchor="end",
                 textfont=dict(color="#ffffff", size=11),
                 customdata=capex_lcoe_customdata,
                 hovertemplate=(
                     "<b>%{x}</b><br>"
-                    "CAPEX total: %{y:.1f} MM CLP<br>"
+                    "CAPEX total: %{y:.0f} MM CLP<br>"
                     "LCOE: %{customdata[1]:,.0f} CLP/kWh<br>"
                     "Payback: %{customdata[2]:.2f} años<br>"
                     "Turbinas: %{customdata[3]:.0f}<br>"
@@ -16891,7 +16891,7 @@ def render_client_sensitivity_analysis():
                 hovertemplate=(
                     "<b>%{x}</b><br>"
                     "LCOE: %{y:,.0f} CLP/kWh<br>"
-                    "CAPEX: %{customdata[0]:.1f} MM CLP<br>"
+                    "CAPEX: %{customdata[0]:.0f} MM CLP<br>"
                     "Payback: %{customdata[2]:.2f} años<br>"
                     "Cobertura real: %{customdata[4]:.0f}%<extra></extra>"
                 ),
@@ -16962,7 +16962,7 @@ def render_client_sensitivity_analysis():
                 name="Turbinas",
                 marker_color=client_blue_4,
                 customdata=capex_stack_customdata,
-                hovertemplate="<b>%{x}</b><br>CAPEX turbinas: %{y:.1f} MM CLP<br>Total: %{customdata[0]:.1f} MM CLP<br>Potencia instalada: %{customdata[2]:.0f} kW<extra></extra>",
+                hovertemplate="<b>%{x}</b><br>CAPEX turbinas: %{y:.0f} MM CLP<br>Total: %{customdata[0]:.0f} MM CLP<br>Potencia instalada: %{customdata[2]:.0f} kW<extra></extra>",
             )
         )
         fig_capex.add_trace(
@@ -16972,7 +16972,7 @@ def render_client_sensitivity_analysis():
                 name="BOS/instalación",
                 marker_color=client_blue_1,
                 customdata=capex_stack_customdata,
-                hovertemplate="<b>%{x}</b><br>BOS/instalación: %{y:.1f} MM CLP<br>Total: %{customdata[0]:.1f} MM CLP<br>Turbinas: %{customdata[1]:.0f}<extra></extra>",
+                hovertemplate="<b>%{x}</b><br>BOS/instalación: %{y:.0f} MM CLP<br>Total: %{customdata[0]:.0f} MM CLP<br>Turbinas: %{customdata[1]:.0f}<extra></extra>",
             )
         )
         fig_capex.add_trace(
@@ -16988,7 +16988,7 @@ def render_client_sensitivity_analysis():
                 textposition="middle center",
                 textfont=dict(color="#ffffff", size=10),
                 customdata=capex_stack_customdata,
-                hovertemplate="<b>%{x}</b><br>Turbinas requeridas: %{y:.0f}<br>CAPEX total: %{customdata[0]:.1f} MM CLP<br>Potencia instalada: %{customdata[2]:.0f} kW<extra></extra>",
+                hovertemplate="<b>%{x}</b><br>Turbinas requeridas: %{y:.0f}<br>CAPEX total: %{customdata[0]:.0f} MM CLP<br>Potencia instalada: %{customdata[2]:.0f} kW<extra></extra>",
             )
         )
         if not capex_stack.empty:
@@ -16998,7 +16998,7 @@ def render_client_sensitivity_analysis():
                     y=capex_stack["Total MM CLP"],
                     name="CAPEX total",
                     mode="text",
-                    text=[f"{v:.1f} MM" for v in capex_stack["Total MM CLP"]],
+                    text=[f"{v:.0f} MM" for v in capex_stack["Total MM CLP"]],
                     textposition="top center",
                     textfont=dict(color=client_blue_text, size=11),
                     hoverinfo="skip",
@@ -17338,10 +17338,10 @@ def render_client_sensitivity_analysis():
                 y=rec_savings_df["Concepto"],
                 orientation="h",
                 marker_color=rec_savings_df["Color"],
-                text=[f"{v:.1f} MM" for v in rec_savings_df["Valor MM"]],
+                text=[f"{v:.0f} MM" for v in rec_savings_df["Valor MM"]],
                 textposition="outside",
                 cliponaxis=False,
-                hovertemplate="<b>%{y}</b><br>Ahorro: %{x:.2f} MM CLP/año<extra></extra>",
+                hovertemplate="<b>%{y}</b><br>Ahorro: %{x:.0f} MM CLP/año<extra></extra>",
             )
         )
         savings_fig.add_annotation(
@@ -17461,7 +17461,7 @@ def render_client_sensitivity_analysis():
                 name="Ahorro bruto",
                 mode="lines",
                 line=dict(color=client_blue_1, width=2, dash="dot"),
-                hovertemplate="Año %{x}<br>Ahorro bruto: %{y:.1f} MM CLP<extra></extra>",
+                hovertemplate="Año %{x}<br>Ahorro bruto: %{y:.0f} MM CLP<extra></extra>",
             )
         )
         saving_fig.add_trace(
@@ -17472,7 +17472,7 @@ def render_client_sensitivity_analysis():
                 mode="lines+markers",
                 line=dict(color=client_blue_4, width=3),
                 marker=dict(size=7, color=client_blue_4, line=dict(color="#ffffff", width=1.5)),
-                hovertemplate="Año %{x}<br>Ahorro neto: %{y:.1f} MM CLP<extra></extra>",
+                hovertemplate="Año %{x}<br>Ahorro neto: %{y:.0f} MM CLP<extra></extra>",
             )
         )
         saving_fig.add_trace(
@@ -17485,7 +17485,7 @@ def render_client_sensitivity_analysis():
                 marker=dict(size=7, color=client_blue_3, line=dict(color="#ffffff", width=1.5)),
                 fill="tozeroy",
                 fillcolor="rgba(99,168,222,.14)",
-                hovertemplate="Año %{x}<br>Neto post CAPEX: %{y:.1f} MM CLP<extra></extra>",
+                hovertemplate="Año %{x}<br>Neto post CAPEX: %{y:.0f} MM CLP<extra></extra>",
             )
         )
         saving_fig.add_hline(y=0, line_color="#0f172a", line_width=1, opacity=.55)
@@ -17906,7 +17906,7 @@ def render_telecom_capex_supply_installation_tab() -> None:
 
     def fmt_clp_mm(value: object) -> str:
         num = parse_float_local(value, np.nan)
-        return "-" if not np.isfinite(num) else f"{num / 1_000_000:.1f} MM".replace(".", ",")
+        return "-" if not np.isfinite(num) else f"{num / 1_000_000:.0f} MM".replace(".", ",")
 
     def fmt_pct(value: object, digits: int = 1) -> str:
         num = parse_float_local(value, np.nan)
@@ -20125,7 +20125,7 @@ def render_telecom_executive_summary_tab() -> None:
         parsed = num(value)
         if not np.isfinite(parsed):
             return "-"
-        return f"{parsed / 1_000_000:,.1f} MM CLP".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"{parsed / 1_000_000:,.0f} MM CLP".replace(",", "X").replace(".", ",").replace("X", ".")
 
     def series_get(row: pd.Series, keys: list[str], default: object = np.nan) -> object:
         for key in keys:
@@ -23875,10 +23875,10 @@ def render_telecom_tower_eval_analysis():
                     mode="lines+markers+text",
                     line=dict(color=blue_4, width=3),
                     marker=dict(size=8, color=blue_4, line=dict(color="#fff", width=1.5)),
-                    text=[f"{v/1_000_000:.2f} MM" for v in billing_df["Total boleta CLP"]],
+                    text=[f"{v/1_000_000:.0f} MM" for v in billing_df["Total boleta CLP"]],
                     textposition="top center",
                     textfont=dict(color=blue_text, size=10),
-                    hovertemplate="<b>%{x}</b><br>Total boleta: %{y:.2f} MM CLP<extra></extra>",
+                    hovertemplate="<b>%{x}</b><br>Total boleta: %{y:.0f} MM CLP<extra></extra>",
                 )
             )
             fig_bills.update_layout(
@@ -25636,7 +25636,7 @@ def render_telecom_scenario_simulator(
                 mode="lines+markers",
                 line=dict(color=palette["orange"], width=3.6),
                 marker=dict(size=7, color=palette["orange"], line=dict(color="#ffffff", width=1.4)),
-                hovertemplate="Año %{x}<br>Beneficio acumulado: %{y:.1f} MM CLP<extra></extra>",
+                hovertemplate="Año %{x}<br>Beneficio acumulado: %{y:.0f} MM CLP<extra></extra>",
             )
         )
         fig.add_trace(
@@ -25649,7 +25649,7 @@ def render_telecom_scenario_simulator(
                 marker=dict(size=7, color=palette["ink"], line=dict(color="#ffffff", width=1.4)),
                 fill="tozeroy",
                 fillcolor="rgba(117,169,184,.16)",
-                hovertemplate="Año %{x}<br>Neto post CAPEX: %{y:.1f} MM CLP<extra></extra>",
+                hovertemplate="Año %{x}<br>Neto post CAPEX: %{y:.0f} MM CLP<extra></extra>",
             )
         )
         fig.add_hline(y=0, line_color=palette["text"], line_width=1, opacity=0.55)
@@ -25691,7 +25691,7 @@ def render_telecom_scenario_simulator(
                     line=dict(color="#ffffff", width=2),
                 ),
                 customdata=np.stack([map_df["LCOE CLP/kWh"], map_df["Cobertura real %"]], axis=-1),
-                hovertemplate="<b>%{text}</b><br>CAPEX: %{x:.1f} MM CLP<br>Payback: %{y:.1f} años<br>LCOE: %{customdata[0]:,.0f} CLP/kWh<br>Cobertura: %{customdata[1]:.0f}%<extra></extra>",
+                hovertemplate="<b>%{text}</b><br>CAPEX: %{x:.0f} MM CLP<br>Payback: %{y:.1f} años<br>LCOE: %{customdata[0]:,.0f} CLP/kWh<br>Cobertura: %{customdata[1]:.0f}%<extra></extra>",
             )
         )
         selected_df = map_df[map_df["Alternativa"].astype(str) == str(selected_turbine)]
@@ -25751,16 +25751,16 @@ def render_telecom_scenario_simulator(
         labels = ["Costo actual", "Ahorro eólico"]
         values = [current_cost / 1_000_000, -wind_saving / 1_000_000]
         measures = ["absolute", "relative"]
-        text = [f"{current_cost/1_000_000:.1f} MM", f"-{wind_saving/1_000_000:.1f} MM"]
+        text = [f"{current_cost/1_000_000:.0f} MM", f"-{wind_saving/1_000_000:.0f} MM"]
         if show_surplus:
             labels.append("Ingreso excedentes")
             values.append(-surplus_income / 1_000_000)
             measures.append("relative")
-            text.append(f"-{surplus_income/1_000_000:.1f} MM")
+            text.append(f"-{surplus_income/1_000_000:.0f} MM")
         labels.extend(["O&M anual", "Costo neto final"])
         values.extend([om_cost / 1_000_000, net_final / 1_000_000])
         measures.extend(["relative", "total"])
-        text.extend([f"+{om_cost/1_000_000:.1f} MM", f"{net_final/1_000_000:.1f} MM"])
+        text.extend([f"+{om_cost/1_000_000:.0f} MM", f"{net_final/1_000_000:.0f} MM"])
         fig = go.Figure(
             go.Waterfall(
                 name="Waterfall económico",
@@ -25773,7 +25773,7 @@ def render_telecom_scenario_simulator(
                 increasing={"marker": {"color": palette["copper"], "line": {"color": "#ffffff", "width": 1.2}}},
                 decreasing={"marker": {"color": palette["sky"], "line": {"color": "#ffffff", "width": 1.2}}},
                 totals={"marker": {"color": palette["ink"], "line": {"color": "#ffffff", "width": 1.4}}},
-                hovertemplate="<b>%{x}</b><br>Impacto: %{y:.1f} MM CLP/año<extra></extra>",
+                hovertemplate="<b>%{x}</b><br>Impacto: %{y:.0f} MM CLP/año<extra></extra>",
             )
         )
         fig.add_hline(y=0, line_color="rgba(32,56,79,.45)", line_width=1)
@@ -26029,10 +26029,10 @@ def render_telecom_scenario_simulator(
             <div class="sim6-kpi-grid">
               <div class="sim6-kpi" style="--accent:#3d5a80;"><p class="sim6-kpi-k">Costo ponderado</p><p class="sim6-kpi-v">{format_clp(weighted_cost)}</p><p class="sim6-kpi-s">Mix normalizado del sitio</p></div>
               <div class="sim6-kpi" style="--accent:#98c1d9;"><p class="sim6-kpi-k">Cobertura real</p><p class="sim6-kpi-v">{rec_coverage:.0f}%</p><p class="sim6-kpi-s">Generación vs consumo</p></div>
-              <div class="sim6-kpi" style="--accent:#ee6c4d;"><p class="sim6-kpi-k">CAPEX total</p><p class="sim6-kpi-v">{rec_capex:.1f} MM</p><p class="sim6-kpi-s">Turbinas + BOS</p></div>
+              <div class="sim6-kpi" style="--accent:#ee6c4d;"><p class="sim6-kpi-k">CAPEX total</p><p class="sim6-kpi-v">{rec_capex:.0f} MM</p><p class="sim6-kpi-s">Turbinas + BOS</p></div>
               <div class="sim6-kpi" style="--accent:#293241;"><p class="sim6-kpi-k">Payback</p><p class="sim6-kpi-v">{years_label(recommended["Payback años"])}</p><p class="sim6-kpi-s">Sobre beneficio neto anual</p></div>
               <div class="sim6-kpi" style="--accent:#3d5a80;"><p class="sim6-kpi-k">LCOE</p><p class="sim6-kpi-v">{format_clp(float(recommended["LCOE CLP/kWh"]))}</p><p class="sim6-kpi-s">CLP/kWh generado</p></div>
-              <div class="sim6-kpi" style="--accent:#98c1d9;"><p class="sim6-kpi-k">Valor periodo</p><p class="sim6-kpi-v">{float(recommended["Beneficio neto periodo CLP"])/1_000_000:.1f} MM</p><p class="sim6-kpi-s">Neto post CAPEX</p></div>
+              <div class="sim6-kpi" style="--accent:#98c1d9;"><p class="sim6-kpi-k">Valor periodo</p><p class="sim6-kpi-v">{float(recommended["Beneficio neto periodo CLP"])/1_000_000:.0f} MM</p><p class="sim6-kpi-s">Neto post CAPEX</p></div>
             </div>
             <div class="sim6-engineering-note">
               <p class="sim6-note-main"><b>Por qué se elige esta versión:</b> combina {int(recommended["Nº turbinas"])} unidad(es) {html.escape(str(recommended["Alternativa"]))} para producir {rec_generation:,.0f} kWh/mes con FP {rec_fp:.1f}% desde {html.escape(rec_wind_text)}.</p>
@@ -26063,7 +26063,7 @@ def render_telecom_scenario_simulator(
     with chart_a:
         st.markdown('<p class="telecom-panel-title">Panorama económico integral por turbina</p><p class="telecom-panel-sub">Barras: CAPEX. Línea: LCOE. Etiqueta: payback.</p>', unsafe_allow_html=True)
         fig_econ = go.Figure()
-        fig_econ.add_trace(go.Bar(x=sim_df["Alternativa"], y=sim_df["CAPEX MM CLP"], name="CAPEX", marker_color=palette["ink"], text=[f'{v:.1f} MM<br>{years_label(pb)}' for v, pb in zip(sim_df["CAPEX MM CLP"], sim_df["Payback años"])], textposition="inside", textfont=dict(color="#fff", size=11)))
+        fig_econ.add_trace(go.Bar(x=sim_df["Alternativa"], y=sim_df["CAPEX MM CLP"], name="CAPEX", marker_color=palette["ink"], text=[f'{v:.0f} MM<br>{years_label(pb)}' for v, pb in zip(sim_df["CAPEX MM CLP"], sim_df["Payback años"])], textposition="inside", textfont=dict(color="#fff", size=11)))
         fig_econ.add_trace(go.Scatter(x=sim_df["Alternativa"], y=sim_df["LCOE CLP/kWh"], name="LCOE", yaxis="y2", mode="lines+markers+text", line=dict(color=palette["orange"], width=3), marker=dict(size=10, color="#fff", line=dict(color=palette["orange"], width=2)), text=[format_clp(v) for v in sim_df["LCOE CLP/kWh"]], textposition="top center"))
         fig_econ.update_layout(xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="CAPEX (MM CLP)", rangemode="tozero"), yaxis2=dict(title="LCOE (CLP/kWh)", overlaying="y", side="right", showgrid=False))
         st.plotly_chart(tune_fig(fig_econ), use_container_width=True, config={"displaylogo": False})
@@ -26085,7 +26085,7 @@ def render_telecom_scenario_simulator(
         with fin_left:
             st.markdown('<p class="telecom-panel-title">Beneficio marginal por alternativa</p><p class="telecom-panel-sub">Valor anual neto, ingreso por excedentes y O&M.</p>', unsafe_allow_html=True)
             fig_benefit = go.Figure()
-            fig_benefit.add_trace(go.Bar(x=sim_df["Alternativa"], y=sim_df["Beneficio neto anual CLP"] / 1_000_000, name="Beneficio neto", marker_color=palette["ink"], text=[f'{v/1_000_000:.1f} MM' for v in sim_df["Beneficio neto anual CLP"]], textposition="outside"))
+            fig_benefit.add_trace(go.Bar(x=sim_df["Alternativa"], y=sim_df["Beneficio neto anual CLP"] / 1_000_000, name="Beneficio neto", marker_color=palette["ink"], text=[f'{v/1_000_000:.0f} MM' for v in sim_df["Beneficio neto anual CLP"]], textposition="outside"))
             fig_benefit.add_trace(go.Bar(x=sim_df["Alternativa"], y=sim_df["Ingreso excedente anual CLP"] / 1_000_000, name="Ingreso excedente", marker_color=palette["orange"]))
             fig_benefit.update_layout(xaxis=dict(categoryorder="array", categoryarray=turbine_order), yaxis=dict(title="MM CLP/año", rangemode="tozero"))
             st.plotly_chart(tune_fig(fig_benefit, 350), use_container_width=True, config={"displaylogo": False})
@@ -26122,7 +26122,7 @@ def render_telecom_scenario_simulator(
     recommendation_text = (
         f"Se recomienda evaluar {int(recommended['Nº turbinas'])} turbinas {recommended['Alternativa']} "
         f"({float(recommended['Potencia instalada kW']):.1f} kW instalados). El escenario alcanza "
-        f"{float(recommended['Cobertura real %']):.0f}% de cobertura, CAPEX de {float(recommended['CAPEX MM CLP']):.1f} MM CLP, "
+        f"{float(recommended['Cobertura real %']):.0f}% de cobertura, CAPEX de {float(recommended['CAPEX MM CLP']):.0f} MM CLP, "
         f"LCOE {format_clp(float(recommended['LCOE CLP/kWh']))}/kWh y recuperación en {years_label(recommended['Payback años'])}."
     )
     st.markdown(f'<div class="telecom-note"><b>Lectura ejecutiva:</b> {html.escape(recommendation_text)}</div>', unsafe_allow_html=True)
@@ -26963,7 +26963,7 @@ def render_pagos_hitos(
             axis_unit = "MM CLP"
             line_label = "Acumulado (MM CLP)"
             def fmt_bar_value(val: float) -> str:
-                return f"{val:.1f} MM"
+                return f"{val:.0f} MM"
             def scale_clp(series: pd.Series) -> pd.Series:
                 return series / 1_000_000.0
 
@@ -26972,8 +26972,8 @@ def render_pagos_hitos(
 
         def fmt_pago_detalle(val: float) -> str:
             if unit_sel.startswith("USD"):
-                return f"{float(val):,.1f} kUSD".replace(",", ".")
-            return f"{float(val):,.2f} MM CLP".replace(",", ".")
+                return f"{float(val):,.0f} kUSD".replace(",", ".")
+            return f"{float(val):,.0f} MM CLP".replace(",", ".")
 
         def apply_unified_hover(fig):
             fig.update_layout(
@@ -28085,7 +28085,7 @@ def render_resumen_content(
     df_items_tot["Pct_total"] = df_items_tot["Total_CLP"] / capex_total_clp_calc
     df_items_tot["Total_MM"] = df_items_tot["Total_CLP"] / 1e6
     df_items_tot["Texto"] = df_items_tot.apply(
-        lambda r: f"{r['Total_MM']:.1f} MM / {r['Pct_total']*100:.1f}%",
+        lambda r: f"{r['Total_MM']:.0f} MM / {r['Pct_total']*100:.1f}%",
         axis=1
     )
     df_items_tot = df_items_tot.sort_values("Total_CLP", ascending=False)
@@ -28135,7 +28135,7 @@ def render_resumen_content(
             textposition="middle right",
             textfont_size=11,
             marker=dict(line=dict(color="rgba(255,255,255,0.92)", width=1.6), opacity=0.96),
-            hovertemplate="<b>%{y}</b><br>Categoría técnica: %{fullData.name}<br>Monto: %{x:.1f} MM CLP<extra></extra>",
+            hovertemplate="<b>%{y}</b><br>Categoría técnica: %{fullData.name}<br>Monto: %{x:.0f} MM CLP<extra></extra>",
         )
         fig_item_total.update_layout(
             xaxis_title="Monto total (millones de CLP)",
@@ -28169,7 +28169,7 @@ def render_resumen_content(
             textfont=dict(size=11, color="#334155"),
             cliponaxis=False,
             marker=dict(line=dict(color="rgba(255,255,255,0.96)", width=1.6)),
-            hovertemplate="<b>%{y}</b><br>Categoría técnica: %{fullData.name}<br>Monto: %{x:.1f} MM CLP<extra></extra>",
+            hovertemplate="<b>%{y}</b><br>Categoría técnica: %{fullData.name}<br>Monto: %{x:.0f} MM CLP<extra></extra>",
         )
         fig_item_total.update_layout(
             xaxis_title="Monto total (millones de CLP)",
@@ -28619,7 +28619,7 @@ def render_capex_items_content():
         labels={"Monto_CLP_MM": "Monto (MM CLP)", "Item": "Ítem", "Categoria": "Categoría"},
         title=f"Top {top_n} ítems por monto (millones de CLP)",
     )
-    fig_top.update_traces(text=df_top["Monto_CLP_MM"].apply(lambda v: f"{v:.1f} MM"), textposition="outside")
+    fig_top.update_traces(text=df_top["Monto_CLP_MM"].apply(lambda v: f"{v:.0f} MM"), textposition="outside")
     fig_top.update_layout(xaxis_title="Monto (millones de CLP)", yaxis_title="", margin=dict(l=10, r=10, t=60, b=10))
     apply_engineering_chart_typography(fig_top, title_size=20, body_size=13, tick_size=12, legend_size=11)
     st.plotly_chart(fig_top, use_container_width=True)
@@ -28787,7 +28787,7 @@ def render_direccion_module_content():
             0.0,
         )
         df_dir_plot["Etiqueta_barra"] = df_dir_plot.apply(
-            lambda row: f'{row["Total_MM"]:.1f} MM | {row["Participacion_pct"]:.1f}%',
+            lambda row: f'{row["Total_MM"]:.0f} MM | {row["Participacion_pct"]:.1f}%',
             axis=1,
         )
         df_dir_plot = df_dir_plot.sort_values("Total", ascending=True).copy()
@@ -28838,7 +28838,7 @@ def render_direccion_module_content():
             cliponaxis=False,
             hovertemplate=(
                 "<b>%{customdata[3]}</b><br>"
-                "Total: %{x:.1f} MM CLP<br>"
+                "Total: %{x:.0f} MM CLP<br>"
                 "Participación: %{customdata[0]:.1f}%<br>"
                 "Meses: %{customdata[1]:.0f}<br>"
                 "Costo mensual: %{customdata[2]:,.0f} CLP<extra></extra>"
@@ -28872,10 +28872,10 @@ def render_direccion_module_content():
         df_dir_table.insert(0, "Ranking", [f"#{i}" for i in range(1, len(df_dir_table) + 1)])
         df_dir_table["Costo mensual"] = df_dir_table["Costo empresa mensual"].apply(format_clp)
         df_dir_table["Intensidad"] = df_dir_table.apply(
-            lambda row: f"{float(row['Total_MM']) / max(float(row['Meses']), 1):.1f} MM/mes",
+            lambda row: f"{float(row['Total_MM']) / max(float(row['Meses']), 1):.0f} MM/mes",
             axis=1,
         )
-        df_dir_table["Total"] = df_dir_table["Total_MM"].map(lambda v: f"{v:.1f} MM CLP")
+        df_dir_table["Total"] = df_dir_table["Total_MM"].map(lambda v: f"{v:.0f} MM CLP")
         df_dir_table["Participación"] = df_dir_table["Participacion_pct"].map(lambda v: f"{v:.1f}%")
 
         col_dir_1, col_dir_2 = st.columns([1.22, 1])
@@ -29047,7 +29047,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
             x="Monto_MM",
             y="Label",
             orientation="h",
-            text=df_val_plot.sort_values("Monto", ascending=True)["Monto_MM"].map(lambda v: f"{v:.1f} MM"),
+            text=df_val_plot.sort_values("Monto", ascending=True)["Monto_MM"].map(lambda v: f"{v:.0f} MM"),
             title="Top conceptos de valorización",
             labels={"Monto_MM": "Monto (MM CLP)", "Label": ""},
             color="Monto_MM",
@@ -30687,13 +30687,13 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
         sensibilidad["Valorización_post_piloto"] = sensibilidad["Volumen"] * ebitda_unit_input * multiple_input
         if investment_currency_input == "CLP":
             sensibilidad["Valorización_millones"] = (sensibilidad["Valorización_post_piloto"] * fx_input) / 1e6
-            sensibilidad["Etiqueta"] = sensibilidad["Valorización_millones"].map(lambda v: f"${v:.2f}M")
+            sensibilidad["Etiqueta"] = sensibilidad["Valorización_millones"].map(lambda v: f"${v:.0f}M")
             sens_customdata = np.stack([sensibilidad["Valorización_post_piloto"] * fx_input, sensibilidad["Volumen"] * ebitda_unit_input * fx_input], axis=-1)
             sens_hover = "<b>Volumen:</b> %{x:.0f} turbinas<br><b>Valorización:</b> $%{customdata[0]:,.0f}<br><b>EBITDA total:</b> $%{customdata[1]:,.0f}<extra></extra>"
             sens_base_y = valor_post_piloto_clp / 1e6
         else:
             sensibilidad["Valorización_millones"] = sensibilidad["Valorización_post_piloto"] / 1e6
-            sensibilidad["Etiqueta"] = sensibilidad["Valorización_millones"].map(lambda v: f"US${v:.2f}M")
+            sensibilidad["Etiqueta"] = sensibilidad["Valorización_millones"].map(lambda v: f"US${v:.0f}M")
             sens_customdata = np.stack([sensibilidad["Valorización_post_piloto"], sensibilidad["Volumen"] * ebitda_unit_input], axis=-1)
             sens_hover = "<b>Volumen:</b> %{x:.0f} turbinas<br><b>Valorización:</b> US$%{customdata[0]:,.0f}<br><b>EBITDA total:</b> US$%{customdata[1]:,.0f}<extra></extra>"
             sens_base_y = valor_post_piloto / 1e6
@@ -30701,7 +30701,7 @@ def render_valorizacion_module_content(key_prefix: str = "val_"):
         fig_sens.update_traces(line=dict(color="#0F766E", width=4), marker=dict(size=10, color="#0F766E", line=dict(width=2, color="#ECFDF5")), textposition="top center", hovertemplate=sens_hover, customdata=sens_customdata)
         fig_sens.add_vline(x=volume_input, line_width=1.5, line_dash="dash", line_color="#1D4ED8", opacity=0.8)
         fig_sens.add_hline(y=sens_base_y, line_width=1.5, line_dash="dot", line_color="#1D4ED8", opacity=0.8)
-        fig_sens.add_annotation(x=volume_input, y=sens_base_y, text=(f"Base: {volume_input:,.0f} turbinas / ${sens_base_y:.2f}M" if investment_currency_input == "CLP" else f"Base: {volume_input:,.0f} turbinas / US${sens_base_y:.2f}M").replace(",", "."), showarrow=True, arrowhead=2, ax=40, ay=-40, bgcolor="rgba(255,255,255,0.95)", bordercolor="#BFDBFE", font=dict(size=11, color="#0F172A"))
+        fig_sens.add_annotation(x=volume_input, y=sens_base_y, text=(f"Base: {volume_input:,.0f} turbinas / ${sens_base_y:.0f}M" if investment_currency_input == "CLP" else f"Base: {volume_input:,.0f} turbinas / US${sens_base_y:.0f}M").replace(",", "."), showarrow=True, arrowhead=2, ax=40, ay=-40, bgcolor="rgba(255,255,255,0.95)", bordercolor="#BFDBFE", font=dict(size=11, color="#0F172A"))
         fig_sens.update_layout(margin=dict(l=10, r=10, t=60, b=10), height=430, plot_bgcolor="white", paper_bgcolor="rgba(0,0,0,0)", hovermode="x unified")
         fig_sens.update_xaxes(showgrid=True, gridcolor="rgba(148,163,184,0.22)", zeroline=False)
         fig_sens.update_yaxes(tickprefix=sens_tickprefix, ticksuffix="M", showgrid=True, gridcolor="rgba(148,163,184,0.22)", zeroline=False)
@@ -30992,7 +30992,7 @@ def render_explorador_module_content(key_prefix: str = "explorer_"):
             title="Ítems filtrados (hasta 20 primeros)",
         )
         fig_exp.update_traces(
-            text=df_plot["Monto_CLP_MM"].apply(lambda v: f"{v:.1f} MM"),
+            text=df_plot["Monto_CLP_MM"].apply(lambda v: f"{v:.0f} MM"),
             textposition="outside",
         )
         fig_exp.update_layout(
@@ -31839,7 +31839,7 @@ if False:
 
     # Texto dentro de la barra: "XX.X MM / YY.Y%"
     df_items_tot["Texto"] = df_items_tot.apply(
-        lambda r: f"{r['Total_MM']:.1f} MM / {r['Pct_total']*100:.1f}%",
+        lambda r: f"{r['Total_MM']:.0f} MM / {r['Pct_total']*100:.1f}%",
         axis=1
     )
 
@@ -32321,7 +32321,7 @@ if False:
     
         # Texto dentro del segmento: "x.x MM / yy% cat"
         df_capex_merged["Texto_seg"] = df_capex_merged.apply(
-            lambda r: f"{r['Monto_CLP_MM']:.1f} MM\n{r['Pct_en_categoria']*100:.0f}% cat",
+            lambda r: f"{r['Monto_CLP_MM']:.0f} MM\n{r['Pct_en_categoria']*100:.0f}% cat",
             axis=1
         )
     
@@ -32378,7 +32378,7 @@ if False:
             hovertemplate=(
                 "<b>%{customdata[0]}</b><br>"
                 "Categoría: %{y}<br>"
-                "Monto: %{x:.2f} MM CLP<br>"
+                "Monto: %{x:.0f} MM CLP<br>"
                 "Monto CLP: %{customdata[1]:,.0f}<br>"
                 "Monto USD: %{customdata[2]:,.0f}<br>"
                 "% en categoría: %{customdata[3]:.1%}<br>"
@@ -32417,7 +32417,7 @@ if False:
             fig_stack.add_annotation(
                 x=row["Total_CLP"] / 1e6,
                 y=row["Categoria"],
-                text=f"{row['Total_CLP']/1e6:.1f} MM",
+                text=f"{row['Total_CLP']/1e6:.0f} MM",
                 xanchor="left",
                 yanchor="middle",
                 showarrow=False,
@@ -32658,7 +32658,7 @@ def render_capex_items_content():
         labels={"Monto_CLP_MM": "Monto (MM CLP)", "Item": "Ítem", "Categoria": "Categoría"},
         title=f"Top {top_n} ítems por monto (millones de CLP)",
     )
-    fig_top.update_traces(text=df_top["Monto_CLP_MM"].apply(lambda v: f"{v:.1f} MM"), textposition="outside")
+    fig_top.update_traces(text=df_top["Monto_CLP_MM"].apply(lambda v: f"{v:.0f} MM"), textposition="outside")
     fig_top.update_layout(xaxis_title="Monto (millones de CLP)", yaxis_title="", margin=dict(l=10, r=10, t=60, b=10))
     st.plotly_chart(fig_top, use_container_width=True)
     st.session_state["fig_top_items"] = fig_top
@@ -32832,7 +32832,7 @@ def render_direccion_module_content():
             0.0,
         )
         df_dir_plot["Etiqueta_barra"] = df_dir_plot.apply(
-            lambda row: f'{row["Total_MM"]:.1f} MM | {row["Participacion_pct"]:.1f}%',
+            lambda row: f'{row["Total_MM"]:.0f} MM | {row["Participacion_pct"]:.1f}%',
             axis=1,
         )
         df_dir_plot = df_dir_plot.sort_values("Total", ascending=True).copy()
@@ -32886,7 +32886,7 @@ def render_direccion_module_content():
             cliponaxis=False,
             hovertemplate=(
                 "<b>%{customdata[3]}</b><br>"
-                "Total: %{x:.1f} MM CLP<br>"
+                "Total: %{x:.0f} MM CLP<br>"
                 "Participación: %{customdata[0]:.1f}%<br>"
                 "Meses: %{customdata[1]:.0f}<br>"
                 "Costo mensual: %{customdata[2]:,.0f} CLP<extra></extra>"
@@ -32925,10 +32925,10 @@ def render_direccion_module_content():
         df_dir_table.insert(0, "Ranking", [f"#{i}" for i in range(1, len(df_dir_table) + 1)])
         df_dir_table["Costo mensual"] = df_dir_table["Costo empresa mensual"].apply(format_clp)
         df_dir_table["Intensidad"] = df_dir_table.apply(
-            lambda row: f"{float(row['Total_MM']) / max(float(row['Meses']), 1):.1f} MM/mes",
+            lambda row: f"{float(row['Total_MM']) / max(float(row['Meses']), 1):.0f} MM/mes",
             axis=1,
         )
-        df_dir_table["Total"] = df_dir_table["Total_MM"].map(lambda v: f"{v:.1f} MM CLP")
+        df_dir_table["Total"] = df_dir_table["Total_MM"].map(lambda v: f"{v:.0f} MM CLP")
         df_dir_table["Participación"] = df_dir_table["Participacion_pct"].map(lambda v: f"{v:.1f}%")
 
         col_dir_1, col_dir_2 = st.columns([1.22, 1])

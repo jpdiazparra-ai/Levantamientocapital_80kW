@@ -2319,7 +2319,7 @@ def render_board_kpis(df: pd.DataFrame) -> None:
     critical_window = release_1 + release_2_amount
 
     def money_mm(value: float) -> str:
-        return f"${value / 1_000_000:.1f} MM".replace(".", ",")
+        return f"${value / 1_000_000:.0f} MM".replace(".", ",")
 
     release_2 = release_windows.get("Liberación 2", pd.DataFrame())
     weighted_progress = (
@@ -2492,7 +2492,7 @@ def render_release_cutoff_intelligence(df: pd.DataFrame) -> None:
     max_total = max(max(float(panel["total"]) for panel in panels), 1.0)
 
     def money_mm(value: float) -> str:
-        return f"${value / 1_000_000:.1f}MM".replace(".", ",")
+        return f"${value / 1_000_000:.0f}MM".replace(".", ",")
 
     def stage_card(panel: dict[str, object], idx: int) -> str:
         color = str(panel["color"])
@@ -3608,7 +3608,7 @@ def render_project_timeline_conditions(df: pd.DataFrame, pmo_source: pd.DataFram
     months_html = "".join(f"<span>{html.escape(month)}</span>" for month in month_cells)
 
     def money_mm(value: float) -> str:
-        return f"${value / 1_000_000:.1f}MM".replace(".", ",")
+        return f"${value / 1_000_000:.0f}MM".replace(".", ",")
 
     def short_text(value: object, limit: int = 92) -> str:
         text = re.sub(r"\s+", " ", str(value or "").strip())
@@ -3811,7 +3811,7 @@ def render_pmo_roadmap_matrix(
     next_row = metrics["next_row"]
 
     def format_clp_mm(value: float) -> str:
-        return f"${value / 1_000_000:.1f}MM".replace(".", ",")
+        return f"${value / 1_000_000:.0f}MM".replace(".", ",")
 
     critical_hitos = {"H1", "H4", "H8"}
     status_label = {"Ejecutado": "Ejecutado", "En curso": "En curso", "Pendiente": "Pendiente"}
@@ -4210,7 +4210,7 @@ def render_hitos_financial_view(
     )
 
     def format_clp_mm(value: float) -> str:
-        return f"${value / 1_000_000:.1f}MM".replace(".", ",")
+        return f"${value / 1_000_000:.0f}MM".replace(".", ",")
 
     def impact_for(row: pd.Series) -> str:
         hito = str(row.get("Hito", ""))

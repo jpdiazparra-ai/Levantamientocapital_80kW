@@ -7,6 +7,48 @@ from streamlit.testing.v1 import AppTest
 
 
 class CommercialScopeUITests(unittest.TestCase):
+    def test_80kw_equipment_default_migrates_existing_session_once(self):
+        import streamlit as st
+        self.addCleanup(setattr, st, 'segmented_control', st.segmented_control)
+        app = AppTest.from_string('''
+import streamlit as st
+from commercial_analysis import render_commercial_scope
+st.segmented_control=st.radio
+st.session_state.setdefault('option4_commercial_composition_Turbina_de_80_kW','Total')
+render_commercial_scope('Turbina de 80 kW', default_mode='Comercial')
+render_commercial_scope('Turbina de 80 kW', key_suffix='detail80')
+''').run()
+        self.assertFalse(app.exception)
+        self.assertEqual([item.value for item in app.radio], ['Comercial', 'Comercial'])
+        app.run()
+        self.assertEqual([item.value for item in app.radio], ['Comercial', 'Comercial'])
+        # A deliberate change remains usable and synchronized after initialization.
+        app.radio[1].set_value('Total').run()
+        self.assertFalse(app.exception)
+        self.assertEqual([item.value for item in app.radio], ['Total', 'Total'])
+
+    def test_detail_selector_updates_the_main_scope_in_both_directions(self):
+        import streamlit as st
+        self.addCleanup(setattr, st, 'segmented_control', st.segmented_control)
+        app = AppTest.from_string('''
+import streamlit as st
+from commercial_analysis import render_commercial_scope
+st.segmented_control=st.radio
+top=render_commercial_scope('Turbina de 80 kW')
+detail=render_commercial_scope('Turbina de 80 kW', key_suffix='detail80')
+st.write(top+' / '+detail)
+''').run()
+        self.assertFalse(app.exception)
+        app.radio[1].set_value('Comercial').run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.radio[0].value, 'Comercial')
+        self.assertEqual(app.radio[1].value, 'Comercial')
+        self.assertIn('Comercial / Comercial', app.markdown[0].value)
+        app.radio[0].set_value('Total').run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.radio[1].value, 'Total')
+        self.assertIn('Total / Total', app.markdown[0].value)
+
     def test_selector_keeps_selection_on_rerun(self):
         app = AppTest.from_string('''
 import streamlit as st
@@ -31,14 +73,14 @@ st.write(commercial_scope_label(mode))
             'Comercial anterior': [100., 200., 300., float('nan')],
             'Presupuesto vigente': [120., 220., 320., 50.],
         })
-        data = dict(base=10., before_margin=20., with_margin=30., final_is_price=False,
+        data = dict(base=10., opex=7., before_margin=20., with_margin=30., final_is_price=False,
                     margin=.1, references={}, labels={})
         for capacity, module in [(10, valuation10_view), (80, valuation80_view)]:
             for mode, subtotal, coverage in [('Total', 600., '3/4'), ('Comercial', 100., '1/2')]:
                 with self.subTest(capacity=capacity, mode=mode):
                     with patch.object(module, 'load_cost_report', return_value={'scope': scope, 'totals': {'Comercial anterior': 600., 'Informadas': 3, 'Partidas': 4}}), \
                          patch.object(module, f'unit_cost_inputs{capacity}', return_value=data), \
-                         patch.object(module, f'sale_prices{capacity}', return_value=dict(net=40., gross=48., vat_rate=.2)), \
+                         patch.object(module, f'sale_prices{capacity}', side_effect=lambda model, fx, equipment_cost: dict(net=equipment_cost+7., gross=(equipment_cost+7.)*1.2, vat_rate=.2)), \
                          patch.object(module, 'exchange_rate', return_value=1.), \
                          patch.object(module.st, 'html') as rendered, \
                          patch.object(module, 'plot'), \
@@ -47,6 +89,13 @@ st.write(commercial_scope_label(mode))
                         card = rendered.call_args_list[0].args[0]
                         self.assertIn(f'<td>{subtotal}</td>', card)
                         self.assertIn(coverage+' partidas', card)
+                        self.assertIn('Costo equipamiento turbina', card)
+                        self.assertIn('OPEX por turbina', card)
+                        self.assertIn('<td>7.0</td>', card)
+                        self.assertIn(f'<td>{subtotal+7.}</td>', card)
+                        self.assertIn(f'<td>{(subtotal+7.)*1.2}</td>', card)
+                        self.assertEqual(card.count('<tr class='),4)
+                        self.assertNotIn('<td>20.0</td>', card)
 
 
 if __name__ == '__main__':

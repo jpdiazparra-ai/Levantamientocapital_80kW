@@ -1,0 +1,158 @@
+/* The always-visible 80 kW commercial panel shares the costs and LCOE reference blue palette. */
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail {
+  --ink:#003366;
+  --teal:#007ACC;
+  --muted:#00509E;
+  --line:#CCE0FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-executive-kpis .primary {
+  background:#CCE0FF;
+  border-color:#CCE0FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-executive-kpis .primary strong {
+  color:#003366;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-executive-kpis .primary>span,
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-executive-kpis .primary small {
+  color:#00509E;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-insight,
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-note {
+  background:#EEF5FF;
+  border-color:#CCE0FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-system-track,
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-coverage-track {
+  background:#CCE0FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-source {
+  background:#F4F8FF;
+  border-color:#CCE0FF;
+}
+
+/* Monte Carlo uses the same light cards and report accent as the base LCOE. */
+.st-key-option4_valuation80_mc {
+  --valuation-ink:#003366;
+  --valuation-muted:#00509E;
+}
+.st-key-option4_valuation80_mc button[kind="primary"] {
+  background:#00509E;
+  border-color:#00509E;
+  color:#FFFFFF;
+}
+.st-key-option4_valuation80_mc button[kind="primary"]:hover {
+  background:#003366;
+  border-color:#003366;
+  color:#FFFFFF;
+}
+
+/* Reference blue theme is scoped to section 03 of the 80 kW case. */
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics {
+  --valuation-ink:#003366;
+  --valuation-muted:#00509E;
+  --ink:#003366;
+  --teal:#007ACC;
+  --line:#CCE0FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics :is(.valuation-section h3,h5,.unit-economics-card h4,.valuation-kpis strong) {
+  color:#003366;
+}
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics .unit-economics-card {
+  color:#003366;
+  border-color:#CCE0FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics .unit-economics-card header {
+  background:#CCE0FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics .unit-economics-card header span {
+  color:#00509E;
+}
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics .unit-economics-card thead th {
+  background:#F4F8FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics .unit-economics-card tr.net {
+  background:#E4EFFF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics .unit-economics-card tr.net td {
+  color:#00509E;
+}
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics .unit-economics-card tr.gross {
+  background:#F4F8FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics .valuation-kpis article:first-child {
+  background:#CCE0FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics .valuation-kpis,
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics [data-testid="stPlotlyChart"] {
+  border-color:#CCE0FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics button[kind="primary"] {
+  background:#00509E;
+  border-color:#00509E;
+  color:#FFFFFF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_unit_economics [data-baseweb="slider"] [role="slider"] {
+  background-color:#00509E!important;
+}
+
+/* Technical system lines, including Eléctrico y control. */
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail [class*="_package_controls"] {
+  background:linear-gradient(135deg,#FFFFFF 55%,#EEF5FF)!important;
+  border-color:#CCE0FF!important;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-package-heading {
+  border-color:#CCE0FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-package-heading span {
+  color:#007ACC;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-package-heading strong,
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-package-heading p {
+  color:#003366;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail [class*="_package_controls"] [data-testid="stCaptionContainer"] p {
+  color:#00509E!important;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail [class*="_package_controls"] button[kind="primary"] {
+  background:#003366!important;
+  border-color:#00509E!important;
+  box-shadow:inset 3px 0 0 #66A3FF,0 3px 9px #00336615!important;
+  color:#FFFFFF!important;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail [class*="_package_controls"] button[kind="primary"] p+p {
+  color:#CCE0FF!important;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail [class*="_package_controls"] button[kind="secondary"] {
+  background:#FFFFFF!important;
+  border-color:#CCE0FF!important;
+  color:#003366!important;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail [class*="_package_controls"] button[kind="secondary"] p {
+  color:#003366!important;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail [class*="_package_controls"] button[kind="secondary"] p+p {
+  color:#00509E!important;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail [class*="_package_controls"] button[kind="secondary"]:hover {
+  background:#EEF5FF!important;
+  border-color:#66A3FF!important;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail [class*="_package_controls"] button:focus-visible {
+  outline-color:#66A3FF!important;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-package-totals article {
+  background:#F4F8FF;
+  border-color:#CCE0FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-package-totals .hours {
+  background:#EEF5FF;
+  border-color:#CCE0FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-package-totals .commercial {
+  background:#CCE0FF;
+  border-color:#66A3FF;
+}
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-package-totals strong,
+.st-key-analysis_option .st-key-option4_valuation80_commercial_detail .option-commercial-package-totals .commercial strong {
+  color:#003366;
+}

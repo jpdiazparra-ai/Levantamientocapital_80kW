@@ -43,7 +43,7 @@ def _decimal(value, digits=1):
 
 
 def _money(value, currency):
-    return 'Sin informar' if pd.isna(value) else ('US$ ' if currency == 'USD' else '$') + _decimal(value, 2 if currency == 'USD' else 0)
+    return 'Sin informar' if pd.isna(value) else ('US$ ' if currency == 'USD' else '$') + _decimal(value, 0)
 
 
 def _sum(frame, column):

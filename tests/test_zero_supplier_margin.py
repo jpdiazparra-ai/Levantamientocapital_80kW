@@ -10,7 +10,8 @@ class ZeroSupplierMarginTests(unittest.TestCase):
         return {'raw': {
             '07 Ventas y producción': [
                 ['', '', 'Costo equivalente con margen proveedor', margin, ''],
-                ['', '', 'Precio Venta', 'USD', price]],
+                ['', '', 'Precio Venta', 'USD', price],
+                ['', '', 'Opex total', 'USD', '4.000']],
             '03 Supuestos': [['', '', 'IVA referencial', '', '19%']]}}
 
     def test_zero_margin_uses_sheet07_for_net_vat_and_lcoe(self):
@@ -40,8 +41,8 @@ import streamlit as st
 import valuationCAP_view as view
 st.session_state['option4_currency']='USD'
 view.load_cost_report=lambda revision: {'totals': {'Comercial anterior': 1000., 'Informadas': 1, 'Partidas': 1}}
-view.unit_cost_overviewCAP(MODEL)
-view.summary_lcoe_panelCAP(MODEL)
+equipment=view.unit_cost_overviewCAP(MODEL)
+view.summary_lcoe_panelCAP(MODEL, equipment)
 """.replace('CAP', str(cap)).replace('MODEL', repr(dict(self.model(), fetched_at='test')))
             with self.subTest(capacity=cap):
                 app=AppTest.from_string(script, default_timeout=20).run()
@@ -49,10 +50,29 @@ view.summary_lcoe_panelCAP(MODEL)
                 card=' '.join(item.proto.body for item in app.get('html'))
                 self.assertIn('Precio de venta · sin IVA', card)
                 self.assertIn('Precio de venta · con IVA', card)
-                self.assertIn('US$ 50.000,00', card)
-                self.assertIn('US$ 59.500,00', card)
-                self.assertIn('precio calculado · hoja 07', card)
+                self.assertIn('US$ 4.001', card)
+                self.assertIn('US$ 4.761', card)
+                self.assertIn('Costo equipamiento turbina + OPEX por turbina', card)
+                self.assertNotIn('Coincide con', card)
                 self.assertEqual(len(app.get('plotly_chart')), 2)
+
+    def test_equipment_plus_opex_sets_price_vat_and_lcoe_for_any_margin(self):
+        for cap in (10, 80):
+            unit=importlib.import_module(f'valuation{cap}_unit')
+            lcoe=importlib.import_module(f'valuation{cap}_lcoe')
+            for margin in ('0%', '20%'):
+                m=self.model(margin=margin)
+                with self.subTest(capacity=cap, margin=margin):
+                    prices=getattr(unit, f'sale_prices{cap}')(m, 980., equipment_cost=60000.)
+                    self.assertEqual(prices['net'], 64000.)
+                    self.assertEqual(prices['gross'], 76160.)
+                    self.assertEqual(prices['net_kw'], 64000./cap)
+                    result=getattr(lcoe, f'summary_lcoe{cap}')(m, .35, 980., equipment_cost=60000.)
+                    self.assertEqual(result['capex'], prices['net'])
+                    reduced=getattr(lcoe, f'summary_lcoe{cap}')(m, .35, 980., equipment_cost=28000.)
+                    self.assertAlmostEqual(result['lcoe'], 2*reduced['lcoe'])
+                    missing=getattr(unit, f'sale_prices{cap}')(m, 980., equipment_cost=float('nan'))
+                    self.assertTrue(pd.isna(missing['net']))
 
     def test_positive_margin_keeps_existing_sale_price(self):
         for cap in (10, 80):

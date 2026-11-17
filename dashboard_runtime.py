@@ -5,8 +5,8 @@ from pathlib import Path
 import sys
 from threading import RLock
 
-APP_RELEASE = '2026.11.13.1'
-_MODULES = ('display_currency', 'timeline_scroll', 'capital_charts', 'capital_detail', 'commercial_report', 'commercial_comparison', 'commercial_analysis', 'valuation_data', 'valuation_finance', 'lcoe_finance', 'valuation_lcoe', 'valuation_interactive', 'valuation_costs', 'valuation_report', 'valuation_view', 'valuation80_data', 'valuation80_project', 'valuation80_unit', 'valuation80_lcoe', 'valuation80_report', 'market_analytics', 'market_pdf', 'market_study', 'valuation80_view', 'valuation10_data', 'valuation10_costs', 'valuation10_project', 'valuation10_unit', 'valuation10_lcoe', 'valuation10_report', 'valuation10_view', 'analysis_option')
+APP_RELEASE = '2026.11.17.1'
+_MODULES = ('display_currency', 'timeline_scroll', 'capital_charts', 'capital_detail', 'commercial_report', 'commercial_excel', 'commercial_comparison', 'commercial_analysis', 'valuation_data', 'valuation_finance', 'lcoe_finance', 'monte_carlo_lcoe', 'valuation_lcoe', 'valuation_interactive', 'valuation_costs', 'valuation_report', 'valuation_view', 'projection_matrix', 'monte_carlo_view', 'valuation80_data', 'valuation80_project', 'valuation80_unit', 'valuation80_lcoe', 'valuation80_report', 'market_analytics', 'market_pdf', 'market_study', 'valuation80_view', 'valuation10_data', 'valuation10_costs', 'valuation10_project', 'valuation10_unit', 'valuation10_lcoe', 'valuation10_report', 'valuation10_view', 'analysis_option')
 _ROOT = Path(__file__).resolve().parent
 _reload_lock = RLock()
 _loaded_revision = None

@@ -26,12 +26,16 @@ def commercial_unit10(model,fx=None):
     return unit
 
 
-def sale_prices10(model,fx):
+def sale_prices10(model,fx,equipment_cost=None):
     data=unit_cost_inputs10(model)
     from_sheet07=data['margin'] == 0
-    price=data['with_margin'] if from_sheet07 else commercial_unit10(model,fx)['Precio de venta']
+    if equipment_cost is not None:
+        price=complete_sum([equipment_cost,data['opex']])
+    else:
+        price=data['with_margin'] if from_sheet07 else commercial_unit10(model,fx)['Precio de venta']
+    source='Costo equipamiento turbina + OPEX por turbina' if equipment_cost is not None else ('Precio calculado · hoja 07' if from_sheet07 else 'Precio inicial de 00 Datos de entrada')
     vat=Sheet('03 Supuestos',model['raw']['03 Supuestos']).value('IVA referencial')
-    return dict(source='Precio calculado · hoja 07' if from_sheet07 else 'Precio inicial de 00 Datos de entrada', net=price,net_kw=price/10,vat_rate=vat,gross=price*(1+vat),gross_kw=price*(1+vat)/10)
+    return dict(source=source, net=price,net_kw=price/10,vat_rate=vat,gross=price*(1+vat),gross_kw=price*(1+vat)/10)
 
 
 def unit_cost_inputs10(model):

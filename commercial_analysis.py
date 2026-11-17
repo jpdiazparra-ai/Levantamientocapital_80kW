@@ -13,9 +13,11 @@ import streamlit as st
 from capital_charts import amount
 from display_currency import currency_label, currency_code, currency_export, exchange_rate
 from commercial_report import build_commercial_pdf
+from commercial_excel import build_commercial_excel
 from commercial_comparison import render_commercial_comparison
 
 cached_commercial_pdf = st.cache_data(show_spinner=False, max_entries=24)(build_commercial_pdf)
+cached_commercial_excel = st.cache_data(show_spinner=False, max_entries=24)(build_commercial_excel)
 
 COMMERCIAL = 'Comercial anterior'
 COLORS = ['#244A6C', '#0F766E', '#2E90A5', '#B7791F', '#718096', '#735D96', '#CBD5E1']
@@ -76,14 +78,25 @@ def commercial_scope_label(mode):
     return {'Total': 'Turbina + instalación', 'Comercial': 'Solo equipo turbina'}[mode]
 
 
-def render_commercial_scope(project):
+def render_commercial_scope(project, *, key_suffix=None, default_mode='Total'):
     index = re.sub(r'\W+', '_', str(project))
     key = f'option4_commercial_composition_{index}'
+    # Apply a revised default once, including sessions opened before this update.
+    migration_key = key + '_equipment_default_v1'
+    if default_mode == 'Comercial' and not st.session_state.get(migration_key, False):
+        st.session_state[key] = default_mode
+        st.session_state[migration_key] = True
     if st.session_state.get(key) not in ('Total', 'Comercial'):
-        st.session_state[key] = 'Total'
-    return st.segmented_control('Alcance del análisis', ['Total', 'Comercial'], key=key,
+        st.session_state[key] = default_mode
+    widget_key = key if key_suffix is None else key + '_' + key_suffix
+    def sync_scope():
+        st.session_state[key] = st.session_state[widget_key] or st.session_state[key] or default_mode
+    if key_suffix is not None:
+        st.session_state[widget_key] = st.session_state[key]
+    return st.segmented_control('Alcance del análisis', ['Total', 'Comercial'], key=widget_key,
+        on_change=sync_scope if key_suffix is not None else None,
         format_func=commercial_scope_label,
-        help='Turbina + instalación incluye todas las partidas Aplica. Solo equipo turbina excluye fundaciones y anclajes, montaje y logística. Actualiza el costo informado, su desglose y los informes del alcance.') or 'Total'
+        help='Turbina + instalación incluye todas las partidas Aplica. Solo equipo turbina excluye fundaciones y anclajes, montaje y logística. Actualiza el costo informado, su desglose y los informes del alcance.') or default_mode
 
 
 def commercial_hour_values(frame):
@@ -186,7 +199,8 @@ def commercial_summary_with_total(summary, dimension, scope):
     return pd.concat([summary, pd.DataFrame([total_row])], ignore_index=True)
 
 
-def commercial_donut(summary, project, total):
+def commercial_donut(summary, project, total, palette=None):
+    palette = COLORS if palette is None else palette
     positive = summary[summary['Monto comercial · CLP'].gt(0)].copy()
     if len(positive) > 7:
         other = positive.iloc[6:]['Monto comercial · CLP'].sum()
@@ -195,7 +209,7 @@ def commercial_donut(summary, project, total):
         hole=.64, sort=False, direction='clockwise', rotation=90,
         text=[f'{value/total:.1%}'.replace('.', ',') if value/total >= .10 else '' for value in positive['Monto comercial · CLP']],
         textinfo='text', textposition='inside', textfont=dict(size=13, color='#FFFFFF'),
-        marker=dict(colors=COLORS, line=dict(color='#FFFFFF', width=3)),
+        marker=dict(colors=palette, line=dict(color='#FFFFFF', width=3)),
         customdata=[amount(value) for value in positive['Monto comercial · CLP']],
         hovertemplate='<b>%{label}</b><br>%{customdata}<br>%{percent:.1%} del subtotal informado<extra></extra>'))
     fig.update_layout(height=320, margin=dict(l=8, r=8, t=12, b=12), showlegend=False,
@@ -206,16 +220,17 @@ def commercial_donut(summary, project, total):
     return fig, positive
 
 
-def commercial_system_ranking(summary, total, wedges):
+def commercial_system_ranking(summary, total, wedges, palette=None):
     """Exact amounts, shares and coverage aligned with the distribution colors."""
-    colors=dict(zip(wedges['Sistema'],COLORS))
+    palette = COLORS if palette is None else palette
+    colors=dict(zip(wedges['Sistema'],palette))
     rows=[]
     for rank,(_,row) in enumerate(summary.iterrows(),1):
         value=row['Monto comercial · CLP']
         share=value/total*100 if pd.notna(value) and pd.notna(total) and total>0 else float('nan')
         label=f'{share:.1f}%'.replace('.',',') if pd.notna(share) else '—'
         width=min(100,max(0,share)) if pd.notna(share) else 0
-        color=colors.get(row['Sistema'],COLORS[-1])
+        color=colors.get(row['Sistema'],palette[-1])
         known=int(row['Partidas informadas']);count=int(row['Actividades'])
         rows.append('<div class="option-commercial-system">'
             f'<div class="option-commercial-system-label"><i style="background:{color}" aria-hidden="true"></i>'
@@ -237,7 +252,8 @@ def commercial_group_details(scope, dimension, group, include_missing=False):
         ids.astype(str).str.casefold().str.replace(r'\d+', lambda match: match.group().zfill(20), regex=True))
 
 
-def _summary_table(summary, dimension, scope, key, project_scope=None, report_context=None):
+def _summary_table(summary, dimension, scope, key, project_scope=None, report_context=None, table_colors=None):
+    table_colors = table_colors or {}
     project_scope = scope if project_scope is None else project_scope
     # Remember the group by name rather than its row number: amounts and IDs
     # can change during refresh, resetting the dataframe's native selection.
@@ -252,7 +268,7 @@ def _summary_table(summary, dimension, scope, key, project_scope=None, report_co
     st.caption('Selecciona una fila para ver las partidas que componen su monto comercial.')
     display_summary = commercial_summary_with_total(summary, dimension, scope)
     styled_summary = display_summary.style.format({'Monto comercial · CLP': amount, 'Monto no comercial · CLP': amount, 'HH': lambda value: f'{value:,.1f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), 'Participación %': '{:.1f}%', 'Cobertura %': '{:.1f}%'}, na_rep='Sin informar')
-    styled_summary = styled_summary.set_properties(subset=pd.IndexSlice[[display_summary.index[-1]], :], **{'background-color': '#E8F3F0', 'color': '#0F4D46'})
+    styled_summary = styled_summary.set_properties(subset=pd.IndexSlice[[display_summary.index[-1]], :], **{'background-color': table_colors.get('summary_bg', '#E8F3F0'), 'color': table_colors.get('summary_text', '#0F4D46')})
     event = st.dataframe(styled_summary,
         hide_index=True, use_container_width=True,
         key=key, on_select=remember_group, selection_mode='single-row',
@@ -328,7 +344,7 @@ def _summary_table(summary, dimension, scope, key, project_scope=None, report_co
             '% del paquete': lambda value: f'{value:.2f}%'.replace('.', ','),
             '% del proyecto': lambda value: f'{value:.2f}%'.replace('.', ','),
             'Variación %': lambda value: f'{value:+.1f}%'.replace('.', ',')}, na_rep='Sin informar')
-            .set_properties(subset=[COMMERCIAL], **{'background-color': '#FFF1ED', 'color': '#9F3A28'}),
+            .set_properties(subset=[COMMERCIAL], **{'background-color': table_colors.get('detail_bg', '#FFF1ED'), 'color': table_colors.get('detail_text', '#9F3A28')}),
         hide_index=True, use_container_width=True, row_height=72, height=min(460, 40+len(details)*72),
         column_config=commercial_detail_columns())
     st.caption('Participación del ID sobre el monto comercial de su mismo sistema y paquete, y de la turbina completa seleccionada. Ambas bases incluyen todas las partidas Aplica de la turbina y se mantienen al filtrar. Los porcentajes se calculan con importes informados; no se calculan si el total es cero o falta información.')
@@ -345,9 +361,9 @@ def _summary_table(summary, dimension, scope, key, project_scope=None, report_co
         file_name=filename+'.pdf', mime='application/pdf', key=group_key+'_download', on_click='ignore')
 
 
-def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False, show_scope_selector=True):
+def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False, show_scope_selector=True, scope_selector_suffix=None, palette=None, title='Costo comercial de las turbinas', table_colors=None):
     with st.container(border=True, key='option4_analysis_commercial'):
-        st.subheader('Costo comercial de las turbinas')
+        st.subheader(title)
         st.caption('Analiza el monto comercial informado para cada turbina y su composición por sistema y paquete. Se incluyen solo las partidas marcadas Aplica en Costos; el detalle permite contrastar cantidades, costos de referencia y presupuesto vigente.')
         if COMMERCIAL not in tasks:
             st.info('La fuente publicada no contiene la columna Comercial anterior en Costos.')
@@ -381,7 +397,7 @@ def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False, sho
         project_tasks = commercial_project_rows(tasks, project)
         project_scope = commercial_product_scope(project_tasks)
         if show_scope_selector:
-            mode = render_commercial_scope(project)
+            mode = render_commercial_scope(project, key_suffix=scope_selector_suffix)
         else:
             mode = st.session_state.get(f'option4_commercial_composition_{index}', 'Total') or 'Total'
         mode_label = commercial_scope_label(mode)
@@ -425,7 +441,7 @@ def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False, sho
             with donut_col, st.container(key=f'option4_commercial_distribution_{index}'):
                 st.html('<div class="option-commercial-distribution-head"><b>Participación por sistema</b><span>Distribución del subtotal informado</span></div>')
                 if can_draw:
-                    fig, wedges = commercial_donut(summary, project, total)
+                    fig, wedges = commercial_donut(summary, project, total, palette=palette)
                     st.plotly_chart(fig, use_container_width=True, config={'displaylogo': False}, key=f'option4_commercial_donut_{index}')
                     st.html('<div class="option-commercial-chart-note">Pasa el cursor sobre cada segmento para ver el sistema y su importe</div>')
                 else:
@@ -435,7 +451,7 @@ def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False, sho
                 if known:
                     if not can_draw:
                         wedges = pd.DataFrame(columns=['Sistema'])
-                    st.html(commercial_system_ranking(summary, total, wedges))
+                    st.html(commercial_system_ranking(summary, total, wedges, palette=palette))
                 elif count:
                     st.html('<div class="option-commercial-pending"><span>DATOS PENDIENTES</span><b>Completar la base comercial de la turbina</b>'
                         f'<p>Hay {count} actividades sin monto comercial informado. Al completar Comercial anterior en Costos y actualizar el panel, aparecerán aquí los montos y su distribución.</p></div>')
@@ -461,9 +477,17 @@ def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False, sho
                     chart_dimension='Sistema', system_summary=summary.to_dict('records'),
                     generated_at=datetime.now(ZoneInfo('America/Santiago')).strftime('%d-%m-%Y %H:%M'),
                     cutoff=scope.attrs.get('document_cutoff'), consulted_at=scope.attrs.get('consulted_at'), source_url=scope.attrs.get('source_url'))
-                download_slot.download_button('Descargar informe completo de la turbina · PDF', cached_commercial_pdf(overview_details, overview_context),
-                    file_name=f'informe_completo_turbina_{capacity}_kW.pdf', mime='application/pdf',
-                    key=f'option4_commercial_full_download_{index}', on_click='ignore')
+                with download_slot.container():
+                    pdf_column, excel_column = st.columns(2)
+                    with pdf_column:
+                        st.download_button('Descargar informe completo de la turbina · PDF', cached_commercial_pdf(overview_details, overview_context),
+                            file_name=f'informe_completo_turbina_{capacity}_kW.pdf', mime='application/pdf',
+                            key=f'option4_commercial_full_download_{index}', on_click='ignore', use_container_width=True)
+                    with excel_column:
+                        st.download_button('Descargar informe completo de la turbina · Excel', cached_commercial_excel(overview_details, overview_context),
+                            file_name=f'informe_completo_turbina_{capacity}_kW.xlsx',
+                            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            key=f'option4_commercial_full_excel_{index}', on_click='ignore', use_container_width=True)
                 st.caption(f'Informe general · {commercial_project_label(project)} · Todos los sistemas y líneas del alcance actual, incluidas partidas sin monto. Disponible sin seleccionar un sistema; el detalle de una selección conserva su descarga independiente.')
             composition = st.container() if embedded else st.expander('Composición por sistema e hito', expanded=False)
             with composition:
@@ -472,6 +496,6 @@ def render_commercial_analysis(tasks, *, fixed_project=None, embedded=False, sho
                 st.caption(f'Alcance seleccionado: {mode_label}. ' + ('Excluye fundaciones y anclajes, montaje y logística.' if mode == 'Comercial' else 'Incluye todos los sistemas de las partidas marcadas Aplica en Costos.'))
                 system_tab, milestone_tab = st.tabs(['Por sistema', 'Por hito'])
                 with system_tab:
-                    _summary_table(summary, 'Sistema', scope, f'option4_commercial_system_{index}', project_scope=project_scope, report_context={'project': commercial_project_label(project), 'mode': mode_label})
+                    _summary_table(summary, 'Sistema', scope, f'option4_commercial_system_{index}', project_scope=project_scope, report_context={'project': commercial_project_label(project), 'mode': mode_label}, table_colors=table_colors)
                 with milestone_tab:
-                    _summary_table(commercial_breakdown(scope, 'Hito objetivo'), 'Hito objetivo', scope, f'option4_commercial_milestone_{index}', project_scope=project_scope, report_context={'project': commercial_project_label(project), 'mode': mode_label})
+                    _summary_table(commercial_breakdown(scope, 'Hito objetivo'), 'Hito objetivo', scope, f'option4_commercial_milestone_{index}', project_scope=project_scope, report_context={'project': commercial_project_label(project), 'mode': mode_label}, table_colors=table_colors)

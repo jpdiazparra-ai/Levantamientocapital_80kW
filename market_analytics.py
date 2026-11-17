@@ -18,7 +18,7 @@ def number(text):
 
 
 def usd(value, decimals=0):
-    formatted = f'{value:,.{decimals}f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+    formatted = f'{value:,.0f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
     return 'US$ '+formatted
 
 
@@ -142,7 +142,7 @@ def cost_figure(data):
         y=[data['cost'],data['opex_cost']-data['cost'],data['spread'],data['price']],
         measure=['absolute','relative','relative','total'],text=[usd(v) for v in [data['cost'],data['opex_cost']-data['cost'],data['spread'],data['price']]],
         textposition='outside',cliponaxis=False,increasing=dict(marker_color=TEAL),totals=dict(marker_color=NAVY),
-        connector=dict(line=dict(color='#CAD7E0')),hovertemplate='%{x}<br>USD %{y:,.2f}<extra></extra>'))
+        connector=dict(line=dict(color='#CAD7E0')),hovertemplate='%{x}<br>USD %{y:,.0f}<extra></extra>'))
     chart_style(fig,360)
     fig.update_yaxes(title='USD por equipo · snapshot del estudio',range=[0,data['price']*1.25])
     return fig

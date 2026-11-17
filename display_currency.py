@@ -39,7 +39,7 @@ def currency_label(text):
 
 
 def currency_number_format():
-    return 'US$ %.2f' if currency_code() == 'USD' else '$ %.0f'
+    return 'US$ %.0f' if currency_code() == 'USD' else '$ %.0f'
 
 
 def amount(value, compact=False):
@@ -48,7 +48,7 @@ def amount(value, compact=False):
     usd = currency_code() == 'USD'
     prefix = 'US$ ' if usd else '$'
     divisor, suffix = (1e6, ' MM') if compact and abs(value) >= 1e6 else (1e3, ' mil') if compact and usd and abs(value) >= 1e3 else (1, '')
-    decimals = 1 if divisor > 1 else 2 if usd else 0
+    decimals = 0
     return prefix + f'{value/divisor:,.{decimals}f}'.replace(',', 'X').replace('.', ',').replace('X', '.') + suffix
 
 

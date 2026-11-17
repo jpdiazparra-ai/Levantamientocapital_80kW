@@ -21,11 +21,11 @@ class ExecutiveReportTests(unittest.TestCase):
 
     def test_usd_is_not_converted_twice_and_percentages_are_invariant(self):
         usd=Report({},'USD',925);clp=Report({},'CLP',925)
-        self.assertEqual(usd.money(1000),'US$ 1.000,00')
+        self.assertEqual(usd.money(1000),'US$ 1.000')
         self.assertEqual(clp.money(1000),'$925.000')
         self.assertEqual(usd.pct(.741),clp.pct(.741))
         self.assertEqual(usd.money(float('nan')),'Sin dato')
-        self.assertEqual(usd.cost_money(925000),'US$ 1.000,00')
+        self.assertEqual(usd.cost_money(925000),'US$ 1.000')
         self.assertEqual(clp.cost_money(925000),'$925.000')
 
     def test_investment_bullets_identify_consolidated_not_sponsor_returns(self):
@@ -45,7 +45,7 @@ class ExecutiveReportTests(unittest.TestCase):
         self.assertIn('consolidados de 10 y 80 kW',text)
         self.assertIn('no la TIR del socio',text)
         self.assertIn('No es EBITDA por turbina',text)
-        self.assertIn('Fabricación media US$ 12,50',text)
+        self.assertIn('Fabricación media US$ 12',text)
 
     def test_five_year_summary_uses_weighted_margin_and_excludes_later_years(self):
         frame=pd.DataFrame({'Año':['Año 0',*[str(2029+i) for i in range(10)]],

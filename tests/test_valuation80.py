@@ -398,15 +398,17 @@ valuation80_view.render_valuation80(1)
 
 
 class UI80Tests(unittest.TestCase):
-    def test_renamed_07_price_is_visible_and_distinct_from_input_sale_price(self):
+    def test_overview_sale_price_sums_selected_equipment_and_sheet07_opex(self):
         script=SCRIPT.replace('valuation80_view.render_valuation80(1)',
             "model['raw']['07 Ventas y producción']=list(csv.reader(StringIO((root.parent/'valuation80_unit_price_renamed.csv').read_text())))\nvaluation80_view.unit_cost_overview80(model)")
         app=AppTest.from_string(script,default_timeout=30).run()
         self.assertFalse(app.exception)
         text=' '.join(item.proto.body for item in app.get('html'))
-        self.assertIn('Precio calculado · hoja 07',text)
-        self.assertIn('US$ 90.239,00',text)
-        self.assertIn('US$ 1.127,99',text)
+        self.assertIn('Costo equipamiento turbina + OPEX por turbina',text)
+        self.assertIn('US$ 4.141',text)
+        self.assertIn('US$ 97.637',text)
+        self.assertIn('US$ 116.188',text)
+        self.assertNotIn('US$ 90.239',text)
         self.assertNotIn('Sin informar',text)
         self.assertIn('Precio de venta · sin IVA',text)
 
@@ -415,8 +417,8 @@ class UI80Tests(unittest.TestCase):
         app=AppTest.from_string(script,default_timeout=30).run()
         self.assertFalse(app.exception)
         text=re.sub(r'<[^>]+>','',' '.join(element.proto.body for element in app.get('html')))
-        self.assertIn('US$ 93.496,02',text)
-        self.assertIn('US$ 1.168,70 / kW',text)
+        self.assertIn('US$ 93.496',text)
+        self.assertIn('US$ 1.169 / kW',text)
         self.assertIn('81/102 partidas con monto',text)
         app.session_state['option4_currency']='CLP';app.run()
         text=re.sub(r'<[^>]+>','',' '.join(element.proto.body for element in app.get('html')))
@@ -456,7 +458,12 @@ class UI80Tests(unittest.TestCase):
         app=AppTest.from_string(script,default_timeout=30).run()
         self.assertFalse(app.exception)
         self.assertEqual([tab.label for tab in app.tabs],['Por sistema','Por hito'])
-        self.assertTrue(any(item.label=='Costo comercial de la turbina de 80 kW' for item in app.expander))
+        self.assertFalse(any(item.label=='Costo comercial de la turbina de 80 kW' for item in app.expander))
+        self.assertTrue(any(item.value=='Costo comercial de la turbina de 80 kW' for item in app.subheader))
+        scope_controls=[item for item in app.radio if item.label=='Alcance del análisis']
+        self.assertEqual(len(scope_controls), 2)
+        self.assertEqual(scope_controls[0].value, scope_controls[1].value)
+        self.assertTrue(any('#00509E' in item.proto.spec for item in app.get('plotly_chart')))
         self.assertFalse(any(item.label=='Valores publicados de 00 · economía unitaria' for item in app.expander))
         self.assertGreaterEqual(len(app.get('plotly_chart')),9)
         text=' '.join(element.proto.body for element in app.get('html'))
@@ -472,7 +479,8 @@ class UI80Tests(unittest.TestCase):
         self.assertFalse(app.exception)
 
     def test_summary_lcoe_factor_recalculates_and_survives_currency_and_refresh(self):
-        script=SCRIPT.replace('valuation80_view.render_valuation80(1)','valuation80_view.overview80(model)')
+        script=SCRIPT.replace('valuation80_view.render_valuation80(1)',
+            "model['raw']['07 Ventas y producción']=list(csv.reader(StringIO((root.parent/'valuation80_unit_price_renamed.csv').read_text())))\nvaluation80_view.load_cost_report=lambda revision:dict(project['costs'],scope=commercial_tasks.copy())\nvaluation80_view.overview80(model)")
         app=AppTest.from_string(script,default_timeout=30).run()
         import json
         def point():
